@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.5](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.4...v0.0.5) (2026-09-24)
+
+### Performance Improvements
+
+* apply run starts and finishes in place, never refresh the route ([#6](https://github.com/MiguelFranken/playwright-reporter/issues/6)) ([9146205](https://github.com/MiguelFranken/playwright-reporter/commit/91462052b06e365f8eb638a0d152a5e0f95e64e1))
+
 ## [0.0.4](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.3...v0.0.4) (2026-09-24)
 
 ### Performance Improvements
