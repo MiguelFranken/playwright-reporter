@@ -24,7 +24,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
-      - uses: jdx/mise-action@v3
+      - uses: jdx/mise-action@v4
       - run: nub ci
       - name: Type check
         run: nub exec turbo run check-types --ui=stream
@@ -38,7 +38,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
-      - uses: jdx/mise-action@v3
+      - uses: jdx/mise-action@v4
       - run: nub ci
       - name: Install Chromium
         working-directory: apps/storybook
@@ -66,7 +66,7 @@ jobs:
       TEST_DATABASE_URL: postgres://postgres:test@localhost:5432/postgres
     steps:
       - uses: actions/checkout@v5
-      - uses: jdx/mise-action@v3
+      - uses: jdx/mise-action@v4
       - run: nub ci
       - name: Integration tests
         run: nub exec turbo run test:integration --ui=stream
