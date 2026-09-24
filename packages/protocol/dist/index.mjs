@@ -220,6 +220,21 @@ const runFinishResponseSchema = z.object({
 	]),
 	url: z.string()
 });
+/**
+* `POST /api/ingest/runs/:runId/heartbeat`, sent on its own while tests run so
+* a silent stretch (a long test) is not taken for a dead reporter. Never part
+* of an event batch: a server without it would reject the whole batch. A
+* server without the endpoint answers 404, and the reporter stops sending.
+*/
+const runHeartbeatSchema = z.object({ shardIndex: z.number().int() });
+const runHeartbeatResponseSchema = z.object({ runStatus: z.enum([
+	"running",
+	"passed",
+	"failed",
+	"timedout",
+	"interrupted",
+	"incomplete"
+]) });
 /** Classifies a Playwright attachment by name and content type. */
 function classifyAttachment(name, contentType) {
 	const n = name.toLowerCase();
@@ -231,6 +246,6 @@ function classifyAttachment(name, contentType) {
 	return "other";
 }
 //#endregion
-export { PROTOCOL_HEADER, PROTOCOL_VERSION, annotationSchema, attachmentKindSchema, attachmentRefSchema, attemptEndEventSchema, attemptStatusSchema, ciInfoSchema, classifyAttachment, eventBatchResponseSchema, eventBatchSchema, executorSchema, gitInfoSchema, ingestEventSchema, locationSchema, playwrightInfoSchema, playwrightProjectInfoSchema, runFinishResponseSchema, runFinishSchema, runLogEventSchema, runStartResponseSchema, runStartSchema, runStatusSchema, shardSchema, stepSchema, systemInfoSchema, testBeginEventSchema, testErrorSchema, testOutcomeSchema, uploadInstructionSchema, uploadUrlsRequestSchema, uploadUrlsResponseSchema };
+export { PROTOCOL_HEADER, PROTOCOL_VERSION, annotationSchema, attachmentKindSchema, attachmentRefSchema, attemptEndEventSchema, attemptStatusSchema, ciInfoSchema, classifyAttachment, eventBatchResponseSchema, eventBatchSchema, executorSchema, gitInfoSchema, ingestEventSchema, locationSchema, playwrightInfoSchema, playwrightProjectInfoSchema, runFinishResponseSchema, runFinishSchema, runHeartbeatResponseSchema, runHeartbeatSchema, runLogEventSchema, runStartResponseSchema, runStartSchema, runStatusSchema, shardSchema, stepSchema, systemInfoSchema, testBeginEventSchema, testErrorSchema, testOutcomeSchema, uploadInstructionSchema, uploadUrlsRequestSchema, uploadUrlsResponseSchema };
 
 //# sourceMappingURL=index.mjs.map

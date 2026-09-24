@@ -569,6 +569,27 @@ export declare const runFinishResponseSchema: z.ZodObject<{
   url: z.ZodString;
 }, z.core.$strip>;
 export type RunFinishResponse = z.infer<typeof runFinishResponseSchema>;
+/**
+ * `POST /api/ingest/runs/:runId/heartbeat`, sent on its own while tests run so
+ * a silent stretch (a long test) is not taken for a dead reporter. Never part
+ * of an event batch: a server without it would reject the whole batch. A
+ * server without the endpoint answers 404, and the reporter stops sending.
+ */
+export declare const runHeartbeatSchema: z.ZodObject<{
+  shardIndex: z.ZodNumber;
+}, z.core.$strip>;
+export type RunHeartbeat = z.infer<typeof runHeartbeatSchema>;
+export declare const runHeartbeatResponseSchema: z.ZodObject<{
+  runStatus: z.ZodEnum<{
+    failed: "failed";
+    incomplete: "incomplete";
+    interrupted: "interrupted";
+    passed: "passed";
+    running: "running";
+    timedout: "timedout";
+  }>;
+}, z.core.$strip>;
+export type RunHeartbeatResponse = z.infer<typeof runHeartbeatResponseSchema>;
 /** Classifies a Playwright attachment by name and content type. */
 export declare function classifyAttachment(name: string, contentType: string): AttachmentKind;
 //#endregion

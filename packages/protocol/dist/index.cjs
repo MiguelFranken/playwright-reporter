@@ -221,6 +221,21 @@ const runFinishResponseSchema = zod.z.object({
 	]),
 	url: zod.z.string()
 });
+/**
+* `POST /api/ingest/runs/:runId/heartbeat`, sent on its own while tests run so
+* a silent stretch (a long test) is not taken for a dead reporter. Never part
+* of an event batch: a server without it would reject the whole batch. A
+* server without the endpoint answers 404, and the reporter stops sending.
+*/
+const runHeartbeatSchema = zod.z.object({ shardIndex: zod.z.number().int() });
+const runHeartbeatResponseSchema = zod.z.object({ runStatus: zod.z.enum([
+	"running",
+	"passed",
+	"failed",
+	"timedout",
+	"interrupted",
+	"incomplete"
+]) });
 /** Classifies a Playwright attachment by name and content type. */
 function classifyAttachment(name, contentType) {
 	const n = name.toLowerCase();
@@ -251,6 +266,8 @@ exports.playwrightInfoSchema = playwrightInfoSchema;
 exports.playwrightProjectInfoSchema = playwrightProjectInfoSchema;
 exports.runFinishResponseSchema = runFinishResponseSchema;
 exports.runFinishSchema = runFinishSchema;
+exports.runHeartbeatResponseSchema = runHeartbeatResponseSchema;
+exports.runHeartbeatSchema = runHeartbeatSchema;
 exports.runLogEventSchema = runLogEventSchema;
 exports.runStartResponseSchema = runStartResponseSchema;
 exports.runStartSchema = runStartSchema;

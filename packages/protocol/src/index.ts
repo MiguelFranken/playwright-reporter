@@ -269,6 +269,26 @@ export const runFinishResponseSchema = z.object({
 export type RunFinishResponse = z.infer<typeof runFinishResponseSchema>;
 
 // ---------------------------------------------------------------------------
+// Heartbeat
+// ---------------------------------------------------------------------------
+
+/**
+ * `POST /api/ingest/runs/:runId/heartbeat`, sent on its own while tests run so
+ * a silent stretch (a long test) is not taken for a dead reporter. Never part
+ * of an event batch: a server without it would reject the whole batch. A
+ * server without the endpoint answers 404, and the reporter stops sending.
+ */
+export const runHeartbeatSchema = z.object({
+  shardIndex: z.number().int(),
+});
+export type RunHeartbeat = z.infer<typeof runHeartbeatSchema>;
+
+export const runHeartbeatResponseSchema = z.object({
+  runStatus: z.enum(['running', 'passed', 'failed', 'timedout', 'interrupted', 'incomplete']),
+});
+export type RunHeartbeatResponse = z.infer<typeof runHeartbeatResponseSchema>;
+
+// ---------------------------------------------------------------------------
 // Helpers shared by both sides
 // ---------------------------------------------------------------------------
 
