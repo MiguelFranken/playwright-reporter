@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.6](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.5...v0.0.6) (2026-09-24)
+
+### Features
+
+* git and CI overrides for runs outside CI ([#7](https://github.com/MiguelFranken/playwright-reporter/issues/7)) ([e74a4b9](https://github.com/MiguelFranken/playwright-reporter/commit/e74a4b9ad6a5591872857c424f1d0897aad695ba))
+
 ## [0.0.5](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.4...v0.0.5) (2026-09-24)
 
 ### Performance Improvements
