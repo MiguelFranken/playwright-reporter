@@ -15,6 +15,8 @@ export const teams = pgTable('teams', {
   id: uuid('id').primaryKey(),
   slug: text('slug').notNull().unique(),
   name: text('name').notNull(),
+  // An `/api/avatars/teams/…` URL, like `users.image`.
+  image: text('image'),
   createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

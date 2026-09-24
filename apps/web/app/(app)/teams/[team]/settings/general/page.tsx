@@ -1,9 +1,11 @@
 import { Suspense } from 'react';
+import { AvatarUpload } from '@/components/avatar-upload';
 import { TeamGeneralForm } from '@/components/teams/team-general-form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@miguelfranken/ui/components/card';
 import { Skeleton } from '@miguelfranken/ui/components/skeleton';
 import { requireTeam } from '@/lib/auth/access';
 import { formatDateTime } from '@miguelfranken/ui/lib/format';
+import { removeTeamAvatar, updateTeamAvatar } from '@/app/(app)/teams/[team]/settings/actions';
 
 type Params = Promise<{ team: string }>;
 
@@ -28,7 +30,15 @@ async function TeamGeneralContent({ params }: { params: Params }) {
           history.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex flex-col gap-6">
+        <AvatarUpload
+          name={access.team.name}
+          image={access.team.image}
+          shape="square"
+          label="Team image"
+          upload={updateTeamAvatar.bind(null, team)}
+          remove={removeTeamAvatar.bind(null, team)}
+        />
         <TeamGeneralForm teamSlug={team} name={access.team.name} />
       </CardContent>
     </Card>

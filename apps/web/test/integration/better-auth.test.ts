@@ -155,3 +155,20 @@ describe('rate limiting', () => {
     expect(rows[0].count).toBeGreaterThan(0);
   });
 });
+
+describe('updateUser', () => {
+  test('cannot set the profile image: only the avatar actions write it', async ({ db, actor }) => {
+    actor.useRealSession();
+    const user = await createAccount('image@example.test');
+    const cookie = await signInCookie('image@example.test');
+
+    await expect(
+      auth.api.updateUser({ body: { name: 'Renamed', image: 'https://tracker.example/pixel.gif' }, headers: { cookie } }),
+    ).rejects.toThrow(/account page/);
+    // A name change on its own still goes through.
+    await auth.api.updateUser({ body: { name: 'Renamed' }, headers: { cookie } });
+
+    const [row] = await db.select().from(users).where(eq(users.id, user.id));
+    expect(row).toMatchObject({ name: 'Renamed', image: null });
+  });
+});
