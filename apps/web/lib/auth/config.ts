@@ -54,3 +54,15 @@ export function artifactUrlTtlSeconds() {
   const n = Number(process.env.ARTIFACT_URL_TTL_SECONDS);
   return Number.isFinite(n) && n > 0 ? n : 3600;
 }
+
+/** Expiry the token form pre-selects for a new personal access token. */
+export function patDefaultTtlDays() {
+  const n = Number(process.env.PAT_DEFAULT_TTL_DAYS);
+  return Number.isFinite(n) && n > 0 ? Math.min(n, patMaxTtlDays()) : Math.min(90, patMaxTtlDays());
+}
+
+/** Hard upper bound for a personal access token's lifetime. Every token expires. */
+export function patMaxTtlDays() {
+  const n = Number(process.env.PAT_MAX_TTL_DAYS);
+  return Number.isFinite(n) && n > 0 ? n : 365;
+}

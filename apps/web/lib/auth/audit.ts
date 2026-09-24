@@ -21,6 +21,8 @@ export type AuditAction =
   | 'project.delete'
   | 'token.create'
   | 'token.revoke'
+  | 'pat.create'
+  | 'pat.revoke'
   | 'user.role'
   | 'user.ban'
   | 'user.unban'

@@ -4,7 +4,7 @@ import { PROTOCOL_HEADER, PROTOCOL_VERSION } from '@miguelfranken/protocol';
 import type { z } from 'zod';
 import { db } from '@/lib/db/drizzle';
 import { apiTokens, projects, teams, type Project } from '@/lib/db/schema';
-import { hashToken } from '@/lib/tokens';
+import { hashToken, isPersonalToken } from '@/lib/tokens';
 
 export class IngestError extends Error {
   constructor(
@@ -39,6 +39,9 @@ export async function requireProjectToken(request: Request): Promise<TokenProjec
   const auth = request.headers.get('authorization') ?? '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
   if (!token) throw new IngestError(401, 'missing bearer token');
+  if (isPersonalToken(token)) {
+    throw new IngestError(401, 'this is a personal access token; the reporter needs a project token from Project → Settings');
+  }
   const hash = hashToken(token);
   const [row] = await db
     .select({ project: projects, teamSlug: teams.slug, tokenId: apiTokens.id })

@@ -57,6 +57,13 @@
       "when": 1790258737690,
       "tag": "0007_artifact_retention",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790279381346,
+      "tag": "0008_personal_access_tokens",
+      "breakpoints": true
     }
   ]
 }

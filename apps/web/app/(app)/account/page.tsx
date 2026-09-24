@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Suspense } from 'react';
+import { AccessTokensCard } from '@/components/account/access-tokens-card';
 import { ChangeNameForm, ChangePasswordForm, SessionsCard } from '@/components/auth/account-forms';
 import { AvatarUpload } from '@/components/avatar-upload';
 import { PushSettings } from '@/components/notifications/push-settings';
@@ -9,8 +10,12 @@ import { Badge } from '@miguelfranken/ui/components/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@miguelfranken/ui/components/card';
 import { Skeleton } from '@miguelfranken/ui/components/skeleton';
 import { requireUser } from '@/lib/auth/access';
+import { patDefaultTtlDays, patMaxTtlDays } from '@/lib/auth/config';
 import { isDemoUser } from '@/lib/auth/demo';
-import { listMyTeams } from '@/lib/db/queries/teams';
+import { listAccessibleProjects } from '@/lib/auth/principal';
+import { listPersonalTokens } from '@/lib/db/queries/personal-tokens';
+import { listAllTeams, listMyTeams } from '@/lib/db/queries/teams';
+import { toPersonalTokenRow } from '@/lib/view-models/personal-tokens';
 import { pushConfig } from '@/lib/push/config';
 import { removeMyAvatar, updateMyAvatar } from '@/app/(app)/account/actions';
 
@@ -19,7 +24,7 @@ export const metadata: Metadata = { title: 'Account' };
 export default function AccountPage() {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-      <PageHeader title="Account" description="Your profile, password, notifications and active sessions." />
+      <PageHeader title="Account" description="Your profile, password, notifications, access tokens and active sessions." />
       <Suspense fallback={<AccountSkeleton />}>
         <AccountContent />
       </Suspense>
@@ -39,10 +44,16 @@ function AccountSkeleton() {
 
 async function AccountContent() {
   const user = await requireUser();
-  const teams = await listMyTeams(user.id);
+  const [teams, tokens, projects, allTeams] = await Promise.all([
+    listMyTeams(user.id),
+    listPersonalTokens(user.id),
+    listAccessibleProjects({ user, grant: null }),
+    user.isSuperadmin ? listAllTeams() : Promise.resolve([]),
+  ]);
   const push = pushConfig();
   // The demo account is shared by every visitor: nothing about it can change.
   const demo = isDemoUser(user);
+  const teamNames = new Map([...allTeams, ...teams].map((t) => [t.id, t.name]));
 
   return (
     <>
@@ -110,15 +121,34 @@ async function AccountContent() {
       )}
 
       {!demo && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Active sessions</CardTitle>
-            <CardDescription>Devices currently signed in with this account.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <SessionsCard />
-          </CardContent>
-        </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Access tokens</CardTitle>
+          <CardDescription>Personal tokens for AI assistants that connect over MCP. Read-only, and never more than you can see.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <AccessTokensCard
+            tokens={tokens.map((t) => toPersonalTokenRow(t, teamNames))}
+            teams={teams.map((t) => ({ value: t.id, label: t.name }))}
+            projects={projects.map((p) => ({ value: p.project.id, label: `${p.team.slug}/${p.project.slug}` }))}
+            isSuperadmin={user.isSuperadmin}
+            defaultDays={patDefaultTtlDays()}
+            maxDays={patMaxTtlDays()}
+          />
+        </CardContent>
+      </Card>
+      )}
+
+      {!demo && (
+      <Card>
+        <CardHeader>
+          <CardTitle>Active sessions</CardTitle>
+          <CardDescription>Devices currently signed in with this account.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <SessionsCard />
+        </CardContent>
+      </Card>
       )}
     </>
   );

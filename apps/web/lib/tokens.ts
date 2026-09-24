@@ -1,10 +1,17 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
-const PREFIX = 'pwr_';
+/** Project ingest tokens: authenticate a reporter against one project. */
+export const INGEST_PREFIX = 'pwr_';
+/** Personal access tokens: authenticate a *person* (the MCP server). */
+export const PAT_PREFIX = 'pwr_pat_';
 
-export function generateToken() {
-  const token = `${PREFIX}${randomBytes(32).toString('base64url')}`;
-  return { token, prefix: token.slice(0, PREFIX.length + 6) };
+export function generateToken(prefix = INGEST_PREFIX) {
+  const token = `${prefix}${randomBytes(32).toString('base64url')}`;
+  return { token, prefix: token.slice(0, prefix.length + 6) };
+}
+
+export function isPersonalToken(token: string) {
+  return token.startsWith(PAT_PREFIX);
 }
 
 export function hashToken(token: string) {
