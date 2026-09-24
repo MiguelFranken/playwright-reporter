@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.12](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.11...v0.0.12) (2026-09-24)
+
+### Features
+
+* delete expired test artifacts by a retention policy superadmins configure ([#15](https://github.com/MiguelFranken/playwright-reporter/issues/15)) ([39d70c9](https://github.com/MiguelFranken/playwright-reporter/commit/39d70c993cc8b596474abac4e1ff02493b6fa674))
+
 ## [0.0.11](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.10...v0.0.11) (2026-09-24)
 
 ### Features
