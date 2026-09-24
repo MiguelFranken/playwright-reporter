@@ -1,6 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db/drizzle';
 import { runs } from '@/lib/db/schema';
+import { notifyRun } from '@/lib/push/notify';
 import { checkStaleRun } from '@/lib/runs/lifecycle';
 
 // Steps of `runWatchdog`. Their ids derive from this file's path and the
@@ -15,6 +16,8 @@ export type WatchdogCheck = { done: true; outcome: 'gone' | 'ended' | 'closed' }
 export async function checkRun(runId: string): Promise<WatchdogCheck> {
   'use step';
   const check = await checkStaleRun(runId);
+  // Only the check that closed the run announces it; a retry finds it `ended`.
+  if (check.state === 'closed') await notifyRun(runId, 'finished');
   if (check.state !== 'running') return { done: true, outcome: check.state };
   return { done: false, deadline: new Date(check.deadline.getTime() + DEADLINE_SLACK_MS).toISOString() };
 }

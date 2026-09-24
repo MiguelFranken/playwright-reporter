@@ -21,6 +21,8 @@ const PUBLIC = [
   /^\/\.well-known\/workflow\//,
   /^\/_next\//,
   /^\/favicon/,
+  // The push service worker: browsers fetch it without following redirects.
+  /^\/push-sw\.js$/,
 ];
 
 export function proxy(request: NextRequest) {
