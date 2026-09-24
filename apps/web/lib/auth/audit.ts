@@ -25,7 +25,9 @@ export type AuditAction =
   | 'user.ban'
   | 'user.unban'
   | 'user.password'
-  | 'user.delete';
+  | 'user.delete'
+  | 'storage.retention.update'
+  | 'storage.retention.sweep';
 
 /**
  * Audit writes are best effort: a failure here must never fail the mutation

@@ -25,6 +25,7 @@ const SECTION_LABELS: Record<string, string> = {
   teams: 'Teams',
   users: 'Users',
   audit: 'Audit log',
+  storage: 'Storage',
 };
 
 type Crumb = { label: string; href?: string };

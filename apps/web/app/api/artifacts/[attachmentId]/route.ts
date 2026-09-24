@@ -5,6 +5,7 @@ import { db } from '@/lib/db/drizzle';
 import { isUuid } from '@/lib/db/queries/shared';
 import { attachments, projects, runs, teams } from '@/lib/db/schema';
 import { getStorage } from '@/lib/storage';
+import { markMissingExpired } from '@/lib/storage/retention';
 
 // Only the trace viewer needs cross-origin access, and only with a signed URL.
 const TRACE_VIEWER_ORIGIN = 'https://trace.playwright.dev';
@@ -49,6 +50,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ atta
   }
 
   const { attachment } = row;
+  // Gone for good: the retention policy (or the store's lifecycle) took the
+  // bytes. 410 rather than 404, so a client can tell it from a bad link.
+  if (attachment.status === 'expired') return gone();
   const storage = getStorage();
   const download = url.searchParams.get('download') !== null;
 
@@ -69,7 +73,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ atta
     if (m && (m[1] || m[2])) range = { start: Number(m[1] || 0), end: m[2] ? Number(m[2]) : undefined };
   }
   const obj = await storage.get(attachment.storageKey, range);
-  if (!obj) return new Response('artifact missing in storage', { status: 404, headers: CORS });
+  if (!obj) {
+    if (await markMissingExpired(attachment.id, storage)) return gone();
+    return new Response('artifact missing in storage', { status: 404, headers: CORS });
+  }
 
   const disposition = download ? 'attachment' : 'inline';
   const headers: Record<string, string> = {
@@ -88,6 +95,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ atta
   }
   headers['content-length'] = String(obj.size);
   return new Response(obj.stream, { status: 200, headers });
+}
+
+function gone() {
+  return new Response('artifact expired', { status: 410, headers: { ...CORS, 'cache-control': 'private, max-age=3600' } });
 }
 
 async function hasSessionAccess(teamSlug: string) {

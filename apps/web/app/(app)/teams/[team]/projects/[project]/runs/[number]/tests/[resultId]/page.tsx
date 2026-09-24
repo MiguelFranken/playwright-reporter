@@ -17,6 +17,7 @@ import { getResultDetail, testHistory } from '@/lib/db/queries/runs';
 import { formatDateTime, formatDuration, formatRelative } from '@miguelfranken/ui/lib/format';
 import { signArtifactPath } from '@/lib/auth/artifact-url';
 import { baseUrl, getStorage } from '@/lib/storage';
+import { expiresAt, getRetentionPolicy } from '@/lib/storage/retention';
 
 type Props = { params: Promise<{ team: string; project: string; number: string; resultId: string }> };
 
@@ -57,7 +58,7 @@ async function ResultContent({ params }: Props) {
   const detail = await getResultDetail(project.id, runNumber, resultId);
   if (!detail) notFound();
   const { result, test, run, attempts, position } = detail;
-  const history = await testHistory(test.id, { limit: 15 });
+  const [history, { policy }] = await Promise.all([testHistory(test.id, { limit: 15 }), getRetentionPolicy()]);
   const base = `/teams/${team}/projects/${project.slug}`;
   const origin = baseUrl();
 
@@ -91,6 +92,8 @@ async function ResultContent({ params }: Props) {
                 ? `https://trace.playwright.dev/?trace=${encodeURIComponent(`${origin}${signArtifactPath(att.id)}`)}`
                 : undefined,
             text: att.kind === 'text' && att.status === 'uploaded' ? await readText(att.storageKey, att.sizeBytes) : undefined,
+            expiredAt: att.expiredAt?.toISOString() ?? null,
+            expiresAt: expiresAt(policy, att.kind, att.createdAt)?.toISOString() ?? null,
           };
         }),
       ),

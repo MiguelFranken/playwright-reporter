@@ -165,6 +165,34 @@ and sleeps again while the run stays active.
 
 On the Postgres world, the worker polls the database twice a second, so a Neon compute behind it never scales to zero.
 
+### Artifact retention
+
+Screenshots, videos and traces of failing tests fill the store quickly. Superadmins set how long they are kept
+under **Administration → Storage**: a lifetime in days, counted from the upload, and optionally a
+shorter one per kind. Videos and traces are the big ones. Retention is **off** until somebody turns it on, so an
+upgrade never deletes anything by itself. A deployment can opt in with `ARTIFACT_RETENTION_DAYS` until a policy is
+saved in the UI.
+
+A **sweep** applies the policy (`apps/web/lib/storage/retention`). It deletes expired objects from the store in
+batches and marks their rows `expired`. The run keeps every result, error, step and the artifact's name and size.
+Its page shows the artifact as expired, and `/api/artifacts/:id` answers `410 Gone` instead of a broken link.
+Sweeps may overlap safely: each batch locks its rows with `skip locked`. A failed store delete rolls its batch back
+for the next sweep. These start a sweep:
+
+| Trigger | Where | Setup |
+| --- | --- | --- |
+| Scheduler | Vercel Cron, daily at 03:17 UTC (`apps/web/vercel.json`, production only) | set `CRON_SECRET` in the project |
+| Scheduler | Docker / Kubernetes: any cron calling `GET /api/cron/artifact-retention` with `Authorization: Bearer $CRON_SECRET` | set `CRON_SECRET` |
+| A finished run | anywhere but Vercel previews, when no sweep started in the last 12 hours | none; `ARTIFACT_RETENTION_INGEST_SWEEP=off` turns it off |
+| Run now | the button on the admin page | none |
+
+Each storage adapter says who deletes expired objects (`StorageAdapter.retention`). The filesystem and Vercel
+Blob have no lifecycle rules, so the app deletes objects itself (`app`). A store with its own lifecycle rules
+(e.g. an S3 bucket rule) would declare `provider`. The sweep then only marks rows by the same lifetimes and
+deletes nothing. An object found missing on first read is also marked expired. Such an adapter can implement
+`applyRetentionPolicy` to push the saved policy to the bucket. The save fails if that call fails, so the two
+never silently disagree.
+
 ## Users and teams
 
 Everything behind `/teams/...` requires a session, and there is no self-registration: accounts come from an
@@ -210,14 +238,17 @@ A team always keeps at least one admin: the last one can't be demoted or removed
    deployments only (previews share the production database).
 2. Set `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `BETTER_AUTH_SECRET`, `STORAGE_DRIVER=vercel-blob` and connect a
    **private** Blob store (`BLOB_READ_WRITE_TOKEN`). `BASE_URL` defaults to the production domain, and previews use
-   their deployment URL; extra domains that should be able to sign in go in `TRUSTED_ORIGINS`.
+   their deployment URL; extra domains that should be able to sign in go in `TRUSTED_ORIGINS`. Set `CRON_SECRET`
+   (`openssl rand -hex 32`) so the daily [artifact retention](#artifact-retention) cron is accepted.
 3. Run `nub run db:seed` once against the production database, with `SEED_SUPERADMIN_EMAIL` (and optionally
    `SEED_VIEWER_EMAIL`) set, to create the first accounts.
 
 ### Docker and Kubernetes
 
 Run `apps/web` as a regular Next.js server, apply migrations with `nub run db:migrate`, and set
-`RUN_WATCHDOG_DRIVER=workflow` with the Postgres world, see [Abandoned runs](#abandoned-runs).
+`RUN_WATCHDOG_DRIVER=workflow` with the Postgres world, see [Abandoned runs](#abandoned-runs). Artifact retention
+needs nothing more: a finished run starts a sweep when none ran for 12 hours. For a fixed schedule, set `CRON_SECRET`
+and call `/api/cron/artifact-retention` from a CronJob, see [Artifact retention](#artifact-retention).
 
 ## The marketing website
 

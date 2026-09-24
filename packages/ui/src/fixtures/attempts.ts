@@ -73,6 +73,10 @@ const pendingUpload: AttachmentView = {
   url: '#pending',
 };
 
+/** An old run's artifacts once the retention policy has deleted their bytes. */
+const expiredAt = new Date(NOW.getTime() - 3 * 86_400_000).toISOString();
+const expired = (a: AttachmentView): AttachmentView => ({ ...a, id: `${a.id}-expired`, status: 'expired', text: undefined, expiredAt });
+
 const STEPS = [
   { title: 'Before Hooks', category: 'hook', durationMs: 412, depth: 0 },
   { title: 'page.goto(/checkout)', category: 'pw:api', durationMs: 1_204, depth: 0 },
@@ -111,6 +115,13 @@ export const retryAttempt: AttemptView = {
   status: 'failed',
   durationMs: 7_980,
   attachments: [failureShot, pendingUpload],
+};
+
+/** Kept for its errors and steps; its screenshots, video and trace are gone. */
+export const expiredAttempt: AttemptView = {
+  ...failedAttempt,
+  id: 'attempt-expired',
+  attachments: [failureShot, diffShot, video, trace, logFile].map(expired),
 };
 
 export const passedAttempt: AttemptView = {

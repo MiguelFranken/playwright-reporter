@@ -14,6 +14,7 @@ import { db } from '@/lib/db/drizzle';
 import { getUserById } from '@/lib/db/queries/teams';
 import { attachments, projects, runs, teamMembers, teams, users } from '@/lib/db/schema';
 import { getStorage } from '@/lib/storage';
+import { getRetentionPolicy, policyFromForm, saveRetentionPolicy, sweepExpiredArtifacts } from '@/lib/storage/retention';
 
 type Ok<T extends object = object> = { ok: true } & T;
 
@@ -204,4 +205,46 @@ export async function deleteUserAccount(userId: string): Promise<Ok | Denied> {
   void deleteAvatar('users', user.id, user.image);
   revalidatePath('/admin/users');
   return { ok: true };
+}
+
+// ----------------------------------------------------------------- storage
+
+export type RetentionFormState = { ok: boolean; message: string } | null;
+
+/** `useActionState` shape: the form posts `enabled`, `days` and `days.<kind>`. */
+export async function updateRetentionPolicy(_prev: RetentionFormState, formData: FormData): Promise<RetentionFormState> {
+  const actor = await superadmin();
+  if (denied(actor)) return actor;
+
+  const policy = policyFromForm(formData);
+  if (typeof policy === 'string') return actionError(policy);
+
+  const before = await getRetentionPolicy();
+  try {
+    await saveRetentionPolicy(policy, actor.actorId);
+  } catch (error) {
+    console.error('[admin] saving the retention policy failed', error);
+    return actionError('Could not apply the policy to the storage provider. Nothing was changed.');
+  }
+  await audit('storage.retention.update', { actorId: actor.actorId, target: { from: before.policy, to: policy } });
+  revalidatePath('/admin/storage');
+  return { ok: true, message: policy.enabled ? 'Retention policy saved.' : 'Saved. Artifacts are kept until retention is turned on.' };
+}
+
+/** "Run now": one bounded sweep, so the button answers within a request. */
+export async function runRetentionSweep(): Promise<
+  Ok<{ expiredCount: number; expiredBytes: number; hasMore: boolean }> | Denied
+> {
+  const actor = await superadmin();
+  if (denied(actor)) return actor;
+
+  const result = await sweepExpiredArtifacts({ trigger: 'manual', budgetMs: 45_000 });
+  if (result.status === 'disabled') return actionError('Turn retention on and save the policy first.');
+  await audit('storage.retention.sweep', {
+    actorId: actor.actorId,
+    target: { sweepId: result.sweepId, expired: result.expiredCount, bytes: result.expiredBytes, error: result.error },
+  });
+  revalidatePath('/admin/storage');
+  if (result.error) return actionError(`The sweep stopped: ${result.error}`);
+  return { ok: true, expiredCount: result.expiredCount, expiredBytes: result.expiredBytes, hasMore: result.hasMore };
 }

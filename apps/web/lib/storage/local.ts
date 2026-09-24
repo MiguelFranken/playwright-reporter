@@ -11,6 +11,7 @@ import type { StorageAdapter, StoredObject } from './types';
  */
 export class LocalStorageAdapter implements StorageAdapter {
   readonly name = 'local' as const;
+  readonly retention = 'app' as const;
 
   constructor(
     private readonly root: string,

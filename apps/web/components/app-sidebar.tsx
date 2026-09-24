@@ -8,6 +8,7 @@ import {
   FlaskConical,
   Folder,
   GitBranch,
+  HardDrive,
   LayoutDashboard,
   ListChecks,
   LogOut,
@@ -110,6 +111,7 @@ const ADMIN_NAV: NavItem[] = [
   { title: 'Overview', href: '/admin', icon: LayoutDashboard, exact: true },
   { title: 'Teams', href: '/admin/teams', icon: Building2 },
   { title: 'Users', href: '/admin/users', icon: Users },
+  { title: 'Storage', href: '/admin/storage', icon: HardDrive },
   { title: 'Audit log', href: '/admin/audit', icon: ScrollText },
 ];
 

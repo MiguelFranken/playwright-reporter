@@ -1,4 +1,4 @@
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 import {
   bigserial,
   boolean,
@@ -41,7 +41,8 @@ export const testOutcomeEnum = pgEnum('test_outcome', [
 ]);
 export const attemptStatusEnum = pgEnum('attempt_status', ['passed', 'failed', 'timedOut', 'skipped', 'interrupted']);
 export const attachmentKindEnum = pgEnum('attachment_kind', ['screenshot', 'video', 'trace', 'image', 'text', 'other']);
-export const attachmentStatusEnum = pgEnum('attachment_status', ['pending', 'uploaded', 'failed']);
+/** `expired`: the bytes were deleted by the retention policy (or the store's own lifecycle); the row stays. */
+export const attachmentStatusEnum = pgEnum('attachment_status', ['pending', 'uploaded', 'failed', 'expired']);
 
 export const projects = pgTable(
   'projects',
@@ -244,8 +245,15 @@ export const attachments = pgTable(
     sizeBytes: integer('size_bytes'),
     status: attachmentStatusEnum('status').notNull().default('pending'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    /** When the stored bytes went away. Set together with `status = 'expired'`. */
+    expiredAt: timestamp('expired_at', { withTimezone: true }),
   },
-  (t) => [index('attachments_attempt_idx').on(t.attemptId), index('attachments_run_idx').on(t.runId)],
+  (t) => [
+    index('attachments_attempt_idx').on(t.attemptId),
+    index('attachments_run_idx').on(t.runId),
+    // The retention sweep's scan: live rows, oldest first.
+    index('attachments_live_created_idx').on(t.createdAt).where(sql`expired_at is null`),
+  ],
 );
 
 export const runEvents = pgTable(
