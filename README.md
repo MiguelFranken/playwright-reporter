@@ -132,6 +132,7 @@ export default defineConfig({
 | `environment` | `PW_REPORTER_ENVIRONMENT`  | Label such as `staging`                                      |
 | `artifacts`   | `PW_REPORTER_ARTIFACTS`    | `false` disables uploads                                     |
 | `debug`       | `PW_REPORTER_DEBUG`        | Verbose logging                                              |
+| `heartbeatIntervalMs` | `PW_REPORTER_HEARTBEAT_MS` | Sign of life while tests run, default `30000`; `0` disables |
 | `git`         | `PW_REPORTER_GIT_BRANCH`, `_SHA`, `_MESSAGE`, `_REPO_URL`, `_AUTHOR` | The commit under test, where no CI variables or git checkout say it |
 | `ci`          | `PW_REPORTER_CI_PROVIDER`, `PW_REPORTER_BUILD_URL`, `_BUILD_NUMBER`, `PW_REPORTER_CI_JOB` | The build that ran the tests, likewise |
 
@@ -143,6 +144,29 @@ When the tests run through Turborepo in strict env mode, list the `PW_REPORTER_*
 `passThroughEnv`, or turbo removes them before Playwright starts.
 
 The reporter never fails a test run: network errors are retried and then logged.
+
+## Abandoned runs
+
+A reporter that dies mid-run (a killed process, a second Ctrl-C, a CI job cut off) never finishes its run.
+Once a run has not heard from its reporter for 5 minutes (`RUN_STALE_TIMEOUT_MS`, clamped to 1–60 minutes;
+a project may set `settings.staleTimeoutMs`), it reads as **Abandoned** (`incomplete`) everywhere. While tests
+run, the reporter sends a heartbeat every 30 seconds, so a long test is not mistaken for a dead reporter. If
+an abandoned run hears from its reporter again, it goes back to running.
+
+Reads work the status out on the fly. A per-run **watchdog** also records it, settling open results and
+telling open pages. The watchdog is a durable [Workflow SDK](https://workflow-sdk.dev) timer
+(`apps/web/lib/runs/watchdog`) that sleeps until the run would go stale, checks, and sleeps again while the run
+stays active. `RUN_WATCHDOG_DRIVER` picks the adapter:
+
+| Deployment | Driver | Setup |
+| --- | --- | --- |
+| Vercel production | `workflow` (default) | none. Vercel runs the workflow |
+| Vercel previews | `none` (default) | previews share the production database, so they do not start watchdogs |
+| `next dev` | `workflow` (default) | none. Local world under `.next/workflow-data`; inspect with `npx workflow web` |
+| Docker / Kubernetes | `workflow` | `WORKFLOW_TARGET_WORLD=@workflow/world-postgres`, `WORKFLOW_POSTGRES_URL` (direct, not pooled), and `npx --package=@workflow/world-postgres bootstrap` once per database; each instance starts the worker in `instrumentation.ts` |
+
+On the Postgres world, the worker polls the database twice a second, so a Neon compute behind it never scales
+to zero.
 
 ## Releases
 

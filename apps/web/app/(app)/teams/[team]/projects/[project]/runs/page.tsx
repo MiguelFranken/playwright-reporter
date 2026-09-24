@@ -22,7 +22,7 @@ const STATUS_OPTIONS = [
   { value: 'failed', label: 'Failed' },
   { value: 'timedout', label: 'Timed out' },
   { value: 'interrupted', label: 'Interrupted' },
-  { value: 'incomplete', label: 'Incomplete' },
+  { value: 'incomplete', label: 'Abandoned' },
 ];
 
 function first(v: string | string[] | undefined) {

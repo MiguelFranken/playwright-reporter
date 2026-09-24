@@ -1,7 +1,7 @@
-import { and, asc, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, getTableColumns, inArray, sql, type SQL } from 'drizzle-orm';
 import { db } from '@/lib/db/drizzle';
 import { attachments, runEvents, runShards, runs, testAttempts, testResults, tests, type Attachment, type Run, type RunShard, type TestAttempt } from '@/lib/db/schema';
-import { markStaleRuns } from '@/lib/ingest/service';
+import { effectiveRunColumns, effectiveStatusSql, effectivelyRunningSql } from '@/lib/runs/staleness';
 import { andAll, num, sinceDate } from './shared';
 
 /**
@@ -83,6 +83,12 @@ async function projectCursorBefore(projectId: string) {
   return row?.cursor ?? 0;
 }
 
+/**
+ * A run as the views show it: a stale run reads as `incomplete` before its
+ * watchdog has written that down (see `lib/runs/staleness`).
+ */
+const runColumns = { ...getTableColumns(runs), ...effectiveRunColumns };
+
 export interface RunFilters {
   status?: string;
   branch?: string;
@@ -94,12 +100,11 @@ export interface RunFilters {
 }
 
 export async function listRuns(projectId: string, filters: RunFilters = {}) {
-  await markStaleRuns(projectId);
   const pageSize = filters.pageSize ?? 25;
   const page = filters.page ?? 1;
   const where = andAll([
     eq(runs.projectId, projectId),
-    filters.status && filters.status !== 'all' ? sql`${runs.status} = ${filters.status}` : undefined,
+    filters.status && filters.status !== 'all' ? sql`${effectiveStatusSql} = ${filters.status}` : undefined,
     filters.branch ? eq(runs.gitBranch, filters.branch) : undefined,
     filters.environment ? eq(runs.environment, filters.environment) : undefined,
     filters.days ? sql`${runs.startedAt} >= ${sinceDate(filters.days)}` : undefined,
@@ -109,7 +114,7 @@ export async function listRuns(projectId: string, filters: RunFilters = {}) {
   ]);
   const cursor = await projectCursorBefore(projectId);
   const rows = await db
-    .select({ run: runs, counts: countsSql, cursor: runCursorSql(sql.raw('"runs"."id"')) })
+    .select({ run: runColumns, counts: countsSql, cursor: runCursorSql(sql.raw('"runs"."id"')) })
     .from(runs)
     .where(where)
     .orderBy(desc(runs.startedAt))
@@ -131,12 +136,11 @@ export async function listActiveRuns(projectId: string) {
 }
 
 export async function listActiveRunsWithCursor(projectId: string) {
-  await markStaleRuns(projectId);
   const cursor = await projectCursorBefore(projectId);
   const rows = await db
-    .select({ run: runs, counts: countsSql, cursor: runCursorSql(sql.raw('"runs"."id"')) })
+    .select({ run: runColumns, counts: countsSql, cursor: runCursorSql(sql.raw('"runs"."id"')) })
     .from(runs)
-    .where(and(eq(runs.projectId, projectId), eq(runs.status, 'running')))
+    .where(and(eq(runs.projectId, projectId), effectivelyRunningSql))
     .orderBy(desc(runs.startedAt))
     .limit(10);
   const withShards = await Promise.all(
@@ -154,9 +158,8 @@ export async function listActiveRunsWithCursor(projectId: string) {
 }
 
 export async function getRunByNumber(projectId: string, number: number) {
-  await markStaleRuns(projectId);
   const [row] = await db
-    .select({ run: runs, counts: countsSql, cursor: runCursorSql(sql.raw('"runs"."id"')) })
+    .select({ run: runColumns, counts: countsSql, cursor: runCursorSql(sql.raw('"runs"."id"')) })
     .from(runs)
     .where(and(eq(runs.projectId, projectId), eq(runs.number, number)));
   if (!row) return null;
@@ -173,7 +176,7 @@ export async function getRunByNumber(projectId: string, number: number) {
 export async function listRunItems(projectId: string, ids: string[]) {
   if (ids.length === 0) return [];
   const rows = await db
-    .select({ run: runs, counts: countsSql, cursor: runCursorSql(sql.raw('"runs"."id"')) })
+    .select({ run: runColumns, counts: countsSql, cursor: runCursorSql(sql.raw('"runs"."id"')) })
     .from(runs)
     .where(and(eq(runs.projectId, projectId), inArray(runs.id, ids)));
   const shards = await db.select().from(runShards).where(inArray(runShards.runId, rows.map((r) => r.run.id))).orderBy(asc(runShards.shardIndex));
@@ -188,7 +191,7 @@ export async function listRunItems(projectId: string, ids: string[]) {
 /** A run's header data by id: what a live run page settles on once the run has finished. */
 export async function getRunSummary(projectId: string, runId: string) {
   const [row] = await db
-    .select({ run: runs, counts: countsSql, cursor: runCursorSql(sql.raw('"runs"."id"')) })
+    .select({ run: runColumns, counts: countsSql, cursor: runCursorSql(sql.raw('"runs"."id"')) })
     .from(runs)
     .where(and(eq(runs.projectId, projectId), eq(runs.id, runId)));
   if (!row) return null;
@@ -318,7 +321,7 @@ export type AttemptWithAttachments = TestAttempt & { attachments: Attachment[] }
 
 export async function getResultDetail(projectId: string, runNumber: number, resultId: string) {
   const [row] = await db
-    .select({ result: testResults, test: tests, run: runs })
+    .select({ result: testResults, test: tests, run: runColumns })
     .from(testResults)
     .innerJoin(tests, eq(tests.id, testResults.testId))
     .innerJoin(runs, eq(runs.id, testResults.runId))

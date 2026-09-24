@@ -6,6 +6,12 @@ function envBool(v: string | undefined): boolean | undefined {
   return !['false', '0', 'no', 'off', ''].includes(v.toLowerCase());
 }
 
+function envNumber(v: string | undefined): number | undefined {
+  if (v === undefined || v.trim() === '') return undefined;
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 ? n : undefined;
+}
+
 export function detectCiRunId(env: NodeJS.ProcessEnv): string | undefined {
   if (env.GITHUB_RUN_ID) return `gh-${env.GITHUB_RUN_ID}-${env.GITHUB_RUN_ATTEMPT ?? '1'}`;
   if (env.CI_PIPELINE_ID) return `gl-${env.CI_PIPELINE_ID}`;
@@ -47,6 +53,7 @@ export function resolveOptions(
     // Two seconds: the live views stay current and a run sends half the requests of one second.
     batchIntervalMs: opts.batch?.intervalMs ?? 2000,
     uploadTimeoutMs: opts.uploadTimeoutMs ?? 120_000,
+    heartbeatIntervalMs: opts.heartbeatIntervalMs ?? envNumber(env.PW_REPORTER_HEARTBEAT_MS) ?? 30_000,
     maxRetries: 5,
     git: defined<GitOverrides>({
       branch: opts.git?.branch ?? env.PW_REPORTER_GIT_BRANCH,

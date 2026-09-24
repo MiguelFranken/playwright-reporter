@@ -15,6 +15,7 @@ import { IngestClient } from './client';
 import { collectCiInfo, collectGitInfo, collectPlaywrightInfo, collectSystemInfo, detectExecutor } from './metadata';
 import { isListMode, resolveOptions } from './options';
 import { EventQueue } from './queue';
+import { Heartbeat } from './heartbeat';
 import type { ReporterOptions, ResolvedOptions } from './types';
 
 const MAX_TEXT = 64 * 1024;
@@ -42,6 +43,7 @@ export default class PlaywrightReporterApp implements Reporter {
   private uploadedBytes = 0;
   private disabled = false;
   private uploadTimer: NodeJS.Timeout | undefined;
+  private heartbeat: Heartbeat | undefined;
 
   constructor(options: ReporterOptions = {}) {
     this.opts = resolveOptions(options);
@@ -102,6 +104,13 @@ export default class PlaywrightReporterApp implements Reporter {
         this.shardIndex = res.shardIndex;
         this.runUrl = res.url;
         this.log(`run #${res.runNumber} started (${res.runId})`);
+        const runId = res.runId;
+        this.heartbeat = new Heartbeat(
+          opts.heartbeatIntervalMs,
+          () => this.client.heartbeat(runId, { shardIndex: this.shardIndex }),
+          (m) => this.log(m),
+        );
+        this.heartbeat.start();
       })
       .catch((err) => {
         this.disabled = true;
@@ -192,6 +201,8 @@ export default class PlaywrightReporterApp implements Reporter {
     if (this.disabled || !this.opts) return;
     await this.startPromise;
     if (!this.runId) return;
+    // The requests below prove the run alive; a beat must not land after the finish.
+    this.heartbeat?.stop();
     try {
       await this.queue.drain();
       this.scheduleUploads(true);
@@ -212,6 +223,7 @@ export default class PlaywrightReporterApp implements Reporter {
   }
 
   async onExit() {
+    this.heartbeat?.stop();
     if (this.disabled || !this.runId) return;
     await this.queue.drain().catch(() => undefined);
   }

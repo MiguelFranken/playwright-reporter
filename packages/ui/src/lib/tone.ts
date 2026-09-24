@@ -48,7 +48,8 @@ const LABELS: Record<string, string> = {
   timedout: 'Timed out',
   timedOut: 'Timed out',
   interrupted: 'Interrupted',
-  incomplete: 'Incomplete',
+  // Stored as `incomplete`: the reporter went silent and the run was closed.
+  incomplete: 'Abandoned',
 };
 
 /** Subtle background + matching hairline + readable text, per role. */

@@ -27,7 +27,9 @@ export const runStatusEnum = pgEnum('run_status', [
   'incomplete',
 ]);
 export const executorEnum = pgEnum('executor', ['ci', 'local']);
-export const shardStatusEnum = pgEnum('shard_status', ['running', 'passed', 'failed', 'timedout', 'interrupted']);
+export const shardStatusEnum = pgEnum('shard_status', ['running', 'passed', 'failed', 'timedout', 'interrupted', 'incomplete']);
+/** Why a run ended: the reporter finished it, or it went silent and was closed as stale. */
+export const runEndReasonEnum = pgEnum('run_end_reason', ['reporter', 'stale']);
 export const testOutcomeEnum = pgEnum('test_outcome', [
   'running',
   'passed',
@@ -110,6 +112,13 @@ export const runs = pgTable(
     system: jsonb('system').$type<SystemInfo>().notNull().default({}),
     playwright: jsonb('playwright').$type<PlaywrightInfo>().notNull().default({ projects: [] }),
     lastEventAt: timestamp('last_event_at', { withTimezone: true }).notNull().defaultNow(),
+    /** How long the run may stay silent before it counts as stale; fixed when the run starts. */
+    staleAfterMs: integer('stale_after_ms').notNull().default(300_000),
+    endReason: runEndReasonEnum('end_reason'),
+    /** The watchdog workflow run guarding this run, once one is started. */
+    watchdogId: text('watchdog_id'),
+    /** When an instance claimed the right to start the watchdog (see `lib/runs/watchdog`). */
+    watchdogClaimedAt: timestamp('watchdog_claimed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

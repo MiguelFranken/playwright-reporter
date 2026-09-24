@@ -225,6 +225,15 @@ z.object({
 	]),
 	url: z.string()
 });
+z.object({ shardIndex: z.number().int() });
+z.object({ runStatus: z.enum([
+	"running",
+	"passed",
+	"failed",
+	"timedout",
+	"interrupted",
+	"incomplete"
+]) });
 //#endregion
 //#region src/client.ts
 var HttpError = class extends Error {
@@ -246,7 +255,7 @@ var IngestClient = class {
 		this.opts = opts;
 		this.log = log;
 	}
-	async request(path, body, attempt = 0) {
+	async request(path, body, attempt = 0, { maxRetries = this.opts.maxRetries, timeoutMs } = {}) {
 		const url = `${this.opts.serverUrl}${path}`;
 		const json = JSON.stringify(body);
 		let payload = json;
@@ -260,10 +269,12 @@ var IngestClient = class {
 			headers["content-encoding"] = "gzip";
 		}
 		try {
+			const signal = timeoutMs ? AbortSignal.timeout(timeoutMs) : void 0;
 			const res = await fetch(url, {
 				method: "POST",
 				headers,
-				body: payload
+				body: payload,
+				signal
 			});
 			if (!res.ok) {
 				const text = await res.text().catch(() => "");
@@ -271,11 +282,14 @@ var IngestClient = class {
 			}
 			return await res.json();
 		} catch (err) {
-			if (isRetryable(err) && attempt < this.opts.maxRetries) {
+			if (isRetryable(err) && attempt < maxRetries) {
 				const delay = Math.min(8e3, 500 * 2 ** attempt);
 				this.log(`request ${path} failed (${err.message}); retrying in ${delay}ms`);
 				await sleep(delay);
-				return this.request(path, body, attempt + 1);
+				return this.request(path, body, attempt + 1, {
+					maxRetries,
+					timeoutMs
+				});
 			}
 			throw err;
 		}
@@ -294,6 +308,13 @@ var IngestClient = class {
 	}
 	finishRun(runId, body) {
 		return this.request(`/api/ingest/runs/${runId}/finish`, body);
+	}
+	/** One attempt, bounded: the next beat is the retry. */
+	heartbeat(runId, body) {
+		return this.request(`/api/ingest/runs/${runId}/heartbeat`, body, 0, {
+			maxRetries: 0,
+			timeoutMs: 1e4
+		});
 	}
 	async upload(instruction, source, contentType) {
 		const data = source.body ?? (source.path ? await readFile(source.path) : void 0);
@@ -519,6 +540,11 @@ function envBool(v) {
 		""
 	].includes(v.toLowerCase());
 }
+function envNumber(v) {
+	if (v === void 0 || v.trim() === "") return void 0;
+	const n = Number(v);
+	return Number.isFinite(n) && n >= 0 ? n : void 0;
+}
 function detectCiRunId(env) {
 	if (env.GITHUB_RUN_ID) return `gh-${env.GITHUB_RUN_ID}-${env.GITHUB_RUN_ATTEMPT ?? "1"}`;
 	if (env.CI_PIPELINE_ID) return `gl-${env.CI_PIPELINE_ID}`;
@@ -547,6 +573,7 @@ function resolveOptions(opts = {}, env = process.env) {
 		batchSize: opts.batch?.size ?? 50,
 		batchIntervalMs: opts.batch?.intervalMs ?? 2e3,
 		uploadTimeoutMs: opts.uploadTimeoutMs ?? 12e4,
+		heartbeatIntervalMs: opts.heartbeatIntervalMs ?? envNumber(env.PW_REPORTER_HEARTBEAT_MS) ?? 3e4,
 		maxRetries: 5,
 		git: defined({
 			branch: opts.git?.branch ?? env.PW_REPORTER_GIT_BRANCH,
@@ -636,6 +663,49 @@ var EventQueue = class {
 	}
 };
 //#endregion
+//#region src/heartbeat.ts
+/**
+* Tells the server the run is alive while no events flow — a long test, a
+* slow global setup — so it is not closed as abandoned. One beat at a time; a
+* failed beat is not retried, the next one is. A server without the endpoint
+* (404) stops it for good.
+*/
+var Heartbeat = class {
+	intervalMs;
+	beat;
+	log;
+	timer;
+	inFlight = false;
+	constructor(intervalMs, beat, log) {
+		this.intervalMs = intervalMs;
+		this.beat = beat;
+		this.log = log;
+	}
+	start() {
+		if (this.intervalMs <= 0 || this.timer) return;
+		this.timer = setInterval(() => void this.tick(), this.intervalMs);
+		this.timer.unref?.();
+	}
+	stop() {
+		if (this.timer) clearInterval(this.timer);
+		this.timer = void 0;
+	}
+	async tick() {
+		if (this.inFlight) return;
+		this.inFlight = true;
+		try {
+			await this.beat();
+		} catch (err) {
+			if (err instanceof HttpError && err.status === 404) {
+				this.log("server does not accept heartbeats; stopping them");
+				this.stop();
+			} else this.log(`heartbeat failed: ${err.message}`);
+		} finally {
+			this.inFlight = false;
+		}
+	}
+};
+//#endregion
 //#region src/index.ts
 const MAX_TEXT = 65536;
 const MAX_STEPS = 2e3;
@@ -656,6 +726,7 @@ var PlaywrightReporterApp = class {
 	uploadedBytes = 0;
 	disabled = false;
 	uploadTimer;
+	heartbeat;
 	constructor(options = {}) {
 		this.opts = resolveOptions(options);
 		if (!this.opts) {
@@ -705,6 +776,9 @@ var PlaywrightReporterApp = class {
 			this.shardIndex = res.shardIndex;
 			this.runUrl = res.url;
 			this.log(`run #${res.runNumber} started (${res.runId})`);
+			const runId = res.runId;
+			this.heartbeat = new Heartbeat(opts.heartbeatIntervalMs, () => this.client.heartbeat(runId, { shardIndex: this.shardIndex }), (m) => this.log(m));
+			this.heartbeat.start();
 		}).catch((err) => {
 			this.disabled = true;
 			this.warn(`could not start run, reporter disabled: ${err.message}`);
@@ -796,6 +870,7 @@ var PlaywrightReporterApp = class {
 		if (this.disabled || !this.opts) return;
 		await this.startPromise;
 		if (!this.runId) return;
+		this.heartbeat?.stop();
 		try {
 			await this.queue.drain();
 			this.scheduleUploads(true);
@@ -813,6 +888,7 @@ var PlaywrightReporterApp = class {
 		}
 	}
 	async onExit() {
+		this.heartbeat?.stop();
 		if (this.disabled || !this.runId) return;
 		await this.queue.drain().catch(() => void 0);
 	}

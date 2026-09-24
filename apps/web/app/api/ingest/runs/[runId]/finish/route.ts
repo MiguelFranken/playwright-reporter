@@ -1,6 +1,7 @@
 import { runFinishSchema } from '@miguelfranken/protocol';
 import { errorResponse, json, readJson, requireProjectToken } from '@/lib/ingest/http';
 import { finishRun, getRunForProject } from '@/lib/ingest/service';
+import { afterIngest } from '@/lib/runs/watchdog';
 
 export const maxDuration = 60;
 
@@ -10,7 +11,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ run
     const project = await requireProjectToken(request);
     const run = await getRunForProject(project, runId);
     const body = await readJson(request, runFinishSchema);
-    return json(await finishRun(project, run, body));
+    const { watchdog, ...res } = await finishRun(project, run, body);
+    afterIngest(watchdog);
+    return json(res);
   } catch (err) {
     return errorResponse(err);
   }

@@ -5,6 +5,7 @@ import { runEvents, runs } from '@/lib/db/schema';
 import { isUuid } from '@/lib/db/queries/shared';
 import { eventsSince } from '@/lib/ingest/service';
 import { sseResponse } from '@/lib/live/sse';
+import { effectiveStatusSql } from '@/lib/runs/staleness';
 
 export const maxDuration = 300;
 
@@ -35,9 +36,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ team
       return r?.max ?? 0;
     },
     endsWith: (ev) => ev.type === 'run.finished',
-    // A safety net for a run marked stale without its stream seeing the event.
+    // A safety net for a run gone stale without its stream seeing the event
+    // (no watchdog recorded it, or not yet).
     isDone: async () => {
-      const [r] = await db.select({ status: runs.status }).from(runs).where(eq(runs.id, runId));
+      const [r] = await db.select({ status: effectiveStatusSql }).from(runs).where(eq(runs.id, runId));
       return !r || r.status !== 'running';
     },
   });

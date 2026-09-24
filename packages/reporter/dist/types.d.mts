@@ -22,6 +22,12 @@ export interface ReporterOptions {
   /** How long onEnd waits for pending uploads (ms). Default 120000. */
   uploadTimeoutMs?: number;
   /**
+   * How often the run tells the server it is alive while tests run (ms), so a
+   * long silent stretch is not taken for a dead reporter. 0 disables.
+   * Default 30000. Env: PW_REPORTER_HEARTBEAT_MS
+   */
+  heartbeatIntervalMs?: number;
+  /**
    * The commit under test, for runs where neither a CI provider's variables nor
    * a git checkout say it (a test image in Kubernetes, say). Wins over what the
    * reporter detects. Env: PW_REPORTER_GIT_BRANCH, PW_REPORTER_GIT_SHA,
@@ -58,6 +64,7 @@ export interface ResolvedOptions {
   batchSize: number;
   batchIntervalMs: number;
   uploadTimeoutMs: number;
+  heartbeatIntervalMs: number;
   maxRetries: number;
   git: GitOverrides;
   ci: CiOverrides;

@@ -16,9 +16,10 @@ type ActiveListed = ActiveRun & { cursor?: number };
 const INSERT_MS = 500;
 
 /**
- * Fetches each run that starts while the page is open, once, and hands it to
- * `insert`. The run's later events then apply through the part's reducer; the
- * replay after the insert is exact because each row carries its own cursor.
+ * Fetches each run that starts (or resumes after going stale) while the page
+ * is open, once, and hands it to `insert`. The run's later events then apply
+ * through the part's reducer; the replay after the insert is exact because
+ * each row carries its own cursor.
  */
 function useRunInserts<T extends { id: string }>(name: string, itemsUrl: string, insert: (current: T[], fresh: T[]) => T[]) {
   const store = useLiveStore();
@@ -35,7 +36,7 @@ function useRunInserts<T extends { id: string }>(name: string, itemsUrl: string,
       store.merge<T[]>(name, (current) => insert(current, fresh), (ev) => idSet.has(ev.data.runId));
     };
     return store.onEvent((ev: LiveEvent) => {
-      if (ev.type !== 'run.started') return;
+      if (ev.type !== 'run.started' && ev.type !== 'run.resumed') return;
       const current = store.peek<T[]>(name);
       if (current?.some((r) => r.id === ev.data.runId)) return;
       queued.add(ev.data.runId);

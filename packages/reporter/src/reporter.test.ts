@@ -74,6 +74,13 @@ describe('options', () => {
     );
     expect(o).toMatchObject({ token: 't', serverUrl: 'http://x', tags: ['a', 'b'], artifacts: false });
   });
+  it('beats every 30 seconds unless told otherwise', () => {
+    const env = { PW_REPORTER_TOKEN: 't', PW_REPORTER_URL: 'http://x' };
+    expect(resolveOptions({}, env)?.heartbeatIntervalMs).toBe(30_000);
+    expect(resolveOptions({}, { ...env, PW_REPORTER_HEARTBEAT_MS: '0' })?.heartbeatIntervalMs).toBe(0);
+    expect(resolveOptions({}, { ...env, PW_REPORTER_HEARTBEAT_MS: 'often' })?.heartbeatIntervalMs).toBe(30_000);
+    expect(resolveOptions({ heartbeatIntervalMs: 5000 }, { ...env, PW_REPORTER_HEARTBEAT_MS: '0' })?.heartbeatIntervalMs).toBe(5000);
+  });
   it('reads git and CI overrides from env and ignores blank ones', () => {
     const o = resolveOptions(
       {},

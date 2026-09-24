@@ -71,6 +71,12 @@ process.env.STORAGE_LOCAL_DIR = storageDir;
 process.env.BASE_URL = 'http://test.local';
 process.env.BETTER_AUTH_SECRET = 'integration-test-secret-0123456789abcdef0123456789abcdef';
 process.env.INGEST_MAX_BATCH_BYTES ??= String(4 * 1024 * 1024);
+// No workflow runtime here: runs read as stale, and tests close them through
+// `checkStaleRun`, the watchdog's step, directly.
+process.env.RUN_WATCHDOG_DRIVER = 'none';
+// Pinned, not unset: dotenv never overrides a set variable, so a developer's
+// `.env.local` cannot change the timeout the tests assume.
+process.env.RUN_STALE_TIMEOUT_MS = '300000';
 
 export const storageRoot = storageDir;
 

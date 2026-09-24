@@ -16,6 +16,7 @@ declare class PlaywrightReporterApp implements Reporter {
   private uploadedBytes;
   private disabled;
   private uploadTimer;
+  private heartbeat;
   constructor(options?: ReporterOptions);
   printsToStdio(): boolean;
   private log;

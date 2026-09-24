@@ -151,8 +151,11 @@ export function LiveConnection({
           const res = await fetch(`${pollUrl}?since=${store.lastEventId || since || 0}`, { cache: 'no-store' });
           const body = (await res.json()) as {
             events: { id: number; type: string; runId: string; createdAt: string; payload: Record<string, unknown> }[];
+            /** The run is over (the stream's `done`); only the run page's poll says so. */
+            done?: boolean;
           };
           for (const e of body.events) receive(toLiveEvent(e.id, e.type, { ...e.payload, runId: e.runId, at: e.createdAt }));
+          if (body.done) finish();
         } catch {
           /* keep polling */
         }
