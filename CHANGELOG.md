@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.0.8](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.7...v0.0.8) (2026-09-24)
+
+### Features
+
+* make the whole run row clickable, even out badge sizes and list active runs above the filters ([5a1aa7b](https://github.com/MiguelFranken/playwright-reporter/commit/5a1aa7b7ce698516ea6d97e1ae2e8c60f0b71c7c))
+
+### Bug Fixes
+
+* name a run's commit by its hash when no message was reported ([#11](https://github.com/MiguelFranken/playwright-reporter/issues/11)) ([9b554c0](https://github.com/MiguelFranken/playwright-reporter/commit/9b554c06c527472437db3784a1f1b218b4ebe719))
+
 ## [0.0.7](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.6...v0.0.7) (2026-09-24)
 
 ### Features
