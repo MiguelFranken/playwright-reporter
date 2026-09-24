@@ -224,3 +224,20 @@ describe('collectPlaywrightInfo', () => {
     expect(info.projects[0]).toMatchObject({ name: 'bare', viewport: null });
   });
 });
+
+describe('git and CI overrides', () => {
+  const bare = { metadata: {}, rootDir: '/nonexistent', projects: [] } as unknown as Parameters<typeof collectGitInfo>[0];
+
+  it('win over what is detected, and bring their own short sha', () => {
+    const info = collectGitInfo(bare, { GITHUB_ACTIONS: 'true', GITHUB_SHA: 'd'.repeat(40), GITHUB_REPOSITORY: 'a/b' }, {
+      sha: 'abcdef1234567890',
+      branch: 'stage',
+      repoUrl: 'https://gitlab.example/mop/app',
+    });
+    expect(info).toMatchObject({ sha: 'abcdef1234567890', shortSha: 'abcdef1', branch: 'stage', repoUrl: 'https://gitlab.example/mop/app' });
+  });
+
+  it('leave detected CI fields alone that they do not set', () => {
+    expect(collectCiInfo({ CI: 'true' }, { buildUrl: 'https://logs.example/job/1' })).toEqual({ provider: 'unknown', buildUrl: 'https://logs.example/job/1' });
+  });
+});

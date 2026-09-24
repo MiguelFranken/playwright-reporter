@@ -92,8 +92,8 @@ export default class PlaywrightReporterApp implements Reporter {
       executor: detectExecutor(env),
       environment: opts.environment,
       tags: opts.tags,
-      git: collectGitInfo(config, env),
-      ci: collectCiInfo(env),
+      git: collectGitInfo(config, env, opts.git),
+      ci: collectCiInfo(env, opts.ci),
       system: collectSystemInfo(),
       playwright: collectPlaywrightInfo(config),
     };

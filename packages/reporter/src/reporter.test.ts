@@ -81,6 +81,25 @@ describe('options', () => {
     expect(resolveOptions({}, { ...env, PW_REPORTER_HEARTBEAT_MS: 'often' })?.heartbeatIntervalMs).toBe(30_000);
     expect(resolveOptions({ heartbeatIntervalMs: 5000 }, { ...env, PW_REPORTER_HEARTBEAT_MS: '0' })?.heartbeatIntervalMs).toBe(5000);
   });
+  it('reads git and CI overrides from env and ignores blank ones', () => {
+    const o = resolveOptions(
+      {},
+      {
+        PW_REPORTER_TOKEN: 't',
+        PW_REPORTER_URL: 'http://x',
+        PW_REPORTER_GIT_BRANCH: 'stage',
+        PW_REPORTER_GIT_SHA: '',
+        PW_REPORTER_GIT_REPO_URL: 'https://gitlab.example/mop/app',
+        PW_REPORTER_BUILD_URL: 'https://logs.example/1',
+      },
+    );
+    expect(o?.git).toEqual({ branch: 'stage', repoUrl: 'https://gitlab.example/mop/app' });
+    expect(o?.ci).toEqual({ buildUrl: 'https://logs.example/1' });
+  });
+  it('prefers explicit options over env', () => {
+    const o = resolveOptions({ token: 't', serverUrl: 'http://x', git: { branch: 'main' } }, { PW_REPORTER_GIT_BRANCH: 'stage' });
+    expect(o?.git.branch).toBe('main');
+  });
   it('detects github run id', () => {
     expect(detectCiRunId({ GITHUB_RUN_ID: '1', GITHUB_RUN_ATTEMPT: '2' })).toBe('gh-1-2');
   });
