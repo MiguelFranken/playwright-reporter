@@ -140,8 +140,9 @@ Git and CI metadata (branch, commit, author, PR, build URL) are collected from P
 Kubernetes job, say) has none of those; set `git` / `ci` (or their env vars) and they win over detection.
 
 When the tests run through Turborepo in strict env mode, list the `PW_REPORTER_*` variables in the task's
-`passThroughEnv`, or turbo removes them before Playwright starts. The reporter never fails a test run:
-network errors are retried and then logged.
+`passThroughEnv`, or turbo removes them before Playwright starts.
+
+The reporter never fails a test run: network errors are retried and then logged.
 
 ## Releases
 
