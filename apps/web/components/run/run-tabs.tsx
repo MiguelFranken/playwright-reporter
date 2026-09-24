@@ -4,6 +4,7 @@ import { RunTabs as RunTabsView } from '@miguelfranken/ui/views/run/run-tabs';
 import { RunTabSkeleton } from '@miguelfranken/ui/views/run/run-skeleton';
 import type { RunTab } from '@miguelfranken/ui/lib/run-tab';
 import { useUrlTab } from '@/components/filters/url-filters';
+import { useLivePeek } from '@/components/live/live-store';
 
 /**
  * URL-driven tab strip; the active tab's content is rendered by the server
@@ -30,8 +31,12 @@ export function RunTabs({
     resets: ['outcome', 'q', 'file', 'signature', 'sort', 'status'],
   });
 
+  // The summary's badge is the run's test count, which grows while it runs.
+  const total = useLivePeek<{ counts: { total: number } } | null>('header', null)?.counts.total;
+  const liveCounts = total === undefined ? counts : { ...counts, summary: total };
+
   return (
-    <RunTabsView value={tab} counts={counts} onValueChange={select}>
+    <RunTabsView value={tab} counts={liveCounts} onValueChange={select}>
       {switching ? <RunTabSkeleton tab={tab} /> : children}
     </RunTabsView>
   );

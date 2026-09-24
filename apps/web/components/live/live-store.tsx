@@ -1,0 +1,219 @@
+'use client';
+
+import { useRouter } from 'next/navigation';
+import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { LiveIndicator, type LiveState } from '@miguelfranken/ui/patterns/live-indicator';
+import { LIVE_EVENT_TYPES, type LiveEvent, type LiveEventType } from '@/lib/live/events';
+import { LiveStore, type Reducer } from '@/lib/live/store';
+
+const LiveStoreContext = createContext<LiveStore | null>(null);
+
+/** One store per page: every live view on it reads from the same stream. */
+export function LiveStoreProvider({ children }: { children: React.ReactNode }) {
+  const [store] = useState(() => new LiveStore());
+  return <LiveStoreContext.Provider value={store}>{children}</LiveStoreContext.Provider>;
+}
+
+export function useLiveStore() {
+  const store = useContext(LiveStoreContext);
+  if (!store) throw new Error('useLiveStore needs a <LiveStoreProvider>');
+  return store;
+}
+
+function useStoreVersion(store: LiveStore) {
+  return useSyncExternalStore(store.subscribe, store.getVersion, () => 0);
+}
+
+/**
+ * A view's data, kept current by the stream. The server-rendered `value` is
+ * shown until the store has taken it over, and whenever the server sends a
+ * newer one (a navigation, a filter change) it replaces the live copy.
+ */
+export function useLivePart<T>(name: string, value: T, cursor: number, reduce: Reducer<T>, source: unknown = value): T {
+  const store = useLiveStore();
+  useStoreVersion(store);
+  useEffect(() => {
+    store.hydrate(name, source, cursor, value, reduce);
+    // `source` stands for `value` and `cursor`: both come from the same server render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store, name, source]);
+  return store.read<T>(name, source) ?? value;
+}
+
+/** Another view's live data, e.g. the header's counts on the summary tab. */
+export function useLivePeek<T>(name: string, fallback: T): T {
+  const store = useLiveStore();
+  useStoreVersion(store);
+  return store.peek<T>(name) ?? fallback;
+}
+
+function toLiveEvent(id: number, type: string, data: Record<string, unknown>): LiveEvent {
+  return { id, type, data } as unknown as LiveEvent;
+}
+
+/** Events after which the page's structure changes (a run appears, a shard ends). */
+const STRUCTURAL: LiveEventType[] = ['run.started', 'run.finished', 'shard.started', 'shard.finished'];
+/** At most one route refresh per this interval on a project page. */
+const REFRESH_THROTTLE_MS = 5000;
+/** A tab in the background this long closes its stream; it resumes from its cursor on return. */
+const HIDDEN_CLOSE_MS = 30_000;
+
+/**
+ * Opens the page's event stream and feeds the store.
+ *
+ * - `run`: one run's stream. It ends with the run; the route is then refreshed
+ *   once, because finishing a run settles results in bulk on the server.
+ * - `project`: every run of a project. Counts are applied from the events; a
+ *   run starting or finishing changes which rows exist, and that refreshes the
+ *   route — throttled, and only for those few events.
+ */
+export function LiveConnection({
+  streamUrl,
+  pollUrl,
+  enabled = true,
+  mode = 'run',
+  label = 'Live',
+  className,
+}: {
+  streamUrl: string;
+  pollUrl?: string;
+  enabled?: boolean;
+  mode?: 'run' | 'project';
+  label?: string;
+  className?: string;
+}) {
+  const store = useLiveStore();
+  const router = useRouter();
+  const [state, setState] = useState<LiveState>(enabled ? 'connecting' : 'off');
+  const routerRef = useRef(router);
+  routerRef.current = router;
+
+  useEffect(() => {
+    if (!enabled) {
+      setState('off');
+      return;
+    }
+    let es: EventSource | null = null;
+    let pollTimer: ReturnType<typeof setTimeout> | null = null;
+    let hiddenTimer: ReturnType<typeof setTimeout> | null = null;
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    let lastRefresh = 0;
+    let failures = 0;
+    let stopped = false;
+    let since: number | null = null;
+
+    const refresh = (delay: number) => {
+      if (refreshTimer) return;
+      const wait = Math.max(delay, lastRefresh + REFRESH_THROTTLE_MS - Date.now());
+      refreshTimer = setTimeout(() => {
+        refreshTimer = null;
+        lastRefresh = Date.now();
+        routerRef.current.refresh();
+      }, wait);
+    };
+
+    const finish = () => {
+      stopped = true;
+      close();
+      setState('done');
+      store.streamFrom = null;
+      refresh(0);
+    };
+
+    const receive = (ev: LiveEvent) => {
+      store.apply(ev);
+      if (mode === 'run' && ev.type === 'run.finished') finish();
+      else if (mode === 'project' && STRUCTURAL.includes(ev.type)) refresh(1000);
+    };
+
+    const close = () => {
+      es?.close();
+      es = null;
+      if (pollTimer) clearTimeout(pollTimer);
+      pollTimer = null;
+    };
+
+    const startPolling = () => {
+      if (!pollUrl || stopped) return;
+      setState('polling');
+      const tick = async () => {
+        if (stopped) return;
+        if (document.hidden) {
+          pollTimer = setTimeout(tick, 5000);
+          return;
+        }
+        try {
+          const res = await fetch(`${pollUrl}?since=${store.lastEventId || since || 0}`, { cache: 'no-store' });
+          const body = (await res.json()) as {
+            events: { id: number; type: string; runId: string; createdAt: string; payload: Record<string, unknown> }[];
+          };
+          for (const e of body.events) receive(toLiveEvent(e.id, e.type, { ...e.payload, runId: e.runId, at: e.createdAt }));
+        } catch {
+          /* keep polling */
+        }
+        if (!stopped) pollTimer = setTimeout(tick, 2000);
+      };
+      void tick();
+    };
+
+    const connect = (from: number) => {
+      if (stopped) return;
+      close();
+      since = from;
+      store.streamFrom = from;
+      es = new EventSource(`${streamUrl}?since=${from}`);
+      es.onopen = () => {
+        failures = 0;
+        setState('live');
+      };
+      const onEvent = (e: MessageEvent) => {
+        if (!e.lastEventId) return;
+        receive(toLiveEvent(Number(e.lastEventId), e.type, JSON.parse(e.data)));
+      };
+      for (const t of LIVE_EVENT_TYPES) es.addEventListener(t, onEvent as EventListener);
+      // The server closes the stream before its function limit; resume at once.
+      es.addEventListener('bye', () => connect(store.lastEventId || from));
+      es.addEventListener('done', finish);
+      es.onerror = () => {
+        failures++;
+        if (failures >= 3 && pollUrl) {
+          close();
+          startPolling();
+        } else {
+          setState('connecting');
+        }
+      };
+    };
+
+    // A part hydrated from a snapshot older than the stream needs those events sent again.
+    store.onNeedStream = (cursor) => connect(Math.min(cursor, store.lastEventId || cursor));
+    const first = store.minCursor;
+    if (first !== null) connect(first);
+
+    const onVisibility = () => {
+      if (document.hidden) {
+        hiddenTimer = setTimeout(() => {
+          close();
+          setState('connecting');
+        }, HIDDEN_CLOSE_MS);
+      } else {
+        if (hiddenTimer) clearTimeout(hiddenTimer);
+        hiddenTimer = null;
+        if (!es && !pollTimer && !stopped && since !== null) connect(store.lastEventId || since);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      stopped = true;
+      close();
+      store.onNeedStream = null;
+      store.streamFrom = null;
+      document.removeEventListener('visibilitychange', onVisibility);
+      if (hiddenTimer) clearTimeout(hiddenTimer);
+      if (refreshTimer) clearTimeout(refreshTimer);
+    };
+  }, [store, streamUrl, pollUrl, enabled, mode]);
+
+  return <LiveIndicator state={state} label={label} className={className} />;
+}

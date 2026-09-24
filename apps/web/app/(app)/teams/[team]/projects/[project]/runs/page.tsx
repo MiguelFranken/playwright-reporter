@@ -3,15 +3,14 @@ import { Suspense } from 'react';
 import { EmptyState } from '@miguelfranken/ui/patterns/empty-state';
 import { Pagination } from '@/components/filters/pagination';
 import { RangeToggle, UrlSearch, UrlSelect } from '@/components/filters/url-filters';
-import { LiveRefresh } from '@/components/live/live-refresh';
+import { LiveActiveRuns, LiveRunsTable } from '@/components/live/live-runs';
+import { LiveConnection, LiveStoreProvider } from '@/components/live/live-store';
 import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
-import { ActiveRuns } from '@miguelfranken/ui/views/runs/active-runs';
-import { RunsTable } from '@miguelfranken/ui/views/runs/runs-table';
 import { FilterSkeleton, TableRowsSkeleton } from '@miguelfranken/ui/patterns/skeletons';
 import { requireProject } from '@/lib/auth/access';
-import { listActiveRuns, listBranches, listEnvironments, listRuns } from '@/lib/db/queries/runs';
+import { listActiveRunsWithCursor, listBranches, listEnvironments, listRuns } from '@/lib/db/queries/runs';
 import { parsePage, parseRange } from '@/lib/db/queries/shared';
-import { projectHrefs, toRunListItem } from '@/lib/view-models';
+import { toRunListItem } from '@/lib/view-models';
 
 type Params = Promise<{ team: string; project: string }>;
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -32,7 +31,7 @@ function first(v: string | string[] | undefined) {
 
 export default function RunsPage({ params, searchParams }: Props) {
   return (
-    <>
+    <LiveStoreProvider>
       <PageHeader
         title={
           <span className="inline-flex items-center gap-3">
@@ -63,14 +62,14 @@ export default function RunsPage({ params, searchParams }: Props) {
       <Suspense fallback={<TableRowsSkeleton rows={10} columns={[12, 34, 16, 20, 8, 10]} className="panel" />}>
         <Results params={params} searchParams={searchParams} />
       </Suspense>
-    </>
+    </LiveStoreProvider>
   );
 }
 
 async function LiveBadge({ params }: { params: Params }) {
   const { team, project: projectSlug } = await params;
   const { project } = await requireProject(team, projectSlug);
-  return <LiveRefresh streamUrl={`/api/teams/${team}/projects/${project.slug}/live`} label="Live" mode="project" />;
+  return <LiveConnection streamUrl={`/api/teams/${team}/projects/${project.slug}/live`} label="Live" mode="project" />;
 }
 
 async function Facets({ params }: { params: Params }) {
@@ -88,8 +87,8 @@ async function Facets({ params }: { params: Params }) {
 async function Active({ params }: { params: Params }) {
   const { team, project: projectSlug } = await params;
   const { project } = await requireProject(team, projectSlug);
-  const runs = await listActiveRuns(project.id);
-  return <ActiveRuns hrefs={projectHrefs(`/teams/${team}/projects/${project.slug}`)} runs={runs.map(toRunListItem)} />;
+  const { runs, cursor } = await listActiveRunsWithCursor(project.id);
+  return <LiveActiveRuns base={`/teams/${team}/projects/${project.slug}`} runs={runs.map(toRunListItem)} cursor={cursor} />;
 }
 
 async function Results({ params, searchParams }: Props) {
@@ -130,7 +129,7 @@ async function Results({ params, searchParams }: Props) {
 
   return (
     <>
-      <RunsTable hrefs={projectHrefs(base)} runs={result.rows.map(toRunListItem)} />
+      <LiveRunsTable base={base} runs={result.rows.map(toRunListItem)} cursor={result.cursor} />
       <Pagination page={result.page} pageSize={result.pageSize} total={result.total} />
     </>
   );

@@ -15,6 +15,7 @@ import { POST as postUploadUrls } from '@/app/api/ingest/runs/[runId]/attachment
 import { POST as postComplete } from '@/app/api/ingest/runs/[runId]/attachments/[attachmentId]/complete/route';
 import { PUT as putUpload } from '@/app/api/ingest/uploads/[attachmentId]/route';
 import { apiTokens, attachments, runs } from '@/lib/db/schema';
+import { getStorage } from '@/lib/storage';
 import { attachmentRef, attemptEnd, runStart, testBegin } from './factories';
 import { createTenant, describe, expect, test, vi } from './fixtures';
 
@@ -287,8 +288,28 @@ describe('attachment upload', () => {
     expect(row.status).toBe('pending');
   });
 
-  test('the complete endpoint marks a presigned upload done with its reported size', async ({ db, tenant }) => {
+  test('the complete endpoint leaves an upload pending while the store does not have it', async ({ db, tenant }) => {
     const { started, ref } = await runWithAttachment(tenant.token);
+
+    const response = await postComplete(
+      ingestRequest(
+        `http://test.local/api/ingest/runs/${started.runId}/attachments/${ref.id}/complete`,
+        { size: 4242 },
+        { token: tenant.token },
+      ),
+      params({ runId: started.runId, attachmentId: ref.id }),
+    );
+    expect(response.status).toBe(409);
+
+    const [row] = await db.select().from(attachments).where(eq(attachments.id, ref.id));
+    expect(row.status).toBe('pending');
+  });
+
+  test('the complete endpoint marks a presigned upload done with the size the store reports', async ({ db, tenant }) => {
+    const { started, ref } = await runWithAttachment(tenant.token);
+    const [pending] = await db.select().from(attachments).where(eq(attachments.id, ref.id));
+    // What a presigned PUT does: the bytes reach the store without passing through the app.
+    await getStorage().put(pending.storageKey, new Uint8Array([1, 2, 3]), { contentType: 'image/png' });
 
     const response = await postComplete(
       ingestRequest(
@@ -304,6 +325,7 @@ describe('attachment upload', () => {
       .select()
       .from(attachments)
       .where(and(eq(attachments.id, ref.id), eq(attachments.status, 'uploaded')));
-    expect(row.sizeBytes).toBe(4242);
+    // The store's size, not the one the reporter claimed.
+    expect(row.sizeBytes).toBe(3);
   });
 });

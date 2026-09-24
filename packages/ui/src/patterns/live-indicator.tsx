@@ -10,7 +10,7 @@ const DOT: Record<Exclude<LiveState, 'off'>, string> = {
 };
 
 /**
- * The visible half of the app's live-refresh machinery. The EventSource, the
+ * The visible half of the app's live machinery (`LiveConnection`). The EventSource, the
  * polling fallback and `router.refresh()` all stay in the app; this renders the
  * state they arrive at, which is the part worth reviewing in a catalogue.
  */

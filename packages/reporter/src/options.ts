@@ -44,3 +44,8 @@ export function resolveOptions(
     maxRetries: 5,
   };
 }
+
+/** Whether Playwright was started to list the tests rather than run them. */
+export function isListMode(argv: readonly string[] = process.argv) {
+  return argv.includes('--list');
+}

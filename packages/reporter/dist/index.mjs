@@ -531,24 +531,37 @@ function resolveOptions(opts = {}, env = process.env) {
 		maxRetries: 5
 	};
 }
+/** Whether Playwright was started to list the tests rather than run them. */
+function isListMode(argv = process.argv) {
+	return argv.includes("--list");
+}
 //#endregion
 //#region src/queue.ts
+/** Per request, however far behind the sender is. The server accepts 1000 events and 4 MB. */
+const MAX_BATCH_EVENTS = 250;
+const MAX_BATCH_BYTES = 1048576;
 /**
 * Batches events and flushes them when the batch is full or the interval elapses.
 * Flushes are serialized so the server always sees increasing sequence numbers.
+*
+* A batch is cut when its send *starts*, not when the flush is asked for: while
+* one request is in flight, everything that arrives joins the next one. A slow
+* server then gets fewer, larger requests instead of a growing line of small ones.
 */
 var EventQueue = class {
 	size;
 	intervalMs;
 	send;
+	maxBatch;
 	pending = [];
 	timer;
 	chain = Promise.resolve();
 	seq = 0;
-	constructor(size, intervalMs, send) {
+	constructor(size, intervalMs, send, maxBatch = Math.max(size, MAX_BATCH_EVENTS)) {
 		this.size = size;
 		this.intervalMs = intervalMs;
 		this.send = send;
+		this.maxBatch = maxBatch;
 	}
 	nextSeq() {
 		return this.seq++;
@@ -567,10 +580,22 @@ var EventQueue = class {
 			this.timer = void 0;
 		}
 		if (this.pending.length === 0) return this.chain;
-		const batch = this.pending;
-		this.pending = [];
-		this.chain = this.chain.then(() => this.send(batch)).catch(() => void 0);
+		this.chain = this.chain.then(() => this.sendPending()).catch(() => void 0);
 		return this.chain;
+	}
+	/** Sends what is pending now, in as few requests as the limits allow. */
+	async sendPending() {
+		while (this.pending.length) {
+			let bytes = 0;
+			let count = 0;
+			while (count < this.pending.length && count < this.maxBatch) {
+				bytes += JSON.stringify(this.pending[count]).length;
+				if (count > 0 && bytes > MAX_BATCH_BYTES) break;
+				count++;
+			}
+			const batch = this.pending.splice(0, count);
+			await this.send(batch).catch(() => void 0);
+		}
 	}
 	/** Flushes everything and waits for all in-flight sends. */
 	async drain() {
@@ -615,6 +640,10 @@ var PlaywrightReporterApp = class {
 	}
 	onBegin(config, suite) {
 		if (this.disabled || !this.opts) return;
+		if (isListMode()) {
+			this.disabled = true;
+			return;
+		}
 		const opts = this.opts;
 		this.config = config;
 		this.startedAt = /* @__PURE__ */ new Date();
@@ -788,7 +817,7 @@ var PlaywrightReporterApp = class {
 				try {
 					const size = await this.client.upload(instr, item.source, item.ref.contentType);
 					this.uploadedBytes += size;
-					await this.client.completeUpload(runId, item.ref.id, size);
+					if (instr.strategy !== "proxy") await this.client.completeUpload(runId, item.ref.id, size);
 				} catch (err) {
 					this.warn(`upload of ${item.ref.name} failed: ${err.message}`);
 				}

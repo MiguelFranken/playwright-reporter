@@ -1,6 +1,6 @@
-import { and, asc, desc, eq, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import { db } from '@/lib/db/drizzle';
-import { attachments, runShards, runs, testAttempts, testResults, tests, type Attachment, type Run, type RunShard, type TestAttempt } from '@/lib/db/schema';
+import { attachments, runEvents, runShards, runs, testAttempts, testResults, tests, type Attachment, type Run, type RunShard, type TestAttempt } from '@/lib/db/schema';
 import { markStaleRuns } from '@/lib/ingest/service';
 import { andAll, num, sinceDate } from './shared';
 
@@ -46,6 +46,25 @@ const countsSql = sql<RunCounts>`(
   ) from ${testResults} tr where tr.run_id = ${sql.raw('"runs"."id"')}
 )`;
 
+/**
+ * The newest event id a view's data already reflects. The live views apply
+ * every later event on top, so for the ones that keep running totals (counts,
+ * spec tallies, error groups) it has to come from the *same statement* as the
+ * totals: a separate query could land on either side of a commit and have an
+ * event counted twice or not at all. A statement sees one snapshot.
+ */
+const runCursorSql = (runId: SQL | string) =>
+  sql<number>`(select coalesce(max(${runEvents.id}), 0)::bigint from ${runEvents} where ${runEvents.runId} = ${runId})`.mapWith(Number);
+const projectCursorSql = (projectId: string) =>
+  sql<number>`(select coalesce(max(${runEvents.id}), 0)::bigint from ${runEvents} where ${runEvents.projectId} = ${projectId})`.mapWith(Number);
+
+/**
+ * An empty result has no row to carry the cursor. `0` — replay every event the
+ * client has — is exact then: had any of those events touched this view's
+ * data, the snapshot would not have been empty.
+ */
+const EMPTY_CURSOR = 0;
+
 export interface RunFilters {
   status?: string;
   branch?: string;
@@ -71,7 +90,7 @@ export async function listRuns(projectId: string, filters: RunFilters = {}) {
       : undefined,
   ]);
   const rows = await db
-    .select({ run: runs, counts: countsSql })
+    .select({ run: runs, counts: countsSql, cursor: projectCursorSql(projectId) })
     .from(runs)
     .where(where)
     .orderBy(desc(runs.startedAt))
@@ -79,6 +98,7 @@ export async function listRuns(projectId: string, filters: RunFilters = {}) {
     .offset((page - 1) * pageSize);
   const [{ total }] = await db.select({ total: sql<number>`count(*)::int` }).from(runs).where(where);
   return {
+    cursor: rows[0]?.cursor ?? EMPTY_CURSOR,
     rows: rows.slice(0, pageSize).map((r) => ({ ...r.run, counts: parseCounts(r.counts) }) as RunWithCounts),
     hasMore: rows.length > pageSize,
     total: num(total),
@@ -88,9 +108,13 @@ export async function listRuns(projectId: string, filters: RunFilters = {}) {
 }
 
 export async function listActiveRuns(projectId: string) {
+  return (await listActiveRunsWithCursor(projectId)).runs;
+}
+
+export async function listActiveRunsWithCursor(projectId: string) {
   await markStaleRuns(projectId);
   const rows = await db
-    .select({ run: runs, counts: countsSql })
+    .select({ run: runs, counts: countsSql, cursor: projectCursorSql(projectId) })
     .from(runs)
     .where(and(eq(runs.projectId, projectId), eq(runs.status, 'running')))
     .orderBy(desc(runs.startedAt))
@@ -102,22 +126,27 @@ export async function listActiveRuns(projectId: string) {
       shards: await db.select().from(runShards).where(eq(runShards.runId, r.run.id)).orderBy(asc(runShards.shardIndex)),
     })),
   );
-  return withShards as (RunWithCounts & { shards: RunShard[] })[];
+  return {
+    runs: withShards as (RunWithCounts & { shards: RunShard[] })[],
+    cursor: rows[0]?.cursor ?? EMPTY_CURSOR,
+  };
 }
 
 export async function getRunByNumber(projectId: string, number: number) {
   await markStaleRuns(projectId);
   const [row] = await db
-    .select({ run: runs, counts: countsSql })
+    .select({ run: runs, counts: countsSql, cursor: runCursorSql(sql.raw('"runs"."id"')) })
     .from(runs)
     .where(and(eq(runs.projectId, projectId), eq(runs.number, number)));
   if (!row) return null;
   const shards = await db.select().from(runShards).where(eq(runShards.runId, row.run.id)).orderBy(asc(runShards.shardIndex));
-  return { ...row.run, counts: parseCounts(row.counts), shards } as RunWithCounts & { shards: RunShard[] };
+  return { ...row.run, counts: parseCounts(row.counts), shards, cursor: row.cursor } as RunWithCounts & { shards: RunShard[]; cursor: number };
 }
 
 
 export interface RunResultFilters {
+  /** Exactly these results — how the live views fetch rows they only know from an event. */
+  ids?: string[];
   outcome?: string;
   q?: string;
   file?: string;
@@ -127,6 +156,7 @@ export interface RunResultFilters {
 export async function listRunResults(runId: string, filters: RunResultFilters = {}): Promise<RunResultRow[]> {
   const where = andAll([
     eq(testResults.runId, runId),
+    filters.ids ? inArray(testResults.id, filters.ids) : undefined,
     filters.outcome && filters.outcome !== 'all'
       ? filters.outcome === 'failed'
         ? sql`${testResults.outcome} in ('failed','timedout','interrupted')`
@@ -175,8 +205,13 @@ export async function listRunResults(runId: string, filters: RunResultFilters = 
 
 
 export async function listRunSpecs(runId: string): Promise<SpecSummary[]> {
+  return (await listRunSpecsWithCursor(runId)).specs;
+}
+
+export async function listRunSpecsWithCursor(runId: string): Promise<{ specs: SpecSummary[]; cursor: number }> {
   const rows = await db
     .select({
+      cursor: runCursorSql(runId),
       file: tests.file,
       total: sql<number>`count(*)::int`,
       passed: sql<number>`count(*) filter (where ${testResults.outcome} = 'passed')::int`,
@@ -191,13 +226,21 @@ export async function listRunSpecs(runId: string): Promise<SpecSummary[]> {
     .where(eq(testResults.runId, runId))
     .groupBy(tests.file)
     .orderBy(asc(tests.file));
-  return rows;
+  return {
+    specs: rows.map(({ cursor: _cursor, ...spec }) => spec),
+    cursor: rows[0]?.cursor ?? EMPTY_CURSOR,
+  };
 }
 
 
 export async function listRunErrorGroups(runId: string): Promise<ErrorGroup[]> {
+  return (await listRunErrorGroupsWithCursor(runId)).groups;
+}
+
+export async function listRunErrorGroupsWithCursor(runId: string): Promise<{ groups: ErrorGroup[]; cursor: number }> {
   const rows = await db
     .select({
+      cursor: runCursorSql(runId),
       signature: testResults.errorSignature,
       message: sql<string>`min(${testResults.errorMessage})`,
       count: sql<number>`count(*)::int`,
@@ -211,7 +254,10 @@ export async function listRunErrorGroups(runId: string): Promise<ErrorGroup[]> {
     .where(and(eq(testResults.runId, runId), sql`${testResults.errorSignature} is not null`))
     .groupBy(testResults.errorSignature)
     .orderBy(desc(sql`count(*)`));
-  return rows.filter((r) => r.signature) as ErrorGroup[];
+  return {
+    groups: rows.filter((r) => r.signature).map(({ cursor: _cursor, ...group }) => group) as ErrorGroup[],
+    cursor: rows[0]?.cursor ?? EMPTY_CURSOR,
+  };
 }
 
 export type AttemptWithAttachments = TestAttempt & { attachments: Attachment[] };

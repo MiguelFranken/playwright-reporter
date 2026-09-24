@@ -34,6 +34,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ team
         .where(eq(runEvents.runId, runId));
       return r?.max ?? 0;
     },
+    endsWith: (ev) => ev.type === 'run.finished',
+    // A safety net for a run marked stale without its stream seeing the event.
     isDone: async () => {
       const [r] = await db.select({ status: runs.status }).from(runs).where(eq(runs.id, runId));
       return !r || r.status !== 'running';

@@ -1,17 +1,49 @@
 import { describe, expect, it, vi } from 'vitest';
 import { EventQueue } from './queue';
-import { detectCiRunId, resolveOptions } from './options';
+import { detectCiRunId, isListMode, resolveOptions } from './options';
 import { normalizeRemote } from './metadata';
 
 describe('EventQueue', () => {
   it('flushes when full and keeps order', async () => {
     const sent: number[][] = [];
-    const q = new EventQueue(2, 10_000, async (evs) => {
-      sent.push(evs.map((e) => e.seq));
-    });
+    const q = new EventQueue(
+      2,
+      10_000,
+      async (evs) => {
+        sent.push(evs.map((e) => e.seq));
+      },
+      2,
+    );
     for (let i = 0; i < 5; i++) q.push({ seq: q.nextSeq(), type: 'run.log', level: 'info', message: 'x' });
     await q.drain();
     expect(sent).toEqual([[0, 1], [2, 3], [4]]);
+  });
+
+  it('folds what arrives during a slow send into the next request', async () => {
+    const sent: number[][] = [];
+    let release!: () => void;
+    const q = new EventQueue(1, 10_000, async (evs) => {
+      sent.push(evs.map((e) => e.seq));
+      if (sent.length === 1) await new Promise<void>((r) => (release = r));
+    });
+    q.push({ seq: q.nextSeq(), type: 'run.log', level: 'info', message: 'x' });
+    await Promise.resolve();
+    // The first request is in flight; these four would each have been a request of their own.
+    for (let i = 0; i < 4; i++) q.push({ seq: q.nextSeq(), type: 'run.log', level: 'info', message: 'x' });
+    release();
+    await q.drain();
+    expect(sent).toEqual([[0], [1, 2, 3, 4]]);
+  });
+
+  it('keeps a request under the size limit', async () => {
+    const sent: number[] = [];
+    const q = new EventQueue(1000, 10_000, async (evs) => {
+      sent.push(evs.length);
+    });
+    const big = 'x'.repeat(300 * 1024);
+    for (let i = 0; i < 5; i++) q.push({ seq: q.nextSeq(), type: 'run.log', level: 'info', message: big });
+    await q.drain();
+    expect(sent).toEqual([3, 2]);
   });
 
   it('flushes on interval', async () => {
@@ -50,5 +82,12 @@ describe('options', () => {
 describe('normalizeRemote', () => {
   it('converts ssh remotes', () => {
     expect(normalizeRemote('git@github.com:org/repo.git')).toBe('https://github.com/org/repo');
+  });
+});
+
+describe('isListMode', () => {
+  it('recognises `playwright test --list`', () => {
+    expect(isListMode(['node', 'playwright', 'test', 'tests/footer', '--list'])).toBe(true);
+    expect(isListMode(['node', 'playwright', 'test', 'tests/footer'])).toBe(false);
   });
 });
