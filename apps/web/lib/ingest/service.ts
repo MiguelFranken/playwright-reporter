@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { and, eq, getTableColumns, gt, inArray, lt, lte, sql } from 'drizzle-orm';
+import { and, eq, getTableColumns, gt, inArray, lte, sql } from 'drizzle-orm';
 import {
   classifyAttachment,
   type AttemptEndEvent,
   type EventBatch,
   type RunFinish,
+  type RunHeartbeat,
   type RunStart,
   type TestBeginEvent,
   type UploadInstruction,
@@ -25,25 +26,15 @@ import {
 import { errorSignature, firstLine } from '@/lib/metrics/error-signature';
 import { baseUrl, getStorage, storageKey } from '@/lib/storage';
 import type { AttemptEndPayload, TestBeginPayload } from '@/lib/live/events';
+import { projectStaleTimeoutMs } from '@/lib/runs/config';
+import { clampDuration, MAX_DURATION_MS, reviveRun, settleOpenResults } from '@/lib/runs/lifecycle';
+import type { WatchdogEffect } from '@/lib/runs/watchdog/types';
 import { IngestError, type TokenProject } from './http';
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Outcome = NonNullable<(typeof testResults.$inferInsert)['outcome']>;
 
-export const STALE_RUN_MS = 10 * 60 * 1000;
-
-/**
- * Every `duration_ms` column is a Postgres `integer`. Durations are derived
- * from timestamps a reporter supplies, so a skewed clock or a run that stayed
- * open for weeks would otherwise overflow the column and turn an ingest call
- * into a 500. Clamping keeps the value monotone and the request successful.
- */
-const MAX_DURATION_MS = 2_147_483_647;
-
-export function clampDuration(ms: number): number {
-  if (!Number.isFinite(ms)) return 0;
-  return Math.min(MAX_DURATION_MS, Math.max(0, Math.round(ms)));
-}
+export { clampDuration };
 
 export function runUrl(project: TokenProject, runNumber: number) {
   return `${baseUrl()}/teams/${project.teamSlug}/projects/${project.slug}/runs/${runNumber}`;
@@ -100,6 +91,7 @@ export async function startRun(project: TokenProject, body: RunStart) {
           system: body.system,
           playwright: body.playwright,
           lastEventAt: new Date(),
+          staleAfterMs: projectStaleTimeoutMs(project),
         })
         .returning();
       await tx.insert(runEvents).values({ runId: run.id, projectId: project.id, type: 'run.started', payload: { runNumber: run.number } });
@@ -110,10 +102,10 @@ export async function startRun(project: TokenProject, body: RunStart) {
         .set({
           expectedTests: sql`${runs.expectedTests} + ${body.expectedTests}`,
           shardTotal: Math.max(run.shardTotal, shardTotal),
-          status: run.status === 'incomplete' ? 'running' : run.status,
           lastEventAt: new Date(),
         })
         .where(eq(runs.id, run.id));
+      if (run.status === 'incomplete') await reviveRun(tx, run);
     }
     await tx
       .insert(runShards)
@@ -135,7 +127,10 @@ export async function startRun(project: TokenProject, body: RunStart) {
       type: 'shard.started',
       payload: { shardIndex, shardTotal, expectedTests: body.expectedTests },
     });
-    return { runId: run.id, runNumber: run.number, shardIndex, url: runUrl(project, run.number) };
+    // Arming is idempotent, so every shard's start asks: a run can only be
+    // running here, and the watchdog's claim sorts out who starts it.
+    const watchdog: WatchdogEffect = { arm: run.id };
+    return { runId: run.id, runNumber: run.number, shardIndex, url: runUrl(project, run.number), watchdog };
   });
 }
 
@@ -163,7 +158,7 @@ export async function ingestEvents(project: TokenProject, run: Run, batch: Event
     // order. The live views rely on that: a page snapshot's cursor is the
     // newest id it reflects, and an older id committing after it would be
     // skipped. Shards contended on this row at the end of the transaction anyway.
-    await tx.select({ id: runs.id }).from(runs).where(eq(runs.id, run.id)).for('no key update');
+    const [locked] = await tx.select().from(runs).where(eq(runs.id, run.id)).for('no key update');
     const [shard] = await tx
       .select()
       .from(runShards)
@@ -171,7 +166,11 @@ export async function ingestEvents(project: TokenProject, run: Run, batch: Event
       .for('update');
     if (!shard) throw new IngestError(404, 'shard not registered');
     const fresh = batch.events.filter((e) => e.seq > shard.lastSeq).sort((a, b) => a.seq - b.seq);
-    if (fresh.length === 0) return { accepted: 0, lastSeq: shard.lastSeq };
+    if (fresh.length === 0) return { accepted: 0, lastSeq: shard.lastSeq, watchdog: {} as WatchdogEffect };
+
+    // Events from a run closed as stale: its reporter was alive after all.
+    const revived = locked.status === 'incomplete' && (await reviveRun(tx, locked));
+    const watchdog: WatchdogEffect = revived || (locked.status === 'running' && !locked.watchdogId) ? { arm: run.id } : {};
 
     const begins = fresh.filter((e): e is TestBeginEvent => e.type === 'test.begin');
     const ends = fresh.filter((e): e is AttemptEndEvent => e.type === 'attempt.end');
@@ -292,7 +291,28 @@ export async function ingestEvents(project: TokenProject, run: Run, batch: Event
     const lastSeq = Math.max(shard.lastSeq, ...fresh.map((e) => e.seq));
     await tx.update(runShards).set({ lastSeq }).where(and(eq(runShards.runId, run.id), eq(runShards.shardIndex, batch.shardIndex)));
     await tx.update(runs).set({ lastEventAt: new Date() }).where(eq(runs.id, run.id));
-    return { accepted: fresh.length, lastSeq };
+    return { accepted: fresh.length, lastSeq, watchdog };
+  });
+}
+
+// ---------------------------------------------------------------- heartbeat
+
+/**
+ * A reporter's sign of life while no events flow (a long test, a slow global
+ * setup). It only moves `last_event_at` — no `run_events` row, so the live
+ * views and the audit trail stay quiet — and revives a run closed as stale.
+ * A finished run ignores it.
+ */
+export async function heartbeat(project: TokenProject, run: Run, _body: RunHeartbeat) {
+  return db.transaction(async (tx) => {
+    const [locked] = await tx.select().from(runs).where(eq(runs.id, run.id)).for('no key update');
+    const revived = locked.status === 'incomplete' && (await reviveRun(tx, locked));
+    if (!revived && locked.status !== 'running') {
+      return { runStatus: locked.status, watchdog: {} as WatchdogEffect };
+    }
+    await tx.update(runs).set({ lastEventAt: new Date() }).where(eq(runs.id, run.id));
+    const watchdog: WatchdogEffect = revived || !locked.watchdogId ? { arm: run.id } : {};
+    return { runStatus: 'running' as const, watchdog };
   });
 }
 
@@ -522,11 +542,15 @@ export async function finishRun(project: TokenProject, run: Run, body: RunFinish
     const allDone = shards.length >= fresh.shardTotal && shards.every((s) => s.status !== 'running');
     await tx.insert(runEvents).values({ runId: run.id, projectId: project.id, type: 'shard.finished', payload: { shardIndex: body.shardIndex, status: body.status } });
     if (!allDone) {
+      // One shard finishing proves the run alive; others may still report.
+      const revived = fresh.status === 'incomplete' && (await reviveRun(tx, fresh));
       await tx.update(runs).set({ lastEventAt: new Date() }).where(eq(runs.id, run.id));
-      return { runStatus: 'running' as const, url: runUrl(project, fresh.number) };
+      const watchdog: WatchdogEffect = revived || (fresh.status === 'running' && !fresh.watchdogId) ? { arm: run.id } : {};
+      return { runStatus: 'running' as const, url: runUrl(project, fresh.number), watchdog };
     }
     const status = await finalizeRun(tx, project, fresh, shards.map((s) => s.status));
-    return { runStatus: status, url: runUrl(project, fresh.number) };
+    const watchdog: WatchdogEffect = fresh.watchdogId ? { disarm: fresh.watchdogId } : {};
+    return { runStatus: status, url: runUrl(project, fresh.number), watchdog };
   });
 }
 
@@ -547,7 +571,15 @@ async function finalizeRun(tx: Tx, project: TokenProject, run: Run, shardStatuse
   const finishedAt = new Date();
   await tx
     .update(runs)
-    .set({ status, finishedAt, durationMs: clampDuration(finishedAt.getTime() - run.startedAt.getTime()), lastEventAt: finishedAt })
+    .set({
+      status,
+      finishedAt,
+      durationMs: clampDuration(finishedAt.getTime() - run.startedAt.getTime()),
+      lastEventAt: finishedAt,
+      endReason: 'reporter',
+      watchdogId: null,
+      watchdogClaimedAt: null,
+    })
     .where(eq(runs.id, run.id));
 
   // The duration rides along, so a live view can finish the run without a fetch.
@@ -556,55 +588,6 @@ async function finalizeRun(tx: Tx, project: TokenProject, run: Run, shardStatuse
     .insert(runEvents)
     .values({ runId: run.id, projectId: project.id, type: 'run.finished', payload: { status, durationMs, finishedAt: finishedAt.toISOString() } });
   return status;
-}
-
-/**
- * Results still marked `running` when a run ends: derive the outcome from the last recorded
- * attempt (Playwright sometimes skips retries, e.g. for a missing screenshot baseline); results
- * without any attempt were cut off and become `interrupted`.
- */
-async function settleOpenResults(tx: Tx | typeof db, runId: string) {
-  await tx.execute(sql`
-    update ${testResults} tr
-    set outcome = (case la.status
-        when 'passed' then (case when tr.attempt_count > 1 then 'flaky' else 'passed' end)
-        when 'timedOut' then 'timedout'
-        when 'skipped' then 'skipped'
-        when 'interrupted' then 'interrupted'
-        else 'failed' end)::test_outcome,
-      finished_at = coalesce(tr.finished_at, la.started_at + make_interval(secs => la.duration_ms / 1000.0))
-    from (select distinct on (test_result_id) test_result_id, status, started_at, duration_ms
-          from ${testAttempts} order by test_result_id, retry desc) la
-    where la.test_result_id = tr.id and tr.run_id = ${runId} and tr.outcome = 'running'`);
-  await tx
-    .update(testResults)
-    .set({ outcome: 'interrupted' })
-    .where(and(eq(testResults.runId, runId), eq(testResults.outcome, 'running')));
-}
-
-/**
- * Read paths call `markStaleRuns` on every render; a run only turns stale
- * after ten minutes, so checking a project more than once in this interval
- * per instance is a write query for nothing.
- */
-const STALE_CHECK_MS = 30_000;
-const lastStaleCheck = new Map<string, number>();
-
-/** Marks runs that stopped reporting as incomplete. Called lazily from read paths. */
-export async function markStaleRuns(projectId: string, { force = false }: { force?: boolean } = {}) {
-  const now = Date.now();
-  if (!force && now - (lastStaleCheck.get(projectId) ?? 0) < STALE_CHECK_MS) return;
-  lastStaleCheck.set(projectId, now);
-  const cutoff = new Date(Date.now() - STALE_RUN_MS);
-  const stale = await db
-    .update(runs)
-    .set({ status: 'incomplete', finishedAt: sql`${runs.lastEventAt}` })
-    .where(and(eq(runs.projectId, projectId), eq(runs.status, 'running'), lt(runs.lastEventAt, cutoff)))
-    .returning({ id: runs.id });
-  if (stale.length) {
-    for (const s of stale) await settleOpenResults(db, s.id);
-    await db.insert(runEvents).values(stale.map((s) => ({ runId: s.id, projectId, type: 'run.finished', payload: { status: 'incomplete' } })));
-  }
 }
 
 /**

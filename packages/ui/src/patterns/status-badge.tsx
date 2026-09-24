@@ -19,11 +19,11 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
 
 export type { AnyStatus };
 
-export function StatusBadge({ status, className }: { status: AnyStatus | string; className?: string }) {
+export function StatusBadge({ status, className, title }: { status: AnyStatus | string; className?: string; title?: string }) {
   const tone = statusTone(status);
   const Icon = ICONS[status] ?? MinusCircle;
   return (
-    <Badge variant="outline" className={cn('gap-1.5 font-medium', toneBadge[tone], className)}>
+    <Badge variant="outline" title={title} className={cn('gap-1.5 font-medium', toneBadge[tone], className)}>
       <Icon className={cn('size-3', status === 'running' && 'animate-spin')} />
       {statusLabel(status)}
     </Badge>

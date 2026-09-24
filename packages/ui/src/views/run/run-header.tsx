@@ -31,6 +31,8 @@ export interface RunHeaderData {
   ciBuildNumber: string | null;
   ciBuildUrl: string | null;
   tags: string[];
+  /** When the reporter was last heard from; explains an abandoned run. */
+  lastEventAt?: Date | null;
 }
 
 export interface RunHeaderShard {
@@ -66,7 +68,11 @@ export function RunHeader({
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-3">
-          <StatusBadge status={run.status} className="h-6 px-2.5 text-sm" />
+          <StatusBadge
+            status={run.status}
+            className="h-6 px-2.5 text-sm"
+            title={run.status === 'incomplete' && run.lastEventAt ? `No data from the reporter since ${formatDateTime(run.lastEventAt)}` : undefined}
+          />
           <h1
             className="min-w-0 flex-1 truncate text-title-m md:text-title-l"
             title={run.gitMessage ?? undefined}

@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { AttemptEndEvent } from '@miguelfranken/protocol';
-import { STALE_RUN_MS, clampDuration, finalOutcome, runUrl } from './service';
+import { clampDuration, finalOutcome, runUrl } from './service';
 
 const attempt = (overrides: Partial<AttemptEndEvent>): AttemptEndEvent =>
   ({ status: 'passed', outcome: 'expected', ...overrides }) as AttemptEndEvent;
@@ -72,11 +72,5 @@ describe('runUrl', () => {
     process.env.BASE_URL = 'https://reports.example.test';
     const project = { teamSlug: 'acme', slug: 'web' } as Parameters<typeof runUrl>[0];
     expect(runUrl(project, 12)).toBe('https://reports.example.test/teams/acme/projects/web/runs/12');
-  });
-});
-
-describe('STALE_RUN_MS', () => {
-  it('is the ten minutes the read paths settle a silent run after', () => {
-    expect(STALE_RUN_MS).toBe(10 * 60 * 1000);
   });
 });

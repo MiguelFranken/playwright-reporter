@@ -254,10 +254,10 @@ describe('sequence handling', () => {
     ]);
 
     const first = await ingestEvents(tenant.tokenProject, run, batch);
-    expect(first).toEqual({ accepted: 2, lastSeq: 1 });
+    expect(first).toMatchObject({ accepted: 2, lastSeq: 1 });
 
     const again = await ingestEvents(tenant.tokenProject, run, batch);
-    expect(again).toEqual({ accepted: 0, lastSeq: 1 });
+    expect(again).toMatchObject({ accepted: 0, lastSeq: 1 });
 
     expect(await db.select().from(testAttempts)).toHaveLength(1);
     expect(await db.select().from(testResults)).toHaveLength(1);
@@ -280,7 +280,7 @@ describe('sequence handling', () => {
         attemptEnd({ seq: 1, testKey: KEY, retry: 0, status: 'failed', errors: [{ message: 'first' }], outcome: 'flaky', isFinal: false }),
       ]),
     );
-    expect(result).toEqual({ accepted: 2, lastSeq: 2 });
+    expect(result).toMatchObject({ accepted: 2, lastSeq: 2 });
 
     const attempts = await db.select().from(testAttempts).orderBy(asc(testAttempts.retry));
     expect(attempts.map((a) => a.retry)).toEqual([0, 1]);

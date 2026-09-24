@@ -24,6 +24,10 @@ needs but the wire does not carry as a status: `running`, `flaky` and
 `incomplete`. It also accepts both spellings of `timedout`/`timedOut`, because
 both appear in stored data.
 
+`incomplete` is labelled **Abandoned**: the reporter went silent (a killed
+process, a CI job cut off) and the run was closed once its stale timeout passed.
+It is not `timedout` (Playwright's own test timeout) nor `interrupted` (Ctrl-C).
+
 ## Tones
 
 Every status collapses to one of five tones, and only the tone reaches CSS:

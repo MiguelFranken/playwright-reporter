@@ -71,6 +71,10 @@ process.env.STORAGE_LOCAL_DIR = storageDir;
 process.env.BASE_URL = 'http://test.local';
 process.env.BETTER_AUTH_SECRET = 'integration-test-secret-0123456789abcdef0123456789abcdef';
 process.env.INGEST_MAX_BATCH_BYTES ??= String(4 * 1024 * 1024);
+// No workflow runtime here: runs read as stale, and tests close them through
+// `checkStaleRun`, the watchdog's step, directly.
+process.env.RUN_WATCHDOG_DRIVER = 'none';
+delete process.env.RUN_STALE_TIMEOUT_MS;
 
 export const storageRoot = storageDir;
 

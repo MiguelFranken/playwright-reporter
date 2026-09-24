@@ -60,7 +60,9 @@ export interface ShardFinishedPayload {
 
 export interface RunFinishedPayload {
   status: string;
-  /** Absent on a run marked stale, which never finished. */
+  /** Set when the run went silent and was closed by its watchdog. */
+  reason?: 'stale';
+  /** Absent on runs closed as stale before the watchdog recorded durations. */
   durationMs?: number;
   finishedAt?: string;
 }
@@ -78,6 +80,8 @@ export type LiveEvent =
   | { id: number; type: 'attempt.end'; data: AttemptEndPayload & StreamMeta }
   | { id: number; type: 'shard.finished'; data: ShardFinishedPayload & StreamMeta }
   | { id: number; type: 'run.finished'; data: RunFinishedPayload & StreamMeta }
+  /** A run closed as stale heard from its reporter again and is running once more. */
+  | { id: number; type: 'run.resumed'; data: StreamMeta }
   | { id: number; type: 'run.log'; data: { level: string; message: string } & StreamMeta };
 
 export type LiveEventType = LiveEvent['type'];
@@ -89,5 +93,6 @@ export const LIVE_EVENT_TYPES: LiveEventType[] = [
   'attempt.end',
   'shard.finished',
   'run.finished',
+  'run.resumed',
   'run.log',
 ];

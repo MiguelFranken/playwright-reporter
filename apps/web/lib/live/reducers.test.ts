@@ -113,6 +113,20 @@ describe('reduceHeader', () => {
     const run = reduceHeader(shard, { id: 2, type: 'run.finished', data: { status: 'failed', ...meta } });
     expect(run.run.status).toBe('failed');
   });
+
+  it('closes a stale run with its shards, and runs it on when it resumes', () => {
+    const shard = reduceHeader(state, { id: 1, type: 'shard.finished', data: { shardIndex: 1, status: 'incomplete', ...meta } });
+    const closed = reduceHeader(shard, {
+      id: 2,
+      type: 'run.finished',
+      data: { status: 'incomplete', reason: 'stale', durationMs: 60_000, finishedAt: meta.at, ...meta },
+    });
+    expect(closed.run).toMatchObject({ status: 'incomplete', durationMs: 60_000 });
+
+    const resumed = reduceHeader(closed, { id: 3, type: 'run.resumed', data: meta });
+    expect(resumed.run).toMatchObject({ status: 'running', durationMs: null });
+    expect(resumed.shards[0].status).toBe('running');
+  });
 });
 
 describe('reduceRows', () => {
@@ -222,6 +236,13 @@ describe('runs list reducers', () => {
     expect(reduceRunsTable([run], finished(3))[0]).toMatchObject({ status: 'failed', durationMs: 5000 });
     // A stale run's event has no duration; the row keeps what it had.
     expect(reduceRunsTable([run], finished(3, { status: 'incomplete', durationMs: undefined }))[0].durationMs).toBeNull();
+  });
+
+  it('puts a resumed stale run back to running', () => {
+    const closed = reduceRunsTable([run], finished(3, { status: 'incomplete', reason: 'stale', durationMs: 60_000 }));
+    expect(reduceRunsTable(closed, { id: 4, type: 'run.resumed', data: meta })[0]).toMatchObject({ status: 'running', durationMs: null });
+    // Not on the page: nothing to do.
+    expect(reduceRunsTable(closed, { id: 4, type: 'run.resumed', data: { ...meta, runId: 'other' } })).toBe(closed);
   });
 
   it('moves shard progress on an active card and drops it once the run finishes', () => {

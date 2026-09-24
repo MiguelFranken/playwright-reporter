@@ -32,7 +32,7 @@ export const AllStatuses: Story = {
   ),
   play: async ({ canvasElement }) => {
     // Colour is never the only carrier: every badge also reads as words.
-    await expect(within(canvasElement).getAllByText(/passed|failed|flaky|skipped|running|timed out|interrupted|incomplete/i))
+    await expect(within(canvasElement).getAllByText(/passed|failed|flaky|skipped|running|timed out|interrupted|abandoned/i))
       .toHaveLength(ALL_STATUSES.length);
   },
 };

@@ -117,6 +117,11 @@ export function reduceHeader<S extends HeaderState>(state: S, ev: LiveEvent): S 
       const { status, durationMs } = ev.data;
       return { ...state, run: { ...state.run, status, ...(durationMs !== undefined ? { durationMs } : {}) } };
     }
+    case 'run.resumed': {
+      // Closed as stale, then heard from again: the shards it closed run on.
+      const shards = state.shards.map((s) => (s.status === 'incomplete' ? { ...s, status: 'running' } : s));
+      return { ...state, run: { ...state.run, status: 'running', durationMs: null }, shards };
+    }
     default:
       return state;
   }
@@ -350,12 +355,16 @@ export function reduceRunCounts<R extends { id: string; counts: RunCounts; curso
 
 type ListedRun = { id: string; counts: RunCounts; cursor?: number; status: string; durationMs: number | null };
 
-/** The runs table: counts, and a finished run's status and duration. */
+/** The runs table: counts, a finished run's status and duration, and a stale run resuming. */
 export function reduceRunsTable<R extends ListedRun>(runs: R[], ev: LiveEvent): R[] {
-  if (ev.type !== 'run.finished') return reduceRunCounts(runs, ev);
+  if (ev.type !== 'run.finished' && ev.type !== 'run.resumed') return reduceRunCounts(runs, ev);
   const index = runs.findIndex((r) => r.id === ev.data.runId);
   if (index < 0) return runs;
   const next = [...runs];
+  if (ev.type === 'run.resumed') {
+    next[index] = { ...runs[index], status: 'running', durationMs: null };
+    return next;
+  }
   const { status, durationMs } = ev.data;
   next[index] = { ...runs[index], status, durationMs: durationMs ?? runs[index].durationMs };
   return next;

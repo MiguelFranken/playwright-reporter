@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import { db } from '@/lib/db/drizzle';
 import { runs, testResults, tests } from '@/lib/db/schema';
 import { CHRONIC_FAILURE_RATE, CHRONIC_MIN_RUNS, CHRONIC_STREAK } from '@/lib/metrics/score';
+import { effectiveStatusRaw } from '@/lib/runs/staleness';
 import { num, reliabilitySql, sinceDate } from './shared';
 
 /** Declared by the views that render them; see `@miguelfranken/ui/views/dashboard`. */
@@ -9,6 +10,10 @@ import type { BranchSummaryRow } from '@miguelfranken/ui/views/dashboard/branch-
 import type { TestHealthRow } from '@miguelfranken/ui/views/dashboard/test-health-lists';
 
 export type { BranchSummaryRow, TestHealthRow };
+
+/** A run's status with stale runs counted as finished (`incomplete`), not running. */
+const status = effectiveStatusRaw();
+const rStatus = effectiveStatusRaw('r');
 
 export interface DashboardStats {
   trackedTests: number;
@@ -28,7 +33,7 @@ export async function dashboardStats(projectId: string, days: number): Promise<D
     ),
     db.execute<{ n: string }>(sql`select count(*) as n from ${tests} where project_id = ${projectId} and first_seen_at >= ${since}`),
     db.execute<{ finished: string; passed: string; avg_ms: string | null }>(
-      sql`select count(*) filter (where status <> 'running') as finished,
+      sql`select count(*) filter (where ${status} <> 'running') as finished,
                  count(*) filter (where status = 'passed') as passed,
                  avg(duration_ms) filter (where status in ('passed','failed')) as avg_ms
           from ${runs} where project_id = ${projectId} and started_at >= ${since}`,
@@ -66,9 +71,9 @@ export async function branchSummary(projectId: string, days: number): Promise<Br
                count(*)::int as runs,
                max(started_at) as last_run_at,
                (array_agg(number order by started_at desc))[1] as last_run_number,
-               (array_agg(status order by started_at desc))[1] as last_status,
-               case when count(*) filter (where status <> 'running') = 0 then null
-                    else count(*) filter (where status = 'passed')::float / count(*) filter (where status <> 'running') end as pass_rate
+               (array_agg(${status} order by started_at desc))[1] as last_status,
+               case when count(*) filter (where ${status} <> 'running') = 0 then null
+                    else count(*) filter (where status = 'passed')::float / count(*) filter (where ${status} <> 'running') end as pass_rate
         from ${runs} where project_id = ${projectId} and started_at >= ${sinceDate(days)}
         group by git_branch order by max(started_at) desc limit 20`,
   );
@@ -152,13 +157,13 @@ export interface TrendPoint {
 
 export async function passFailTrend(projectId: string, limit = 30): Promise<TrendPoint[]> {
   const rows = await db.execute<Record<string, unknown>>(
-    sql`select r.number, r.started_at, r.status,
+    sql`select r.number, r.started_at, ${rStatus} as status,
                count(*) filter (where tr.outcome = 'passed')::int as passed,
                count(*) filter (where tr.outcome in ('failed','timedout','interrupted'))::int as failed,
                count(*) filter (where tr.outcome = 'flaky')::int as flaky,
                count(*) filter (where tr.outcome = 'skipped')::int as skipped
         from ${runs} r left join ${testResults} tr on tr.run_id = r.id
-        where r.project_id = ${projectId} and r.status <> 'running'
+        where r.project_id = ${projectId} and ${rStatus} <> 'running'
         group by r.id order by r.started_at desc limit ${limit}`,
   );
   return Array.from(rows)
