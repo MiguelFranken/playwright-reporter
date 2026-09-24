@@ -6,6 +6,7 @@ import { ConsentForm } from '@/components/oauth/consent-form';
 import { Card, CardDescription, CardHeader, CardTitle } from '@miguelfranken/ui/components/card';
 import { Skeleton } from '@miguelfranken/ui/components/skeleton';
 import { getCurrentUser } from '@/lib/auth/access';
+import { isDemoUser } from '@/lib/auth/demo';
 import { listAccessibleProjects } from '@/lib/auth/principal';
 import { listMyTeams } from '@/lib/db/queries/teams';
 import { validateAuthorizationRequest } from '@/lib/oauth/authorize';
@@ -39,6 +40,16 @@ async function ConnectContent({ searchParams }: { searchParams: SearchParams }) 
 
   const validation = await validateAuthorizationRequest(params);
   if (!validation.ok && validation.kind === 'redirect') redirect(validation.redirectTo);
+  if (validation.ok && isDemoUser(user)) {
+    return (
+      <Card className="w-full max-w-md">
+        <CardHeader className="items-center text-center">
+          <CardTitle>The demo account cannot connect assistants</CardTitle>
+          <CardDescription>It is shared by every visitor. Sign in with your own account to connect {validation.request.client.clientName}.</CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
   if (!validation.ok) {
     return (
       <Card className="w-full max-w-md">

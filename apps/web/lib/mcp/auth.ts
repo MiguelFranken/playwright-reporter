@@ -9,6 +9,7 @@
  */
 import { OAuthError, OAuthErrorCode, type AuthInfo, type OAuthTokenVerifier } from '@modelcontextprotocol/server';
 import { after } from 'next/server';
+import { isDemoUser } from '@/lib/auth/demo';
 import type { GrantScope, Principal } from '@/lib/auth/principal';
 import { findActivePersonalToken, touchPersonalToken } from '@/lib/db/queries/personal-tokens';
 import { ACCESS_PREFIX, isOurResource } from '@/lib/oauth/config';
@@ -31,6 +32,7 @@ export const verifier: OAuthTokenVerifier = {
     }
     const row = await findActivePersonalToken(hashToken(token));
     if (!row) throw new OAuthError(OAuthErrorCode.InvalidToken, 'The token is invalid, expired or revoked.');
+    if (isDemoUser(row.user)) throw new OAuthError(OAuthErrorCode.InvalidToken, 'The shared demo account cannot use the MCP server.');
 
     const principal: Principal = {
       user: {
@@ -65,6 +67,7 @@ export const verifier: OAuthTokenVerifier = {
 async function verifyOAuthToken(token: string): Promise<AuthInfo> {
   const row = await findActiveAccessToken(token);
   if (!row) throw new OAuthError(OAuthErrorCode.InvalidToken, 'The access token is invalid, expired or revoked.');
+  if (isDemoUser(row.user)) throw new OAuthError(OAuthErrorCode.InvalidToken, 'The shared demo account cannot use the MCP server.');
   // Audience binding (RFC 8707): a token minted for another resource is not ours to accept.
   if (!isOurResource(row.token.resource)) throw new OAuthError(OAuthErrorCode.InvalidToken, 'The access token was issued for another resource.');
   const principal: Principal = {

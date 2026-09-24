@@ -3,6 +3,7 @@
 import { redirect } from 'next/navigation';
 import { actionError, getCurrentUser, type Denied } from '@/lib/auth/access';
 import { audit } from '@/lib/auth/audit';
+import { DEMO_READ_ONLY, isDemoUser } from '@/lib/auth/demo';
 import { listAccessibleTeamIds, resolveProjectByIdFor } from '@/lib/auth/principal';
 import { errorRedirect, validateAuthorizationRequest } from '@/lib/oauth/authorize';
 import { issuer } from '@/lib/oauth/config';
@@ -22,6 +23,8 @@ function paramsFrom(formData: FormData): Record<string, string> {
 export async function approveConnection(formData: FormData): Promise<Denied | never> {
   const user = await getCurrentUser();
   if (!user) return actionError('Sign in first.');
+  // The demo account is shared by every visitor; a grant would outlive their visit.
+  if (isDemoUser(user)) return actionError(DEMO_READ_ONLY);
   const validation = await validateAuthorizationRequest(paramsFrom(formData));
   if (!validation.ok) {
     if (validation.kind === 'redirect') redirect(validation.redirectTo);

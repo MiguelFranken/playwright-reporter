@@ -173,7 +173,9 @@ async function AccountContent() {
           />
         </CardContent>
       </Card>
+      )}
 
+      {!demo && (
       <Card>
         <CardHeader>
           <CardTitle>Active sessions</CardTitle>
