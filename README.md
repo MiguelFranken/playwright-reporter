@@ -338,13 +338,6 @@ release. PRs are squash-merged with their title as the commit message, so the ti
 `feat:` bump the patch version while on 0.x, a breaking change the minor version). Run the workflow manually for a
 dry run.
 
-## Demo accounts
-
-| Role | Email | Password |
-| --- | --- | --- |
-| superadmin | miguel.franken@denkwerk.com | `localdev-password-1` |
-| member | viewer@example.com | `invitee-password-1` |
-
 ## License
 
 [MIT](LICENSE) © Miguel Franken
