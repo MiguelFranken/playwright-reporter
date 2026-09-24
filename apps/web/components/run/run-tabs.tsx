@@ -1,8 +1,8 @@
 'use client';
 
-import { RunTabs as RunTabsView } from '@repo/ui/views/run/run-tabs';
-import { RunTabSkeleton } from '@repo/ui/views/run/run-skeleton';
-import type { RunTab } from '@repo/ui/lib/run-tab';
+import { RunTabs as RunTabsView } from '@miguelfranken/ui/views/run/run-tabs';
+import { RunTabSkeleton } from '@miguelfranken/ui/views/run/run-skeleton';
+import type { RunTab } from '@miguelfranken/ui/lib/run-tab';
 import { useUrlTab } from '@/components/filters/url-filters';
 
 /**

@@ -1,13 +1,13 @@
 import { PlayCircle } from 'lucide-react';
 import { Suspense } from 'react';
-import { EmptyState } from '@repo/ui/patterns/empty-state';
+import { EmptyState } from '@miguelfranken/ui/patterns/empty-state';
 import { Pagination } from '@/components/filters/pagination';
 import { RangeToggle, UrlSearch, UrlSelect } from '@/components/filters/url-filters';
 import { LiveRefresh } from '@/components/live/live-refresh';
-import { PageHeader } from '@repo/ui/patterns/page-header';
-import { ActiveRuns } from '@repo/ui/views/runs/active-runs';
-import { RunsTable } from '@repo/ui/views/runs/runs-table';
-import { FilterSkeleton, TableRowsSkeleton } from '@repo/ui/patterns/skeletons';
+import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
+import { ActiveRuns } from '@miguelfranken/ui/views/runs/active-runs';
+import { RunsTable } from '@miguelfranken/ui/views/runs/runs-table';
+import { FilterSkeleton, TableRowsSkeleton } from '@miguelfranken/ui/patterns/skeletons';
 import { requireProject } from '@/lib/auth/access';
 import { listActiveRuns, listBranches, listEnvironments, listRuns } from '@/lib/db/queries/runs';
 import { parsePage, parseRange } from '@/lib/db/queries/shared';

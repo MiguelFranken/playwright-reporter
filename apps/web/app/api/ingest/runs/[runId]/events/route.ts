@@ -1,4 +1,4 @@
-import { eventBatchSchema } from '@repo/protocol';
+import { eventBatchSchema } from '@miguelfranken/protocol';
 import { errorResponse, json, readJson, requireProjectToken } from '@/lib/ingest/http';
 import { getRunForProject, ingestEvents } from '@/lib/ingest/service';
 

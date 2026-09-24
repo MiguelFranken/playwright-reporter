@@ -17,4 +17,4 @@ Never edit `app/(payload)/*` or `app/(payload)/admin/importMap.js` by hand; rege
 import map with `pnpm payload:importmap`.
 
 `packages/ui` never imports Payload. Marketing components take plain props; the adapters in
-`components/blocks/` are the only place Payload types and `@repo/ui` meet.
+`components/blocks/` are the only place Payload types and `@miguelfranken/ui` meet.

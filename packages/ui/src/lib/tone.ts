@@ -1,4 +1,4 @@
-import type { AttemptStatus, RunStatus, TestOutcome } from '@repo/protocol';
+import type { AttemptStatus, RunStatus, TestOutcome } from '@miguelfranken/protocol';
 
 /**
  * The display vocabulary is wider than the wire's. It adds the three states the

@@ -1,18 +1,40 @@
 {
-  "name": "@repo/reporter",
+  "name": "@miguelfranken/reporter",
   "version": "0.0.1",
-  "private": true,
   "type": "module",
   "description": "Playwright reporter that streams test runs to the self-hosted reporter app",
-  "files": ["dist"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MiguelFranken/playwright-reporter.git",
+    "directory": "packages/reporter"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "files": [
+    "dist"
+  ],
   "exports": {
     ".": {
-      "import": { "types": "./dist/index.d.mts", "default": "./dist/index.mjs" },
-      "require": { "types": "./dist/index.d.cts", "default": "./dist/index.cjs" }
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     },
     "./types": {
-      "import": { "types": "./dist/types.d.mts", "default": "./dist/types.mjs" },
-      "require": { "types": "./dist/types.d.cts", "default": "./dist/types.cjs" }
+      "import": {
+        "types": "./dist/types.d.mts",
+        "default": "./dist/types.mjs"
+      },
+      "require": {
+        "types": "./dist/types.d.cts",
+        "default": "./dist/types.cjs"
+      }
     }
   },
   "main": "./dist/index.cjs",
@@ -24,14 +46,16 @@
     "test": "vitest run",
     "test:unit": "vitest run"
   },
-  "peerDependencies": { "@playwright/test": ">=1.50" },
+  "peerDependencies": {
+    "@playwright/test": ">=1.50"
+  },
   "dependencies": {
-    "@repo/protocol": "workspace:*",
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@miguelfranken/protocol": "workspace:*",
+    "@miguelfranken/typescript-config": "workspace:*",
     "@playwright/test": "^1.63.0",
-    "@repo/typescript-config": "workspace:*",
     "@types/node": "^24.13.5",
     "tsdown": "0.23.0",
     "typescript": "^7.0.2",

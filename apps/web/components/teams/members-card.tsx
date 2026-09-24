@@ -11,15 +11,15 @@ import {
   revokeInvitation,
   updateMemberRole,
 } from '@/app/(app)/teams/[team]/settings/actions';
-import { CopyButton } from '@repo/ui/patterns/copy-button';
-import { Alert, AlertDescription, AlertTitle } from '@repo/ui/components/alert';
-import { Badge } from '@repo/ui/components/badge';
-import { Button } from '@repo/ui/components/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@repo/ui/components/dialog';
-import { Input } from '@repo/ui/components/input';
-import { Label } from '@repo/ui/components/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@repo/ui/components/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@repo/ui/components/table';
+import { CopyButton } from '@miguelfranken/ui/patterns/copy-button';
+import { Alert, AlertDescription, AlertTitle } from '@miguelfranken/ui/components/alert';
+import { Badge } from '@miguelfranken/ui/components/badge';
+import { Button } from '@miguelfranken/ui/components/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@miguelfranken/ui/components/dialog';
+import { Input } from '@miguelfranken/ui/components/input';
+import { Label } from '@miguelfranken/ui/components/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@miguelfranken/ui/components/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@miguelfranken/ui/components/table';
 import { TEAM_ROLE_DESCRIPTIONS, TEAM_ROLE_LABELS, type TeamRoleName } from '@/lib/auth/permissions';
 
 export type MemberRow = {

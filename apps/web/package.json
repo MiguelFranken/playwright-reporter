@@ -1,5 +1,5 @@
 {
-  "name": "@repo/web",
+  "name": "@miguelfranken/web",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -19,8 +19,8 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
-    "@repo/protocol": "workspace:*",
-    "@repo/ui": "workspace:*",
+    "@miguelfranken/protocol": "workspace:*",
+    "@miguelfranken/ui": "workspace:*",
     "@vercel/blob": "^2.8.0",
     "better-auth": "1.7.5",
     "dotenv": "^17.4.2",
@@ -35,7 +35,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@repo/typescript-config": "workspace:*",
+    "@miguelfranken/typescript-config": "workspace:*",
     "@tailwindcss/postcss": "4.3.3",
     "@testcontainers/postgresql": "^12.1.0",
     "@types/node": "^24.13.5",

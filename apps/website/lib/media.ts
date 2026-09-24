@@ -1,4 +1,4 @@
-import type { ImageSource, ThemedImageSources } from '@repo/ui/lib/marketing';
+import type { ImageSource, ThemedImageSources } from '@miguelfranken/ui/lib/marketing';
 import type { Media } from '@/payload-types';
 
 /** The CMS shape of a `themedMedia()` group. */

@@ -13,7 +13,7 @@ cd "$(dirname "$0")/.."
 # binary on PATH; the root devDependency provides it after `nub ci`.
 export PATH="$(cd ../.. && pwd)/node_modules/.bin:$PATH"
 
-(cd ../.. && node_modules/.bin/turbo run build --filter=@repo/web)
+(cd ../.. && node_modules/.bin/turbo run build --filter=@miguelfranken/web)
 
 if [ "${VERCEL_ENV:-}" = "production" ]; then
   node_modules/.bin/drizzle-kit migrate

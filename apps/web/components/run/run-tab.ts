@@ -1,4 +1,4 @@
-import { RUN_TABS, type RunTab } from '@repo/ui/lib/run-tab';
+import { RUN_TABS, type RunTab } from '@miguelfranken/ui/lib/run-tab';
 
 export { RUN_TABS };
 export type { RunTab };

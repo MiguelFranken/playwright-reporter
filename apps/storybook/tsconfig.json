@@ -1,5 +1,5 @@
 {
-  "extends": "@repo/typescript-config/library.json",
+  "extends": "@miguelfranken/typescript-config/library.json",
   "compilerOptions": {
     "jsx": "react-jsx",
     "noEmit": true,

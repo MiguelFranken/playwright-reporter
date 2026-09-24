@@ -1,4 +1,4 @@
-import { runStartSchema } from '@repo/protocol';
+import { runStartSchema } from '@miguelfranken/protocol';
 import { errorResponse, json, readJson, requireProjectToken } from '@/lib/ingest/http';
 import { startRun } from '@/lib/ingest/service';
 

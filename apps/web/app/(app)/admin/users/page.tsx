@@ -1,11 +1,11 @@
 import { Suspense } from 'react';
 import { AdminUsersCard, type AdminUserRow } from '@/components/admin/users-card';
-import { PageHeader } from '@repo/ui/patterns/page-header';
-import { TableRowsSkeleton } from '@repo/ui/patterns/skeletons';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@repo/ui/components/card';
+import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
+import { TableRowsSkeleton } from '@miguelfranken/ui/patterns/skeletons';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@miguelfranken/ui/components/card';
 import { requireSuperadmin } from '@/lib/auth/access';
 import { listUsers } from '@/lib/db/queries/teams';
-import { formatRelative } from '@repo/ui/lib/format';
+import { formatRelative } from '@miguelfranken/ui/lib/format';
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 

@@ -22,9 +22,9 @@ import type { LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
-import { ThemeToggle } from '@repo/ui/patterns/theme-toggle';
-import { Button } from '@repo/ui/components/button';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@repo/ui/components/collapsible';
+import { ThemeToggle } from '@miguelfranken/ui/patterns/theme-toggle';
+import { Button } from '@miguelfranken/ui/components/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@miguelfranken/ui/components/collapsible';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,7 +33,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@repo/ui/components/dropdown-menu';
+} from '@miguelfranken/ui/components/dropdown-menu';
 import {
   Sidebar,
   SidebarContent,
@@ -51,11 +51,11 @@ import {
   SidebarMenuSubItem,
   SidebarRail,
   useSidebar,
-} from '@repo/ui/components/sidebar';
-import { Skeleton } from '@repo/ui/components/skeleton';
+} from '@miguelfranken/ui/components/sidebar';
+import { Skeleton } from '@miguelfranken/ui/components/skeleton';
 import { authClient } from '@/lib/auth/client';
 import { isActivePath, useActiveTeam, type SidebarTeam, type SidebarUser } from '@/components/nav-model';
-import { cn } from '@repo/ui/lib/cn';
+import { cn } from '@miguelfranken/ui/lib/cn';
 
 export type { SidebarProject, SidebarTeam, SidebarUser } from '@/components/nav-model';
 

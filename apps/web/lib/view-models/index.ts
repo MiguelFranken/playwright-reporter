@@ -1,14 +1,14 @@
 /**
  * Bridges between the database rows the query layer produces and the view
- * models `@repo/ui` declares.
+ * models `@miguelfranken/ui` declares.
  *
  * Most rows are already structurally compatible and need nothing here. The
  * mappers below exist for the fields a view deliberately does not know how to
  * compute — chiefly URLs, which depend on the git provider or on the route
  * shape the app happens to use.
  */
-import type { RunHeaderData } from '@repo/ui/views/run/run-header';
-import type { RunListItem } from '@repo/ui/views/runs/runs-table';
+import type { RunHeaderData } from '@miguelfranken/ui/views/run/run-header';
+import type { RunListItem } from '@miguelfranken/ui/views/runs/runs-table';
 
 /**
  * GitHub, GitLab and Bitbucket each shape a commit URL differently. That is

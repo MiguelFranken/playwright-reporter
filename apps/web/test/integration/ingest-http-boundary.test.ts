@@ -7,7 +7,7 @@ import { gzipSync } from 'node:zlib';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { and, eq } from 'drizzle-orm';
-import { PROTOCOL_HEADER } from '@repo/protocol';
+import { PROTOCOL_HEADER } from '@miguelfranken/protocol';
 import { POST as postRun } from '@/app/api/ingest/runs/route';
 import { POST as postEvents } from '@/app/api/ingest/runs/[runId]/events/route';
 import { POST as postFinish } from '@/app/api/ingest/runs/[runId]/finish/route';

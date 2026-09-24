@@ -13,7 +13,7 @@ import type {
   RunFinish,
   RunStart,
   TestBeginEvent,
-} from '@repo/protocol';
+} from '@miguelfranken/protocol';
 import type { TokenProject } from '@/lib/ingest/http';
 import { finishRun, getRunForProject, ingestEvents, startRun } from '@/lib/ingest/service';
 

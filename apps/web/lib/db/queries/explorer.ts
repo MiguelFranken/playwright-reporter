@@ -5,12 +5,12 @@ import { CHRONIC_FAILURE_RATE, CHRONIC_MIN_RUNS, CHRONIC_STREAK } from '@/lib/me
 import { andAll, num, reliabilitySql, sinceDate } from './shared';
 import { testHistory, type HistoryRow } from './runs';
 
-/** Declared by the views that render them; see `@repo/ui/views/explorer`. */
-import type { ExplorerRow } from '@repo/ui/views/explorer/explorer-table';
-import type { EnvironmentStat, TestOverviewStats, UniqueError } from '@repo/ui/views/explorer/test-overview';
+/** Declared by the views that render them; see `@miguelfranken/ui/views/explorer`. */
+import type { ExplorerRow } from '@miguelfranken/ui/views/explorer/explorer-table';
+import type { EnvironmentStat, TestOverviewStats, UniqueError } from '@miguelfranken/ui/views/explorer/test-overview';
 // The sort vocabulary is plain data and lives outside the client component, or
 // it would reach this server module as a client reference rather than an array.
-import { EXPLORER_SORTS, type ExplorerSort } from '@repo/ui/lib/explorer-sort';
+import { EXPLORER_SORTS, type ExplorerSort } from '@miguelfranken/ui/lib/explorer-sort';
 
 export { EXPLORER_SORTS };
 export type { ExplorerRow, ExplorerSort, UniqueError };

@@ -1,4 +1,4 @@
-import { SiteFooter } from '@repo/ui/marketing/site-footer';
+import { SiteFooter } from '@miguelfranken/ui/marketing/site-footer';
 import { resolveLinks } from '@/lib/links';
 import { queryFooter, querySiteSettings } from '@/lib/queries';
 

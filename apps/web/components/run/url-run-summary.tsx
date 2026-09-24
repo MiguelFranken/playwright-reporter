@@ -1,8 +1,8 @@
 'use client';
 
-import { RunSummary, type RunSummaryFilters } from '@repo/ui/views/run/run-summary';
-import type { RunResultRow } from '@repo/ui/views/run/run-result';
-import type { RunCounts } from '@repo/ui/patterns/counts-bar';
+import { RunSummary, type RunSummaryFilters } from '@miguelfranken/ui/views/run/run-summary';
+import type { RunResultRow } from '@miguelfranken/ui/views/run/run-result';
+import type { RunCounts } from '@miguelfranken/ui/patterns/counts-bar';
 import { useUrlParams } from '@/components/filters/url-filters';
 import { runHrefs } from '@/lib/view-models';
 

@@ -15,7 +15,7 @@ fails type-checking.
 The dependency direction is the point: the app depends on the design system, and
 the design system never depends on the app or its ORM.
 
-## 2. Wire vocabulary comes from `@repo/protocol`, as types only
+## 2. Wire vocabulary comes from `@miguelfranken/protocol`, as types only
 
 `RunStatus`, `TestOutcome`, `AttemptStatus` and friends are imported with
 `import type`, so they are erased at build time and `zod` never reaches the UI
@@ -37,6 +37,6 @@ knows its domain; it just must not know the database.
 
 ## 4. Controlled here, connected there
 
-Every URL-bound control exists twice: a controlled component in `@repo/ui` that a
+Every URL-bound control exists twice: a controlled component in `@miguelfranken/ui` that a
 story can drive, and a `Url*` wrapper in `apps/web` that binds it to
 `useSearchParams`. The wrapper is three lines and holds all the coupling.

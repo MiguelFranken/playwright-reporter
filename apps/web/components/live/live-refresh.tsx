@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { LiveIndicator, type LiveState } from '@repo/ui/patterns/live-indicator';
+import { LiveIndicator, type LiveState } from '@miguelfranken/ui/patterns/live-indicator';
 
 type State = LiveState;
 

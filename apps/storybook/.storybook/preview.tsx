@@ -1,11 +1,11 @@
 import type { Preview } from '@storybook/react-vite';
 import { withThemeByClassName } from '@storybook/addon-themes';
 import { ThemeProvider } from 'next-themes';
-import { UiProvider } from '@repo/ui/provider';
-import { Toaster } from '@repo/ui/components/sonner';
+import { UiProvider } from '@miguelfranken/ui/provider';
+import { Toaster } from '@miguelfranken/ui/components/sonner';
 import '@fontsource-variable/inter';
 import '@fontsource-variable/jetbrains-mono';
-import '@repo/ui/styles.css';
+import '@miguelfranken/ui/styles.css';
 import './fonts.css';
 
 const preview: Preview = {

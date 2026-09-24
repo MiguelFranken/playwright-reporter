@@ -1,9 +1,9 @@
 import { Suspense } from 'react';
 import { TeamGeneralForm } from '@/components/teams/team-general-form';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@repo/ui/components/card';
-import { Skeleton } from '@repo/ui/components/skeleton';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@miguelfranken/ui/components/card';
+import { Skeleton } from '@miguelfranken/ui/components/skeleton';
 import { requireTeam } from '@/lib/auth/access';
-import { formatDateTime } from '@repo/ui/lib/format';
+import { formatDateTime } from '@miguelfranken/ui/lib/format';
 
 type Params = Promise<{ team: string }>;
 

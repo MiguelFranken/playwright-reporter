@@ -8,8 +8,8 @@
  * pixels on any machine and in CI. The results are committed (a handful of
  * files, a couple of megabytes) so `db:seed` works without a build step.
  *
- *   pnpm --filter @repo/storybook build
- *   pnpm --filter @repo/website screenshots
+ *   pnpm --filter @miguelfranken/storybook build
+ *   pnpm --filter @miguelfranken/website screenshots
  */
 import { createServer } from 'node:http';
 import { readFile, mkdir } from 'node:fs/promises';
@@ -80,7 +80,7 @@ async function main() {
     await readFile(join(staticDir, 'index.html'));
   } catch {
     console.error(
-      `No Storybook build at ${staticDir}.\nRun: pnpm --filter @repo/storybook build`,
+      `No Storybook build at ${staticDir}.\nRun: pnpm --filter @miguelfranken/storybook build`,
     );
     process.exit(1);
   }

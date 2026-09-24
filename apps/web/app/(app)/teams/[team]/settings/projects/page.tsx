@@ -1,10 +1,10 @@
 import { Suspense } from 'react';
 import { ProjectsCard, type ProjectRow } from '@/components/teams/projects-card';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@repo/ui/components/card';
-import { Skeleton } from '@repo/ui/components/skeleton';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@miguelfranken/ui/components/card';
+import { Skeleton } from '@miguelfranken/ui/components/skeleton';
 import { requireTeam } from '@/lib/auth/access';
 import { listTeamProjects } from '@/lib/db/queries/teams';
-import { formatRelative } from '@repo/ui/lib/format';
+import { formatRelative } from '@miguelfranken/ui/lib/format';
 
 type Params = Promise<{ team: string }>;
 

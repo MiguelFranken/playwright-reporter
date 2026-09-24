@@ -1,4 +1,4 @@
-import type { IngestEvent } from '@repo/protocol';
+import type { IngestEvent } from '@miguelfranken/protocol';
 
 /**
  * Batches events and flushes them when the batch is full or the interval elapses.

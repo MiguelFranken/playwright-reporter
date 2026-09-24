@@ -1,4 +1,4 @@
-# `@repo/ui` — the design system
+# `@miguelfranken/ui` — the design system
 
 Everything the product renders itself out of. It runs without Next.js, without a
 database and without an authenticated session — if a component cannot, it does
@@ -95,7 +95,7 @@ dependency direction is the point: the app depends on the design system, never
 the other way round.
 
 Wire-level vocabulary (`RunStatus`, `TestOutcome`, `AttemptStatus`, `Executor`,
-the `*Info` shapes) is `import type`d from `@repo/protocol` so the two cannot
+the `*Info` shapes) is `import type`d from `@miguelfranken/protocol` so the two cannot
 drift. Type-only, so `zod` never enters the UI bundle — the boundary test
 enforces that.
 
@@ -179,15 +179,15 @@ range because a rate against a zero baseline is a flat line.
 ## Commands
 
 ```bash
-pnpm turbo run dev  --filter=@repo/storybook   # catalogue at :6006
-pnpm turbo run test --filter=@repo/storybook   # every story, in Chromium
-pnpm --filter @repo/ui check-types             # covers stories and fixtures
-pnpm --filter @repo/ui test                    # node-side: helpers + boundary guard
-pnpm --filter @repo/ui exec shadcn add <name>  # components.json lives here
+pnpm turbo run dev  --filter=@miguelfranken/storybook   # catalogue at :6006
+pnpm turbo run test --filter=@miguelfranken/storybook   # every story, in Chromium
+pnpm --filter @miguelfranken/ui check-types             # covers stories and fixtures
+pnpm --filter @miguelfranken/ui test                    # node-side: helpers + boundary guard
+pnpm --filter @miguelfranken/ui exec shadcn add <name>  # components.json lives here
 ```
 
 Browser tests need Playwright's Chromium once:
-`pnpm --filter @repo/storybook exec playwright install chromium`.
+`pnpm --filter @miguelfranken/storybook exec playwright install chromium`.
 
 ## Package rules
 
@@ -195,14 +195,14 @@ Browser tests need Playwright's Chromium once:
   packages and Storybook's Vite pipeline compiles TSX natively, so there is no
   loader outside a bundler to satisfy. Keep `'use client'` directives exactly
   where they are.
-- **Subpath exports, no barrel** — `@repo/ui/components/button` mirrors the file
+- **Subpath exports, no barrel** — `@miguelfranken/ui/components/button` mirrors the file
   layout. A root barrel would pull `recharts` and `sonner` into every consumer
   and defeat the `'use client'` boundaries.
 - **Imports inside the package are relative** (`../lib/cn`). There is no `@/`
   alias here, and that is what guarantees the package cannot reach into the app.
 - `src/lib/boundaries.test.ts` fails the build if anything here imports
   `next/*`, `drizzle-orm`, `better-auth`, `postgres` or an `@/` path, or imports
-  `@repo/protocol` as a value rather than a type.
+  `@miguelfranken/protocol` as a value rather than a type.
 
 ## Writing a story
 

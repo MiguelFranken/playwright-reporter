@@ -1,11 +1,11 @@
 import { FlaskConical } from 'lucide-react';
 import { Suspense } from 'react';
-import { EmptyState } from '@repo/ui/patterns/empty-state';
+import { EmptyState } from '@miguelfranken/ui/patterns/empty-state';
 import { UrlExplorer } from '@/components/explorer/url-explorer';
 import { Pagination } from '@/components/filters/pagination';
 import { RangeToggle, UrlSearch, UrlSelect } from '@/components/filters/url-filters';
-import { PageHeader } from '@repo/ui/patterns/page-header';
-import { FilterSkeleton, TableRowsSkeleton } from '@repo/ui/patterns/skeletons';
+import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
+import { FilterSkeleton, TableRowsSkeleton } from '@miguelfranken/ui/patterns/skeletons';
 import { requireProject } from '@/lib/auth/access';
 import { EXPLORER_SORTS, exploreTests, type ExplorerSort } from '@/lib/db/queries/explorer';
 import { listEnvironments, listPlatforms, listTestTags } from '@/lib/db/queries/runs';

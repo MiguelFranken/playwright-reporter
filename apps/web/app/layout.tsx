@@ -2,7 +2,7 @@ import './globals.css';
 import type { Metadata, Viewport } from 'next';
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import { ThemeProvider } from 'next-themes';
-import { Toaster } from '@repo/ui/components/sonner';
+import { Toaster } from '@miguelfranken/ui/components/sonner';
 import { AppUiProvider } from '@/components/ui-provider';
 
 export const metadata: Metadata = {

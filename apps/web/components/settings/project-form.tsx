@@ -2,9 +2,9 @@
 
 import { useActionState, useEffect } from 'react';
 import { toast } from 'sonner';
-import { Button } from '@repo/ui/components/button';
-import { Input } from '@repo/ui/components/input';
-import { Label } from '@repo/ui/components/label';
+import { Button } from '@miguelfranken/ui/components/button';
+import { Input } from '@miguelfranken/ui/components/input';
+import { Label } from '@miguelfranken/ui/components/label';
 import { renameProject, type RenameState } from '@/app/(app)/teams/[team]/projects/[project]/settings/actions';
 
 export function ProjectRenameForm({ teamSlug, projectSlug, name }: { teamSlug: string; projectSlug: string; name: string }) {

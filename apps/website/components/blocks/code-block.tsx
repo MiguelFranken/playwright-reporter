@@ -1,6 +1,6 @@
-import { CodeTabs } from '@repo/ui/marketing/code-tabs';
-import { Section } from '@repo/ui/marketing/section';
-import { SectionHeader } from '@repo/ui/marketing/section-header';
+import { CodeTabs } from '@miguelfranken/ui/marketing/code-tabs';
+import { Section } from '@miguelfranken/ui/marketing/section';
+import { SectionHeader } from '@miguelfranken/ui/marketing/section-header';
 import { highlight } from '@/lib/highlight';
 import type { CodeBlockBlock } from '@/payload-types';
 import { toSectionHeader, toSettings } from './shared';

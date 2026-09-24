@@ -5,16 +5,16 @@ import { markStaleRuns } from '@/lib/ingest/service';
 import { andAll, num, sinceDate } from './shared';
 
 /**
- * The row shapes live in `@repo/ui`, next to the components that render them,
+ * The row shapes live in `@miguelfranken/ui`, next to the components that render them,
  * and are re-exported here so the existing call sites keep working. The point
  * of the direction is that every SQL projection below is now checked against
  * what the UI actually reads, rather than the UI being shaped by the schema.
  */
-import type { RunCounts } from '@repo/ui/patterns/counts-bar';
-import type { ErrorGroup } from '@repo/ui/views/run/run-errors';
-import type { RunResultRow } from '@repo/ui/views/run/run-result';
-import type { SpecSummary } from '@repo/ui/views/run/run-specs';
-import type { HistoryRow } from '@repo/ui/views/explorer/test-overview';
+import type { RunCounts } from '@miguelfranken/ui/patterns/counts-bar';
+import type { ErrorGroup } from '@miguelfranken/ui/views/run/run-errors';
+import type { RunResultRow } from '@miguelfranken/ui/views/run/run-result';
+import type { SpecSummary } from '@miguelfranken/ui/views/run/run-specs';
+import type { HistoryRow } from '@miguelfranken/ui/views/explorer/test-overview';
 
 export type { ErrorGroup, HistoryRow, RunCounts, RunResultRow, SpecSummary };
 

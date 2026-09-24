@@ -1,4 +1,4 @@
-import { FeatureShowcase } from '@repo/ui/marketing/feature-showcase';
+import { FeatureShowcase } from '@miguelfranken/ui/marketing/feature-showcase';
 import { resolveLink } from '@/lib/links';
 import type { FeatureShowcaseBlock } from '@/payload-types';
 import { toSectionHeader, toSettings, Visual } from './shared';

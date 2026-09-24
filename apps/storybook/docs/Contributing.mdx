@@ -7,20 +7,20 @@ import { Meta } from '@storybook/addon-docs/blocks';
 ## Running it
 
 ```bash
-pnpm turbo run dev --filter=@repo/storybook   # http://localhost:6006
-pnpm turbo run test --filter=@repo/storybook  # every story, in Chromium
+pnpm turbo run dev --filter=@miguelfranken/storybook   # http://localhost:6006
+pnpm turbo run test --filter=@miguelfranken/storybook  # every story, in Chromium
 ```
 
 The browser tests need Playwright's Chromium once:
 
 ```bash
-pnpm --filter @repo/storybook exec playwright install chromium
+pnpm --filter @miguelfranken/storybook exec playwright install chromium
 ```
 
 ## Adding a primitive
 
 ```bash
-pnpm --filter @repo/ui exec shadcn add <name>
+pnpm --filter @miguelfranken/ui exec shadcn add <name>
 ```
 
 `components.json` lives in `packages/ui`, so the CLI writes into the package and

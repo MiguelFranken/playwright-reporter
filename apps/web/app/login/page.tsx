@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
 import { LoginForm } from '@/components/auth/login-form';
-import { Skeleton } from '@repo/ui/components/skeleton';
+import { Skeleton } from '@miguelfranken/ui/components/skeleton';
 import { getCurrentUser } from '@/lib/auth/access';
 import { safeNext } from '@/lib/auth/next-param';
 

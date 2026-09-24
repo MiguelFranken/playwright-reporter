@@ -10,8 +10,8 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
   BreadcrumbSeparator,
-} from '@repo/ui/components/breadcrumb';
-import { Skeleton } from '@repo/ui/components/skeleton';
+} from '@miguelfranken/ui/components/breadcrumb';
+import { Skeleton } from '@miguelfranken/ui/components/skeleton';
 
 const SECTION_LABELS: Record<string, string> = {
   dashboard: 'Dashboard',

@@ -1,12 +1,12 @@
 import { Badge } from '../../components/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/table';
-import type { CiInfo, GitInfo, PlaywrightInfo, SystemInfo } from '@repo/protocol';
+import type { CiInfo, GitInfo, PlaywrightInfo, SystemInfo } from '@miguelfranken/protocol';
 import { formatBytes, formatDateTime, formatDuration } from '../../lib/format';
 
 /**
  * Everything the configuration tab reports. The four nested shapes come from
- * `@repo/protocol` as types only — they are the wire vocabulary, so sharing
+ * `@miguelfranken/protocol` as types only — they are the wire vocabulary, so sharing
  * them is what stops the tab drifting from what the reporter actually sends.
  */
 export interface RunConfigData {

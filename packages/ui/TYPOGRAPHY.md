@@ -99,6 +99,6 @@ every role and declaring that a role replaces `font-size`, `font-weight`,
 group. Any new role must be added to that list, or it will disappear the first
 time someone passes a `className` through.
 
-Note that components import `cn` from `@repo/ui/lib/cn` (relatively, from inside this package), not from the bare `cn`
+Note that components import `cn` from `@miguelfranken/ui/lib/cn` (relatively, from inside this package), not from the bare `cn`
 package. Components added later by the shadcn CLI import `from "cn"` and must be
 repointed.

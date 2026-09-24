@@ -1,6 +1,6 @@
-import { CodeTabs } from '@repo/ui/marketing/code-tabs';
-import { ThemedImage } from '@repo/ui/marketing/themed-image';
-import { Steps } from '@repo/ui/marketing/steps';
+import { CodeTabs } from '@miguelfranken/ui/marketing/code-tabs';
+import { ThemedImage } from '@miguelfranken/ui/marketing/themed-image';
+import { Steps } from '@miguelfranken/ui/marketing/steps';
 import { RichText } from '@/components/rich-text';
 import { highlight } from '@/lib/highlight';
 import { resolveLink } from '@/lib/links';

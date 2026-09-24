@@ -1,4 +1,4 @@
-import { ComparisonTable } from '@repo/ui/marketing/comparison-table';
+import { ComparisonTable } from '@miguelfranken/ui/marketing/comparison-table';
 import { RichText } from '@/components/rich-text';
 import type { ComparisonTableBlock } from '@/payload-types';
 import { toSectionHeader, toSettings } from './shared';

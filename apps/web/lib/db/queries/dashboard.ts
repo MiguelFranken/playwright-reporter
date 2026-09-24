@@ -4,9 +4,9 @@ import { runs, testResults, tests } from '@/lib/db/schema';
 import { CHRONIC_FAILURE_RATE, CHRONIC_MIN_RUNS, CHRONIC_STREAK } from '@/lib/metrics/score';
 import { num, reliabilitySql, sinceDate } from './shared';
 
-/** Declared by the views that render them; see `@repo/ui/views/dashboard`. */
-import type { BranchSummaryRow } from '@repo/ui/views/dashboard/branch-summary-table';
-import type { TestHealthRow } from '@repo/ui/views/dashboard/test-health-lists';
+/** Declared by the views that render them; see `@miguelfranken/ui/views/dashboard`. */
+import type { BranchSummaryRow } from '@miguelfranken/ui/views/dashboard/branch-summary-table';
+import type { TestHealthRow } from '@miguelfranken/ui/views/dashboard/test-health-lists';
 
 export type { BranchSummaryRow, TestHealthRow };
 

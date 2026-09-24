@@ -1,6 +1,6 @@
 import { gunzipSync } from 'node:zlib';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { PROTOCOL_HEADER, PROTOCOL_VERSION } from '@repo/protocol';
+import { PROTOCOL_HEADER, PROTOCOL_VERSION } from '@miguelfranken/protocol';
 import { HttpError, IngestClient } from './client';
 import type { ResolvedOptions } from './types';
 

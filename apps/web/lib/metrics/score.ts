@@ -9,7 +9,7 @@ export function reliabilityScore(failureRate: number, flakyRate: number): number
 
 // Label + tone is presentation and lives in the design system; re-exported
 // here so the existing call sites keep working.
-export { flakyLabel, reliabilityLabel } from '@repo/ui/lib/reliability';
+export { flakyLabel, reliabilityLabel } from '@miguelfranken/ui/lib/reliability';
 
 export const CHRONIC_STREAK = 5;
 export const CHRONIC_FAILURE_RATE = 0.7;

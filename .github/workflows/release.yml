@@ -1,0 +1,59 @@
+name: Release
+
+# Every push to main is a release candidate. After CI passes, semantic-release
+# reads the Conventional Commits since the last tag; if they call for a
+# release, @miguelfranken/reporter is published to GitHub Packages and the
+# version bump and CHANGELOG.md are committed back, together with a tag and a
+# GitHub release.
+#
+# Run manually for a dry run: it prints the next version and publishes nothing.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# One release at a time, never cancelled half-way.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CI: true
+  TURBO_TELEMETRY_DISABLED: 1
+
+jobs:
+  ci:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
+  release:
+    name: Release
+    needs: ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # release commit, tag and GitHub release
+      issues: write # semantic-release/github
+      pull-requests: write # semantic-release/github
+      packages: write # GitHub Packages
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: jdx/mise-action@v4
+      - run: nub ci
+      - run: nub exec turbo run build --ui=stream --filter=@miguelfranken/reporter
+
+      # A reference that npm expands, so the token is never written to disk.
+      - name: Authenticate with GitHub Packages
+        run: echo '//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}' > "$HOME/.npmrc"
+
+      - name: Release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: nub exec semantic-release ${{ github.event_name == 'workflow_dispatch' && '--dry-run' || '' }}

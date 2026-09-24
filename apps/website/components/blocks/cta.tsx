@@ -1,4 +1,4 @@
-import { CtaBand } from '@repo/ui/marketing/cta-band';
+import { CtaBand } from '@miguelfranken/ui/marketing/cta-band';
 import { RichText } from '@/components/rich-text';
 import { resolveLinks } from '@/lib/links';
 import type { CtaBlock } from '@/payload-types';

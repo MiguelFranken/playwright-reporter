@@ -8,7 +8,7 @@ import {
   type RunStart,
   type TestBeginEvent,
   type UploadInstruction,
-} from '@repo/protocol';
+} from '@miguelfranken/protocol';
 import { db } from '@/lib/db/drizzle';
 import {
   attachments,

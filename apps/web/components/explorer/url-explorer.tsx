@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { ExplorerTable, type ExplorerRow } from '@repo/ui/views/explorer/explorer-table';
-import type { ExplorerSort, SortDir } from '@repo/ui/lib/explorer-sort';
-import { TestDrawer } from '@repo/ui/views/explorer/test-drawer';
-import { TestOverview, type TestOverviewData, type TestOverviewPreview } from '@repo/ui/views/explorer/test-overview';
+import { ExplorerTable, type ExplorerRow } from '@miguelfranken/ui/views/explorer/explorer-table';
+import type { ExplorerSort, SortDir } from '@miguelfranken/ui/lib/explorer-sort';
+import { TestDrawer } from '@miguelfranken/ui/views/explorer/test-drawer';
+import { TestOverview, type TestOverviewData, type TestOverviewPreview } from '@miguelfranken/ui/views/explorer/test-overview';
 import { useUrlParams } from '@/components/filters/url-filters';
 import { projectHrefs } from '@/lib/view-models';
 

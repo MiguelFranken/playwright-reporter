@@ -38,10 +38,10 @@ describe('packages/ui boundaries', () => {
     expect(offenders.map((f) => f.slice(SRC.length))).toEqual([]);
   });
 
-  it('only imports @repo/protocol as types', () => {
+  it('only imports @miguelfranken/protocol as types', () => {
     const offenders = files.filter((file) => {
       const source = readFileSync(file, 'utf8');
-      return /(?<!import type )(?:^|\n)import\s+(?!type\b)[^;]*from\s+['"]@repo\/protocol/.test(source);
+      return /(?<!import type )(?:^|\n)import\s+(?!type\b)[^;]*from\s+['"]@miguelfranken\/protocol/.test(source);
     });
     expect(offenders.map((f) => f.slice(SRC.length))).toEqual([]);
   });

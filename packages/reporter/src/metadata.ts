@@ -1,7 +1,7 @@
 import os from 'node:os';
 import { execFileSync } from 'node:child_process';
 import type { FullConfig } from '@playwright/test/reporter';
-import type { CiInfo, Executor, GitInfo, PlaywrightInfo, SystemInfo } from '@repo/protocol';
+import type { CiInfo, Executor, GitInfo, PlaywrightInfo, SystemInfo } from '@miguelfranken/protocol';
 
 function git(args: string[], cwd: string): string | undefined {
   try {

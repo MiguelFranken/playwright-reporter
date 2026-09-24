@@ -12,8 +12,8 @@ import {
   UserMenuSkeleton,
   type SidebarTeam,
 } from '@/components/app-sidebar';
-import { SidebarInset, SidebarProvider, SidebarTrigger } from '@repo/ui/components/sidebar';
-import { TooltipProvider } from '@repo/ui/components/tooltip';
+import { SidebarInset, SidebarProvider, SidebarTrigger } from '@miguelfranken/ui/components/sidebar';
+import { TooltipProvider } from '@miguelfranken/ui/components/tooltip';
 import { requireUser } from '@/lib/auth/access';
 import { roleCan } from '@/lib/auth/permissions';
 import { listAllTeams, listMyTeams, listProjectsForTeams } from '@/lib/db/queries/teams';

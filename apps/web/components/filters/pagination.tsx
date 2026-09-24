@@ -1,6 +1,6 @@
 'use client';
 
-import { Pagination } from '@repo/ui/patterns/pagination';
+import { Pagination } from '@miguelfranken/ui/patterns/pagination';
 import { useUrlParams } from './url-filters';
 
 /** Binds the presentational pager to the `page` search param. */
