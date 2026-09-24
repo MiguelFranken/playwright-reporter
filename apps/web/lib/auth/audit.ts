@@ -7,6 +7,8 @@ export type AuditAction =
   | 'team.create'
   | 'team.update'
   | 'team.delete'
+  | 'team.avatar.update'
+  | 'team.avatar.remove'
   | 'member.invite'
   | 'member.invite.regenerate'
   | 'member.invite.revoke'

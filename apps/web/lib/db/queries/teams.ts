@@ -5,7 +5,7 @@ import { auditLogs, projects, teamInvitations, teamMembers, teams, users } from 
 /** Teams the user is a member of, newest membership last. */
 export async function listMyTeams(userId: string) {
   return db
-    .select({ id: teams.id, slug: teams.slug, name: teams.name, role: teamMembers.role })
+    .select({ id: teams.id, slug: teams.slug, name: teams.name, image: teams.image, role: teamMembers.role })
     .from(teamMembers)
     .innerJoin(teams, eq(teams.id, teamMembers.teamId))
     .where(eq(teamMembers.userId, userId))
@@ -19,6 +19,7 @@ export async function listAllTeams() {
       id: teams.id,
       slug: teams.slug,
       name: teams.name,
+      image: teams.image,
       createdAt: teams.createdAt,
       // Drizzle renders bare column names inside a `sql` template, so these
       // sub-selects qualify them explicitly: an unqualified `id` would bind to

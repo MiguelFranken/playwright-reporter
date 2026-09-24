@@ -1,4 +1,5 @@
 import { betterAuth } from 'better-auth';
+import { APIError, createAuthMiddleware } from 'better-auth/api';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { nextCookies } from 'better-auth/next-js';
 import { admin } from 'better-auth/plugins';
@@ -39,6 +40,16 @@ export const auth = betterAuth({
     window: 60,
     max: 120,
     customRules: { '/sign-in/email': { window: 60, max: 10 } },
+  },
+  hooks: {
+    // `users.image` belongs to the avatar actions, which validate and store the
+    // bytes and write the column directly. Through Better Auth's own
+    // `update-user` endpoint a client could point it at any URL at all.
+    before: createAuthMiddleware(async (ctx) => {
+      if (ctx.path === '/update-user' && ctx.body && 'image' in ctx.body) {
+        throw new APIError('BAD_REQUEST', { message: 'Upload a profile image on the account page instead.' });
+      }
+    }),
   },
   plugins: [
     admin({ ac, roles: { superadmin: superadminRole, user: userRole }, adminRoles: ['superadmin'], defaultRole: 'user' }),

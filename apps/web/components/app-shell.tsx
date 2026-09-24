@@ -37,11 +37,12 @@ const shellData = cache(async () => {
 
   // A superadmin can open any team, so the switcher offers all of them.
   const rows = user.isSuperadmin
-    ? (await listAllTeams()).map((t) => ({ id: t.id, slug: t.slug, name: t.name, canManage: true }))
+    ? (await listAllTeams()).map((t) => ({ id: t.id, slug: t.slug, name: t.name, image: t.image, canManage: true }))
     : (await listMyTeams(user.id)).map((t) => ({
         id: t.id,
         slug: t.slug,
         name: t.name,
+        image: t.image,
         canManage: roleCan(t.role, { member: ['read'] }),
       }));
 
@@ -50,6 +51,7 @@ const shellData = cache(async () => {
   const teams: SidebarTeam[] = rows.map((t) => ({
     slug: t.slug,
     name: t.name,
+    image: t.image,
     canManage: t.canManage,
     projects: projects.filter((p) => p.teamId === t.id).map((p) => ({ slug: p.slug, name: p.name })),
   }));
@@ -112,7 +114,7 @@ async function NavSlot() {
 
 async function AccountSlot() {
   const { user } = await shellData();
-  return <UserMenu user={{ name: user.name, email: user.email, isSuperadmin: user.isSuperadmin }} />;
+  return <UserMenu user={{ name: user.name, email: user.email, image: user.image, isSuperadmin: user.isSuperadmin }} />;
 }
 
 async function BreadcrumbsSlot() {

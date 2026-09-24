@@ -3,8 +3,8 @@
 import { usePathname } from 'next/navigation';
 
 export type SidebarProject = { slug: string; name: string };
-export type SidebarTeam = { slug: string; name: string; canManage: boolean; projects: SidebarProject[] };
-export type SidebarUser = { name: string; email: string; isSuperadmin: boolean };
+export type SidebarTeam = { slug: string; name: string; image: string | null; canManage: boolean; projects: SidebarProject[] };
+export type SidebarUser = { name: string; email: string; image: string | null; isSuperadmin: boolean };
 
 /**
  * The chrome is rendered by one layout shared across every section, so it is

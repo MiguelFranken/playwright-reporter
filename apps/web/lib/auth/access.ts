@@ -136,6 +136,19 @@ export async function requireUserOr401(): Promise<CurrentUser> {
   return user;
 }
 
+/** For handlers that only have a team id, like the avatar route. */
+export async function requireTeamIdOr404(teamId: string): Promise<CurrentUser> {
+  const user = await requireUserOr401();
+  if (user.isSuperadmin) return user;
+  const [member] = await db
+    .select({ role: teamMembers.role })
+    .from(teamMembers)
+    .where(and(eq(teamMembers.teamId, teamId), eq(teamMembers.userId, user.id)))
+    .limit(1);
+  if (!member || !roleCan(member.role, { team: ['read'] })) throw new AccessError(404);
+  return user;
+}
+
 export async function requireProjectOr404(
   teamSlug: string,
   projectSlug: string,
