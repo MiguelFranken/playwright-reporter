@@ -43,6 +43,13 @@
       "when": 1790256604164,
       "tag": "0005_run_staleness",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790257074443,
+      "tag": "0006_push_subscriptions",
+      "breakpoints": true
     }
   ]
 }

@@ -29,6 +29,7 @@ import type { AttemptEndPayload, TestBeginPayload } from '@/lib/live/events';
 import { projectStaleTimeoutMs } from '@/lib/runs/config';
 import { clampDuration, MAX_DURATION_MS, reviveRun, settleOpenResults } from '@/lib/runs/lifecycle';
 import type { WatchdogEffect } from '@/lib/runs/watchdog/types';
+import type { PushEffect } from '@/lib/push';
 import { IngestError, type TokenProject } from './http';
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -53,6 +54,8 @@ export async function startRun(project: TokenProject, body: RunStart) {
       .from(runs)
       .where(and(eq(runs.projectId, project.id), eq(runs.ciRunId, body.ciRunId)))
       .for('update');
+    // Only the first shard announces the run.
+    let push: PushEffect = null;
     if (!run) {
       const [{ runCounter }] = await tx
         .update(projects)
@@ -95,6 +98,7 @@ export async function startRun(project: TokenProject, body: RunStart) {
         })
         .returning();
       await tx.insert(runEvents).values({ runId: run.id, projectId: project.id, type: 'run.started', payload: { runNumber: run.number } });
+      push = { runId: run.id, kind: 'started' };
     } else {
       // Another shard of the same run: extend expected test count and revive if marked stale.
       await tx
@@ -130,7 +134,7 @@ export async function startRun(project: TokenProject, body: RunStart) {
     // Arming is idempotent, so every shard's start asks: a run can only be
     // running here, and the watchdog's claim sorts out who starts it.
     const watchdog: WatchdogEffect = { arm: run.id };
-    return { runId: run.id, runNumber: run.number, shardIndex, url: runUrl(project, run.number), watchdog };
+    return { runId: run.id, runNumber: run.number, shardIndex, url: runUrl(project, run.number), watchdog, push };
   });
 }
 
@@ -546,11 +550,13 @@ export async function finishRun(project: TokenProject, run: Run, body: RunFinish
       const revived = fresh.status === 'incomplete' && (await reviveRun(tx, fresh));
       await tx.update(runs).set({ lastEventAt: new Date() }).where(eq(runs.id, run.id));
       const watchdog: WatchdogEffect = revived || (fresh.status === 'running' && !fresh.watchdogId) ? { arm: run.id } : {};
-      return { runStatus: 'running' as const, url: runUrl(project, fresh.number), watchdog };
+      return { runStatus: 'running' as const, url: runUrl(project, fresh.number), watchdog, push: null };
     }
     const status = await finalizeRun(tx, project, fresh, shards.map((s) => s.status));
     const watchdog: WatchdogEffect = fresh.watchdogId ? { disarm: fresh.watchdogId } : {};
-    return { runStatus: status, url: runUrl(project, fresh.number), watchdog };
+    // A repeated finish call settles the run again but announces nothing new.
+    const push: PushEffect = fresh.status === 'running' || fresh.status === 'incomplete' ? { runId: run.id, kind: 'finished' } : null;
+    return { runStatus: status, url: runUrl(project, fresh.number), watchdog, push };
   });
 }
 

@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.0.10](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.9...v0.0.10) (2026-09-24)
+
+### Features
+
+* browser push notifications when a run starts or finishes ([#12](https://github.com/MiguelFranken/playwright-reporter/issues/12)) ([9219ff8](https://github.com/MiguelFranken/playwright-reporter/commit/9219ff8ca2d6f18adf8c3c39fb450349c19afb35))
+
+## [0.0.9](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.8...v0.0.9) (2026-09-24)
+
+### Features
+
+* close runs of dead reporters as abandoned, with a Workflow SDK watchdog ([#9](https://github.com/MiguelFranken/playwright-reporter/issues/9)) ([43eb43f](https://github.com/MiguelFranken/playwright-reporter/commit/43eb43f571db5358a7eebf498dd6d0906503d62b))
+
 ## [0.0.8](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.7...v0.0.8) (2026-09-24)
 
 ### Features

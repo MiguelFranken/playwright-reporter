@@ -3,12 +3,14 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { ChangeNameForm, ChangePasswordForm, SessionsCard } from '@/components/auth/account-forms';
 import { AvatarUpload } from '@/components/avatar-upload';
+import { PushSettings } from '@/components/notifications/push-settings';
 import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
 import { Badge } from '@miguelfranken/ui/components/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@miguelfranken/ui/components/card';
 import { Skeleton } from '@miguelfranken/ui/components/skeleton';
 import { requireUser } from '@/lib/auth/access';
 import { listMyTeams } from '@/lib/db/queries/teams';
+import { pushConfig } from '@/lib/push/config';
 import { removeMyAvatar, updateMyAvatar } from '@/app/(app)/account/actions';
 
 export const metadata: Metadata = { title: 'Account' };
@@ -16,7 +18,7 @@ export const metadata: Metadata = { title: 'Account' };
 export default function AccountPage() {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-      <PageHeader title="Account" description="Your profile, password and active sessions." />
+      <PageHeader title="Account" description="Your profile, password, notifications and active sessions." />
       <Suspense fallback={<AccountSkeleton />}>
         <AccountContent />
       </Suspense>
@@ -37,6 +39,7 @@ function AccountSkeleton() {
 async function AccountContent() {
   const user = await requireUser();
   const teams = await listMyTeams(user.id);
+  const push = pushConfig();
 
   return (
     <>
@@ -82,6 +85,18 @@ async function AccountContent() {
           <ChangePasswordForm />
         </CardContent>
       </Card>
+
+      {push && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Browser notifications</CardTitle>
+            <CardDescription>Set per browser: turning them on here does not turn them on elsewhere.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <PushSettings publicKey={push.publicKey} />
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
