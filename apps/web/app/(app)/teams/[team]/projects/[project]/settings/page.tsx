@@ -3,6 +3,7 @@ import { Suspense } from 'react';
 import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
 import { ProjectDangerZone } from '@/components/settings/danger-zone';
 import { ProjectRenameForm } from '@/components/settings/project-form';
+import { DefaultBranchForm } from '@/components/settings/default-branch-form';
 import { ReporterSetup } from '@miguelfranken/ui/views/settings/reporter-setup';
 import { StorageCard } from '@miguelfranken/ui/views/settings/storage-card';
 import { TokensCard, type TokenRow } from '@/components/settings/tokens-card';
@@ -10,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@migu
 import { Skeleton } from '@miguelfranken/ui/components/skeleton';
 import { requireProject } from '@/lib/auth/access';
 import { listTokens } from '@/lib/db/queries/projects';
+import { defaultBranch } from '@/lib/db/queries/mcp';
 import { formatDateTime, formatRelative } from '@miguelfranken/ui/lib/format';
 import { baseUrl, storageDriver } from '@/lib/storage';
 
@@ -44,7 +46,12 @@ async function SettingsContent({ params }: { params: Params }) {
   const canSeeTokens = access.can({ token: ['read'] });
   const canUpdate = access.can({ project: ['update'] });
   const canDelete = access.can({ project: ['delete'] });
-  const tokens = canSeeTokens ? await listTokens(project.id) : [];
+  const configuredBranch = typeof project.settings.defaultBranch === 'string' ? project.settings.defaultBranch : '';
+  // Resolved with empty settings on purpose: the placeholder shows what an empty field falls back to.
+  const [tokens, fallbackBranch] = await Promise.all([
+    canSeeTokens ? listTokens(project.id) : [],
+    canUpdate ? defaultBranch(project.id, {}) : null,
+  ]);
 
   const rows: TokenRow[] = tokens.map((t) => ({
     id: t.id,
@@ -87,6 +94,9 @@ async function SettingsContent({ params }: { params: Params }) {
               <dd className="break-all text-code-s leading-5 text-muted-foreground">{project.id}</dd>
             </dl>
             {canUpdate ? <ProjectRenameForm teamSlug={team} projectSlug={project.slug} name={project.name} /> : null}
+            {canUpdate && fallbackBranch ? (
+              <DefaultBranchForm teamSlug={team} projectSlug={project.slug} value={configuredBranch} fallback={fallbackBranch} />
+            ) : null}
           </CardContent>
         </Card>
 

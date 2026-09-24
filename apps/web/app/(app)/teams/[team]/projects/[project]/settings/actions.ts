@@ -1,7 +1,7 @@
 'use server';
 
 import { randomUUID } from 'node:crypto';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { actionError, denied, projectForAction } from '@/lib/auth/access';
 import { audit } from '@/lib/auth/audit';
@@ -31,6 +31,45 @@ export async function renameProject(_prev: RenameState, formData: FormData): Pro
   });
   revalidatePath(`/teams/${teamSlug}`, 'layout');
   return { ok: true, message: 'Project renamed.' };
+}
+
+export type DefaultBranchState = { ok: boolean; message?: string } | null;
+
+/**
+ * Sets `projects.settings.defaultBranch`, the branch AI assistants compare
+ * against to tell a new failure from one already failing on the base branch
+ * (see `defaultBranch` in lib/db/queries/mcp.ts). An empty value removes the
+ * key, which hands the choice back to the fallback (main/master, then the
+ * busiest branch) rather than pinning a stale guess.
+ *
+ * The change is a jsonb merge done in SQL, so other settings keys such as
+ * `staleTimeoutMs` survive even if they were written concurrently.
+ */
+export async function updateDefaultBranch(_prev: DefaultBranchState, formData: FormData): Promise<DefaultBranchState> {
+  const teamSlug = String(formData.get('team') ?? '');
+  const projectSlug = String(formData.get('project') ?? '');
+  const branch = String(formData.get('defaultBranch') ?? '').trim();
+  if (!teamSlug || !projectSlug) return { ok: false, message: 'Missing project.' };
+  if (branch.length > 200) return { ok: false, message: 'Branch name must be at most 200 characters.' };
+
+  const access = await projectForAction(teamSlug, projectSlug, { project: ['update'] });
+  if (denied(access)) return access;
+
+  const current = typeof access.project.settings.defaultBranch === 'string' ? access.project.settings.defaultBranch : '';
+  if (current === branch) return { ok: true, message: 'No changes.' };
+
+  const settings = branch
+    ? sql`${projects.settings} || jsonb_build_object('defaultBranch', ${branch}::text)`
+    : sql`${projects.settings} - 'defaultBranch'`;
+  await db.update(projects).set({ settings, updatedAt: new Date() }).where(eq(projects.id, access.project.id));
+  await audit('project.update', {
+    actorId: access.user.id,
+    teamId: access.team.id,
+    projectId: access.project.id,
+    target: { slug: access.project.slug, defaultBranch: branch || null },
+  });
+  revalidatePath(`/teams/${teamSlug}/projects/${projectSlug}/settings`);
+  return { ok: true, message: branch ? `Base branch set to ${branch}.` : 'Base branch cleared.' };
 }
 
 export type CreateTokenResult = { ok: true; token: string; name: string } | { ok: false; message: string };

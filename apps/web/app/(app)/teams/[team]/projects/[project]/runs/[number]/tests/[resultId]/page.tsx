@@ -6,6 +6,8 @@ import { HistorySparkline } from '@miguelfranken/ui/patterns/history-sparkline';
 import { collapseWs, stripAnsi } from '@miguelfranken/ui/lib/ansi';
 import { ResultAttempts, type AttachmentView, type AttemptView } from '@miguelfranken/ui/views/run/result-attempts';
 import { StatusBadge } from '@miguelfranken/ui/patterns/status-badge';
+import { DebugWithAiMenu } from '@miguelfranken/ui/patterns/debug-with-ai-menu';
+import { debugPrompt } from '@miguelfranken/ui/lib/ai-handoff';
 import { Alert, AlertDescription, AlertTitle } from '@miguelfranken/ui/components/alert';
 import { Badge } from '@miguelfranken/ui/components/badge';
 import { Button } from '@miguelfranken/ui/components/button';
@@ -16,6 +18,7 @@ import { requireProject } from '@/lib/auth/access';
 import { getResultDetail, testHistory } from '@/lib/db/queries/runs';
 import { formatDateTime, formatDuration, formatRelative } from '@miguelfranken/ui/lib/format';
 import { signArtifactPath } from '@/lib/auth/artifact-url';
+import { projectHrefs } from '@/lib/view-models';
 import { baseUrl, getStorage } from '@/lib/storage';
 import { expiresAt, getRetentionPolicy } from '@/lib/storage/retention';
 
@@ -38,6 +41,9 @@ export default function ResultPage(props: Props) {
 }
 
 const MAX_INLINE_TEXT = 200 * 1024;
+
+/** Outcomes the "Debug with AI" menu is offered for: every kind of failure, and flaky passes. */
+const AI_DEBUG_OUTCOMES = new Set<string>(['failed', 'timedout', 'interrupted', 'flaky']);
 
 async function readText(storageKey: string, size: number | null) {
   if (size !== null && size > MAX_INLINE_TEXT) return undefined;
@@ -103,6 +109,11 @@ async function ResultContent({ params }: Props) {
   const comparison = compareAttempts(attempts);
   const runHref = `${base}/runs/${run.number}`;
   const resultHref = (id: string) => `${runHref}/tests/${id}`;
+  // Only outcomes with something to explain get the hand-off; the prompt is a
+  // plain string so it can cross into the client menu (packages/ui AGENTS.md, trap 1).
+  const aiPrompt = AI_DEBUG_OUTCOMES.has(result.outcome)
+    ? debugPrompt({ resultUrl: `${origin}${projectHrefs(base).result(run.number, result.id)}` })
+    : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -150,6 +161,7 @@ async function ResultContent({ params }: Props) {
             <Button variant="outline" size="sm" nativeButton={false} render={<Link href={`${base}/tests/${test.id}`} />}>
               <History className="size-3.5" /> History
             </Button>
+            {aiPrompt ? <DebugWithAiMenu prompt={aiPrompt} setupHref="/account/ai" /> : null}
           </div>
         </div>
       </div>
