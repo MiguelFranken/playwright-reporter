@@ -9,6 +9,17 @@ export function baseUrl() {
   return (process.env.BASE_URL ?? vercelUrl() ?? 'http://localhost:3000').replace(/\/+$/, '');
 }
 
+/**
+ * Origins Better Auth accepts requests from. Besides `baseUrl()`, a Vercel
+ * deployment answers on its own URL, its branch URL and the production domain,
+ * and further aliases can be listed in `TRUSTED_ORIGINS` (comma-separated).
+ */
+export function trustedOrigins() {
+  const hosts = [process.env.VERCEL_URL, process.env.VERCEL_BRANCH_URL, process.env.VERCEL_PROJECT_PRODUCTION_URL];
+  const extra = (process.env.TRUSTED_ORIGINS ?? '').split(',').map((o) => o.trim().replace(/\/+$/, ''));
+  return [...new Set([baseUrl(), ...hosts.filter(Boolean).map((h) => `https://${h}`), ...extra.filter(Boolean)])];
+}
+
 function vercelUrl() {
   const host =
     process.env.VERCEL_ENV === 'production'

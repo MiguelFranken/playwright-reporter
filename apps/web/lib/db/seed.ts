@@ -55,6 +55,30 @@ async function seed() {
     await db.insert(teamMembers).values({ teamId: team.id, userId: user.id, role: 'admin', addedBy: user.id });
   }
 
+  // --------------------------------------------------------- demo viewer (opt-in)
+  // A read-only team member for demos, created only when SEED_VIEWER_EMAIL is set.
+  const viewerEmail = process.env.SEED_VIEWER_EMAIL?.toLowerCase();
+  let generatedViewerPassword: string | undefined;
+  if (viewerEmail) {
+    let [viewer] = await db.select().from(users).where(eq(users.email, viewerEmail));
+    if (!viewer) {
+      const password = process.env.SEED_VIEWER_PASSWORD ?? (generatedViewerPassword = randomBytes(12).toString('base64url'));
+      await auth.api.createUser({ body: { email: viewerEmail, password, name: process.env.SEED_VIEWER_NAME ?? 'Demo viewer', role: 'user' } });
+      [viewer] = await db.select().from(users).where(eq(users.email, viewerEmail));
+      console.log(`Created viewer ${viewerEmail}`);
+    } else {
+      console.log(`Viewer ${viewerEmail} already exists`);
+    }
+    const [viewerMembership] = await db
+      .select()
+      .from(teamMembers)
+      .where(and(eq(teamMembers.teamId, team.id), eq(teamMembers.userId, viewer.id)));
+    if (!viewerMembership) {
+      await db.insert(teamMembers).values({ teamId: team.id, userId: viewer.id, role: 'viewer', addedBy: user.id });
+      console.log(`Added ${viewerEmail} to team "${team.name}" as viewer`);
+    }
+  }
+
   // ------------------------------------------------------------------- project
   let [project] = await db
     .select()
@@ -92,6 +116,10 @@ async function seed() {
   if (generatedPassword) {
     console.log('\nSuperadmin password (shown once):');
     console.log(`  ${generatedPassword}`);
+  }
+  if (generatedViewerPassword) {
+    console.log('\nViewer password (shown once):');
+    console.log(`  ${generatedViewerPassword}`);
   }
   console.log(`\nSign in at ${baseUrl()}/login as ${email}\n`);
 

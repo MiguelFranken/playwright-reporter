@@ -4,14 +4,14 @@ import { nextCookies } from 'better-auth/next-js';
 import { admin } from 'better-auth/plugins';
 import { db } from '@/lib/db/drizzle';
 import * as schema from '@/lib/db/schema';
-import { authSecret, baseUrl, COOKIE_PREFIX } from './config';
+import { authSecret, baseUrl, COOKIE_PREFIX, trustedOrigins } from './config';
 import { ac, superadminRole, userRole } from './permissions';
 
 export const auth = betterAuth({
   appName: 'Playwright Reporter',
   baseURL: baseUrl(),
   secret: authSecret(),
-  trustedOrigins: [baseUrl()],
+  trustedOrigins: trustedOrigins(),
   database: drizzleAdapter(db, { provider: 'pg', schema, usePlural: true }),
   advanced: {
     // Postgres generates the uuids (`gen_random_uuid()`); the adapter reports

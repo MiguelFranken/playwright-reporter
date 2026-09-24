@@ -18,7 +18,9 @@
         "ARTIFACT_URL_TTL_SECONDS",
         "VERCEL_ENV",
         "VERCEL_URL",
-        "VERCEL_PROJECT_PRODUCTION_URL"
+        "VERCEL_PROJECT_PRODUCTION_URL",
+        "VERCEL_BRANCH_URL",
+        "TRUSTED_ORIGINS"
       ]
     },
     "check-types": { "outputs": ["*.tsbuildinfo"] }

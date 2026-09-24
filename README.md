@@ -240,14 +240,17 @@ CMS users are separate from the reporter's users: different auth system, differe
 schema. Editing a page and publishing it revalidates the affected paths, so content changes go live
 without a deploy.
 
-## Deploying to Vercel (not yet verified end to end)
+## Deploying to Vercel
 
-1. Import the repo, set the Root Directory to `apps/web`.
-2. Environment variables: `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `BASE_URL` (the real public origin —
-   Better Auth uses it for cookies and CSRF), `BETTER_AUTH_SECRET`, `STORAGE_DRIVER=vercel-blob` and a
-   **private** Blob store connected to the project (`BLOB_READ_WRITE_TOKEN`).
-3. Run `pnpm db:migrate` against the production database from your machine or CI, then `pnpm db:seed`
-   once with `SEED_SUPERADMIN_EMAIL` set to create the first account.
+1. Import the repo, set the Root Directory to `apps/web`. `apps/web/vercel.json` installs with nub and
+   builds through `scripts/vercel-build.sh`, which runs the Turborepo build and then applies pending
+   migrations — on **production** deployments only (previews share the production database).
+2. Environment variables: `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `BETTER_AUTH_SECRET`,
+   `STORAGE_DRIVER=vercel-blob` and a **private** Blob store connected to the project
+   (`BLOB_READ_WRITE_TOKEN`). `BASE_URL` is optional: it defaults to the production domain (previews use
+   their deployment URL). Extra domain aliases that should be able to sign in go in `TRUSTED_ORIGINS`.
+3. Run `pnpm db:seed` once against the production database with `SEED_SUPERADMIN_EMAIL` (and optionally
+   `SEED_VIEWER_EMAIL`) set to create the first accounts.
 
 The website is a **second** Vercel project on the same repository: Root Directory `apps/website`,
 build command `pnpm turbo run ci --filter=@repo/website` (which migrates before building), and a
