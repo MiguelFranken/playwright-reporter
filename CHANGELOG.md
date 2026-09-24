@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.4](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.3...v0.0.4) (2026-09-24)
+
+### Performance Improvements
+
+* fewer ingest, upload and backfill requests per run ([#5](https://github.com/MiguelFranken/playwright-reporter/issues/5)) ([0cd0b35](https://github.com/MiguelFranken/playwright-reporter/commit/0cd0b350c71dfe9d613d319e1e1d0c6b9ccab153))
+
 ## [0.0.3](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.2...v0.0.3) (2026-09-24)
 
 ### Performance Improvements
