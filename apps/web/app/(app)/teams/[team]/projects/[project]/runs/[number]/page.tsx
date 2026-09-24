@@ -11,7 +11,7 @@ import { UrlRunSummary } from '@/components/run/url-run-summary';
 import { LiveRunErrors, LiveRunHeader } from '@/components/live/live-run';
 import { LiveStoreProvider } from '@/components/live/live-store';
 import { requireProject } from '@/lib/auth/access';
-import { toRunHeaderData } from '@/lib/view-models';
+import { branchHref, toRunHeaderData } from '@/lib/view-models';
 import { getRunByNumber, listRunErrorGroupsWithCursor, listRunResults, listRunSpecsWithCursor } from '@/lib/db/queries/runs';
 
 type Params = Promise<{ team: string; project: string; number: string }>;
@@ -72,6 +72,7 @@ async function Header({ params }: { params: Params }) {
       pollUrl={`/api${base}/runs/${found.id}/events`}
       summaryUrl={`/api${base}/runs/${found.id}/summary`}
       resultsUrl={`/api${base}/runs/${found.id}/results`}
+      branchHref={runRow.gitBranch ? branchHref(base, runRow.gitBranch) : undefined}
     />
   );
 }

@@ -15,6 +15,20 @@ export type { BranchSummaryRow, TestHealthRow };
 const status = effectiveStatusRaw();
 const rStatus = effectiveStatusRaw('r');
 
+/**
+ * Narrows a query to one git branch. Every dashboard aggregate takes one, so
+ * the branch page is the dashboard with a `where` added rather than a second
+ * copy of each query that could drift from the first.
+ */
+export interface BranchScope {
+  branch?: string;
+}
+
+/** `and <col> = branch`, or nothing. `col` is a trusted column reference, never input. */
+function onBranch(scope: BranchScope, col = 'git_branch') {
+  return scope.branch === undefined ? sql`` : sql` and ${sql.raw(col)} = ${scope.branch}`;
+}
+
 export interface DashboardStats {
   trackedTests: number;
   newTests: number;
@@ -25,18 +39,27 @@ export interface DashboardStats {
   avgRunDurationMs: number | null;
 }
 
-export async function dashboardStats(projectId: string, days: number): Promise<DashboardStats> {
+export async function dashboardStats(projectId: string, days: number, scope: BranchScope = {}): Promise<DashboardStats> {
   const since = sinceDate(days);
+  // On a branch, "new" means new *to that branch*: its first result there
+  // falls inside the range, wherever else the test had already run.
+  const newTests =
+    scope.branch === undefined
+      ? sql`select count(*) as n from ${tests} where project_id = ${projectId} and first_seen_at >= ${since}`
+      : sql`select count(*) as n from (
+              select tr.test_id from ${testResults} tr join ${runs} r on r.id = tr.run_id
+              where r.project_id = ${projectId}${onBranch(scope, 'r.git_branch')}
+              group by tr.test_id having min(r.started_at) >= ${since}) t`;
   const [[tracked], [newT], [runAgg], [rel]] = await Promise.all([
     db.execute<{ n: string }>(
-      sql`select count(distinct tr.test_id) as n from ${testResults} tr join ${runs} r on r.id = tr.run_id where r.project_id = ${projectId} and r.started_at >= ${since}`,
+      sql`select count(distinct tr.test_id) as n from ${testResults} tr join ${runs} r on r.id = tr.run_id where r.project_id = ${projectId} and r.started_at >= ${since}${onBranch(scope, 'r.git_branch')}`,
     ),
-    db.execute<{ n: string }>(sql`select count(*) as n from ${tests} where project_id = ${projectId} and first_seen_at >= ${since}`),
+    db.execute<{ n: string }>(newTests),
     db.execute<{ finished: string; passed: string; avg_ms: string | null }>(
       sql`select count(*) filter (where ${status} <> 'running') as finished,
                  count(*) filter (where status = 'passed') as passed,
                  avg(duration_ms) filter (where status in ('passed','failed')) as avg_ms
-          from ${runs} where project_id = ${projectId} and started_at >= ${since}`,
+          from ${runs} where project_id = ${projectId} and started_at >= ${since}${onBranch(scope)}`,
     ),
     db.execute<{ score: string | null }>(
       sql`select avg(score) as score from (
@@ -46,7 +69,7 @@ export async function dashboardStats(projectId: string, days: number): Promise<D
               sql`count(*) filter (where tr.outcome = 'flaky')`,
             )} as score
             from ${testResults} tr join ${runs} r on r.id = tr.run_id
-            where r.project_id = ${projectId} and r.started_at >= ${since}
+            where r.project_id = ${projectId} and r.started_at >= ${since}${onBranch(scope, 'r.git_branch')}
             group by tr.test_id) s where score is not null`,
     ),
   ]);
@@ -66,7 +89,7 @@ export async function dashboardStats(projectId: string, days: number): Promise<D
 
 export async function branchSummary(projectId: string, days: number): Promise<BranchSummaryRow[]> {
   const rows = await db.execute<Record<string, unknown>>(
-    sql`select coalesce(git_branch, '(unknown)') as branch,
+    sql`select git_branch as branch,
                (array_agg(environment order by started_at desc))[1] as environment,
                count(*)::int as runs,
                max(started_at) as last_run_at,
@@ -78,7 +101,7 @@ export async function branchSummary(projectId: string, days: number): Promise<Br
         group by git_branch order by max(started_at) desc limit 20`,
   );
   return Array.from(rows).map((r) => ({
-    branch: String(r.branch),
+    branch: (r.branch as string | null) ?? null,
     environment: (r.environment as string | null) ?? null,
     runs: num(r.runs),
     lastRunAt: new Date(r.last_run_at as string),
@@ -107,12 +130,12 @@ function mapHealth(r: Record<string, unknown>): TestHealthRow {
   };
 }
 
-const healthCte = (projectId: string, since: string) => sql`
+const healthCte = (projectId: string, since: string, scope: BranchScope) => sql`
   with res as (
     select tr.test_id, tr.outcome, tr.started_at, tr.duration_ms, r.number,
            row_number() over (partition by tr.test_id order by tr.started_at desc) as rn
     from ${testResults} tr join ${runs} r on r.id = tr.run_id
-    where r.project_id = ${projectId} and r.started_at >= ${since} and tr.outcome not in ('running','skipped')
+    where r.project_id = ${projectId} and r.started_at >= ${since}${onBranch(scope, 'r.git_branch')} and tr.outcome not in ('running','skipped')
   ),
   agg as (
     select test_id,
@@ -129,16 +152,16 @@ const healthCte = (projectId: string, since: string) => sql`
   )
   select a.*, t.title, t.file, t.pw_project from agg a join ${tests} t on t.id = a.test_id`;
 
-export async function mostFlakyTests(projectId: string, days: number, limit = 10): Promise<TestHealthRow[]> {
+export async function mostFlakyTests(projectId: string, days: number, limit = 10, scope: BranchScope = {}): Promise<TestHealthRow[]> {
   const rows = await db.execute<Record<string, unknown>>(
-    sql`${healthCte(projectId, sinceDate(days))} where a.flaky > 0 order by a.flaky_rate desc, a.flaky desc limit ${limit}`,
+    sql`${healthCte(projectId, sinceDate(days), scope)} where a.flaky > 0 order by a.flaky_rate desc, a.flaky desc limit ${limit}`,
   );
   return Array.from(rows).map(mapHealth);
 }
 
-export async function chronicFailures(projectId: string, days: number, limit = 10): Promise<TestHealthRow[]> {
+export async function chronicFailures(projectId: string, days: number, limit = 10, scope: BranchScope = {}): Promise<TestHealthRow[]> {
   const rows = await db.execute<Record<string, unknown>>(
-    sql`${healthCte(projectId, sinceDate(days))}
+    sql`${healthCte(projectId, sinceDate(days), scope)}
         where a.streak >= ${CHRONIC_STREAK} or (a.runs >= ${CHRONIC_MIN_RUNS} and a.failure_rate >= ${CHRONIC_FAILURE_RATE})
         order by a.streak desc, a.failure_rate desc limit ${limit}`,
   );
@@ -155,7 +178,7 @@ export interface TrendPoint {
   skipped: number;
 }
 
-export async function passFailTrend(projectId: string, limit = 30): Promise<TrendPoint[]> {
+export async function passFailTrend(projectId: string, limit = 30, scope: BranchScope = {}): Promise<TrendPoint[]> {
   const rows = await db.execute<Record<string, unknown>>(
     sql`select r.number, r.started_at, ${rStatus} as status,
                count(*) filter (where tr.outcome = 'passed')::int as passed,
@@ -163,7 +186,7 @@ export async function passFailTrend(projectId: string, limit = 30): Promise<Tren
                count(*) filter (where tr.outcome = 'flaky')::int as flaky,
                count(*) filter (where tr.outcome = 'skipped')::int as skipped
         from ${runs} r left join ${testResults} tr on tr.run_id = r.id
-        where r.project_id = ${projectId} and ${rStatus} <> 'running'
+        where r.project_id = ${projectId} and ${rStatus} <> 'running'${onBranch(scope, 'r.git_branch')}
         group by r.id order by r.started_at desc limit ${limit}`,
   );
   return Array.from(rows)

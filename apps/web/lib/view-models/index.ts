@@ -42,10 +42,20 @@ export function toRunHeaderData<T extends RunRowLike>(run: T): T & Pick<RunHeade
   return toRunListItem(run);
 }
 
+/**
+ * A branch's page. Branch names carry slashes (`feature/checkout`), so the
+ * route is a catch-all and each segment is encoded on its own: the slashes stay
+ * path separators and anything else (`#`, `?`, `%`) survives the round trip.
+ */
+export function branchHref(base: string, name: string) {
+  return `${base}/branches/${name.split('/').map(encodeURIComponent).join('/')}`;
+}
+
 /** The href builders a project's views need, all rooted at one base path. */
 export function projectHrefs(base: string) {
   return {
     run: (number: number) => `${base}/runs/${number}`,
+    branch: (name: string) => branchHref(base, name),
     test: (testId: string) => `${base}/tests/${testId}`,
     result: (runNumber: number, resultId: string) => `${base}/runs/${runNumber}/tests/${resultId}`,
   };
