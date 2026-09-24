@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.15](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.14...v0.0.15) (2026-09-24)
+
+### Bug Fixes
+
+* **mcp:** rank a test once in project_health's fix-first list ([#19](https://github.com/MiguelFranken/playwright-reporter/issues/19)) ([b875c54](https://github.com/MiguelFranken/playwright-reporter/commit/b875c542e99b0c61b63efe9a668d0be74f3ceb49))
+
 ## [0.0.14](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.13...v0.0.14) (2026-09-24)
 
 ### Features
