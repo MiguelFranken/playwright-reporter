@@ -64,6 +64,13 @@
       "when": 1790279381346,
       "tag": "0008_personal_access_tokens",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790281357223,
+      "tag": "0009_oauth",
+      "breakpoints": true
     }
   ]
 }

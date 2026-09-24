@@ -11,10 +11,15 @@ import { OAuthError, OAuthErrorCode, type AuthInfo, type OAuthTokenVerifier } fr
 import { after } from 'next/server';
 import type { GrantScope, Principal } from '@/lib/auth/principal';
 import { findActivePersonalToken, touchPersonalToken } from '@/lib/db/queries/personal-tokens';
+import { ACCESS_PREFIX, isOurResource } from '@/lib/oauth/config';
+import { findActiveAccessToken, touchGrant } from '@/lib/oauth/tokens';
 import { INGEST_PREFIX, PAT_PREFIX, hashToken } from '@/lib/tokens';
+
+const scopesOf = (scopes: string[]) => scopes.filter((s): s is GrantScope => s === 'read' || s === 'write');
 
 export const verifier: OAuthTokenVerifier = {
   async verifyAccessToken(token: string): Promise<AuthInfo> {
+    if (token.startsWith(ACCESS_PREFIX)) return verifyOAuthToken(token);
     if (!token.startsWith(PAT_PREFIX)) {
       // Anything else must also be an OAuthError: other errors become a 500.
       throw new OAuthError(
@@ -38,13 +43,13 @@ export const verifier: OAuthTokenVerifier = {
       grant: {
         kind: 'pat',
         id: row.token.id,
-        scopes: row.token.scopes.filter((s): s is GrantScope => s === 'read' || s === 'write'),
+        scopes: scopesOf(row.token.scopes),
         teamIds: row.token.teamIds,
         projectId: row.token.projectId,
         allTeams: row.token.allTeams,
       },
     };
-    touchLater(row.token.id);
+    later(() => touchPersonalToken(row.token.id));
     return {
       token,
       clientId: `pat:${row.token.id}`,
@@ -56,9 +61,37 @@ export const verifier: OAuthTokenVerifier = {
   },
 };
 
-/** `last_used_at` after the response, like the ingest tokens' bookkeeping; never blocks or fails a call. */
-function touchLater(id: string) {
-  const touch = () => touchPersonalToken(id).catch(() => undefined);
+/** An OAuth access token (claude.ai, ChatGPT, …): the grant the user consented to becomes the principal. */
+async function verifyOAuthToken(token: string): Promise<AuthInfo> {
+  const row = await findActiveAccessToken(token);
+  if (!row) throw new OAuthError(OAuthErrorCode.InvalidToken, 'The access token is invalid, expired or revoked.');
+  // Audience binding (RFC 8707): a token minted for another resource is not ours to accept.
+  if (!isOurResource(row.token.resource)) throw new OAuthError(OAuthErrorCode.InvalidToken, 'The access token was issued for another resource.');
+  const principal: Principal = {
+    user: { id: row.user.id, email: row.user.email, name: row.user.name, image: row.user.image, isSuperadmin: row.user.role === 'superadmin' },
+    grant: {
+      kind: 'oauth',
+      id: row.grant.id,
+      scopes: scopesOf(row.grant.scopes),
+      teamIds: row.grant.teamIds,
+      projectId: row.grant.projectId,
+      allTeams: row.grant.allTeams,
+    },
+  };
+  later(() => touchGrant(row.grant.id));
+  return {
+    token,
+    clientId: row.grant.clientId,
+    scopes: [...principal.grant!.scopes],
+    expiresAt: Math.floor(row.token.expiresAt.getTime() / 1000),
+    resource: row.token.resource ? new URL(row.token.resource) : undefined,
+    extra: { principal, tokenName: row.clientName, tokenPrefix: null },
+  };
+}
+
+/** Usage bookkeeping after the response, like the ingest tokens'; never blocks or fails a call. */
+function later(fn: () => Promise<unknown>) {
+  const touch = () => fn().catch(() => undefined);
   try {
     after(touch);
   } catch {

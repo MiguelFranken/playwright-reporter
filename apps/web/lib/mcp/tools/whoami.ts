@@ -71,7 +71,14 @@ export const whoami = defineTool({
         md.heading('Connection', 2);
         md.kv([
           ['User', `${d.user.name} <${d.user.email}>${d.user.superadmin ? ' (superadmin)' : ''}`],
-          ['Credential', d.credential.kind === 'pat' ? `personal access token "${d.credential.name}" (${d.credential.prefix}…)` : d.credential.kind],
+          [
+            'Credential',
+            d.credential.kind === 'pat'
+              ? `personal access token "${d.credential.name}" (${d.credential.prefix}…)`
+              : d.credential.kind === 'oauth'
+                ? `OAuth connection "${d.credential.name}" (revocable under Account → Connected apps)`
+                : d.credential.kind,
+          ],
           ['Scopes', d.credential.scopes.join(', ')],
           ['Expires', d.credential.expiresAt ? when(d.credential.expiresAt) : null],
           ['Restricted to', d.credential.restrictions.project ? 'one project' : d.credential.restrictions.teams ? `${d.credential.restrictions.teams.length} team(s)` : null],

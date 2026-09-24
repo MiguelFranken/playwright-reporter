@@ -5,10 +5,12 @@
  */
 import {
   createMcpHandler,
+  getOAuthProtectedResourceMetadataUrl,
   hostHeaderValidationResponse,
   originValidationResponse,
   requireBearerAuth,
 } from '@modelcontextprotocol/server';
+import { mcpResourceUrl } from '@/lib/oauth/config';
 import { verifier } from './auth';
 import { allowedHosts, mcpEnabledByEnv } from './config';
 import { getMcpSetting } from './instance';
@@ -26,7 +28,18 @@ const handler = createMcpHandler(buildServer, {
   },
 });
 
-const gate = requireBearerAuth({ verifier, requiredScopes: ['read'] });
+/**
+ * Built per request: the metadata URL depends on BASE_URL, which a test (or a
+ * preview deployment) may set after this module loaded. It points clients at
+ * the protected-resource document, which is how they discover OAuth.
+ */
+function gate(request: Request) {
+  return requireBearerAuth({
+    verifier,
+    requiredScopes: ['read'],
+    resourceMetadataUrl: getOAuthProtectedResourceMetadataUrl(new URL(mcpResourceUrl())),
+  })(request);
+}
 
 /** The env var can only switch it off; a superadmin can also switch it off at runtime. */
 export async function mcpEnabled(): Promise<boolean> {

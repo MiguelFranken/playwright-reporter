@@ -23,6 +23,8 @@ export type AuditAction =
   | 'token.revoke'
   | 'pat.create'
   | 'pat.revoke'
+  | 'oauth.grant'
+  | 'oauth.revoke'
   | 'user.role'
   | 'user.ban'
   | 'user.unban'
