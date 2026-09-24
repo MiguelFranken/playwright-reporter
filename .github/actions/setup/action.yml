@@ -1,0 +1,46 @@
+name: Setup
+description: Install the mise toolchain and workspace dependencies, with the nub store and turbo cache restored.
+
+inputs:
+  turbo-cache-key:
+    description: Distinguishes this job's turbo cache from other jobs'.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: jdx/mise-action@v4
+
+    - name: Locate nub cache dirs
+      id: nub-dirs
+      shell: bash
+      run: |
+        echo "store=$(nub store path)" >> "$GITHUB_OUTPUT"
+        echo "cache=${XDG_CACHE_HOME:-$HOME/.cache}/nub/pm" >> "$GITHUB_OUTPUT"
+
+    # The content-addressable store (tarballs) plus nub's metadata and
+    # side-effects cache, so native builds (cpu-features, ssh2) are reused too.
+    - name: Cache nub store
+      uses: actions/cache@v6
+      with:
+        path: |
+          ${{ steps.nub-dirs.outputs.store }}
+          ${{ steps.nub-dirs.outputs.cache }}
+          ~/.cache/node-gyp
+        key: nub-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('nub.lock', 'mise.toml') }}
+        restore-keys: |
+          nub-${{ runner.os }}-${{ runner.arch }}-
+
+    - name: Install dependencies
+      shell: bash
+      run: nub ci
+
+    # Turbo's local cache: unchanged packages replay their build, type check
+    # and test results instead of running again.
+    - name: Cache turbo
+      uses: actions/cache@v6
+      with:
+        path: .turbo/cache
+        key: turbo-${{ inputs.turbo-cache-key }}-${{ runner.os }}-${{ github.sha }}
+        restore-keys: |
+          turbo-${{ inputs.turbo-cache-key }}-${{ runner.os }}-
