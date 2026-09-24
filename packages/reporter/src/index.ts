@@ -20,6 +20,7 @@ import type { ReporterOptions, ResolvedOptions } from './types';
 const MAX_TEXT = 64 * 1024;
 const MAX_STEPS = 2000;
 const UPLOAD_CONCURRENCY = 4;
+const UPLOAD_DEBOUNCE_MS = 2000;
 
 interface PendingUpload {
   ref: AttachmentRef;
@@ -40,6 +41,7 @@ export default class PlaywrightReporterApp implements Reporter {
   private uploadPromises: Promise<void>[] = [];
   private uploadedBytes = 0;
   private disabled = false;
+  private uploadTimer: NodeJS.Timeout | undefined;
 
   constructor(options: ReporterOptions = {}) {
     this.opts = resolveOptions(options);
@@ -192,7 +194,7 @@ export default class PlaywrightReporterApp implements Reporter {
     if (!this.runId) return;
     try {
       await this.queue.drain();
-      this.scheduleUploads();
+      this.scheduleUploads(true);
       await withTimeout(Promise.all(this.uploadPromises), this.opts.uploadTimeoutMs, 'uploads');
       const res = await this.client.finishRun(this.runId, {
         shardIndex: this.shardIndex,
@@ -227,8 +229,19 @@ export default class PlaywrightReporterApp implements Reporter {
     }
   }
 
-  private scheduleUploads() {
+  /**
+   * Uploads start a moment after a test ends, so the attachments of tests that
+   * end close together share one upload-urls request. `onEnd` passes `now`.
+   */
+  private scheduleUploads(now = false) {
+    if (this.uploadTimer) clearTimeout(this.uploadTimer);
+    this.uploadTimer = undefined;
     if (this.uploads.length === 0) return;
+    if (!now) {
+      this.uploadTimer = setTimeout(() => this.scheduleUploads(true), UPLOAD_DEBOUNCE_MS);
+      this.uploadTimer.unref?.();
+      return;
+    }
     const batch = this.uploads.splice(0, this.uploads.length);
     const p = this.uploadBatch(batch).catch((err) => this.warn(`upload batch failed: ${(err as Error).message}`));
     this.uploadPromises.push(p);

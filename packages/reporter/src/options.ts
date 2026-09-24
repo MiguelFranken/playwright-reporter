@@ -39,7 +39,8 @@ export function resolveOptions(
     artifacts: opts.artifacts ?? envBool(env.PW_REPORTER_ARTIFACTS) ?? true,
     debug: opts.debug ?? envBool(env.PW_REPORTER_DEBUG) ?? false,
     batchSize: opts.batch?.size ?? 50,
-    batchIntervalMs: opts.batch?.intervalMs ?? 1000,
+    // Two seconds: the live views stay current and a run sends half the requests of one second.
+    batchIntervalMs: opts.batch?.intervalMs ?? 2000,
     uploadTimeoutMs: opts.uploadTimeoutMs ?? 120_000,
     maxRetries: 5,
   };

@@ -18,6 +18,19 @@ async function silentSince(db: Db, runId: string, minutes: number) {
 }
 
 describe('markStaleRuns', () => {
+  test('checks a project at most every 30 seconds per instance, unless forced', async ({ db, tenant }) => {
+    const { runId } = await playRun(tenant.tokenProject, { tests: [{ outcome: 'running' }], finish: false });
+    await markStaleRuns(tenant.project.id);
+    await silentSince(db, runId, 11);
+
+    // Checked a moment ago: a render right after does not write again.
+    await markStaleRuns(tenant.project.id);
+    expect((await db.select().from(runs).where(eq(runs.id, runId)))[0].status).toBe('running');
+
+    await markStaleRuns(tenant.project.id, { force: true });
+    expect((await db.select().from(runs).where(eq(runs.id, runId)))[0].status).toBe('incomplete');
+  });
+
   test('marks a run that stopped reporting as incomplete and stamps finished_at', async ({ db, tenant }) => {
     const { runId } = await playRun(tenant.tokenProject, { tests: [{ outcome: 'running' }], finish: false });
     const lastEventAt = await silentSince(db, runId, 11);

@@ -63,8 +63,12 @@ export function useLiveRunCounts(fallback: RunCounts): RunCounts {
   return useLivePeek<Header | null>('header', null)?.counts ?? fallback;
 }
 
-/** How long partial rows wait before their full data is fetched, so a burst is one request. */
-const BACKFILL_MS = 750;
+/**
+ * How long partial rows wait before their full data is fetched, so the tests
+ * a wave of workers starts together are one request. The row is on screen
+ * meanwhile; only its history and uploads arrive with the fetch.
+ */
+const BACKFILL_MS = 2000;
 const BACKFILL_BATCH = 100;
 
 /**
