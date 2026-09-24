@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.7](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.6...v0.0.7) (2026-09-24)
+
+### Features
+
+* profile images for users and teams ([#10](https://github.com/MiguelFranken/playwright-reporter/issues/10)) ([ee89d44](https://github.com/MiguelFranken/playwright-reporter/commit/ee89d4464809cc9570328426895bf1e945d89102))
+
 ## [0.0.6](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.5...v0.0.6) (2026-09-24)
 
 ### Features
