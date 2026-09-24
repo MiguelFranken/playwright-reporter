@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.11](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.10...v0.0.11) (2026-09-24)
+
+### Features
+
+* add a branches page and a page per branch with its runs and trends ([#13](https://github.com/MiguelFranken/playwright-reporter/issues/13)) ([c7b695e](https://github.com/MiguelFranken/playwright-reporter/commit/c7b695e8b288ea5469b94bd162f0f56dd42a8ec4))
+
 ## [0.0.10](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.9...v0.0.10) (2026-09-24)
 
 ### Features
