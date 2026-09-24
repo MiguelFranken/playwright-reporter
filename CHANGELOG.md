@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.13](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.12...v0.0.13) (2026-09-24)
+
+### Features
+
+* a live demo with passwordless viewer sign-in and a scheduled suite that feeds it ([#17](https://github.com/MiguelFranken/playwright-reporter/issues/17)) ([920ac73](https://github.com/MiguelFranken/playwright-reporter/commit/920ac73b575ed6e477106cce73260fc31c61e9f3))
+
 ## [0.0.12](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.11...v0.0.12) (2026-09-24)
 
 ### Features
