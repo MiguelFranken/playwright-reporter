@@ -8,7 +8,8 @@ import type { AnyStatus } from '../../lib/tone';
 
 /** One git branch, summarised over the selected time range. */
 export interface BranchSummaryRow {
-  branch: string;
+  /** `null` groups the runs reported without a branch. */
+  branch: string | null;
   environment: string | null;
   runs: number;
   lastRunAt: Date;
@@ -19,16 +20,12 @@ export interface BranchSummaryRow {
 
 export interface BranchSummaryHrefs {
   run: (number: number) => string;
+  /** Optional so a host without branch pages can still render the summary. */
+  branch?: (name: string) => string;
 }
 import { formatPercent, formatRelative } from '../../lib/format';
+import { NO_BRANCH_LABEL, passRateClass } from '../../lib/branch';
 import { cn } from '../../lib/cn';
-
-function rateClass(rate: number | null) {
-  if (rate === null) return 'text-muted-foreground';
-  if (rate >= 0.9) return 'text-success-text';
-  if (rate >= 0.6) return 'text-warning-text';
-  return 'text-danger-text';
-}
 
 export function BranchSummaryTable({ hrefs, rows }: { hrefs: BranchSummaryHrefs; rows: BranchSummaryRow[] }) {
   if (rows.length === 0) {
@@ -47,13 +44,21 @@ export function BranchSummaryTable({ hrefs, rows }: { hrefs: BranchSummaryHrefs;
       </TableHeader>
       <TableBody>
         {rows.map((r) => (
-          <TableRow key={r.branch}>
+          <TableRow key={r.branch ?? ''}>
             <TableCell className="max-w-0">
               <div className="flex min-w-0 items-center gap-2">
                 <GitBranch className="size-3.5 shrink-0 text-muted-foreground" />
-                <span className="truncate font-medium" title={r.branch}>
-                  {r.branch}
-                </span>
+                {r.branch === null ? (
+                  <span className="truncate text-muted-foreground">{NO_BRANCH_LABEL}</span>
+                ) : hrefs.branch ? (
+                  <Link href={hrefs.branch(r.branch)} className="truncate font-medium underline-offset-4 hover:underline" title={r.branch}>
+                    {r.branch}
+                  </Link>
+                ) : (
+                  <span className="truncate font-medium" title={r.branch}>
+                    {r.branch}
+                  </span>
+                )}
                 {r.environment ? (
                   <Badge variant="secondary" className="shrink-0">
                     {r.environment}
@@ -71,7 +76,7 @@ export function BranchSummaryTable({ hrefs, rows }: { hrefs: BranchSummaryHrefs;
                 #{r.lastRunNumber} · {formatRelative(r.lastRunAt)}
               </Link>
             </TableCell>
-            <TableCell className={cn('text-right font-medium tabular-nums', rateClass(r.passRate))}>{formatPercent(r.passRate)}</TableCell>
+            <TableCell className={cn('text-right font-medium tabular-nums', passRateClass(r.passRate))}>{formatPercent(r.passRate)}</TableCell>
             <TableCell>
               <StatusBadge status={r.lastStatus} />
             </TableCell>

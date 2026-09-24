@@ -1,4 +1,5 @@
 import { Clock, ExternalLink, GitBranch, GitCommitHorizontal, Server, Tag, User } from 'lucide-react';
+import { Link } from '../../provider';
 import { CountsBar } from '../../patterns/counts-bar';
 import { Skeleton } from '../../components/skeleton';
 import { StatusBadge, StatusDot } from '../../patterns/status-badge';
@@ -48,6 +49,7 @@ export function RunHeader({
   counts,
   shards,
   liveIndicator,
+  branchHref,
   now = new Date(),
 }: {
   run: RunHeaderData;
@@ -55,6 +57,8 @@ export function RunHeader({
   shards: RunHeaderShard[];
   /** The app fills this with <LiveRefresh />; a story with a static indicator. */
   liveIndicator?: React.ReactNode;
+  /** The branch's page, resolved by the host; without it the branch is plain text. */
+  branchHref?: string;
   /** Reference instant for a still-running run's elapsed time. */
   now?: Date;
 }) {
@@ -83,10 +87,17 @@ export function RunHeader({
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
           {run.gitBranch ? (
-            <span className="inline-flex items-center gap-1.5 text-code-s">
-              <GitBranch className="size-3.5" />
-              {run.gitBranch}
-            </span>
+            branchHref ? (
+              <Link href={branchHref} className="inline-flex items-center gap-1.5 text-code-s hover:text-foreground hover:underline">
+                <GitBranch className="size-3.5" />
+                {run.gitBranch}
+              </Link>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-code-s">
+                <GitBranch className="size-3.5" />
+                {run.gitBranch}
+              </span>
+            )
           ) : null}
           {run.environment ? <Badge variant="secondary">{run.environment}</Badge> : null}
           {sha ? (

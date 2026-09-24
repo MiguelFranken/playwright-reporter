@@ -9,7 +9,7 @@ import { ChartDelta } from '../../patterns/chart-frame';
 import { BranchSummaryTable } from './branch-summary-table';
 import { ChronicFailuresList, FlakyTestsList } from './test-health-lists';
 
-const hrefs = { run: (n: number) => `#run-${n}`, test: (id: string) => `#test-${id}` };
+const hrefs = { run: (n: number) => `#run-${n}`, test: (id: string) => `#test-${id}`, branch: (name: string) => `#branch-${name}` };
 
 const meta = {
   title: 'Views/Dashboard/Cards & Lists',
@@ -51,6 +51,22 @@ export const MetricCards: Story = {
 };
 
 export const Branches: Story = { render: () => <BranchSummaryTable hrefs={hrefs} rows={branchSummary} /> };
+
+/** Each branch name opens that branch's page. */
+export const BranchesLinkToBranches: Story = {
+  render: () => <BranchSummaryTable hrefs={hrefs} rows={branchSummary} />,
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByRole('link', { name: 'main' })).toHaveAttribute('href', '#branch-main');
+  },
+};
+
+/** Runs reported without a branch: named as such, and not a link. */
+export const BranchesNoBranch: Story = {
+  render: () => <BranchSummaryTable hrefs={hrefs} rows={[{ ...branchSummary[0], branch: null }]} />,
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByText('No branch')).toBeVisible();
+  },
+};
 
 export const BranchesEmpty: Story = {
   render: () => <BranchSummaryTable hrefs={hrefs} rows={[]} />,

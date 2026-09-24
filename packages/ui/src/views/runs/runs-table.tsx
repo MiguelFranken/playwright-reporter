@@ -38,6 +38,8 @@ export interface RunListItem {
 
 export interface RunsTableHrefs {
   run: (number: number) => string;
+  /** Optional so a host without branch pages can still render the table. */
+  branch?: (name: string) => string;
 }
 
 export function RunsTable({ hrefs, runs }: { hrefs: RunsTableHrefs; runs: RunListItem[] }) {
@@ -125,9 +127,15 @@ function RunRow({ hrefs, run }: { hrefs: RunsTableHrefs; run: RunListItem }) {
       </TableCell>
       <TableCell className="align-top whitespace-normal">
         <div className="flex flex-col gap-1">
-          <span className="text-code-s" title={run.gitBranch ?? undefined}>
-            {run.gitBranch ?? <span className="text-muted-foreground">–</span>}
-          </span>
+          {run.gitBranch && hrefs.branch ? (
+            <Link href={hrefs.branch(run.gitBranch)} className="relative z-10 w-fit text-code-s hover:underline" title={run.gitBranch}>
+              {run.gitBranch}
+            </Link>
+          ) : (
+            <span className="text-code-s" title={run.gitBranch ?? undefined}>
+              {run.gitBranch ?? <span className="text-muted-foreground">–</span>}
+            </span>
+          )}
           <div className="flex flex-wrap gap-1">
             {run.environment ? <Badge variant="secondary">{run.environment}</Badge> : null}
             {run.tags.map((t) => (

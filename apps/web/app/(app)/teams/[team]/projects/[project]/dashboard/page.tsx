@@ -1,4 +1,5 @@
-import { Activity, Clock, FlaskConical, Gauge, GitBranch, ListChecks, Repeat, TrendingUp } from 'lucide-react';
+import Link from 'next/link';
+import { Activity, ArrowRight, Clock, FlaskConical, Gauge, GitBranch, ListChecks, Repeat, TrendingUp } from 'lucide-react';
 import { Suspense } from 'react';
 import { BranchSummaryTable } from '@miguelfranken/ui/views/dashboard/branch-summary-table';
 import { MetricCard, toneClass } from '@miguelfranken/ui/patterns/metric-card';
@@ -8,7 +9,8 @@ import { EmptyState } from '@miguelfranken/ui/patterns/empty-state';
 import { RangeToggle } from '@/components/filters/url-filters';
 import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
 import { ChartSkeleton, ListRowsSkeleton, MetricCardsSkeleton, TableRowsSkeleton } from '@miguelfranken/ui/patterns/skeletons';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@miguelfranken/ui/components/card';
+import { Button } from '@miguelfranken/ui/components/button';
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@miguelfranken/ui/components/card';
 import { requireProject } from '@/lib/auth/access';
 import { projectHrefs } from '@/lib/view-models';
 import { branchSummary, chronicFailures, dashboardStats, mostFlakyTests, passFailTrend } from '@/lib/db/queries/dashboard';
@@ -57,6 +59,11 @@ export default function DashboardPage({ params, searchParams }: Props) {
               Branch summary
             </CardTitle>
             <CardDescription>Most recently active branches in this range.</CardDescription>
+            <CardAction>
+              <Suspense fallback={null}>
+                <AllBranchesLink params={params} searchParams={searchParams} />
+              </Suspense>
+            </CardAction>
           </CardHeader>
           <CardContent className="px-0 py-0">
             <Suspense fallback={<TableRowsSkeleton rows={5} columns={[40, 12, 24, 14]} />}>
@@ -150,6 +157,16 @@ async function Trend({ params }: { params: Params }) {
 async function Branches(props: Props) {
   const { project, days, base } = await scope(props);
   return <BranchSummaryTable hrefs={projectHrefs(base)} rows={await branchSummary(project.id, days)} />;
+}
+
+async function AllBranchesLink(props: Props) {
+  const [{ base }, sp] = await Promise.all([scope(props), props.searchParams]);
+  return (
+    <Button variant="ghost" size="sm" nativeButton={false} render={<Link href={`${base}/branches${sp.range ? `?range=${sp.range}` : ''}`} />}>
+      All branches
+      <ArrowRight data-icon="inline-end" />
+    </Button>
+  );
 }
 
 async function Flaky(props: Props) {

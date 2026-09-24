@@ -34,6 +34,7 @@ export function LiveRunHeader({
   pollUrl,
   summaryUrl,
   resultsUrl,
+  branchHref,
 }: {
   run: RunHeaderData;
   counts: RunCounts;
@@ -43,6 +44,7 @@ export function LiveRunHeader({
   pollUrl: string;
   summaryUrl: string;
   resultsUrl: string;
+  branchHref?: string;
 }) {
   const store = useLiveStore();
   const header = useLivePart<Header>('header', { run, counts, shards }, cursor, reduceHeader, run);
@@ -60,6 +62,7 @@ export function LiveRunHeader({
       run={header.run}
       counts={header.counts}
       shards={header.shards}
+      branchHref={branchHref}
       now={now}
       liveIndicator={
         <LiveConnection

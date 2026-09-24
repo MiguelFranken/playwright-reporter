@@ -7,6 +7,7 @@ import {
   ChevronsUpDown,
   FlaskConical,
   Folder,
+  GitBranch,
   LayoutDashboard,
   ListChecks,
   LogOut,
@@ -101,6 +102,7 @@ const PROJECT_NAV = [
   { segment: 'dashboard', title: 'Dashboard', icon: LayoutDashboard },
   { segment: 'runs', title: 'Test Runs', icon: Play },
   { segment: 'tests', title: 'Test Explorer', icon: ListChecks },
+  { segment: 'branches', title: 'Branches', icon: GitBranch },
   { segment: 'settings', title: 'Settings', icon: Settings },
 ];
 
