@@ -1,6 +1,6 @@
 # MCP server: product plan
 
-> Status: **proposal** · Scope: `apps/web` (server), `packages/mcp` (local bridge), `packages/ui` (setup and
+> Status: **phases 0–3 implemented** (see "Implementation status" in the technical plan); phase 4 open · Scope: `apps/web` (server), `packages/mcp` (local bridge), `packages/ui` (setup and
 > hand-off UI) · Technical companion: [MCP_PLAN_TECHNICAL.md](MCP_PLAN_TECHNICAL.md)
 
 This plan gives AI coding assistants (Claude Code, Cursor, VS Code Copilot, Windsurf, Codex, Claude Desktop, claude.ai,

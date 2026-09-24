@@ -19,6 +19,7 @@
   <a href="#using-the-reporter-in-your-project">Reporter</a> ·
   <a href="#configuration">Configuration</a> ·
   <a href="#users-and-teams">Users &amp; teams</a> ·
+  <a href="#ai-assistants-mcp">AI assistants</a> ·
   <a href="#deploying">Deploying</a> ·
   <a href="#contributing">Contributing</a>
 </p>
@@ -37,6 +38,8 @@
 - 🪦 **No zombie runs**: a run whose reporter died reads as *Abandoned*, recorded by a durable
   [Workflow SDK](https://workflow-sdk.dev) watchdog
 - 🔔 **Push notifications**: the browser tells you when a run starts or finishes
+- 🤖 **AI assistants over MCP**: Claude, Cursor, Copilot, ChatGPT and friends read your test history, debug failures
+  with evidence (flaky or broken, last green commit, screenshot) and check whether a fix held
 - 👥 **Teams, roles and invitations**: superadmins, team admins, members and viewers; teams can't see each other's
   projects
 - 🛡️ **Never fails your tests**: network errors are retried and then logged, the run goes on
@@ -234,6 +237,76 @@ A team always keeps at least one admin: the last one can't be demoted or removed
 
 </details>
 
+## AI assistants (MCP)
+
+The app runs a [Model Context Protocol](https://modelcontextprotocol.io) server at `/api/mcp`. An assistant in your
+editor or browser can then answer "why is the checkout test red on my branch?" from the stored runs, not from a
+pasted stack trace: which attempts failed and how, whether the test is flaky or broken, the last green commit, the
+screenshot, and the command to re-run it. It reads as the person who connected it, never more than they can see, and
+it cannot change anything.
+
+**Connecting.** Everything below is also on **Account → AI assistants**, pre-filled with your instance's URL.
+
+- **Token-based** (Claude Code, Cursor, VS Code, Windsurf, Codex): create a personal access token under
+  **Account → Access tokens** (read-only, always expires, optionally limited to one team or project), then:
+
+  ```bash
+  claude mcp add --transport http playwright-reporter 'https://reporter.example.com/api/mcp' \
+    --header 'Authorization: Bearer pwr_pat_…'
+  ```
+
+  Add `?project=team/project` to the URL to pin a default project.
+- **Sign-in based** (claude.ai, ChatGPT, Claude Code without `--header`): add the URL as a custom connector. The
+  assistant opens the app, you choose which teams or project it may read, and it gets a short-lived token. Connected
+  apps are listed, and can be disconnected, under **Account → Connected apps**.
+- **Local only** (Claude Desktop's config file, older clients): the [`@miguelfranken/mcp`](packages/mcp) bridge
+  speaks stdio and forwards to the instance; it picks the project from your checkout's git remote.
+
+**Tools.** Sixteen read-only tools in two toolsets; the full reference, generated from the code, is
+[`docs/mcp-tools.md`](docs/mcp-tools.md).
+
+| Toolset | Tools |
+| --- | --- |
+| `core` | `whoami`, `list_filters`, `list_runs`, `get_run`, `list_run_results`, `get_result`, `find_tests`, `get_test_history`, `project_health` |
+| `debug` | `get_failure_context` (start here for a failing test), `check_flakiness`, `summarize_failures`, `compare_runs`, `verify_fix`, `get_artifact`, `get_rerun_command` |
+
+Verdicts (flaky, deterministic, fixed, …) are computed from the stored attempts, not guessed by a model, and say
+which fixes the evidence rules out. Clients with slash commands also get the prompts `triage_run`, `debug_test`,
+`investigate_flake` and `branch_check`. Failed results and runs carry a **Debug with AI** menu that hands a prompt to
+your assistant.
+
+**Operating it.**
+
+| Setting | |
+| --- | --- |
+| `MCP_ENABLED` | `false` switches the server off; superadmins can also switch it off under **Administration → MCP** |
+| `MCP_DEFAULT_TOOLSETS` | `core,debug`; a connection can ask for fewer with `?toolsets=core` |
+| `MCP_RESPONSE_BUDGET_CHARS` | characters per answer before it is trimmed (with a notice), `20000` |
+| `MCP_RATE_LIMIT_PER_MINUTE` | tool calls per token, `120` |
+| `MCP_ARTIFACT_URL_TTL_SECONDS` | lifetime of the artifact links handed to assistants, `900` |
+| `MCP_INLINE_IMAGE_MAX_BYTES` | largest screenshot returned inline, `1048576` |
+| `MCP_ALLOWED_HOSTS` | extra `Host` values behind a reverse proxy; `BASE_URL` and `TRUSTED_ORIGINS` are always allowed |
+| `PAT_DEFAULT_TTL_DAYS`, `PAT_MAX_TTL_DAYS` | token lifetime offered and allowed, `90` and `365` days |
+
+> [!NOTE]
+> Test titles, error messages and logs are written by the code under test. The server hands them to the assistant
+> fenced and labelled as untrusted, and tells it never to follow instructions found in them.
+
+<details>
+<summary><b>Troubleshooting</b></summary>
+
+<br>
+
+- **401 "project ingest token"**: MCP needs a personal access token (`pwr_pat_…`), not the reporter's `pwr_…` token.
+- **401 "invalid, expired or revoked"**: tokens always expire; create a new one under Account → Access tokens.
+- **`PROJECT_REQUIRED`**: you can read several projects; pass `project` as `team/project` or pin one in the URL.
+- **`NOT_FOUND`** means "not found *or* not visible to you", like the app's 404s.
+- **`ARTIFACT_EXPIRED`**: the retention policy deleted the screenshot or trace; re-run the test.
+- **The client lists no tools**: restart it, or check `whoami` and **Administration → MCP**.
+- **The bridge cannot be installed**: it is published to GitHub Packages like the reporter; see the `.npmrc` step above.
+
+</details>
+
 ## Deploying
 
 ### Vercel
@@ -343,6 +416,7 @@ genuinely flaky and failures come with real screenshots, videos and traces.
 | [`apps/website`](apps/website) | the marketing site: Next.js 16 and Payload CMS |
 | [`apps/storybook`](apps/storybook) | Storybook 10 for the design system; config only, no components of its own |
 | [`packages/reporter`](packages/reporter) | the Playwright reporter, `@miguelfranken/reporter`, bundled with tsdown |
+| [`packages/mcp`](packages/mcp) | the stdio bridge to the MCP server, `@miguelfranken/mcp`, for clients that only start local servers |
 | [`packages/protocol`](packages/protocol) | Zod schemas of the ingest protocol, shared by the reporter and the app |
 | [`packages/ui`](packages/ui) | the design system, `@miguelfranken/ui`: tokens, primitives, patterns, views and the marketing layer; TypeScript source, no build step |
 | [`examples/playwright-demo`](examples/playwright-demo) | a Playwright project that uses the reporter through `workspace:*` |
