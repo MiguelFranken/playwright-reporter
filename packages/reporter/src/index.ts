@@ -10,7 +10,7 @@ import type {
   TestResult,
   TestStep,
 } from '@playwright/test/reporter';
-import type { AttachmentRef, AttemptEndEvent, IngestEvent, Step, TestBeginEvent, TestError } from '@repo/protocol';
+import type { AttachmentRef, AttemptEndEvent, IngestEvent, Step, TestBeginEvent, TestError } from '@miguelfranken/protocol';
 import { IngestClient } from './client';
 import { collectCiInfo, collectGitInfo, collectPlaywrightInfo, collectSystemInfo, detectExecutor } from './metadata';
 import { resolveOptions } from './options';

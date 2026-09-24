@@ -1,10 +1,10 @@
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
-import { RunConfig } from '@repo/ui/views/run/run-config';
-import { RunErrors } from '@repo/ui/views/run/run-errors';
-import { RunHeader, RunHeaderSkeleton } from '@repo/ui/views/run/run-header';
-import { RunTabsSkeleton } from '@repo/ui/views/run/run-skeleton';
-import { parseSpecSort, parseSpecStatuses } from '@repo/ui/lib/spec-filter';
+import { RunConfig } from '@miguelfranken/ui/views/run/run-config';
+import { RunErrors } from '@miguelfranken/ui/views/run/run-errors';
+import { RunHeader, RunHeaderSkeleton } from '@miguelfranken/ui/views/run/run-header';
+import { RunTabsSkeleton } from '@miguelfranken/ui/views/run/run-skeleton';
+import { parseSpecSort, parseSpecStatuses } from '@miguelfranken/ui/lib/spec-filter';
 import { parseRunTab } from '@/components/run/run-tab';
 import { UrlRunSpecs } from '@/components/run/url-run-specs';
 import { RunTabs } from '@/components/run/run-tabs';

@@ -1,5 +1,5 @@
 {
-  "name": "@repo/website",
+  "name": "@miguelfranken/website",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -29,7 +29,7 @@
     "@payloadcms/plugin-seo": "3.89.0",
     "@payloadcms/richtext-lexical": "3.89.0",
     "@payloadcms/storage-vercel-blob": "3.89.0",
-    "@repo/ui": "workspace:*",
+    "@miguelfranken/ui": "workspace:*",
     "dotenv": "^17.4.2",
     "graphql": "^16.14.2",
     "lucide-react": "^1.47.0",
@@ -43,7 +43,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
-    "@repo/typescript-config": "workspace:*",
+    "@miguelfranken/typescript-config": "workspace:*",
     "@tailwindcss/postcss": "4.3.3",
     "@types/node": "^24.13.5",
     "@types/react": "19.3.0",

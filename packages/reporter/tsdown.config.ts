@@ -11,9 +11,9 @@ export default defineConfig({
   deps: {
     // Playwright is a peer dependency supplied by the consuming project.
     neverBundle: ['@playwright/test'],
-    // @repo/protocol is private to this repo, so it has to be inlined. Its zod
+    // @miguelfranken/protocol is private to this repo, so it has to be inlined. Its zod
     // import stays external: zod is a declared dependency here, so consumers
     // resolve it from node_modules instead of carrying a second copy in dist.
-    alwaysBundle: ['@repo/protocol'],
+    alwaysBundle: ['@miguelfranken/protocol'],
   },
 });

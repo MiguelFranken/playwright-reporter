@@ -3,10 +3,10 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useTransition } from 'react';
 import { toast } from 'sonner';
-import { Button } from '@repo/ui/components/button';
-import { Input } from '@repo/ui/components/input';
-import { Label } from '@repo/ui/components/label';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@repo/ui/components/table';
+import { Button } from '@miguelfranken/ui/components/button';
+import { Input } from '@miguelfranken/ui/components/input';
+import { Label } from '@miguelfranken/ui/components/label';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@miguelfranken/ui/components/table';
 import { authClient } from '@/lib/auth/client';
 
 export function ChangeNameForm({ name }: { name: string }) {

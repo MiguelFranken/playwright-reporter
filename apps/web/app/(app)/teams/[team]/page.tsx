@@ -1,11 +1,11 @@
 import { FolderKanban, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { Suspense } from 'react';
-import { EmptyState } from '@repo/ui/patterns/empty-state';
-import { PageHeader } from '@repo/ui/patterns/page-header';
-import { Button } from '@repo/ui/components/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@repo/ui/components/card';
-import { Skeleton } from '@repo/ui/components/skeleton';
+import { EmptyState } from '@miguelfranken/ui/patterns/empty-state';
+import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
+import { Button } from '@miguelfranken/ui/components/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@miguelfranken/ui/components/card';
+import { Skeleton } from '@miguelfranken/ui/components/skeleton';
 import { requireTeam } from '@/lib/auth/access';
 import { listTeamProjects } from '@/lib/db/queries/teams';
 

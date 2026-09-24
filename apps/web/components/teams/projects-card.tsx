@@ -6,11 +6,11 @@ import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { createProject, deleteProject } from '@/app/(app)/teams/[team]/settings/actions';
-import { Button } from '@repo/ui/components/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@repo/ui/components/dialog';
-import { Input } from '@repo/ui/components/input';
-import { Label } from '@repo/ui/components/label';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@repo/ui/components/table';
+import { Button } from '@miguelfranken/ui/components/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@miguelfranken/ui/components/dialog';
+import { Input } from '@miguelfranken/ui/components/input';
+import { Label } from '@miguelfranken/ui/components/label';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@miguelfranken/ui/components/table';
 import { slugify } from '@/lib/auth/slug';
 
 export type ProjectRow = { id: string; slug: string; name: string; runCounter: number; createdAt: string };

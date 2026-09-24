@@ -4,11 +4,11 @@ import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { deleteProject } from '@/app/(app)/teams/[team]/settings/actions';
-import { Button } from '@repo/ui/components/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@repo/ui/components/card';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@repo/ui/components/dialog';
-import { Input } from '@repo/ui/components/input';
-import { Label } from '@repo/ui/components/label';
+import { Button } from '@miguelfranken/ui/components/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@miguelfranken/ui/components/card';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@miguelfranken/ui/components/dialog';
+import { Input } from '@miguelfranken/ui/components/input';
+import { Label } from '@miguelfranken/ui/components/label';
 
 /**
  * Deleting a project is the one irreversible action on this page, so it gets

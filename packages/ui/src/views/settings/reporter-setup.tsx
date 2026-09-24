@@ -2,7 +2,7 @@ import { CopyButton } from '../../patterns/copy-button';
 
 const CONFIG_SNIPPET = `reporter: [
   ['list'],
-  ['@repo/reporter', { token: process.env.PW_REPORTER_TOKEN, serverUrl: process.env.PW_REPORTER_URL }],
+  ['@miguelfranken/reporter', { token: process.env.PW_REPORTER_TOKEN, serverUrl: process.env.PW_REPORTER_URL }],
 ],`;
 
 export function ReporterSetup({ baseUrl }: { baseUrl: string }) {

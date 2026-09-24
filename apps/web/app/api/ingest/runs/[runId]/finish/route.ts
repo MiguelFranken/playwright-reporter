@@ -1,4 +1,4 @@
-import { runFinishSchema } from '@repo/protocol';
+import { runFinishSchema } from '@miguelfranken/protocol';
 import { errorResponse, json, readJson, requireProjectToken } from '@/lib/ingest/http';
 import { finishRun, getRunForProject } from '@/lib/ingest/service';
 

@@ -1,5 +1,5 @@
 import { Suspense } from 'react';
-import { PageHeader } from '@repo/ui/patterns/page-header';
+import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
 import { SettingsTabs, SettingsTabsSkeleton } from '@/components/teams/settings-tabs';
 
 /**

@@ -2,10 +2,10 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { ChangeNameForm, ChangePasswordForm, SessionsCard } from '@/components/auth/account-forms';
-import { PageHeader } from '@repo/ui/patterns/page-header';
-import { Badge } from '@repo/ui/components/badge';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@repo/ui/components/card';
-import { Skeleton } from '@repo/ui/components/skeleton';
+import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
+import { Badge } from '@miguelfranken/ui/components/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@miguelfranken/ui/components/card';
+import { Skeleton } from '@miguelfranken/ui/components/skeleton';
 import { requireUser } from '@/lib/auth/access';
 import { listMyTeams } from '@/lib/db/queries/teams';
 

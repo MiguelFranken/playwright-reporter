@@ -3,7 +3,7 @@
  * database and lives in `test/integration/ingest-*.test.ts`.
  */
 import { describe, expect, it } from 'vitest';
-import type { AttemptEndEvent } from '@repo/protocol';
+import type { AttemptEndEvent } from '@miguelfranken/protocol';
 import { STALE_RUN_MS, clampDuration, finalOutcome, runUrl } from './service';
 
 const attempt = (overrides: Partial<AttemptEndEvent>): AttemptEndEvent =>

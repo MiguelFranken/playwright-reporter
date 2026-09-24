@@ -12,16 +12,16 @@ See [PROJECT.md](./PROJECT.md) for the product scope and
 
 ```
 apps/web                  Next.js 16 app: auth, ingest API, live (SSE) endpoints, artifact serving,
-                          and the feature components that bind @repo/ui to all of it
+                          and the feature components that bind @miguelfranken/ui to all of it
 apps/website              The public marketing site: Next.js 16 + Payload CMS, rendering pages
-                          from CMS blocks with components from @repo/ui/marketing
-apps/storybook            Storybook 10 for @repo/ui: config only, no components of its own
-packages/ui               The design system (@repo/ui): tokens, primitives, patterns, views,
+                          from CMS blocks with components from @miguelfranken/ui/marketing
+apps/storybook            Storybook 10 for @miguelfranken/ui: config only, no components of its own
+packages/ui               The design system (@miguelfranken/ui): tokens, primitives, patterns, views,
                           and the marketing layer the website renders into.
                           Shipped as TypeScript source, no build step. Stories live beside
                           the components they describe and run as browser tests.
 packages/protocol         Zod schemas of the ingest protocol (shared by reporter and app)
-packages/reporter         Playwright reporter (@repo/reporter), bundled with tsdown/rolldown
+packages/reporter         Playwright reporter (@miguelfranken/reporter), bundled with tsdown/rolldown
 packages/typescript-config
 examples/playwright-demo  Example Playwright project using the reporter via workspace:*
 ```
@@ -31,14 +31,14 @@ its layering rules and the server/client boundary pitfalls are worth reading bef
 component. To browse it:
 
 ```bash
-pnpm turbo run dev --filter=@repo/storybook   # http://localhost:6006
+pnpm turbo run dev --filter=@miguelfranken/storybook   # http://localhost:6006
 ```
 
 Its stories run as tests in a real browser, with accessibility checks on every one:
 
 ```bash
-pnpm --filter @repo/storybook exec playwright install chromium   # once
-pnpm turbo run test --filter=@repo/storybook
+pnpm --filter @miguelfranken/storybook exec playwright install chromium   # once
+pnpm turbo run test --filter=@miguelfranken/storybook
 ```
 
 ## Requirements
@@ -101,12 +101,24 @@ PW_REPORTER_CI_RUN_ID=my-run-1 pnpm --filter playwright-demo test:shard2
 
 ## Using the reporter in your own project
 
+`@miguelfranken/reporter` is published to GitHub Packages. Point the scope at it in the project's `.npmrc`,
+with a token that has `read:packages` and access to this repository:
+
+```ini
+@miguelfranken:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_PACKAGES_TOKEN}
+```
+
+```bash
+pnpm add -D @miguelfranken/reporter
+```
+
 ```ts
 // playwright.config.ts
 export default defineConfig({
   reporter: [
     ['list'],
-    ['@repo/reporter', { token: process.env.PW_REPORTER_TOKEN, serverUrl: process.env.PW_REPORTER_URL }],
+    ['@miguelfranken/reporter', { token: process.env.PW_REPORTER_TOKEN, serverUrl: process.env.PW_REPORTER_URL }],
   ],
 });
 ```
@@ -124,6 +136,15 @@ export default defineConfig({
 Git and CI metadata (branch, commit, author, PR, build URL) are collected from Playwright's
 `captureGitInfo`, CI environment variables and the local git checkout. The reporter never fails a test run:
 network errors are retried and then logged.
+
+## Releases
+
+Every push to `main` runs [`release.yml`](.github/workflows/release.yml): after CI, semantic-release reads the
+[Conventional Commits](https://www.conventionalcommits.org) since the last tag, publishes the reporter to GitHub
+Packages, and commits the version bump and `CHANGELOG.md` back with a tag and a GitHub release. PRs are
+squash-merged with their title as the commit message, so the title decides the release (`fix:` and `feat:`
+bump the patch version while on 0.x, a breaking change the minor version). Run the workflow manually for a
+dry run.
 
 ## Users and teams
 
@@ -198,21 +219,21 @@ TEST_DATABASE_URL=postgres://postgres:test@localhost:54329/postgres pnpm test:in
 `TEST_DATABASE_URL` is refused if it names the same database as `DATABASE_URL`: the suite creates,
 truncates and drops databases on whatever it is given.
 
-Both projects run together with `pnpm --filter @repo/web test:all`.
+Both projects run together with `pnpm --filter @miguelfranken/web test:all`.
 
 ## Website
 
 `apps/website` is the public marketing site (`WEBSITE.md`, `WEBSITE_TECHNICAL.md`). It is a second
 Next.js app with [Payload CMS](https://payloadcms.com) inside it, sharing this repository's Postgres
 database under its own `website` schema — so it needs no infrastructure of its own. Pages are built
-from CMS blocks and rendered with the `marketing/` layer of `@repo/ui`, and the product demos on it
+from CMS blocks and rendered with the `marketing/` layer of `@miguelfranken/ui`, and the product demos on it
 are the app's real views driven by the design system's fixtures.
 
 ```bash
 cp apps/website/.env.example apps/website/.env.local   # then fill it in
-pnpm --filter @repo/website db:migrate                 # creates the `website` schema
-pnpm --filter @repo/website db:seed                    # admin, globals and the five pages
-pnpm turbo run dev --filter=@repo/website              # http://localhost:3001, admin at /admin
+pnpm --filter @miguelfranken/website db:migrate                 # creates the `website` schema
+pnpm --filter @miguelfranken/website db:seed                    # admin, globals and the five pages
+pnpm turbo run dev --filter=@miguelfranken/website              # http://localhost:3001, admin at /admin
 ```
 
 Environment variables (`apps/website/.env.example`):
@@ -231,9 +252,9 @@ The screenshots the seed uploads are committed under `apps/website/payload/seed/
 Regenerate them when the interface changes:
 
 ```bash
-pnpm turbo run build --filter=@repo/storybook
-pnpm --filter @repo/website screenshots
-pnpm --filter @repo/website db:seed --reset
+pnpm turbo run build --filter=@miguelfranken/storybook
+pnpm --filter @miguelfranken/website screenshots
+pnpm --filter @miguelfranken/website db:seed --reset
 ```
 
 CMS users are separate from the reporter's users: different auth system, different tables, different
@@ -253,7 +274,7 @@ without a deploy.
    `SEED_VIEWER_EMAIL`) set to create the first accounts.
 
 The website is a **second** Vercel project on the same repository: Root Directory `apps/website`,
-build command `pnpm turbo run ci --filter=@repo/website` (which migrates before building), and a
+build command `pnpm turbo run ci --filter=@miguelfranken/website` (which migrates before building), and a
 **public** Blob store of its own. The two projects share the database and nothing else.
 
 ## Demo Accounts

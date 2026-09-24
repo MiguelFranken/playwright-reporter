@@ -4,9 +4,9 @@ import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { updateTeam } from '@/app/(app)/teams/[team]/settings/actions';
-import { Button } from '@repo/ui/components/button';
-import { Input } from '@repo/ui/components/input';
-import { Label } from '@repo/ui/components/label';
+import { Button } from '@miguelfranken/ui/components/button';
+import { Input } from '@miguelfranken/ui/components/input';
+import { Label } from '@miguelfranken/ui/components/label';
 
 export function TeamGeneralForm({ teamSlug, name: initialName }: { teamSlug: string; name: string }) {
   const router = useRouter();

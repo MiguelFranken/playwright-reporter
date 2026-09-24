@@ -2,9 +2,9 @@
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useOptimistic, useTransition } from 'react';
-import { RunSpecs, type SpecSummary } from '@repo/ui/views/run/run-specs';
-import type { RunResultRow } from '@repo/ui/views/run/run-result';
-import type { SpecFilterChange, SpecFilters } from '@repo/ui/lib/spec-filter';
+import { RunSpecs, type SpecSummary } from '@miguelfranken/ui/views/run/run-specs';
+import type { RunResultRow } from '@miguelfranken/ui/views/run/run-result';
+import type { SpecFilterChange, SpecFilters } from '@miguelfranken/ui/lib/spec-filter';
 import { runHrefs } from '@/lib/view-models';
 
 /**

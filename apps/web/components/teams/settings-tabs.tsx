@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { NavTabs, NavTabsSkeleton } from '@repo/ui/patterns/nav-tabs';
+import { NavTabs, NavTabsSkeleton } from '@miguelfranken/ui/patterns/nav-tabs';
 import { usePendingSelection } from '@/components/filters/url-filters';
 
 const TABS = [

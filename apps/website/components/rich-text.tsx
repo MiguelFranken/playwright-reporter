@@ -3,8 +3,8 @@ import {
   type JSXConvertersFunction,
 } from '@payloadcms/richtext-lexical/react';
 import type { SerializedEditorState } from '@payloadcms/richtext-lexical/lexical';
-import { ThemedImage } from '@repo/ui/marketing/themed-image';
-import { CodeTabs } from '@repo/ui/marketing/code-tabs';
+import { ThemedImage } from '@miguelfranken/ui/marketing/themed-image';
+import { CodeTabs } from '@miguelfranken/ui/marketing/code-tabs';
 import { highlight } from '@/lib/highlight';
 import { pathForSlug } from '@/lib/links';
 import type { CodeBlockBlock, Media } from '@/payload-types';

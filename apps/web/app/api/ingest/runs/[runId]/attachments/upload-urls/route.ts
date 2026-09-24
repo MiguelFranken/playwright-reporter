@@ -1,4 +1,4 @@
-import { uploadUrlsRequestSchema } from '@repo/protocol';
+import { uploadUrlsRequestSchema } from '@miguelfranken/protocol';
 import { errorResponse, json, readJson, requireProjectToken } from '@/lib/ingest/http';
 import { getRunForProject, uploadInstructions } from '@/lib/ingest/service';
 

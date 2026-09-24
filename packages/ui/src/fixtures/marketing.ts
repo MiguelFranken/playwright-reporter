@@ -140,7 +140,7 @@ export const social: SocialLink[] = [
 export const reporterSnippet = `import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
-  reporter: [['@repo/reporter', {
+  reporter: [['@miguelfranken/reporter', {
     url: process.env.PW_REPORTER_URL,
     token: process.env.PW_REPORTER_TOKEN,
   }]],

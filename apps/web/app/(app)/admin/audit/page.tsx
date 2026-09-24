@@ -1,11 +1,11 @@
 import { Suspense } from 'react';
-import { PageHeader } from '@repo/ui/patterns/page-header';
-import { TableRowsSkeleton } from '@repo/ui/patterns/skeletons';
-import { Badge } from '@repo/ui/components/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@repo/ui/components/table';
+import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
+import { TableRowsSkeleton } from '@miguelfranken/ui/patterns/skeletons';
+import { Badge } from '@miguelfranken/ui/components/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@miguelfranken/ui/components/table';
 import { requireSuperadmin } from '@/lib/auth/access';
 import { listAuditLogs } from '@/lib/db/queries/teams';
-import { formatDateTime, formatRelative } from '@repo/ui/lib/format';
+import { formatDateTime, formatRelative } from '@miguelfranken/ui/lib/format';
 
 export default function AdminAuditPage() {
   return (

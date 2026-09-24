@@ -9,7 +9,7 @@ export const reporterConfig = `import { defineConfig } from '@playwright/test';
 export default defineConfig({
   reporter: [
     ['list'],
-    ['@repo/reporter', {
+    ['@miguelfranken/reporter', {
       url: process.env.PW_REPORTER_URL,
       token: process.env.PW_REPORTER_TOKEN,
     }],
@@ -37,7 +37,7 @@ export const envSetup = `cp apps/web/.env.example apps/web/.env.local
 export const migrateAndSeed = `pnpm db:migrate
 pnpm db:seed          # prints the first superadmin's password once`;
 
-export const runTheDemo = `pnpm --filter @repo/web dev
+export const runTheDemo = `pnpm --filter @miguelfranken/web dev
 pnpm --filter playwright-demo test:e2e`;
 
 export const deployToVercel = `vercel link

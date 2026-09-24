@@ -1,16 +1,16 @@
 import path from 'node:path';
 import { Suspense } from 'react';
-import { PageHeader } from '@repo/ui/patterns/page-header';
+import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
 import { ProjectDangerZone } from '@/components/settings/danger-zone';
 import { ProjectRenameForm } from '@/components/settings/project-form';
-import { ReporterSetup } from '@repo/ui/views/settings/reporter-setup';
-import { StorageCard } from '@repo/ui/views/settings/storage-card';
+import { ReporterSetup } from '@miguelfranken/ui/views/settings/reporter-setup';
+import { StorageCard } from '@miguelfranken/ui/views/settings/storage-card';
 import { TokensCard, type TokenRow } from '@/components/settings/tokens-card';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@repo/ui/components/card';
-import { Skeleton } from '@repo/ui/components/skeleton';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@miguelfranken/ui/components/card';
+import { Skeleton } from '@miguelfranken/ui/components/skeleton';
 import { requireProject } from '@/lib/auth/access';
 import { listTokens } from '@/lib/db/queries/projects';
-import { formatDateTime, formatRelative } from '@repo/ui/lib/format';
+import { formatDateTime, formatRelative } from '@miguelfranken/ui/lib/format';
 import { baseUrl, storageDriver } from '@/lib/storage';
 
 type Params = Promise<{ team: string; project: string }>;

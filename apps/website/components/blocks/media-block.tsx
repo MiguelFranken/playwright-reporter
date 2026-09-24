@@ -1,4 +1,4 @@
-import { Section } from '@repo/ui/marketing/section';
+import { Section } from '@miguelfranken/ui/marketing/section';
 import type { MediaBlock } from '@/payload-types';
 import { toSettings, Visual } from './shared';
 

@@ -12,7 +12,7 @@ export default defineConfig({
   reporter: [
     ['list'],
     [
-      '@repo/reporter',
+      '@miguelfranken/reporter',
       {
         token: process.env.PW_REPORTER_TOKEN,
         serverUrl: process.env.PW_REPORTER_URL ?? 'http://localhost:3000',

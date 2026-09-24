@@ -1,7 +1,7 @@
-import { BrowserFrame } from '@repo/ui/marketing/browser-frame';
-import { CodeTabs } from '@repo/ui/marketing/code-tabs';
-import { Hero } from '@repo/ui/marketing/hero';
-import { ThemedImage } from '@repo/ui/marketing/themed-image';
+import { BrowserFrame } from '@miguelfranken/ui/marketing/browser-frame';
+import { CodeTabs } from '@miguelfranken/ui/marketing/code-tabs';
+import { Hero } from '@miguelfranken/ui/marketing/hero';
+import { ThemedImage } from '@miguelfranken/ui/marketing/themed-image';
 import { Demo } from '@/components/demos';
 import { RichText } from '@/components/rich-text';
 import { highlight } from '@/lib/highlight';

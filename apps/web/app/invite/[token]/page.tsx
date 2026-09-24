@@ -4,15 +4,15 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { LoginForm } from '@/components/auth/login-form';
 import { CreateAccountForm, JoinTeamButton, WrongAccountNotice } from '@/components/auth/invite-forms';
-import { Badge } from '@repo/ui/components/badge';
-import { Button } from '@repo/ui/components/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@repo/ui/components/card';
-import { Skeleton } from '@repo/ui/components/skeleton';
+import { Badge } from '@miguelfranken/ui/components/badge';
+import { Button } from '@miguelfranken/ui/components/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@miguelfranken/ui/components/card';
+import { Skeleton } from '@miguelfranken/ui/components/skeleton';
 import { getCurrentUser } from '@/lib/auth/access';
 import { resolveInvitation } from '@/lib/auth/invitations';
 import { TEAM_ROLE_DESCRIPTIONS, TEAM_ROLE_LABELS } from '@/lib/auth/permissions';
 import { getUserByEmail } from '@/lib/db/queries/teams';
-import { formatDateTime } from '@repo/ui/lib/format';
+import { formatDateTime } from '@miguelfranken/ui/lib/format';
 
 export const metadata: Metadata = { title: 'Invitation' };
 

@@ -1,4 +1,4 @@
-import { FeatureGrid } from '@repo/ui/marketing/feature-grid';
+import { FeatureGrid } from '@miguelfranken/ui/marketing/feature-grid';
 import { featureIcons } from '@/components/icons';
 import { resolveLink } from '@/lib/links';
 import type { FeatureGridBlock } from '@/payload-types';

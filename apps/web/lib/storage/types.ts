@@ -1,4 +1,4 @@
-import type { UploadInstruction } from '@repo/protocol';
+import type { UploadInstruction } from '@miguelfranken/protocol';
 
 export type StorageDriver = 'local' | 'vercel-blob';
 

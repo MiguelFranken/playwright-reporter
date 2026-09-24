@@ -3,8 +3,8 @@
  * pages — everything needed for the site to be complete on the day it is
  * deployed (WEBSITE.md §9.1).
  *
- *   pnpm --filter @repo/website db:seed
- *   pnpm --filter @repo/website db:seed --reset
+ *   pnpm --filter @miguelfranken/website db:seed
+ *   pnpm --filter @miguelfranken/website db:seed --reset
  *
  * Idempotent: it exits when a page with the slug `home` already exists, unless
  * `--reset` is passed, which deletes pages and media but never users.
@@ -115,7 +115,7 @@ async function seedMedia(payload: Payload): Promise<MediaIds> {
   try {
     files = (await readdir(screenshotDir)).filter((file) => file.endsWith('.png')).sort();
   } catch {
-    payload.logger.warn('No screenshots found. Run `pnpm --filter @repo/website screenshots` first.');
+    payload.logger.warn('No screenshots found. Run `pnpm --filter @miguelfranken/website screenshots` first.');
     return ids;
   }
 

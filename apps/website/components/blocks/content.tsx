@@ -1,5 +1,5 @@
-import { Prose } from '@repo/ui/marketing/prose';
-import { Section } from '@repo/ui/marketing/section';
+import { Prose } from '@miguelfranken/ui/marketing/prose';
+import { Section } from '@miguelfranken/ui/marketing/section';
 import { RichText } from '@/components/rich-text';
 import type { ContentBlock } from '@/payload-types';
 import { toSettings } from './shared';

@@ -1,5 +1,5 @@
-import { SiteHeader } from '@repo/ui/marketing/site-header';
-import { ThemedImage } from '@repo/ui/marketing/themed-image';
+import { SiteHeader } from '@miguelfranken/ui/marketing/site-header';
+import { ThemedImage } from '@miguelfranken/ui/marketing/themed-image';
 import { resolveLink, resolveLinks } from '@/lib/links';
 import { resolveMedia } from '@/lib/media';
 import { queryHeader, querySiteSettings } from '@/lib/queries';

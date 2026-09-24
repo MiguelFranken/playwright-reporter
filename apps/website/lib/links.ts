@@ -1,4 +1,4 @@
-import type { MarketingLink } from '@repo/ui/lib/marketing';
+import type { MarketingLink } from '@miguelfranken/ui/lib/marketing';
 import type { Page } from '@/payload-types';
 
 /**

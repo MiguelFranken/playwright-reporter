@@ -1,4 +1,4 @@
-import { Skeleton } from '@repo/ui/components/skeleton';
+import { Skeleton } from '@miguelfranken/ui/components/skeleton';
 
 /**
  * Shown while a settings section is being fetched — including when switching

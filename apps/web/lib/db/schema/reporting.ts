@@ -14,7 +14,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import type { Annotation, CiInfo, GitInfo, PlaywrightInfo, Step, SystemInfo, TestError } from '@repo/protocol';
+import type { Annotation, CiInfo, GitInfo, PlaywrightInfo, Step, SystemInfo, TestError } from '@miguelfranken/protocol';
 import { users } from './auth';
 import { teams } from './tenancy';
 

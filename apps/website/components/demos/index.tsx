@@ -2,7 +2,7 @@ import dynamic from 'next/dynamic';
 import type { ComponentType } from 'react';
 // The hero demo is above the fold on the home page, so it is the one demo
 // worth having in the first chunk.
-import { ActiveRunsDemo } from '@repo/ui/marketing/demos/active-runs';
+import { ActiveRunsDemo } from '@miguelfranken/ui/marketing/demos/active-runs';
 import type { DemoKey } from '@/payload/demos';
 
 /**
@@ -20,21 +20,21 @@ import type { DemoKey } from '@/payload/demos';
  */
 export const demoComponents: Record<DemoKey, ComponentType> = {
   'active-runs': ActiveRunsDemo,
-  'runs-table': dynamic(() => import('@repo/ui/marketing/demos/runs-table').then((m) => m.RunsTableDemo)),
-  'run-summary': dynamic(() => import('@repo/ui/marketing/demos/run-summary').then((m) => m.RunSummaryDemo)),
-  'run-errors': dynamic(() => import('@repo/ui/marketing/demos/run-errors').then((m) => m.RunErrorsDemo)),
+  'runs-table': dynamic(() => import('@miguelfranken/ui/marketing/demos/runs-table').then((m) => m.RunsTableDemo)),
+  'run-summary': dynamic(() => import('@miguelfranken/ui/marketing/demos/run-summary').then((m) => m.RunSummaryDemo)),
+  'run-errors': dynamic(() => import('@miguelfranken/ui/marketing/demos/run-errors').then((m) => m.RunErrorsDemo)),
   'result-attempts': dynamic(() =>
-    import('@repo/ui/marketing/demos/result-attempts').then((m) => m.ResultAttemptsDemo),
+    import('@miguelfranken/ui/marketing/demos/result-attempts').then((m) => m.ResultAttemptsDemo),
   ),
   'dashboard-metrics': dynamic(() =>
-    import('@repo/ui/marketing/demos/dashboard-metrics').then((m) => m.DashboardMetricsDemo),
+    import('@miguelfranken/ui/marketing/demos/dashboard-metrics').then((m) => m.DashboardMetricsDemo),
   ),
   'pass-fail-chart': dynamic(() =>
-    import('@repo/ui/marketing/demos/pass-fail-chart').then((m) => m.PassFailChartDemo),
+    import('@miguelfranken/ui/marketing/demos/pass-fail-chart').then((m) => m.PassFailChartDemo),
   ),
-  'flaky-tests': dynamic(() => import('@repo/ui/marketing/demos/flaky-tests').then((m) => m.FlakyTestsDemo)),
+  'flaky-tests': dynamic(() => import('@miguelfranken/ui/marketing/demos/flaky-tests').then((m) => m.FlakyTestsDemo)),
   'explorer-table': dynamic(() =>
-    import('@repo/ui/marketing/demos/explorer-table').then((m) => m.ExplorerTableDemo),
+    import('@miguelfranken/ui/marketing/demos/explorer-table').then((m) => m.ExplorerTableDemo),
   ),
 };
 

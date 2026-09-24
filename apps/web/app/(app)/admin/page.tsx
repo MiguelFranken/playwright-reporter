@@ -1,12 +1,12 @@
 import { Building2, FolderKanban, ScrollText, Users } from 'lucide-react';
 import Link from 'next/link';
 import { Suspense } from 'react';
-import { PageHeader } from '@repo/ui/patterns/page-header';
-import { ListRowsSkeleton, MetricCardsSkeleton } from '@repo/ui/patterns/skeletons';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@repo/ui/components/card';
+import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
+import { ListRowsSkeleton, MetricCardsSkeleton } from '@miguelfranken/ui/patterns/skeletons';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@miguelfranken/ui/components/card';
 import { requireSuperadmin } from '@/lib/auth/access';
 import { listAllTeams, listAuditLogs, listUsers } from '@/lib/db/queries/teams';
-import { formatRelative } from '@repo/ui/lib/format';
+import { formatRelative } from '@miguelfranken/ui/lib/format';
 
 /**
  * The headings, card frames and copy never change, so they are part of the

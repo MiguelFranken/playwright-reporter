@@ -4,10 +4,10 @@ import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { acceptInvitationExisting, acceptInvitationNewUser } from '@/app/invite/[token]/actions';
 import { PlainSignOutButton } from '@/components/app-sidebar';
-import { Alert, AlertDescription } from '@repo/ui/components/alert';
-import { Button } from '@repo/ui/components/button';
-import { Input } from '@repo/ui/components/input';
-import { Label } from '@repo/ui/components/label';
+import { Alert, AlertDescription } from '@miguelfranken/ui/components/alert';
+import { Button } from '@miguelfranken/ui/components/button';
+import { Input } from '@miguelfranken/ui/components/input';
+import { Label } from '@miguelfranken/ui/components/label';
 
 export function CreateAccountForm({ token, email }: { token: string; email: string }) {
   const router = useRouter();

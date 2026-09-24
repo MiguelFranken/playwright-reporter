@@ -3,13 +3,13 @@
 import { AlertCircle, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
-import { Alert, AlertDescription } from '@repo/ui/components/alert';
-import { Button } from '@repo/ui/components/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@repo/ui/components/card';
-import { Field, FieldDescription, FieldGroup, FieldLabel } from '@repo/ui/components/field';
-import { Input } from '@repo/ui/components/input';
+import { Alert, AlertDescription } from '@miguelfranken/ui/components/alert';
+import { Button } from '@miguelfranken/ui/components/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@miguelfranken/ui/components/card';
+import { Field, FieldDescription, FieldGroup, FieldLabel } from '@miguelfranken/ui/components/field';
+import { Input } from '@miguelfranken/ui/components/input';
 import { authClient } from '@/lib/auth/client';
-import { cn } from '@repo/ui/lib/cn';
+import { cn } from '@miguelfranken/ui/lib/cn';
 
 export function LoginForm({
   next = '/',

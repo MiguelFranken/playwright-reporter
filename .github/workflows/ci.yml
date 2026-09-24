@@ -1,14 +1,14 @@
 name: CI
 
+# Pushes to main run CI through the release workflow, which calls this one.
 on:
-  push:
-    branches: [main]
   pull_request:
+  workflow_call:
   workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -30,7 +30,7 @@ jobs:
         run: nub exec turbo run check-types --ui=stream
       # Storybook runs its stories in a real browser; that has its own job.
       - name: Unit tests
-        run: nub exec turbo run test:unit --ui=stream --filter=!@repo/storybook
+        run: nub exec turbo run test:unit --ui=stream --filter=!@miguelfranken/storybook
 
   storybook:
     name: Storybook browser tests
@@ -44,7 +44,7 @@ jobs:
         working-directory: apps/storybook
         run: nub exec playwright install --with-deps chromium
       - name: Storybook tests
-        run: nub exec turbo run test:unit --ui=stream --filter=@repo/storybook
+        run: nub exec turbo run test:unit --ui=stream --filter=@miguelfranken/storybook
 
   integration:
     name: Integration tests

@@ -11,7 +11,7 @@ import {
   type RunStartResponse,
   type UploadInstruction,
   type UploadUrlsResponse,
-} from '@repo/protocol';
+} from '@miguelfranken/protocol';
 import type { ResolvedOptions } from './types';
 
 export class HttpError extends Error {

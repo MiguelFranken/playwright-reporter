@@ -1,4 +1,4 @@
-import { Faq } from '@repo/ui/marketing/faq';
+import { Faq } from '@miguelfranken/ui/marketing/faq';
 import { RichText } from '@/components/rich-text';
 import type { FaqBlock } from '@/payload-types';
 import { toSectionHeader, toSettings } from './shared';

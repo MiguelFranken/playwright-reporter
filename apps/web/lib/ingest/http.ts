@@ -1,6 +1,6 @@
 import { gunzipSync } from 'node:zlib';
 import { and, eq, isNull } from 'drizzle-orm';
-import { PROTOCOL_HEADER, PROTOCOL_VERSION } from '@repo/protocol';
+import { PROTOCOL_HEADER, PROTOCOL_VERSION } from '@miguelfranken/protocol';
 import type { z } from 'zod';
 import { db } from '@/lib/db/drizzle';
 import { apiTokens, projects, teams, type Project } from '@/lib/db/schema';

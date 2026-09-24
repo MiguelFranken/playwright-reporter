@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 /**
- * These assume the seed has run (`pnpm --filter @repo/website db:seed`): they
+ * These assume the seed has run (`pnpm --filter @miguelfranken/website db:seed`): they
  * check the seeded site, not an empty CMS.
  */
 

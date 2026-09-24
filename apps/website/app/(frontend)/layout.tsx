@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import { draftMode } from 'next/headers';
 import { ThemeProvider } from 'next-themes';
-import { AnnouncementBar } from '@repo/ui/marketing/announcement-bar';
+import { AnnouncementBar } from '@miguelfranken/ui/marketing/announcement-bar';
 import { Footer } from '@/components/site-footer';
 import { Header } from '@/components/site-header';
 import { LivePreviewListener } from '@/components/live-preview-listener';

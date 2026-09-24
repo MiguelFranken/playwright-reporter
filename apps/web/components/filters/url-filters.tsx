@@ -12,7 +12,7 @@ import {
   type FilterSelectProps,
   type RangeToggleProps,
   type SearchFieldProps,
-} from '@repo/ui/patterns/filter-controls';
+} from '@miguelfranken/ui/patterns/filter-controls';
 
 /** Updates one or more search params on the current route (resetting `page`). */
 export function useUrlParams() {
@@ -103,7 +103,7 @@ export function useUrlTab<T extends string>(
 
 /**
  * Each control below is the connected half of a controlled component in
- * `@repo/ui/patterns/filter-controls`: it reads the query string, hands the
+ * `@miguelfranken/ui/patterns/filter-controls`: it reads the query string, hands the
  * value down and writes the change back. Nothing else in the app knows the
  * filters live in the URL.
  *

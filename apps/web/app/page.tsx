@@ -3,9 +3,9 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
 import { PlainSignOutButton } from '@/components/app-sidebar';
-import { EmptyState } from '@repo/ui/patterns/empty-state';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@repo/ui/components/card';
-import { Skeleton } from '@repo/ui/components/skeleton';
+import { EmptyState } from '@miguelfranken/ui/patterns/empty-state';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@miguelfranken/ui/components/card';
+import { Skeleton } from '@miguelfranken/ui/components/skeleton';
 import { requireUser } from '@/lib/auth/access';
 import { listMyTeams, listTeamProjects } from '@/lib/db/queries/teams';
 

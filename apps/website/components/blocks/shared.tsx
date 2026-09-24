@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
-import type { SectionHeaderContent, SectionSettings } from '@repo/ui/lib/marketing';
-import { BrowserFrame } from '@repo/ui/marketing/browser-frame';
-import { ThemedImage } from '@repo/ui/marketing/themed-image';
+import type { SectionHeaderContent, SectionSettings } from '@miguelfranken/ui/lib/marketing';
+import { BrowserFrame } from '@miguelfranken/ui/marketing/browser-frame';
+import { ThemedImage } from '@miguelfranken/ui/marketing/themed-image';
 import { Demo } from '@/components/demos';
 import { RichText } from '@/components/rich-text';
 import { resolveThemedMedia, type CmsThemedMedia } from '@/lib/media';
@@ -9,7 +9,7 @@ import { DEMO_URLS, type DemoKey } from '@/payload/demos';
 
 /**
  * The pieces every block adapter needs. Each one turns a generated Payload
- * shape into the plain props `@repo/ui/marketing` declares — this file and its
+ * shape into the plain props `@miguelfranken/ui/marketing` declares — this file and its
  * siblings are the only place the two ever meet.
  */
 

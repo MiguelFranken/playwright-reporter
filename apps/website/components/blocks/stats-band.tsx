@@ -1,4 +1,4 @@
-import { StatsBand } from '@repo/ui/marketing/stats-band';
+import { StatsBand } from '@miguelfranken/ui/marketing/stats-band';
 import type { StatsBandBlock } from '@/payload-types';
 import { toSectionHeader, toSettings } from './shared';
 
