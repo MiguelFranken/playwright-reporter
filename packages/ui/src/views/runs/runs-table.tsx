@@ -69,11 +69,14 @@ function RunRow({ hrefs, run }: { hrefs: RunsTableHrefs; run: RunListItem }) {
   const commitUrl = run.gitCommitUrl;
   const title = commitTitle(run);
   return (
-    <TableRow>
+    // The run number's link stretches over the whole row, so any click on it
+    // opens the run; the commit and PR links sit above it (`relative z-10`)
+    // and keep going to the git host.
+    <TableRow className="relative">
       <TableCell className="align-top">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
-            <Link href={href} className="font-semibold tabular-nums hover:underline">
+            <Link href={href} className="font-semibold tabular-nums after:absolute after:inset-0 after:content-[''] hover:underline">
               #{run.number}
             </Link>
             <Badge variant="outline" className="h-4 px-1.5 text-label-xs">
@@ -99,7 +102,7 @@ function RunRow({ hrefs, run }: { hrefs: RunsTableHrefs; run: RunListItem }) {
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
             {run.gitShortSha ? (
               commitUrl ? (
-                <a href={commitUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-mono hover:text-foreground hover:underline">
+                <a href={commitUrl} target="_blank" rel="noreferrer" className="relative z-10 inline-flex items-center gap-1 font-mono hover:text-foreground hover:underline">
                   {run.gitShortSha}
                   <ExternalLink className="size-3" />
                 </a>
@@ -110,7 +113,7 @@ function RunRow({ hrefs, run }: { hrefs: RunsTableHrefs; run: RunListItem }) {
             {run.gitAuthorName ? <span className="truncate">{run.gitAuthorName}</span> : null}
             {run.prNumber ? (
               run.prUrl ? (
-                <a href={run.prUrl} target="_blank" rel="noreferrer" className="hover:text-foreground hover:underline">
+                <a href={run.prUrl} target="_blank" rel="noreferrer" className="relative z-10 hover:text-foreground hover:underline">
                   #{run.prNumber}
                 </a>
               ) : (
@@ -128,7 +131,7 @@ function RunRow({ hrefs, run }: { hrefs: RunsTableHrefs; run: RunListItem }) {
           <div className="flex flex-wrap gap-1">
             {run.environment ? <Badge variant="secondary">{run.environment}</Badge> : null}
             {run.tags.map((t) => (
-              <Badge key={t} variant="outline" className="h-4 px-1.5 text-label-xs">
+              <Badge key={t} variant="outline">
                 {t}
               </Badge>
             ))}
