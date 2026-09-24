@@ -39,4 +39,13 @@ describe('rankFixFirst', () => {
     expect(ranked[0].chronic).toBe(true);
     expect(ranked[0].reason).toBe('failed 5 of 10 runs, chronic: 5 failures in a row, still failing');
   });
+
+  it('ranks a test that appears in several candidate lists once', () => {
+    const failing = { ...base, testId: 'a', failed: 3, flaky: 2, failureRate: 0.3 };
+    const ranked = rankFixFirst([failing, { ...base, testId: 'b', flaky: 2 }, failing]);
+    expect(ranked.map((r) => [r.testId, r.rank])).toEqual([
+      ['a', 1],
+      ['b', 2],
+    ]);
+  });
 });

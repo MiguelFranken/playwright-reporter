@@ -16,7 +16,7 @@
     "dist"
   ],
   "bin": {
-    "pw-reporter-mcp": "./dist/cli.mjs"
+    "pw-reporter-mcp": "dist/cli.mjs"
   },
   "exports": {
     ".": {

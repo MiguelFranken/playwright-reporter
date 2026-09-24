@@ -68,7 +68,6 @@ export const projectHealth = defineTool({
     const ranked = rankFixFirst(
       [...failing.rows, ...flaky.rows].map((t) => ({ ...ref(t), runs: t.runs, failed: t.failed, flaky: t.flaky, failureRate: t.failureRate, streak: t.streak, lastOutcome: t.lastOutcome, lastRunAt: t.lastRunAt, lastRunNumber: t.lastRunNumber })),
     );
-    const unique = new Map(ranked.map((r) => [r.testId, r]));
     return {
       data: {
         project: project.ref,
@@ -84,7 +83,7 @@ export const projectHealth = defineTool({
           avgRunDurationMs: stats.avgRunDurationMs === null ? null : Math.round(stats.avgRunDurationMs),
         },
         trend: { runs: trend.map((t) => ({ runNumber: t.runNumber, status: t.status, failed: t.failed, flaky: t.flaky, url: project.links.run(t.runNumber) })) },
-        fixFirst: [...unique.values()].map((r) => ({ testId: r.testId, title: r.title, file: r.file, browser: r.browser, url: r.url, rank: r.rank, impact: r.impact, chronic: r.chronic, reason: r.reason })),
+        fixFirst: ranked.map((r) => ({ testId: r.testId, title: r.title, file: r.file, browser: r.browser, url: r.url, rank: r.rank, impact: r.impact, chronic: r.chronic, reason: r.reason })),
         flaky: flaky.rows.map((t) => ({ ...ref(t), flakyRate: t.flakyRate, runs: t.runs })),
         slowest: slow.rows.map((t) => ({ ...ref(t), p95DurationMs: t.p95DurationMs === null ? null : Math.round(t.p95DurationMs) })),
         gettingSlower: slower.rows
