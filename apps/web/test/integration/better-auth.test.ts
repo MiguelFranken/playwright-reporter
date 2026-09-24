@@ -126,7 +126,12 @@ describe('signInEmail', () => {
     await createAccount('tamper@example.test');
     const cookie = await signInCookie('tamper@example.test');
 
-    actor.useRealSession({ cookie: cookie.replace(/=(.)/, '=X') });
+    // Swap the first character of the value for a different one; always
+    // writing `X` was a no-op whenever the token already started with it.
+    const tampered = cookie.replace(/=(.)/, (_, first: string) => `=${first === 'X' ? 'Y' : 'X'}`);
+    expect(tampered).not.toBe(cookie);
+
+    actor.useRealSession({ cookie: tampered });
     expect(await getSession()).toBeNull();
   });
 });
