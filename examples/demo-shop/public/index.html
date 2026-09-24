@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Acme Web Shop</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a href="#/" class="brand">Acme</a>
+      <form class="search" role="search" id="search-form">
+        <label for="search" class="sr-only">Search products</label>
+        <input id="search" type="search" placeholder="Search products" autocomplete="off" />
+        <ul id="suggestions" class="suggestions" role="listbox" aria-label="Suggestions" hidden></ul>
+      </form>
+      <nav class="links">
+        <a href="#/account" id="account-link">Sign in</a>
+        <a href="#/cart" class="cart-link">Cart <span id="cart-count" class="badge" aria-label="Items in cart">0</span></a>
+      </nav>
+    </header>
+    <main id="app" tabindex="-1"></main>
+    <div id="toast" role="status" aria-live="polite" class="toast" hidden></div>
+    <script src="/app.js"></script>
+  </body>
+</html>

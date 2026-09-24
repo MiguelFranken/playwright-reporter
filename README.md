@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <a href="https://playwright-reporter-nine.vercel.app">Live demo</a> ·
+  <a href="https://playwright-reporter-nine.vercel.app/demo"><b>Live demo</b></a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="#using-the-reporter-in-your-project">Reporter</a> ·
   <a href="#configuration">Configuration</a> ·
@@ -42,6 +42,11 @@
 - 🛡️ **Never fails your tests**: network errors are retried and then logged, the run goes on
 - ☁️ **Runs anywhere**: Postgres (Neon recommended) and local or Vercel Blob storage; deploys to Vercel, Docker or
   Kubernetes
+
+> [!TIP]
+> **[Open the live demo](https://playwright-reporter-nine.vercel.app/demo)**: no sign-up, you are signed in as a
+> read-only viewer. Its runs are real: a scheduled workflow runs a web shop's suite every two hours, with
+> flaky tests, regressions that get fixed, and feature branches that come and go. See [The live demo](#the-live-demo).
 
 ## Quick start
 
@@ -297,6 +302,39 @@ of its own. The two projects share the database and nothing else.
 
 </details>
 
+## The live demo
+
+[`/demo`](https://playwright-reporter-nine.vercel.app/demo) signs a visitor in, without a password, as the account
+`DEMO_USER_EMAIL` names, and lands on `DEMO_LANDING_PATH`. That account has to be a plain user who is a `viewer` in
+every team it is in, or `/demo` is a 404, and it can't change its name, password or avatar or list its sessions,
+since every visitor shares it. Somebody who is signed in already stays signed in as themselves.
+
+Its data comes from [`examples/demo-shop`](examples/demo-shop): the Acme web shop and a Playwright suite for it,
+desktop and mobile. [`demo.yml`](.github/workflows/demo.yml) runs the suite every two hours for the branches
+[`schedule.ts`](examples/demo-shop/schedule.ts) plans for that slot. `main` runs in two shards and is mostly green,
+apart from a regression now and then that gets fixed a day later, and a new feature branch opens every three days,
+some of them broken until their last commit. A scenario sets the shop's latencies and bugs, so flaky tests are
+genuinely flaky and failures come with real screenshots, videos and traces.
+
+<details>
+<summary><b>Setting it up on an instance</b></summary>
+
+<br>
+
+1. Create the team, the project and the demo viewer, and note the API token the seed prints:
+   ```bash
+   SEED_TEAM_SLUG=acme SEED_TEAM_NAME=Acme SEED_PROJECT_SLUG=web-shop SEED_PROJECT_NAME="Web shop" \
+   SEED_VIEWER_EMAIL=viewer@example.com nub run --filter @miguelfranken/web db:seed
+   ```
+2. Set `DEMO_USER_EMAIL=viewer@example.com` and `DEMO_LANDING_PATH=/teams/acme/projects/web-shop/dashboard` on the
+   app.
+3. In the repository, set the variable `DEMO_REPORTER_URL` and the secret `DEMO_REPORTER_TOKEN`.
+4. Run **Live demo** with `backfill_days: 30` once. It records every scenario through the real reporter and replays
+   the recordings over the past 30 days, oldest first, so the time filters have something to show from day one.
+5. Set the variable `DEMO_ENABLED=true` to start the schedule.
+
+</details>
+
 ## Repository layout
 
 | Path | |
@@ -308,6 +346,7 @@ of its own. The two projects share the database and nothing else.
 | [`packages/protocol`](packages/protocol) | Zod schemas of the ingest protocol, shared by the reporter and the app |
 | [`packages/ui`](packages/ui) | the design system, `@miguelfranken/ui`: tokens, primitives, patterns, views and the marketing layer; TypeScript source, no build step |
 | [`examples/playwright-demo`](examples/playwright-demo) | a Playwright project that uses the reporter through `workspace:*` |
+| [`examples/demo-shop`](examples/demo-shop) | the Acme web shop and its suite, which feed the live demo |
 
 ## Contributing
 

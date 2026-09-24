@@ -11,6 +11,8 @@ import { COOKIE_PREFIX } from '@/lib/auth/config';
 const PUBLIC = [
   /^\/login$/,
   /^\/invite\//,
+  // Signs visitors in as the read-only demo account (`lib/auth/demo.ts`).
+  /^\/demo$/,
   // Every route handler authorizes itself — by ingest token, Better Auth
   // session, or a signed artifact URL — and answers with a status code.
   // Redirecting an API request to an HTML login page would only confuse the

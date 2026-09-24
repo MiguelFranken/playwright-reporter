@@ -22,6 +22,7 @@ import {
   tests,
   type Attachment,
   type Run,
+  type RunShard,
 } from '@/lib/db/schema';
 import { errorSignature, firstLine } from '@/lib/metrics/error-signature';
 import { baseUrl, getStorage, storageKey } from '@/lib/storage';
@@ -552,7 +553,7 @@ export async function finishRun(project: TokenProject, run: Run, body: RunFinish
       const watchdog: WatchdogEffect = revived || (fresh.status === 'running' && !fresh.watchdogId) ? { arm: run.id } : {};
       return { runStatus: 'running' as const, url: runUrl(project, fresh.number), watchdog, push: null };
     }
-    const status = await finalizeRun(tx, project, fresh, shards.map((s) => s.status));
+    const status = await finalizeRun(tx, project, fresh, shards);
     const watchdog: WatchdogEffect = fresh.watchdogId ? { disarm: fresh.watchdogId } : {};
     // A repeated finish call settles the run again but announces nothing new.
     const push: PushEffect = fresh.status === 'running' || fresh.status === 'incomplete' ? { runId: run.id, kind: 'finished' } : null;
@@ -560,7 +561,19 @@ export async function finishRun(project: TokenProject, run: Run, body: RunFinish
   });
 }
 
-async function finalizeRun(tx: Tx, project: TokenProject, run: Run, shardStatuses: string[]) {
+/**
+ * A run ends when its last shard says it ended: the same clock as its start,
+ * so the duration is the reporter's, and a run replayed from a report (the
+ * demo's backfill) keeps its own day. Clamped into [start, now], so a skewed
+ * clock can neither end a run before it began nor in the future.
+ */
+export function runFinishedAt(run: Pick<Run, 'startedAt'>, shards: Pick<RunShard, 'finishedAt'>[], now = new Date()): Date {
+  const reported = Math.max(...shards.map((s) => s.finishedAt?.getTime() ?? now.getTime()));
+  return new Date(Math.min(now.getTime(), Math.max(run.startedAt.getTime(), reported)));
+}
+
+async function finalizeRun(tx: Tx, project: TokenProject, run: Run, shards: RunShard[]) {
+  const shardStatuses = shards.map((s) => s.status);
   await settleOpenResults(tx, run.id);
   const [agg] = await tx
     .select({
@@ -574,7 +587,7 @@ async function finalizeRun(tx: Tx, project: TokenProject, run: Run, shardStatuse
   if (agg.failed > 0 || shardStatuses.includes('failed')) status = 'failed';
   else if (shardStatuses.includes('timedout')) status = 'timedout';
   else if (agg.interrupted > 0 || shardStatuses.includes('interrupted')) status = 'interrupted';
-  const finishedAt = new Date();
+  const finishedAt = runFinishedAt(run, shards);
   await tx
     .update(runs)
     .set({

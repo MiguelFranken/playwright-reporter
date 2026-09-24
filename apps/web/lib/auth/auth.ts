@@ -6,6 +6,7 @@ import { admin } from 'better-auth/plugins';
 import { db } from '@/lib/db/drizzle';
 import * as schema from '@/lib/db/schema';
 import { authSecret, baseUrl, COOKIE_PREFIX, trustedOrigins } from './config';
+import { demoPlugin } from './demo';
 import { ac, superadminRole, userRole } from './permissions';
 
 export const auth = betterAuth({
@@ -53,6 +54,7 @@ export const auth = betterAuth({
   },
   plugins: [
     admin({ ac, roles: { superadmin: superadminRole, user: userRole }, adminRoles: ['superadmin'], defaultRole: 'user' }),
+    demoPlugin(),
     nextCookies(), // must stay last
   ],
 });
