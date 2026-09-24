@@ -31,6 +31,8 @@ interface Move {
 
 function moveOf(ev: LiveEvent): Move | null {
   if (!isResultEvent(ev)) return null;
+  // Events stored before payloads carried their previous state cannot move a total.
+  if (ev.data.prevOutcome === undefined) return null;
   const { prevOutcome, outcome } = ev.data;
   if (prevOutcome === outcome) return null;
   return { from: prevOutcome, to: outcome };
@@ -136,13 +138,13 @@ function rowFromBegin(d: TestBeginPayload): LiveRow {
     attemptCount: 0,
     errorMessage: null,
     errorSignature: null,
-    annotations: d.annotations,
-    tags: d.tags,
+    annotations: d.annotations ?? [],
+    tags: d.tags ?? [],
     title: d.title,
-    titlePath: d.titlePath,
+    titlePath: d.titlePath ?? [d.title],
     file: d.file,
     pwProject: d.project,
-    line: d.line,
+    line: d.line ?? 0,
     history: [],
     attachmentKinds: [],
     partial: true,
@@ -154,11 +156,11 @@ function rowFromEnd(d: AttemptEndPayload): LiveRow {
     id: d.resultId,
     testId: d.testId,
     outcome: d.outcome,
-    durationMs: d.resultDurationMs,
-    attemptCount: d.attemptCount,
-    errorMessage: d.errorMessage,
-    errorSignature: d.errorSignature,
-    annotations: d.annotations,
+    durationMs: d.resultDurationMs ?? d.durationMs ?? 0,
+    attemptCount: d.attemptCount ?? d.retry + 1,
+    errorMessage: d.errorMessage ?? null,
+    errorSignature: d.errorSignature ?? null,
+    annotations: d.annotations ?? [],
     tags: [],
     title: d.title,
     titlePath: [d.title],
@@ -178,18 +180,19 @@ export function reduceRows(rows: RowMap, ev: LiveEvent): RowMap {
   const existing = rows.get(ev.data.resultId);
   let row: LiveRow;
   if (ev.type === 'test.begin') {
-    row = existing ? { ...existing, outcome: ev.data.outcome, tags: ev.data.tags } : rowFromBegin(ev.data);
+    row = existing ? { ...existing, outcome: ev.data.outcome ?? existing.outcome, tags: ev.data.tags ?? existing.tags } : rowFromBegin(ev.data);
   } else {
     const d = ev.data;
     row = existing
       ? {
           ...existing,
           outcome: d.outcome,
-          durationMs: d.resultDurationMs,
-          attemptCount: d.attemptCount,
-          errorMessage: d.errorMessage,
-          errorSignature: d.errorSignature,
-          annotations: d.annotations,
+          // `??` for events stored before payloads carried the result's totals.
+          durationMs: d.resultDurationMs ?? existing.durationMs,
+          attemptCount: d.attemptCount ?? existing.attemptCount,
+          errorMessage: d.errorMessage ?? existing.errorMessage,
+          errorSignature: d.errorSignature ?? existing.errorSignature,
+          annotations: d.annotations ?? existing.annotations,
         }
       : rowFromEnd(d);
   }

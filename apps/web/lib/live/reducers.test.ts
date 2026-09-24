@@ -85,6 +85,15 @@ describe('reduceCounts', () => {
   });
 });
 
+describe('events stored before the live payloads', () => {
+  it('leave totals alone instead of guessing the previous outcome', () => {
+    const old = end(9, { outcome: 'passed' });
+    delete (old.data as Partial<AttemptEndPayload>).prevOutcome;
+    const counts = { ...zero, total: 1, running: 1 };
+    expect(reduceCounts(counts, old)).toBe(counts);
+  });
+});
+
 describe('reduceHeader', () => {
   const state = { run: { status: 'running', expectedTests: 4 }, counts: zero, shards: [{ shardIndex: 1, status: 'running', expectedTests: 4, durationMs: null, hostname: null }] };
 
