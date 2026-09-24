@@ -120,8 +120,9 @@ export async function listFacets(projectId: string, since: Date) {
 }
 
 /**
- * The branch comparisons measure against: `settings.defaultBranch` when set,
- * otherwise the branch with the most finished runs in 30 days, otherwise main.
+ * The branch comparisons measure against: `settings.defaultBranch` when set;
+ * otherwise `main` or `master` if they have runs; otherwise the branch with the
+ * most runs in 30 days; otherwise `main`.
  */
 export async function defaultBranch(projectId: string, settings: Record<string, unknown>): Promise<string> {
   if (typeof settings.defaultBranch === 'string' && settings.defaultBranch.trim()) return settings.defaultBranch.trim();
@@ -130,7 +131,7 @@ export async function defaultBranch(projectId: string, settings: Record<string, 
     .from(runs)
     .where(and(eq(runs.projectId, projectId), sql`${runs.gitBranch} is not null`, gt(runs.startedAt, sql`now() - interval '30 days'`)))
     .groupBy(runs.gitBranch)
-    .orderBy(desc(sql`count(*)`))
+    .orderBy(desc(sql`${runs.gitBranch} in ('main', 'master')`), desc(sql`count(*)`), desc(sql`max(${runs.startedAt})`))
     .limit(1);
   return row?.branch ?? 'main';
 }

@@ -14,3 +14,10 @@ export { flakyLabel, reliabilityLabel } from '@miguelfranken/ui/lib/reliability'
 export const CHRONIC_STREAK = 5;
 export const CHRONIC_FAILURE_RATE = 0.7;
 export const CHRONIC_MIN_RUNS = 5;
+
+/** Fewer executions than this and a cross-run flakiness verdict says "insufficient data". */
+export const VERDICT_MIN_EXECUTIONS = 3;
+/** Runs that passed only on retry before a test counts as flaky on that evidence alone. */
+export const FLAKY_MIN_RETRY_RUNS = 2;
+/** With one retry-pass, this share of pass↔fail flips between consecutive runs also makes it flaky. */
+export const FLAKY_FLIP_RATE = 0.3;

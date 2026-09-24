@@ -79,7 +79,8 @@ describe.each(ERAS)('handshake on the %s protocol generation', (era) => {
     const client = await mcpClient({ token, era });
     expect(client.getNegotiatedProtocolVersion()).toBe(era === 'modern' ? '2026-07-28' : '2025-11-25');
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name)).toEqual(expect.arrayContaining(['whoami', 'list_runs', 'get_run', 'find_tests', 'project_health']));
+    expect(tools.map((t) => t.name)).toHaveLength(16);
+    expect(tools.map((t) => t.name)).toEqual(expect.arrayContaining(['whoami', 'list_runs', 'get_failure_context', 'verify_fix', 'get_artifact']));
     for (const tool of tools) {
       expect(tool.annotations?.readOnlyHint).toBe(true);
       expect(tool.outputSchema).toBeTruthy();
@@ -95,6 +96,7 @@ describe.each(ERAS)('handshake on the %s protocol generation', (era) => {
     const { token } = await createPat(tenant.adminUser);
     const client = await mcpClient({ token, era, query: '?toolsets=core' });
     const { tools } = await client.listTools();
+    expect(tools).toHaveLength(9);
     expect(tools.every((t) => !['get_failure_context', 'verify_fix'].includes(t.name))).toBe(true);
     await client.close();
   });

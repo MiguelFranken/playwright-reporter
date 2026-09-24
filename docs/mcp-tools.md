@@ -16,6 +16,13 @@ also accepts `project`, `format` (`markdown` | `json`) and `maxChars`. See the R
 | [`find_tests`](#find_tests) | core | Rank or search tests across runs: flakiest, most failing, chronic, slowest (p95), getting slower, least reliable — or find a test by title. |
 | [`get_test_history`](#get_test_history) | core | One test over time: reliability, failure and flaky rate, p95 duration and trend, streak, breakdown by environment and branch, the same test in other browser projects, its distinct errors, and recent executions. |
 | [`project_health`](#project_health) | core | Where a project stands and what to fix first: run pass rate, reliability, a ranked fix-first list (failures weigh fully, flakes half), flakiest and slowest tests, tests getting slower, and the most widespread errors. |
+| [`get_failure_context`](#get_failure_context) | debug | Start here for any failing or flaky test. |
+| [`check_flakiness`](#check_flakiness) | debug | Is this test flaky, broken, or is there not enough data to say? Judges across runs: retries that passed, the same commit both passing and failing, and how often it flips. |
+| [`summarize_failures`](#summarize_failures) | debug | Triage a red run: its failures grouped by root cause (error signature), largest group first, each with category, affected files and browsers, and whether it is new or already failing on the base branch. |
+| [`compare_runs`](#compare_runs) | debug | What changed between two runs, or between a branch and its base branch: new failures, fixed tests, new flakes, still failing (same or different error), added and removed tests, and tests that got much slower. |
+| [`verify_fix`](#verify_fix) | debug | After a fix landed: did later runs fix the test? Give the test and the run it failed in. |
+| [`get_artifact`](#get_artifact) | debug | The contents of one test attachment: screenshots and visual diffs as images you can look at, text attachments inline, traces and videos as short-lived links (with a trace-viewer link and a local show-trace command). |
+| [`get_rerun_command`](#get_rerun_command) | debug | The exact "npx playwright test …" command that re-runs a run’s failed and/or flaky tests on the same browser projects, one command per project. |
 
 ## whoami
 
@@ -203,10 +210,151 @@ Where a project stands and what to fix first: run pass rate, reliability, a rank
 
 Structured output fields: `project`, `window`, `branch`, `stats`, `trend`, `fixFirst`, `flaky`, `slowest`, `gettingSlower`, `topErrors`, `truncated`.
 
+## get_failure_context
+
+**Get failure context** · toolset `debug`
+
+Start here for any failing or flaky test. One call returns the failure, a per-attempt verdict, the regression window (last pass → first fail, with a compare link), where else it fails, artifacts, and which fixes the evidence rules out.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+| `result` | string |  | Result id or result URL (…/runs/128/tests/<id>). |
+| `test` | string |  | Test id, test or result URL, or part of the test title. Add file/browser to pick one when several tests match. |
+| `run` | integer (–9007199254740991) \| string |  | Run the failure happened in. Default: the latest run in 30 days where the test failed or flaked. |
+| `file` | string |  | Part of the spec file path, e.g. "checkout.spec". |
+| `browser` | string |  | Playwright project name, e.g. "chromium" (see list_filters). |
+| `detail` | `"summary"` \| `"standard"` \| `"full"` |  | How much to return (default standard). summary: failure, verdict, regression window, ruled-out list. |
+| `includeGuidance` | boolean |  | Include the short "how to read this" block (default true; turn off on repeat calls). |
+
+Structured output fields: `project`, `failure`, `attempts`, `regression`, `spread`, `artifacts`, `ruledOut`, `pointsTo`, `next`, `truncated`.
+
+## check_flakiness
+
+**Check flakiness** · toolset `debug`
+
+Is this test flaky, broken, or is there not enough data to say? Judges across runs: retries that passed, the same commit both passing and failing, and how often it flips. Returns a verdict with confidence and the evidence behind it.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+| `test` | string | yes | Test id, test or result URL, or part of the test title. Add file/browser to pick one when several tests match. |
+| `file` | string |  | Part of the spec file path, e.g. "checkout.spec". |
+| `browser` | string |  | Playwright project name, e.g. "chromium" (see list_filters). |
+| `branch` | string |  | Git branch name, e.g. "main". |
+| `since` | string |  | Start of the window: a duration back from now ("24h", "7d", "4w") or an ISO date. |
+
+Structured output fields: `project`, `window`, `test`, `verdict`, `confidence`, `reason`, `evidence`, `ruledOut`, `pointsTo`, `truncated`.
+
+## summarize_failures
+
+**Summarize failures** · toolset `debug`
+
+Triage a red run: its failures grouped by root cause (error signature), largest group first, each with category, affected files and browsers, and whether it is new or already failing on the base branch.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+| `run` | integer (–9007199254740991) \| string |  | Run to triage (default "latest-failed"). |
+| `branch` | string |  | Git branch name, e.g. "main". |
+| `environment` | string |  | Environment label the reporter sent, e.g. "staging". |
+| `includeFlaky` | boolean |  | Include flaky tests in the groups (default true). |
+| `limit` | integer (1–50) |  | Groups to return (default 10). |
+
+Structured output fields: `project`, `run`, `baseBranch`, `totals`, `groups`, `ungrouped`, `truncated`.
+
+## compare_runs
+
+**Compare runs** · toolset `debug`
+
+What changed between two runs, or between a branch and its base branch: new failures, fixed tests, new flakes, still failing (same or different error), added and removed tests, and tests that got much slower.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+| `base` | integer (–9007199254740991) \| string |  | The earlier run (default: latest finished run on the base branch before head). |
+| `head` | integer (–9007199254740991) \| string |  | The later run (default: latest finished run on "branch", or on the base run’s branch). |
+| `branch` | string |  | Branch mode: compare the latest run of this branch against the base branch. |
+| `baseBranch` | string |  | Branch to compare against (default: the project’s base branch). |
+| `environment` | string |  | Environment label the reporter sent, e.g. "staging". |
+| `limit` | integer (1–100) |  | Rows per bucket (default 20). |
+
+Structured output fields: `project`, `mode`, `base`, `head`, `summary`, `newFailures`, `fixed`, `newFlaky`, `stillFailing`, `added`, `removed`, `slower`, `truncated`.
+
+## verify_fix
+
+**Verify fix** · toolset `debug`
+
+After a fix landed: did later runs fix the test? Give the test and the run it failed in. Strict — passing only after retries is "unstable", and a new error is "different_failure", never "fixed".
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+| `test` | string | yes | Test id, test or result URL, or part of the test title. Add file/browser to pick one when several tests match. |
+| `file` | string |  | Part of the spec file path, e.g. "checkout.spec". |
+| `browser` | string |  | Playwright project name, e.g. "chromium" (see list_filters). |
+| `baselineRun` | integer (–9007199254740991) \| string | yes | The run the failure happened in. |
+| `branch` | string |  | Branch to check (default: the baseline run’s branch; "any" for every branch). |
+| `requirePasses` | integer (1–20) |  | First-try passes in a row needed to call it fixed (default 1). |
+
+Structured output fields: `project`, `test`, `status`, `confidence`, `explanation`, `baseline`, `branch`, `since`, `next`, `truncated`.
+
+## get_artifact
+
+**Get artifact** · toolset `debug`
+
+The contents of one test attachment: screenshots and visual diffs as images you can look at, text attachments inline, traces and videos as short-lived links (with a trace-viewer link and a local show-trace command).
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+| `attachment` | string |  | Attachment id (from get_result or get_failure_context). |
+| `result` | string |  | Instead of an id: a result, whose failing attempt’s diff, actual or screenshot is picked. |
+| `name` | string |  | With "result": the attachment name to pick (e.g. "trace", "screenshot"). |
+| `kind` | `"screenshot"` \| `"video"` \| `"trace"` \| `"image"` \| `"text"` \| `"other"` |  | With "result": the kind to pick. |
+
+Structured output fields: `project`, `attachment`, `resultUrl`, `delivered`, `url`, `traceViewerUrl`, `showTraceCommand`, `text`, `note`, `truncated`.
+
+## get_rerun_command
+
+**Get re-run command** · toolset `debug`
+
+The exact "npx playwright test …" command that re-runs a run’s failed and/or flaky tests on the same browser projects, one command per project. Read-only: it prints the command and never starts a run.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+| `run` | integer (–9007199254740991) \| string |  | Run whose tests to re-run (default "latest-failed"). |
+| `scope` | `"failed"` \| `"flaky"` \| `"failed-and-flaky"` |  | Which tests (default failed, which includes timed out). |
+| `tests` | string[] |  | Exactly these test or result ids of the run; overrides scope. |
+| `browser` | string |  | Playwright project name, e.g. "chromium" (see list_filters). |
+| `style` | `"locations"` \| `"grep"` |  | Select tests by file:line (default) or by --grep on titles. |
+| `repeat` | integer (2–100) |  | Add --repeat-each=N --retries=0, e.g. to reproduce a flake. |
+
+Structured output fields: `project`, `run`, `selected`, `commands`, `tests`, `notes`, `truncated`.
+
 ## Prompts
 
 | Prompt | Arguments | Purpose |
 |---|---|---|
+| `triage_run` | `project?`, `run?` | Group a red run’s failures by root cause and get an ordered fix list, noting which failures are new. |
+| `debug_test` | `project?`, `test`, `run?` | Find out why one test fails and what change fixes it, then how to confirm the fix. |
+| `investigate_flake` | `project?`, `test` | Decide whether a test is flaky or broken, classify the defect, and propose a stabilisation. |
+| `branch_check` | `project?`, `branch` | Compare a branch’s latest run with the base branch and get a go / no-go. |
 
 ## Resources
 
