@@ -7,6 +7,8 @@ import {
   type EventBatchResponse,
   type RunFinish,
   type RunFinishResponse,
+  type RunHeartbeat,
+  type RunHeartbeatResponse,
   type RunStart,
   type RunStartResponse,
   type UploadInstruction,
@@ -36,7 +38,12 @@ export class IngestClient {
     private readonly log: (msg: string) => void,
   ) {}
 
-  private async request<T>(path: string, body: unknown, attempt = 0): Promise<T> {
+  private async request<T>(
+    path: string,
+    body: unknown,
+    attempt = 0,
+    { maxRetries = this.opts.maxRetries, timeoutMs }: { maxRetries?: number; timeoutMs?: number } = {},
+  ): Promise<T> {
     const url = `${this.opts.serverUrl}${path}`;
     const json = JSON.stringify(body);
     let payload: BodyInit = json;
@@ -50,18 +57,19 @@ export class IngestClient {
       headers['content-encoding'] = 'gzip';
     }
     try {
-      const res = await fetch(url, { method: 'POST', headers, body: payload });
+      const signal = timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined;
+      const res = await fetch(url, { method: 'POST', headers, body: payload, signal });
       if (!res.ok) {
         const text = await res.text().catch(() => '');
         throw new HttpError(res.status, `${res.status} ${path}: ${text.slice(0, 500)}`);
       }
       return (await res.json()) as T;
     } catch (err) {
-      if (isRetryable(err) && attempt < this.opts.maxRetries) {
+      if (isRetryable(err) && attempt < maxRetries) {
         const delay = Math.min(8000, 500 * 2 ** attempt);
         this.log(`request ${path} failed (${(err as Error).message}); retrying in ${delay}ms`);
         await sleep(delay);
-        return this.request<T>(path, body, attempt + 1);
+        return this.request<T>(path, body, attempt + 1, { maxRetries, timeoutMs });
       }
       throw err;
     }
@@ -85,6 +93,11 @@ export class IngestClient {
 
   finishRun(runId: string, body: RunFinish) {
     return this.request<RunFinishResponse>(`/api/ingest/runs/${runId}/finish`, body);
+  }
+
+  /** One attempt, bounded: the next beat is the retry. */
+  heartbeat(runId: string, body: RunHeartbeat) {
+    return this.request<RunHeartbeatResponse>(`/api/ingest/runs/${runId}/heartbeat`, body, 0, { maxRetries: 0, timeoutMs: 10_000 });
   }
 
   async upload(

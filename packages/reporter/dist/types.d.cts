@@ -21,6 +21,12 @@ export interface ReporterOptions {
   };
   /** How long onEnd waits for pending uploads (ms). Default 120000. */
   uploadTimeoutMs?: number;
+  /**
+   * How often the run tells the server it is alive while tests run (ms), so a
+   * long silent stretch is not taken for a dead reporter. 0 disables.
+   * Default 30000. Env: PW_REPORTER_HEARTBEAT_MS
+   */
+  heartbeatIntervalMs?: number;
 }
 export interface ResolvedOptions {
   token: string;
@@ -33,6 +39,7 @@ export interface ResolvedOptions {
   batchSize: number;
   batchIntervalMs: number;
   uploadTimeoutMs: number;
+  heartbeatIntervalMs: number;
   maxRetries: number;
 }
 //#endregion

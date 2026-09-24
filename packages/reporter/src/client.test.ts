@@ -14,6 +14,7 @@ const options = (overrides: Partial<ResolvedOptions> = {}): ResolvedOptions => (
   batchSize: 50,
   batchIntervalMs: 1000,
   uploadTimeoutMs: 120_000,
+  heartbeatIntervalMs: 30_000,
   maxRetries: 2,
   ...overrides,
 });
@@ -204,5 +205,17 @@ describe('upload', () => {
   it('fails clearly when the attachment has neither a path nor a body', async () => {
     await expect(withTimers(client().upload(instruction, {}, 'image/png'))).rejects.toThrow(/neither path nor body/);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('heartbeat', () => {
+  it('posts the shard to the heartbeat endpoint once, even when it fails', async () => {
+    fetchMock.mockResolvedValue(fail(503));
+    await expect(withTimers(client({ maxRetries: 5 }).heartbeat('run-1', { shardIndex: 2 }))).rejects.toThrow(/503/);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://reports.example.test/api/ingest/runs/run-1/heartbeat');
+    expect(JSON.parse(init.body)).toEqual({ shardIndex: 2 });
+    expect(init.signal).toBeInstanceOf(AbortSignal);
   });
 });
