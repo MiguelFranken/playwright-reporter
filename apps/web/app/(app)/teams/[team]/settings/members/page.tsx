@@ -31,6 +31,7 @@ async function MembersContent({ params }: { params: Params }) {
     userId: m.userId,
     name: m.name,
     email: m.email,
+    image: m.image,
     role: m.role as TeamRoleName,
     instanceRole: m.instanceRole,
     banned: m.banned,

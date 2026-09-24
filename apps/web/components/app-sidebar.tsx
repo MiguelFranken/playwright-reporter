@@ -55,6 +55,7 @@ import {
 import { Skeleton } from '@miguelfranken/ui/components/skeleton';
 import { authClient } from '@/lib/auth/client';
 import { isActivePath, useActiveTeam, type SidebarTeam, type SidebarUser } from '@/components/nav-model';
+import { ProfileAvatar } from '@/components/profile-avatar';
 import { cn } from '@miguelfranken/ui/lib/cn';
 
 export type { SidebarProject, SidebarTeam, SidebarUser } from '@/components/nav-model';
@@ -326,7 +327,7 @@ export function TeamSwitcher({ teams }: { teams: SidebarTeam[] }) {
   const team = useActiveTeam(teams);
   const label = (
     <>
-      <BrandMark />
+      {team?.image ? <ProfileAvatar name={team.name} image={team.image} shape="square" /> : <BrandMark />}
       <span className="grid flex-1 text-left leading-tight">
         <span className="truncate text-sm font-semibold">{team?.name ?? 'Playwright Reporter'}</span>
         <span className="truncate text-xs text-sidebar-foreground/70">{team ? 'Playwright Reporter' : 'All teams'}</span>
@@ -357,7 +358,11 @@ export function TeamSwitcher({ teams }: { teams: SidebarTeam[] }) {
           <DropdownMenuLabel>Teams</DropdownMenuLabel>
           {teams.map((t) => (
             <DropdownMenuItem key={t.slug} render={<Link href={`/teams/${t.slug}`} />}>
-              <Building2 className="opacity-60" />
+              {t.image ? (
+                <ProfileAvatar name={t.name} image={t.image} shape="square" size="sm" className="size-4" />
+              ) : (
+                <Building2 className="opacity-60" />
+              )}
               <span className="truncate">{t.name}</span>
               {t.slug === team?.slug ? <Check className="ms-auto size-4 text-accent-text" /> : null}
             </DropdownMenuItem>
@@ -393,9 +398,12 @@ export function UserMenu({ user }: { user: SidebarUser }) {
       <DropdownMenuTrigger
         render={
           <SidebarMenuButton size="lg" tooltip={user.email}>
-            <span className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-lg bg-accent-subtle text-eyebrow text-accent-text">
-              {initials(user.name || user.email)}
-            </span>
+            <ProfileAvatar
+              name={user.name || user.email}
+              image={user.image}
+              shape="square"
+              fallbackClassName="bg-accent-subtle text-eyebrow text-accent-text"
+            />
             <span className="grid flex-1 text-left leading-tight">
               <span className="truncate text-sm font-medium">{user.name}</span>
               <span className="truncate text-xs text-sidebar-foreground/70">{user.email}</span>
@@ -470,9 +478,4 @@ export function PlainSignOutButton({ next = '/login' }: { next?: string }) {
       {pending ? 'Signing out…' : 'Sign out'}
     </Button>
   );
-}
-
-function initials(value: string) {
-  const parts = value.split(/[\s@._-]+/).filter(Boolean);
-  return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).slice(0, 2) || value.slice(0, 2);
 }

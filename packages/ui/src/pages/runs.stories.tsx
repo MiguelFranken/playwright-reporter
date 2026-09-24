@@ -52,8 +52,8 @@ export const Default: Story = {
         }
         description="Every report this project has received, newest first."
       />
-      <Filters />
       <ActiveRuns hrefs={hrefs} runs={activeRuns} />
+      <Filters />
       <RunsTable hrefs={hrefs} runs={runs} />
       <Pagination page={1} pageSize={25} total={482} onPageChange={() => {}} />
     </div>
@@ -71,8 +71,8 @@ export const NoActiveRuns: Story = {
   render: () => (
     <div className="flex flex-col gap-6 p-8">
       <PageHeader title="Test Runs" description="Every report this project has received, newest first." />
-      <Filters />
       <ActiveRuns hrefs={hrefs} runs={[]} />
+      <Filters />
       <RunsTable hrefs={hrefs} runs={runs} />
       <Pagination page={3} pageSize={25} total={482} onPageChange={() => {}} />
     </div>

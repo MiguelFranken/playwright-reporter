@@ -9,6 +9,7 @@ import { audit } from '@/lib/auth/audit';
 import { baseUrl } from '@/lib/auth/config';
 import { generateInvitationToken, hashInvitationToken, invitationExpiry } from '@/lib/auth/invitations';
 import { validateSlug } from '@/lib/auth/slug';
+import { deleteAvatar, storeAvatar } from '@/lib/avatars/store';
 import { db } from '@/lib/db/drizzle';
 import { countTeamAdmins, getUserByEmail } from '@/lib/db/queries/teams';
 import { attachments, projects, teamInvitations, teamMembers, teams, type TeamRole } from '@/lib/db/schema';
@@ -40,6 +41,36 @@ export async function updateTeam(teamSlug: string, name: string, slug: string): 
   await audit('team.update', { actorId: access.user.id, teamId: access.team.id, target: { name: trimmed, slug } });
   revalidatePath('/', 'layout');
   return { ok: true, slug };
+}
+
+/** Replaces the team's profile image with the uploaded `file`. */
+export async function updateTeamAvatar(teamSlug: string, formData: FormData): Promise<Ok | Denied> {
+  const access = await teamForAction(teamSlug, { team: ['update'] });
+  if (denied(access)) return access;
+
+  const stored = await storeAvatar('teams', access.team.id, formData.get('file'));
+  if ('error' in stored) return actionError(stored.error);
+
+  await setTeamImage(access.team.id, stored.url);
+  await audit('team.avatar.update', { actorId: access.user.id, teamId: access.team.id });
+  revalidatePath('/', 'layout');
+  return { ok: true };
+}
+
+export async function removeTeamAvatar(teamSlug: string): Promise<Ok | Denied> {
+  const access = await teamForAction(teamSlug, { team: ['update'] });
+  if (denied(access)) return access;
+
+  await setTeamImage(access.team.id, null);
+  await audit('team.avatar.remove', { actorId: access.user.id, teamId: access.team.id });
+  revalidatePath('/', 'layout');
+  return { ok: true };
+}
+
+async function setTeamImage(teamId: string, image: string | null) {
+  const [previous] = await db.select({ image: teams.image }).from(teams).where(eq(teams.id, teamId));
+  await db.update(teams).set({ image, updatedAt: new Date() }).where(eq(teams.id, teamId));
+  if (previous?.image !== image) await deleteAvatar('teams', teamId, previous?.image);
 }
 
 // ------------------------------------------------------------------ projects

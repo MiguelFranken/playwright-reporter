@@ -1,6 +1,6 @@
 {
-  "id": "3e120d1a-719b-42ff-a7c3-36856967ce0d",
-  "prevId": "a619ad38-cc81-4e1b-96fc-1e96138d72bd",
+  "id": "796cdd3b-6f5d-46c1-b2ce-c5215556da31",
+  "prevId": "3e120d1a-719b-42ff-a7c3-36856967ce0d",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1784,6 +1784,32 @@
           "notNull": true,
           "default": "now()"
         },
+        "stale_after_ms": {
+          "name": "stale_after_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 300000
+        },
+        "end_reason": {
+          "name": "end_reason",
+          "type": "run_end_reason",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "watchdog_id": {
+          "name": "watchdog_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "watchdog_claimed_at": {
+          "name": "watchdog_claimed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -2520,6 +2546,14 @@
         "local"
       ]
     },
+    "public.run_end_reason": {
+      "name": "run_end_reason",
+      "schema": "public",
+      "values": [
+        "reporter",
+        "stale"
+      ]
+    },
     "public.run_status": {
       "name": "run_status",
       "schema": "public",
@@ -2540,7 +2574,8 @@
         "passed",
         "failed",
         "timedout",
-        "interrupted"
+        "interrupted",
+        "incomplete"
       ]
     },
     "public.test_outcome": {

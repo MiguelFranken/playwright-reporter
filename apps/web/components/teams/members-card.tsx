@@ -20,12 +20,14 @@ import { Input } from '@miguelfranken/ui/components/input';
 import { Label } from '@miguelfranken/ui/components/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@miguelfranken/ui/components/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@miguelfranken/ui/components/table';
+import { ProfileAvatar } from '@/components/profile-avatar';
 import { TEAM_ROLE_DESCRIPTIONS, TEAM_ROLE_LABELS, type TeamRoleName } from '@/lib/auth/permissions';
 
 export type MemberRow = {
   userId: string;
   name: string;
   email: string;
+  image: string | null;
   role: TeamRoleName;
   instanceRole: string;
   banned: boolean;
@@ -163,6 +165,7 @@ function MemberRowView({
   return (
     <TableRow>
       <TableCell className="font-medium">
+        <ProfileAvatar name={member.name || member.email} image={member.image} size="sm" className="me-2 inline-flex align-middle" />
         {member.name}
         {isSelf ? <span className="ml-1.5 text-xs text-muted-foreground">(you)</span> : null}
         {member.instanceRole === 'superadmin' ? (

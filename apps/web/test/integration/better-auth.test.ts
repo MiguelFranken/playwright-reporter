@@ -126,7 +126,12 @@ describe('signInEmail', () => {
     await createAccount('tamper@example.test');
     const cookie = await signInCookie('tamper@example.test');
 
-    actor.useRealSession({ cookie: cookie.replace(/=(.)/, '=X') });
+    // Swap the first character of the value for a different one; always
+    // writing `X` was a no-op whenever the token already started with it.
+    const tampered = cookie.replace(/=(.)/, (_, first: string) => `=${first === 'X' ? 'Y' : 'X'}`);
+    expect(tampered).not.toBe(cookie);
+
+    actor.useRealSession({ cookie: tampered });
     expect(await getSession()).toBeNull();
   });
 });
@@ -148,5 +153,22 @@ describe('rate limiting', () => {
     const rows = await db.select().from(rateLimits);
     expect(rows.length).toBeGreaterThan(0);
     expect(rows[0].count).toBeGreaterThan(0);
+  });
+});
+
+describe('updateUser', () => {
+  test('cannot set the profile image: only the avatar actions write it', async ({ db, actor }) => {
+    actor.useRealSession();
+    const user = await createAccount('image@example.test');
+    const cookie = await signInCookie('image@example.test');
+
+    await expect(
+      auth.api.updateUser({ body: { name: 'Renamed', image: 'https://tracker.example/pixel.gif' }, headers: { cookie } }),
+    ).rejects.toThrow(/account page/);
+    // A name change on its own still goes through.
+    await auth.api.updateUser({ body: { name: 'Renamed' }, headers: { cookie } });
+
+    const [row] = await db.select().from(users).where(eq(users.id, user.id));
+    expect(row).toMatchObject({ name: 'Renamed', image: null });
   });
 });

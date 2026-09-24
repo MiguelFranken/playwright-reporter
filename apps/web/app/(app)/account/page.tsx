@@ -2,12 +2,14 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { ChangeNameForm, ChangePasswordForm, SessionsCard } from '@/components/auth/account-forms';
+import { AvatarUpload } from '@/components/avatar-upload';
 import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
 import { Badge } from '@miguelfranken/ui/components/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@miguelfranken/ui/components/card';
 import { Skeleton } from '@miguelfranken/ui/components/skeleton';
 import { requireUser } from '@/lib/auth/access';
 import { listMyTeams } from '@/lib/db/queries/teams';
+import { removeMyAvatar, updateMyAvatar } from '@/app/(app)/account/actions';
 
 export const metadata: Metadata = { title: 'Account' };
 
@@ -44,6 +46,7 @@ async function AccountContent() {
           <CardDescription>How you appear to the rest of your teams.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
+          <AvatarUpload name={user.name || user.email} image={user.image} label="Profile image" upload={updateMyAvatar} remove={removeMyAvatar} />
           <ChangeNameForm name={user.name} />
           <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1.5 text-sm">
             <dt className="text-muted-foreground">Email</dt>

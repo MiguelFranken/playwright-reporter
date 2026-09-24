@@ -44,6 +44,10 @@ export default function RunsPage({ params, searchParams }: Props) {
         description="Every report this project has received, newest first."
       />
 
+      <Suspense fallback={null}>
+        <Active params={params} />
+      </Suspense>
+
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <UrlSearch placeholder="Search commit, branch or #number" className="lg:min-w-72" />
         <div className="flex flex-wrap items-center gap-2">
@@ -54,10 +58,6 @@ export default function RunsPage({ params, searchParams }: Props) {
           <RangeToggle param="range" options={[7, 30, 90]} allowAll />
         </div>
       </div>
-
-      <Suspense fallback={null}>
-        <Active params={params} />
-      </Suspense>
 
       <Suspense fallback={<TableRowsSkeleton rows={10} columns={[12, 34, 16, 20, 8, 10]} className="panel" />}>
         <Results params={params} searchParams={searchParams} />

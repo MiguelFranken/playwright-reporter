@@ -9,6 +9,7 @@ import { actionError, denied, getCurrentUser, type Denied } from '@/lib/auth/acc
 import { audit } from '@/lib/auth/audit';
 import { auth } from '@/lib/auth/auth';
 import { validateSlug } from '@/lib/auth/slug';
+import { deleteAvatar } from '@/lib/avatars/store';
 import { db } from '@/lib/db/drizzle';
 import { getUserById } from '@/lib/db/queries/teams';
 import { attachments, projects, runs, teamMembers, teams, users } from '@/lib/db/schema';
@@ -90,6 +91,7 @@ export async function deleteTeam(teamId: string, confirmation: string): Promise<
 
   // Artifact bytes go afterwards and are not fatal: the rows are already gone.
   void deleteArtifacts(keys);
+  void deleteAvatar('teams', team.id, team.image);
 
   revalidatePath('/', 'layout');
   return { ok: true };
@@ -199,6 +201,7 @@ export async function deleteUserAccount(userId: string): Promise<Ok | Denied> {
   // Memberships and sessions cascade; audit rows survive with a null actor.
   await db.delete(users).where(eq(users.id, userId));
   await audit('user.delete', { actorId: actor.actorId, target: { userId, email: user.email } });
+  void deleteAvatar('users', user.id, user.image);
   revalidatePath('/admin/users');
   return { ok: true };
 }
