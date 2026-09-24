@@ -342,7 +342,14 @@ function num(v) {
 function detectExecutor(env) {
 	return env.CI && !["false", "0"].includes(env.CI.toLowerCase()) ? "ci" : "local";
 }
-function collectCiInfo(env) {
+/** Explicit overrides win over what was detected; see `ReporterOptions.git` / `.ci`. */
+function collectCiInfo(env, overrides = {}) {
+	return {
+		...detectCiInfo(env),
+		...overrides
+	};
+}
+function detectCiInfo(env) {
 	if (env.GITHUB_ACTIONS) {
 		const base = `${env.GITHUB_SERVER_URL ?? "https://github.com"}/${env.GITHUB_REPOSITORY}`;
 		return {
@@ -384,7 +391,15 @@ function collectCiInfo(env) {
 	if (env.CI) return { provider: "unknown" };
 	return {};
 }
-function collectGitInfo(config, env) {
+function collectGitInfo(config, env, overrides = {}) {
+	const merged = {
+		...detectGitInfo(config, env),
+		...overrides
+	};
+	if (overrides.sha) merged.shortSha = overrides.sha.slice(0, 7);
+	return merged;
+}
+function detectGitInfo(config, env) {
 	const info = {};
 	const meta = config.metadata ?? {};
 	const gc = meta.gitCommit;
@@ -512,6 +527,10 @@ function detectCiRunId(env) {
 	if (env.BUILD_BUILDID) return `azp-${env.BUILD_BUILDID}`;
 	if (env.BUILD_NUMBER && env.JENKINS_URL) return `jenkins-${env.JOB_NAME ?? "job"}-${env.BUILD_NUMBER}`;
 }
+/** Drops unset and blank values, so an empty env var (`E2E_COMMIT_SHA: ""`) overrides nothing. */
+function defined(values) {
+	return Object.fromEntries(Object.entries(values).map(([k, v]) => [k, v?.trim()]).filter(([, v]) => v));
+}
 function resolveOptions(opts = {}, env = process.env) {
 	const token = opts.token ?? env.PW_REPORTER_TOKEN;
 	const serverUrl = (opts.serverUrl ?? env.PW_REPORTER_URL)?.replace(/\/+$/, "");
@@ -528,7 +547,20 @@ function resolveOptions(opts = {}, env = process.env) {
 		batchSize: opts.batch?.size ?? 50,
 		batchIntervalMs: opts.batch?.intervalMs ?? 2e3,
 		uploadTimeoutMs: opts.uploadTimeoutMs ?? 12e4,
-		maxRetries: 5
+		maxRetries: 5,
+		git: defined({
+			branch: opts.git?.branch ?? env.PW_REPORTER_GIT_BRANCH,
+			sha: opts.git?.sha ?? env.PW_REPORTER_GIT_SHA,
+			message: opts.git?.message ?? env.PW_REPORTER_GIT_MESSAGE,
+			repoUrl: opts.git?.repoUrl ?? env.PW_REPORTER_GIT_REPO_URL,
+			authorName: opts.git?.authorName ?? env.PW_REPORTER_GIT_AUTHOR
+		}),
+		ci: defined({
+			provider: opts.ci?.provider ?? env.PW_REPORTER_CI_PROVIDER,
+			buildUrl: opts.ci?.buildUrl ?? env.PW_REPORTER_BUILD_URL,
+			buildNumber: opts.ci?.buildNumber ?? env.PW_REPORTER_BUILD_NUMBER,
+			job: opts.ci?.job ?? env.PW_REPORTER_CI_JOB
+		})
 	};
 }
 /** Whether Playwright was started to list the tests rather than run them. */
@@ -663,8 +695,8 @@ var PlaywrightReporterApp = class {
 			executor: detectExecutor(env),
 			environment: opts.environment,
 			tags: opts.tags,
-			git: collectGitInfo(config, env),
-			ci: collectCiInfo(env),
+			git: collectGitInfo(config, env, opts.git),
+			ci: collectCiInfo(env, opts.ci),
 			system: collectSystemInfo(),
 			playwright: collectPlaywrightInfo(config)
 		};
