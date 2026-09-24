@@ -21,6 +21,31 @@ export interface ReporterOptions {
   };
   /** How long onEnd waits for pending uploads (ms). Default 120000. */
   uploadTimeoutMs?: number;
+  /**
+   * The commit under test, for runs where neither a CI provider's variables nor
+   * a git checkout say it (a test image in Kubernetes, say). Wins over what the
+   * reporter detects. Env: PW_REPORTER_GIT_BRANCH, PW_REPORTER_GIT_SHA,
+   * PW_REPORTER_GIT_MESSAGE, PW_REPORTER_GIT_REPO_URL, PW_REPORTER_GIT_AUTHOR
+   */
+  git?: GitOverrides;
+  /**
+   * The build that ran the tests, likewise. Env: PW_REPORTER_CI_PROVIDER,
+   * PW_REPORTER_BUILD_URL, PW_REPORTER_BUILD_NUMBER, PW_REPORTER_CI_JOB
+   */
+  ci?: CiOverrides;
+}
+export interface GitOverrides {
+  branch?: string;
+  sha?: string;
+  message?: string;
+  repoUrl?: string;
+  authorName?: string;
+}
+export interface CiOverrides {
+  provider?: string;
+  buildUrl?: string;
+  buildNumber?: string;
+  job?: string;
 }
 export interface ResolvedOptions {
   token: string;
@@ -34,6 +59,8 @@ export interface ResolvedOptions {
   batchIntervalMs: number;
   uploadTimeoutMs: number;
   maxRetries: number;
+  git: GitOverrides;
+  ci: CiOverrides;
 }
 //#endregion
 //# sourceMappingURL=types.d.mts.map

@@ -25,7 +25,12 @@ export function detectExecutor(env: NodeJS.ProcessEnv): Executor {
   return env.CI && !['false', '0'].includes(env.CI.toLowerCase()) ? 'ci' : 'local';
 }
 
-export function collectCiInfo(env: NodeJS.ProcessEnv): CiInfo {
+/** Explicit overrides win over what was detected; see `ReporterOptions.git` / `.ci`. */
+export function collectCiInfo(env: NodeJS.ProcessEnv, overrides: Partial<CiInfo> = {}): CiInfo {
+  return { ...detectCiInfo(env), ...overrides };
+}
+
+function detectCiInfo(env: NodeJS.ProcessEnv): CiInfo {
   if (env.GITHUB_ACTIONS) {
     const base = `${env.GITHUB_SERVER_URL ?? 'https://github.com'}/${env.GITHUB_REPOSITORY}`;
     return {
@@ -53,7 +58,15 @@ export function collectCiInfo(env: NodeJS.ProcessEnv): CiInfo {
   return {};
 }
 
-export function collectGitInfo(config: FullConfig, env: NodeJS.ProcessEnv): GitInfo {
+export function collectGitInfo(config: FullConfig, env: NodeJS.ProcessEnv, overrides: Partial<GitInfo> = {}): GitInfo {
+  const info = detectGitInfo(config, env);
+  const merged = { ...info, ...overrides };
+  // An overridden commit is a different commit: its short sha, not the checkout's.
+  if (overrides.sha) merged.shortSha = overrides.sha.slice(0, 7);
+  return merged;
+}
+
+function detectGitInfo(config: FullConfig, env: NodeJS.ProcessEnv): GitInfo {
   const info: GitInfo = {};
   // 1. Playwright's captureGitInfo output (structure documented as subject to change).
   const meta = (config.metadata ?? {}) as Record<string, any>;

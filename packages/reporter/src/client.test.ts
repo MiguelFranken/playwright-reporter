@@ -13,6 +13,8 @@ const options = (overrides: Partial<ResolvedOptions> = {}): ResolvedOptions => (
   debug: false,
   batchSize: 50,
   batchIntervalMs: 1000,
+  git: {},
+  ci: {},
   uploadTimeoutMs: 120_000,
   maxRetries: 2,
   ...overrides,
