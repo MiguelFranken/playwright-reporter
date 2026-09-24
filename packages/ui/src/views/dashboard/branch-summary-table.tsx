@@ -32,7 +32,7 @@ function rateClass(rate: number | null) {
 
 export function BranchSummaryTable({ hrefs, rows }: { hrefs: BranchSummaryHrefs; rows: BranchSummaryRow[] }) {
   if (rows.length === 0) {
-    return <EmptyState icon={GitBranch} title="No runs in this range" description="Runs grouped by git branch will appear here." className="py-8" />;
+    return <EmptyState icon={GitBranch} title="No runs in this range" description="Runs grouped by git branch will appear here." className="m-(--card-spacing) py-8" />;
   }
   return (
     <Table className="table-fixed">

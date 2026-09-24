@@ -58,7 +58,7 @@ function TestRow({ hrefs, t, right }: { hrefs: TestHealthHrefs; t: TestHealthRow
 
 export function FlakyTestsList({ hrefs, rows }: { hrefs: TestHealthHrefs; rows: TestHealthRow[] }) {
   if (rows.length === 0) {
-    return <EmptyState icon={ShieldCheck} title="No flaky tests" description="No test was flaky in this range." className="mx-4 mb-4 py-8" />;
+    return <EmptyState icon={ShieldCheck} title="No flaky tests" description="No test was flaky in this range." className="m-(--card-spacing) py-8" />;
   }
   return (
     <ul className="divide-y">
@@ -88,7 +88,7 @@ export function FlakyTestsList({ hrefs, rows }: { hrefs: TestHealthHrefs; rows: 
 
 export function ChronicFailuresList({ hrefs, rows }: { hrefs: TestHealthHrefs; rows: TestHealthRow[] }) {
   if (rows.length === 0) {
-    return <EmptyState icon={ShieldCheck} title="No chronic failures" description="No test is failing repeatedly in this range." className="mx-4 mb-4 py-8" />;
+    return <EmptyState icon={ShieldCheck} title="No chronic failures" description="No test is failing repeatedly in this range." className="m-(--card-spacing) py-8" />;
   }
   return (
     <ul className="divide-y">
