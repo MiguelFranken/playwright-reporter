@@ -577,8 +577,19 @@ async function settleOpenResults(tx: Tx | typeof db, runId: string) {
     .where(and(eq(testResults.runId, runId), eq(testResults.outcome, 'running')));
 }
 
+/**
+ * Read paths call `markStaleRuns` on every render; a run only turns stale
+ * after ten minutes, so checking a project more than once in this interval
+ * per instance is a write query for nothing.
+ */
+const STALE_CHECK_MS = 30_000;
+const lastStaleCheck = new Map<string, number>();
+
 /** Marks runs that stopped reporting as incomplete. Called lazily from read paths. */
-export async function markStaleRuns(projectId: string) {
+export async function markStaleRuns(projectId: string, { force = false }: { force?: boolean } = {}) {
+  const now = Date.now();
+  if (!force && now - (lastStaleCheck.get(projectId) ?? 0) < STALE_CHECK_MS) return;
+  lastStaleCheck.set(projectId, now);
   const cutoff = new Date(Date.now() - STALE_RUN_MS);
   const stale = await db
     .update(runs)

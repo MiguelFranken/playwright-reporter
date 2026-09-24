@@ -15,6 +15,7 @@ declare class PlaywrightReporterApp implements Reporter {
   private uploadPromises;
   private uploadedBytes;
   private disabled;
+  private uploadTimer;
   constructor(options?: ReporterOptions);
   printsToStdio(): boolean;
   private log;
@@ -26,6 +27,10 @@ declare class PlaywrightReporterApp implements Reporter {
   onEnd(result: FullResult): Promise<void>;
   onExit(): Promise<void>;
   private sendBatch;
+  /**
+   * Uploads start a moment after a test ends, so the attachments of tests that
+   * end close together share one upload-urls request. `onEnd` passes `now`.
+   */
   private scheduleUploads;
   private uploadBatch;
   private relFile;

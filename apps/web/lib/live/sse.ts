@@ -4,6 +4,9 @@ import type { RunEvent } from '@/lib/db/schema';
 const POLL_MS = 1000;
 /** Poll interval an idle stream backs off to. */
 const IDLE_POLL_MS = 4000;
+/** …and after a quiet minute (a project page with no run going), further still. */
+const QUIET_POLL_MS = 10_000;
+const QUIET_AFTER_MS = 60_000;
 const PING_MS = 15_000;
 /** How often `isDone` is asked; the stream normally ends on an `endsWith` event first. */
 const DONE_CHECK_MS = 30_000;
@@ -87,6 +90,7 @@ export function sseResponse(request: Request, source: SseSource) {
 
       let interval = POLL_MS;
       let idleTicks = 0;
+      let lastEventAt = Date.now();
       let lastDoneCheck = -Infinity;
       let doneSince: number | null = null;
       const tick = async () => {
@@ -112,7 +116,9 @@ export function sseResponse(request: Request, source: SseSource) {
           }
           // A short pause between tests is normal; back off only once the run has gone quiet.
           idleTicks = events.length ? 0 : idleTicks + 1;
-          interval = idleTicks < 3 || doneSince !== null ? POLL_MS : Math.min(IDLE_POLL_MS, Math.round(interval * 1.5));
+          if (events.length) lastEventAt = Date.now();
+          const ceiling = Date.now() - lastEventAt >= QUIET_AFTER_MS ? QUIET_POLL_MS : IDLE_POLL_MS;
+          interval = idleTicks < 3 || doneSince !== null ? POLL_MS : Math.min(ceiling, Math.round(interval * 1.5));
         } catch (err) {
           console.error('[sse] poll failed', err);
         }

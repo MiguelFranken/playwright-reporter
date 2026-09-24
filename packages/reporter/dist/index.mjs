@@ -526,7 +526,7 @@ function resolveOptions(opts = {}, env = process.env) {
 		artifacts: opts.artifacts ?? envBool(env.PW_REPORTER_ARTIFACTS) ?? true,
 		debug: opts.debug ?? envBool(env.PW_REPORTER_DEBUG) ?? false,
 		batchSize: opts.batch?.size ?? 50,
-		batchIntervalMs: opts.batch?.intervalMs ?? 1e3,
+		batchIntervalMs: opts.batch?.intervalMs ?? 2e3,
 		uploadTimeoutMs: opts.uploadTimeoutMs ?? 12e4,
 		maxRetries: 5
 	};
@@ -608,6 +608,7 @@ var EventQueue = class {
 const MAX_TEXT = 65536;
 const MAX_STEPS = 2e3;
 const UPLOAD_CONCURRENCY = 4;
+const UPLOAD_DEBOUNCE_MS = 2e3;
 var PlaywrightReporterApp = class {
 	opts;
 	client;
@@ -622,6 +623,7 @@ var PlaywrightReporterApp = class {
 	uploadPromises = [];
 	uploadedBytes = 0;
 	disabled = false;
+	uploadTimer;
 	constructor(options = {}) {
 		this.opts = resolveOptions(options);
 		if (!this.opts) {
@@ -764,7 +766,7 @@ var PlaywrightReporterApp = class {
 		if (!this.runId) return;
 		try {
 			await this.queue.drain();
-			this.scheduleUploads();
+			this.scheduleUploads(true);
 			await withTimeout(Promise.all(this.uploadPromises), this.opts.uploadTimeoutMs, "uploads");
 			const res = await this.client.finishRun(this.runId, {
 				shardIndex: this.shardIndex,
@@ -795,8 +797,19 @@ var PlaywrightReporterApp = class {
 			this.warn(`dropping ${events.length} events: ${err.message}`);
 		}
 	}
-	scheduleUploads() {
+	/**
+	* Uploads start a moment after a test ends, so the attachments of tests that
+	* end close together share one upload-urls request. `onEnd` passes `now`.
+	*/
+	scheduleUploads(now = false) {
+		if (this.uploadTimer) clearTimeout(this.uploadTimer);
+		this.uploadTimer = void 0;
 		if (this.uploads.length === 0) return;
+		if (!now) {
+			this.uploadTimer = setTimeout(() => this.scheduleUploads(true), UPLOAD_DEBOUNCE_MS);
+			this.uploadTimer.unref?.();
+			return;
+		}
 		const batch = this.uploads.splice(0, this.uploads.length);
 		const p = this.uploadBatch(batch).catch((err) => this.warn(`upload batch failed: ${err.message}`));
 		this.uploadPromises.push(p);
