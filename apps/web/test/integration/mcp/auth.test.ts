@@ -67,9 +67,10 @@ describe('bearer authentication', () => {
   test('records when a token was last used', async ({ db, tenant }) => {
     const { token, id } = await createPat(tenant.adminUser);
     await rawPost(initializeBody, { authorization: `Bearer ${token}` });
-    await new Promise((r) => setTimeout(r, 50));
-    const [row] = await db.select().from(personalAccessTokens).where(eq(personalAccessTokens.id, id));
-    expect(row.lastUsedAt).toBeInstanceOf(Date);
+    // The write is fire-and-forget (it must never slow a call down), so wait for it.
+    await expect
+      .poll(async () => (await db.select().from(personalAccessTokens).where(eq(personalAccessTokens.id, id)))[0].lastUsedAt, { timeout: 5_000 })
+      .toBeInstanceOf(Date);
   });
 });
 
