@@ -1,6 +1,6 @@
 'use client';
 
-import { Camera, CircleAlert, Download, ExternalLink, FileText, Film, ListOrdered, Paperclip, Route, Terminal } from 'lucide-react';
+import { Camera, CircleAlert, Clock, Download, ExternalLink, FileText, Film, ListOrdered, Paperclip, Route, Terminal } from 'lucide-react';
 import { useState } from 'react';
 import { EmptyState } from '../../patterns/empty-state';
 import { StatusBadge } from '../../patterns/status-badge';
@@ -23,6 +23,10 @@ export interface AttachmentView {
   traceUrl?: string;
   /** Inline text content for small text attachments (read server-side). */
   text?: string;
+  /** Set once `status` is `expired`: when the retention policy deleted the bytes. */
+  expiredAt?: string | null;
+  /** When the retention policy will delete the bytes; absent while nothing expires. */
+  expiresAt?: string | null;
 }
 
 export interface AttemptView {
@@ -169,6 +173,8 @@ function AttemptCard({ attempt }: { attempt: AttemptView }) {
                   <figure key={v.id} className="flex flex-col gap-1">
                     {v.status === 'uploaded' ? (
                       <video controls preload="metadata" src={v.url} className="max-w-full rounded-md border bg-black" />
+                    ) : v.status === 'expired' ? (
+                      <ExpiredPlaceholder a={v} />
                     ) : (
                       <Pending />
                     )}
@@ -191,16 +197,22 @@ function AttemptCard({ attempt }: { attempt: AttemptView }) {
                     <span className="text-sm">{t.name}</span>
                     <span className="text-xs text-muted-foreground">{formatBytes(t.sizeBytes)}</span>
                     <div className="ml-auto flex gap-2">
-                      {t.status === 'uploaded' && t.traceUrl ? (
-                        <Button size="sm" nativeButton={false} render={<a href={t.traceUrl} target="_blank" rel="noreferrer" />}>
-                          <ExternalLink className="size-3.5" /> Open in Trace Viewer
-                        </Button>
+                      {t.status === 'expired' ? (
+                        <Expired a={t} />
                       ) : (
-                        <Pending />
+                        <>
+                          {t.status === 'uploaded' && t.traceUrl ? (
+                            <Button size="sm" nativeButton={false} render={<a href={t.traceUrl} target="_blank" rel="noreferrer" />}>
+                              <ExternalLink className="size-3.5" /> Open in Trace Viewer
+                            </Button>
+                          ) : (
+                            <Pending />
+                          )}
+                          <Button size="sm" variant="outline" nativeButton={false} render={<a href={`${t.url}?download`} />}>
+                            <Download className="size-3.5" /> Download
+                          </Button>
+                        </>
                       )}
-                      <Button size="sm" variant="outline" nativeButton={false} render={<a href={`${t.url}?download`} />}>
-                        <Download className="size-3.5" /> Download
-                      </Button>
                     </div>
                   </div>
                 ))}
@@ -235,9 +247,12 @@ function AttemptCard({ attempt }: { attempt: AttemptView }) {
                       </Badge>
                       <span className="text-xs text-muted-foreground">
                         {a.contentType} · {formatBytes(a.sizeBytes)}
+                        {a.status === 'uploaded' && a.expiresAt ? <> · kept until {formatDay(a.expiresAt)}</> : null}
                       </span>
                       <div className="ml-auto flex gap-1">
-                        {a.status === 'uploaded' ? (
+                        {a.status === 'expired' ? (
+                          <Expired a={a} />
+                        ) : a.status === 'uploaded' ? (
                           <>
                             <Button size="xs" variant="ghost" nativeButton={false} render={<a href={a.url} target="_blank" rel="noreferrer" />}>
                               <ExternalLink className="size-3" /> Open
@@ -262,6 +277,36 @@ function AttemptCard({ attempt }: { attempt: AttemptView }) {
         </div>
       </Tabs>
     </section>
+  );
+}
+
+/** A day, fixed to UTC: this renders on the server and again in the browser, and both must agree. */
+function formatDay(iso: string) {
+  return new Date(iso).toLocaleDateString('en', { dateStyle: 'medium', timeZone: 'UTC' });
+}
+
+/** Why an old run's artifact has no link: the retention policy deleted it. */
+function expiredTitle(a: AttachmentView) {
+  return a.expiredAt ? `Deleted by the retention policy on ${formatDay(a.expiredAt)}` : 'Deleted by the retention policy';
+}
+
+function Expired({ a }: { a: AttachmentView }) {
+  return (
+    <Badge variant="outline" className="text-muted-foreground" title={expiredTitle(a)}>
+      <Clock aria-hidden />
+      expired
+    </Badge>
+  );
+}
+
+/** Stands in for media that can no longer be shown, keeping the grid's shape. */
+function ExpiredPlaceholder({ a }: { a: AttachmentView }) {
+  return (
+    <div className="flex min-h-32 flex-col items-center justify-center gap-1 rounded-md border border-dashed p-4 text-center text-xs text-muted-foreground">
+      <Clock className="size-4" aria-hidden />
+      <span className="font-medium">Expired</span>
+      <span>{expiredTitle(a)}.</span>
+    </div>
   );
 }
 
@@ -338,6 +383,7 @@ function Screenshots({ images }: { images: AttachmentView[] }) {
 }
 
 function Img({ a }: { a: AttachmentView }) {
+  if (a.status === 'expired') return <ExpiredPlaceholder a={a} />;
   if (a.status !== 'uploaded') return <Pending />;
   return (
     <a href={a.url} target="_blank" rel="noreferrer" className="block">

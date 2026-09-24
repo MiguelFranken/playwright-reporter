@@ -150,4 +150,8 @@ describe('name', () => {
   it('identifies the driver stored on the attachment row', () => {
     expect(storage.name).toBe('local');
   });
+
+  it('deletes expired artifacts itself: a directory has no lifecycle rules', () => {
+    expect(storage.retention).toBe('app');
+  });
 });

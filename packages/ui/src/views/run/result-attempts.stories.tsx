@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, userEvent, within } from 'storybook/test';
-import { attempts, cleanAttempt, failedAttempt } from '../../fixtures/attempts';
+import { attempts, cleanAttempt, expiredAttempt, failedAttempt } from '../../fixtures/attempts';
 import { ResultAttempts } from './result-attempts';
 
 const meta = {
@@ -23,6 +23,23 @@ export const Failed: Story = { args: { attempts: [failedAttempt] } };
 
 /** An attempt whose trace is still uploading offers no dead download link. */
 export const UploadPending: Story = { args: { attempts: [attempts[1]!] } };
+
+/**
+ * An old run after the retention policy deleted its artifacts: each one says
+ * so and offers no link that would only 410.
+ */
+export const ArtifactsExpired: Story = {
+  args: { attempts: [expiredAttempt] },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('tab', { name: /screenshots/i }));
+    await expect(canvas.getAllByText('Expired').length).toBeGreaterThan(0);
+    await expect(canvas.queryByRole('img')).toBeNull();
+    await userEvent.click(canvas.getByRole('tab', { name: /trace/i }));
+    await expect(canvas.queryByRole('link', { name: /trace viewer|download/i })).toBeNull();
+    await expect(canvas.getByText('expired')).toBeInTheDocument();
+  },
+};
 
 /** A failing attempt opens on its error, because that is what you came for. */
 export const OpensOnTheError: Story = {

@@ -8,6 +8,8 @@ const TOKEN_REFRESH_MS = 20 * 60 * 1000;
 const TOKEN_TTL_MS = 60 * 60 * 1000;
 /** The Blob API version the upload headers speak, as `@vercel/blob` sends it. */
 const BLOB_API_VERSION = '12';
+/** Pathnames per `del` call. */
+const BLOB_DELETE_CHUNK = 100;
 
 /**
  * Stores objects in a private Vercel Blob store.
@@ -20,6 +22,7 @@ const BLOB_API_VERSION = '12';
  */
 export class VercelBlobStorageAdapter implements StorageAdapter {
   readonly name = 'vercel-blob' as const;
+  readonly retention = 'app' as const;
   private signed: Promise<IssuedSignedToken> | null = null;
   private signedUntil = 0;
 
@@ -115,7 +118,14 @@ export class VercelBlobStorageAdapter implements StorageAdapter {
     return { stream: res.body, contentType, size: Number(m[3]), range: { start: Number(m[1]), end: Number(m[2]) } };
   }
 
+  /**
+   * Blob has no lifecycle rules, so expired artifacts are deleted from here
+   * (`retention = 'app'`). `del` takes pathnames and is fine with ones that no
+   * longer exist; large lists go in chunks to keep each request small.
+   */
   async delete(keys: string[]) {
-    if (keys.length) await del(keys, this.opts());
+    for (let i = 0; i < keys.length; i += BLOB_DELETE_CHUNK) {
+      await del(keys.slice(i, i + BLOB_DELETE_CHUNK), this.opts());
+    }
   }
 }
