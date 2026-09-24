@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.14](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.13...v0.0.14) (2026-09-24)
+
+### Features
+
+* an MCP server so AI assistants can read test results and debug failures ([#18](https://github.com/MiguelFranken/playwright-reporter/issues/18)) ([257fff0](https://github.com/MiguelFranken/playwright-reporter/commit/257fff01376a783a72aa1820a8af99e55efa2aff))
+
 ## [0.0.13](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.12...v0.0.13) (2026-09-24)
 
 ### Features
