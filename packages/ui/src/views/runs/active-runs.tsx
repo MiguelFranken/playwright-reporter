@@ -1,5 +1,7 @@
 import { GitBranch } from 'lucide-react';
 import { Link } from '../../provider';
+import { cn } from '../../lib/cn';
+import { commitTitle } from '../../lib/commit';
 import { CountsBar } from '../../patterns/counts-bar';
 import { StatusBadge, StatusDot } from '../../patterns/status-badge';
 import { Badge } from '../../components/badge';
@@ -31,6 +33,7 @@ export function ActiveRuns({ hrefs, runs }: { hrefs: RunsTableHrefs; runs: Activ
 
 function ActiveRunCard({ hrefs, run }: { hrefs: RunsTableHrefs; run: ActiveRun }) {
   const finished = run.counts.total - run.counts.running;
+  const title = commitTitle(run);
   const expected = Math.max(run.expectedTests, run.counts.total);
   return (
     <Link
@@ -52,8 +55,8 @@ function ActiveRunCard({ hrefs, run }: { hrefs: RunsTableHrefs; run: ActiveRun }
           started {formatRelative(run.startedAt)}
         </span>
       </div>
-      <p className="truncate text-sm" title={run.gitMessage ?? undefined}>
-        {run.gitMessage ?? <span className="text-muted-foreground">No commit message</span>}
+      <p className={cn('truncate text-sm', title.muted && 'text-muted-foreground')} title={run.gitMessage ?? undefined}>
+        {title.text}
       </p>
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         {run.gitBranch ? (

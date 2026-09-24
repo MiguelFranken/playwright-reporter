@@ -1,5 +1,7 @@
 import { ExternalLink } from 'lucide-react';
 import { Link } from '../../provider';
+import { cn } from '../../lib/cn';
+import { commitTitle } from '../../lib/commit';
 import { CountsBar } from '../../patterns/counts-bar';
 import { StatusBadge } from '../../patterns/status-badge';
 import { Badge } from '../../components/badge';
@@ -65,6 +67,7 @@ export function RunsTable({ hrefs, runs }: { hrefs: RunsTableHrefs; runs: RunLis
 function RunRow({ hrefs, run }: { hrefs: RunsTableHrefs; run: RunListItem }) {
   const href = hrefs.run(run.number);
   const commitUrl = run.gitCommitUrl;
+  const title = commitTitle(run);
   return (
     <TableRow>
       <TableCell className="align-top">
@@ -90,8 +93,8 @@ function RunRow({ hrefs, run }: { hrefs: RunsTableHrefs; run: RunListItem }) {
       </TableCell>
       <TableCell className="max-w-[420px] align-top whitespace-normal">
         <div className="flex flex-col gap-1">
-          <span className="line-clamp-1 break-all" title={run.gitMessage ?? undefined}>
-            {run.gitMessage ?? <span className="text-muted-foreground">No commit message</span>}
+          <span className={cn('line-clamp-1 break-all', title.muted && 'text-muted-foreground')} title={run.gitMessage ?? undefined}>
+            {title.text}
           </span>
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
             {run.gitShortSha ? (
