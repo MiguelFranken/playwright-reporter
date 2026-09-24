@@ -16,6 +16,9 @@ const PUBLIC = [
   // Redirecting an API request to an HTML login page would only confuse the
   // caller (an `EventSource`, the reporter, or the trace viewer).
   /^\/api\//,
+  // The Workflow SDK's queue calls these back (the run watchdog); a redirect
+  // would break every watchdog in local dev and self-hosted.
+  /^\/\.well-known\/workflow\//,
   /^\/_next\//,
   /^\/favicon/,
 ];

@@ -20,7 +20,11 @@
         "VERCEL_URL",
         "VERCEL_PROJECT_PRODUCTION_URL",
         "VERCEL_BRANCH_URL",
-        "TRUSTED_ORIGINS"
+        "TRUSTED_ORIGINS",
+        "RUN_STALE_TIMEOUT_MS",
+        "RUN_WATCHDOG_DRIVER",
+        "WORKFLOW_TARGET_WORLD",
+        "WORKFLOW_POSTGRES_URL"
       ]
     },
     "check-types": { "outputs": ["*.tsbuildinfo"] }
