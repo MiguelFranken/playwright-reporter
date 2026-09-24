@@ -120,9 +120,8 @@ describe('mcpClientSetups', () => {
     expect(mcpClientSetups({ baseUrl: BASE }).map((c) => c.id)).toEqual([...MCP_CLIENT_IDS]);
   });
 
-  it('marks the bridge and OAuth clients as coming soon, and only they', () => {
-    const soon = mcpClientSetups({ baseUrl: BASE }).filter((c) => c.status === 'coming-soon');
-    expect(soon.map((c) => c.id)).toEqual(['claude-desktop', 'web']);
+  it('marks every client as available now that the bridge and OAuth ship', () => {
+    expect(mcpClientSetups({ baseUrl: BASE }).filter((c) => c.status !== 'available')).toEqual([]);
   });
 
   it('offers install links for Cursor and VS Code only', () => {

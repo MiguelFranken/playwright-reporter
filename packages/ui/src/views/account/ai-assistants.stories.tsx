@@ -94,12 +94,12 @@ export const NoProjects: Story = {
   },
 };
 
-/** Clients that are not wired up yet still show their configuration, flagged. */
-export const ComingSoon: Story = {
+/** Claude Desktop goes through the stdio bridge; web assistants add a connector and sign in. */
+export const BridgeAndConnectors: Story = {
   args: { defaultClient: 'claude-desktop' },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByText('Coming soon')).toBeVisible();
+    await expect(await canvas.findByText(/bridge/)).toBeVisible();
     await userEvent.click(canvas.getByRole('tab', { name: 'claude.ai / ChatGPT' }));
     await expect(await canvas.findByText(/custom connector/)).toBeVisible();
   },

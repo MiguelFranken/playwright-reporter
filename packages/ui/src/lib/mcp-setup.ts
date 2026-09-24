@@ -175,7 +175,7 @@ export function mcpClientSetups(input: McpSetupInput): McpClientSetup[] {
       location: 'Terminal',
       language: 'bash',
       snippet: claudeCodeSnippet(input),
-      note: 'Run this once in a terminal. The server is then available in every Claude Code session on this machine.',
+      note: 'Run this once in a terminal. The server is then available in every Claude Code session on this machine. Without the --header line, Claude Code signs in through the browser instead (/mcp → Authenticate).',
     },
     cursor: {
       id: 'cursor',
@@ -218,20 +218,20 @@ export function mcpClientSetups(input: McpSetupInput): McpClientSetup[] {
     'claude-desktop': {
       id: 'claude-desktop',
       label: 'Claude Desktop',
-      status: 'coming-soon',
+      status: 'available',
       location: 'claude_desktop_config.json',
       language: 'json',
       snippet: claudeDesktopSnippet(input),
-      note: `Claude Desktop runs local servers only, so it connects through the ${MCP_BRIDGE_PACKAGE} bridge, which is not published yet.`,
+      note: `Claude Desktop starts local servers from this file, so it connects through the ${MCP_BRIDGE_PACKAGE} bridge (published next to the reporter; set up .npmrc the same way). Alternatively add the server URL as a connector and sign in, like claude.ai.`,
     },
     web: {
       id: 'web',
       label: 'claude.ai / ChatGPT',
-      status: 'coming-soon',
+      status: 'available',
       location: 'Custom connector URL',
       language: 'text',
       snippet: mcpUrl({ ...input, token: null }),
-      note: 'Web assistants add the server as a custom connector with this URL and sign in through the browser. That sign-in (OAuth) is not available yet.',
+      note: 'Add a custom connector with this URL (claude.ai: Settings → Connectors; ChatGPT: Settings → Apps). You sign in here and choose what it may read; disconnect it any time under Account → Connected apps.',
     },
   };
   return MCP_CLIENT_IDS.map((id) => byId[id]);
