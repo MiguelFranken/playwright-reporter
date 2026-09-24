@@ -5,11 +5,13 @@ import type { RunCounts } from '@miguelfranken/ui/patterns/counts-bar';
 import { RunErrors, type ErrorGroup } from '@miguelfranken/ui/views/run/run-errors';
 import { RunHeader, type RunHeaderData, type RunHeaderShard } from '@miguelfranken/ui/views/run/run-header';
 import type { RunResultRow } from '@miguelfranken/ui/views/run/run-result';
+import type { SpecSummary } from '@miguelfranken/ui/views/run/run-specs';
 import type { LiveEvent } from '@/lib/live/events';
 import {
   reduceErrorGroups,
   reduceHeader,
   reduceRows,
+  reviveDates,
   visibleRows,
   type HeaderState,
   type LiveRow,
@@ -17,6 +19,7 @@ import {
   type RowMap,
 } from '@/lib/live/reducers';
 import { runHrefs } from '@/lib/view-models';
+import type { LiveStore } from '@/lib/live/store';
 import { LiveConnection, useLivePart, useLivePeek, useLiveStore } from './live-store';
 
 type Header = HeaderState<RunHeaderData> & { shards: RunHeaderShard[] };
@@ -29,6 +32,8 @@ export function LiveRunHeader({
   cursor,
   streamUrl,
   pollUrl,
+  summaryUrl,
+  resultsUrl,
 }: {
   run: RunHeaderData;
   counts: RunCounts;
@@ -36,7 +41,10 @@ export function LiveRunHeader({
   cursor: number;
   streamUrl: string;
   pollUrl: string;
+  summaryUrl: string;
+  resultsUrl: string;
 }) {
+  const store = useLiveStore();
   const header = useLivePart<Header>('header', { run, counts, shards }, cursor, reduceHeader, run);
   const running = header.run.status === 'running';
   // A running run's elapsed time is derived from the clock, not from events.
@@ -53,9 +61,56 @@ export function LiveRunHeader({
       counts={header.counts}
       shards={header.shards}
       now={now}
-      liveIndicator={<LiveConnection streamUrl={streamUrl} pollUrl={pollUrl} enabled={run.status === 'running'} />}
+      liveIndicator={
+        <LiveConnection
+          streamUrl={streamUrl}
+          pollUrl={pollUrl}
+          enabled={run.status === 'running'}
+          onFinish={() => settleFinishedRun(store, summaryUrl, resultsUrl)}
+        />
+      }
     />
   );
+}
+
+/**
+ * Once a run has finished, the page takes the server's final numbers: the
+ * finish settles results still open in bulk, without an event for each. One
+ * summary request (plus the rows still shown as running) replaces what a
+ * route refresh used to do — without emptying the router cache.
+ */
+async function settleFinishedRun(store: LiveStore, summaryUrl: string, resultsUrl: string): Promise<boolean> {
+  const parts = ['specs', 'errors'].filter((p) => store.peek(p) !== undefined);
+  const res = await fetch(`${summaryUrl}?parts=${parts.join(',')}`, { cache: 'no-store' });
+  if (!res.ok) return false;
+  const body = (await res.json()) as {
+    header: { run: RunHeaderData; counts: RunCounts; shards: RunHeaderShard[] };
+    specs: SpecSummary[] | null;
+    errors: ErrorGroup[] | null;
+  };
+  const never = () => false;
+  store.merge<Header>('header', () => ({ ...body.header, run: reviveDates(body.header.run) }), never);
+  if (body.specs) store.merge<SpecSummary[]>('specs', () => body.specs!, never);
+  if (body.errors) store.merge<ErrorGroup[]>('errors', () => body.errors!, never);
+
+  const rows = store.peek<RowMap>('rows');
+  const open = rows ? [...rows.values()].filter((r) => r.outcome === 'running').map((r) => r.id) : [];
+  for (let i = 0; i < open.length; i += BACKFILL_BATCH) {
+    const ids = open.slice(i, i + BACKFILL_BATCH);
+    const page = await fetch(`${resultsUrl}?ids=${ids.join(',')}`, { cache: 'no-store' });
+    if (!page.ok) return false;
+    const fresh = ((await page.json()) as { rows: RunResultRow[] }).rows;
+    store.merge<RowMap>(
+      'rows',
+      (current) => {
+        const next = new Map(current);
+        for (const row of fresh) next.set(row.id, row);
+        return next;
+      },
+      never,
+    );
+  }
+  return true;
 }
 
 /** The run's counts as the header currently has them. */

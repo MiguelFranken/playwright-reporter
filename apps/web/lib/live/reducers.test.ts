@@ -6,8 +6,12 @@ import {
   matchesRowFilters,
   reduceCounts,
   reduceErrorGroups,
+  matchesRunFilters,
+  reduceActiveRuns,
   reduceHeader,
   reduceRows,
+  reduceRunsTable,
+  reviveDates,
   reduceRunCounts,
   reduceSpecs,
   visibleRows,
@@ -207,5 +211,39 @@ describe('reduceRunCounts', () => {
     const runs = [{ id: 'run-1', counts: { ...zero, total: 1, running: 1 }, cursor: 5 }];
     expect(reduceRunCounts(runs, begin(4))).toBe(runs);
     expect(reduceRunCounts(runs, end(6))[0]).toMatchObject({ cursor: 6, counts: { running: 0, passed: 1 } });
+  });
+});
+
+describe('runs list reducers', () => {
+  const run = { id: 'run-1', number: 7, status: 'running', durationMs: null, counts: zero, cursor: 0, shardTotal: 2, shards: [{ shardIndex: 1, status: 'running' }] };
+  const finished = (id: number, over = {}): LiveEvent => ({ id, type: 'run.finished', data: { status: 'failed', durationMs: 5000, ...over, ...meta } });
+
+  it('finishes a table row from the event, duration included', () => {
+    expect(reduceRunsTable([run], finished(3))[0]).toMatchObject({ status: 'failed', durationMs: 5000 });
+    // A stale run's event has no duration; the row keeps what it had.
+    expect(reduceRunsTable([run], finished(3, { status: 'incomplete', durationMs: undefined }))[0].durationMs).toBeNull();
+  });
+
+  it('moves shard progress on an active card and drops it once the run finishes', () => {
+    const second = reduceActiveRuns([run], { id: 2, type: 'shard.started', data: { shardIndex: 2, shardTotal: 2, expectedTests: 3, ...meta } });
+    expect(second[0].shards.map((sh) => [sh.shardIndex, sh.status])).toEqual([[1, 'running'], [2, 'running']]);
+    const done = reduceActiveRuns(second, { id: 3, type: 'shard.finished', data: { shardIndex: 1, status: 'passed', ...meta } });
+    expect(done[0].shards[0].status).toBe('passed');
+    expect(reduceActiveRuns(done, finished(4))).toEqual([]);
+  });
+
+  it('matches the SQL filters for a run that starts while the page is open', () => {
+    const r = { number: 12, status: 'running', gitBranch: 'feature/x', environment: 'local', gitMessage: 'Add footer', gitShortSha: 'abc1234', startedAt: new Date() };
+    expect(matchesRunFilters(r, {})).toBe(true);
+    expect(matchesRunFilters(r, { status: 'failed' })).toBe(false);
+    expect(matchesRunFilters(r, { branch: 'main' })).toBe(false);
+    expect(matchesRunFilters(r, { q: '#12' })).toBe(true);
+    expect(matchesRunFilters(r, { q: 'ABC' })).toBe(true);
+    expect(matchesRunFilters({ ...r, startedAt: new Date(Date.now() - 9 * 86_400_000) }, { days: 7 })).toBe(false);
+  });
+
+  it('revives the dates a JSON endpoint sends as strings', () => {
+    const at = '2026-09-24T10:00:00.000Z';
+    expect(reviveDates({ startedAt: at, finishedAt: null, gitMessage: 'x' })).toEqual({ startedAt: new Date(at), finishedAt: null, gitMessage: 'x' });
   });
 });

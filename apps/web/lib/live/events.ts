@@ -60,6 +60,9 @@ export interface ShardFinishedPayload {
 
 export interface RunFinishedPayload {
   status: string;
+  /** Absent on a run marked stale, which never finished. */
+  durationMs?: number;
+  finishedAt?: string;
 }
 
 /** What the SSE stream adds to every payload. */

@@ -129,7 +129,7 @@ async function Results({ params, searchParams }: Props) {
 
   return (
     <>
-      <LiveRunsTable base={base} runs={result.rows.map(toRunListItem)} cursor={result.cursor} />
+      <LiveRunsTable base={base} runs={result.rows.map(toRunListItem)} cursor={result.cursor} filters={filters} pageSize={result.pageSize} />
       <Pagination page={result.page} pageSize={result.pageSize} total={result.total} />
     </>
   );

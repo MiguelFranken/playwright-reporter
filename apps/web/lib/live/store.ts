@@ -34,6 +34,7 @@ export class LiveStore {
   /** Received events, ascending by id. */
   private log: LiveEvent[] = [];
   private listeners = new Set<() => void>();
+  private eventListeners = new Set<(ev: LiveEvent) => void>();
   private emitTimer: ReturnType<typeof setTimeout> | null = null;
   /** Bumped on every change; what `useSyncExternalStore` compares. */
   version = 0;
@@ -55,6 +56,14 @@ export class LiveStore {
   };
 
   getVersion = () => this.version;
+
+  /** Every new event, once — for views that react to one (a run appearing) rather than fold it. */
+  onEvent(listener: (ev: LiveEvent) => void) {
+    this.eventListeners.add(listener);
+    return () => {
+      this.eventListeners.delete(listener);
+    };
+  }
 
   private emit(immediate = false) {
     this.version++;
@@ -134,11 +143,12 @@ export class LiveStore {
   apply(ev: LiveEvent) {
     // A restarted stream sends events again; keep one copy, in id order.
     const last = this.lastEventId;
+    let isNew = true;
     if (ev.id > last) this.log.push(ev);
     else if (!this.log.some((e) => e.id === ev.id)) {
       this.log.push(ev);
       this.log.sort((a, b) => a.id - b.id);
-    }
+    } else isNew = false;
     if (this.log.length > LOG_LIMIT) {
       const dropped = this.log.splice(0, this.log.length - LOG_LIMIT);
       this.logFrom = Math.max(this.logFrom, dropped.at(-1)!.id);
@@ -154,5 +164,6 @@ export class LiveStore {
       }
     }
     if (changed) this.emit();
+    if (isNew) for (const l of this.eventListeners) l(ev);
   }
 }

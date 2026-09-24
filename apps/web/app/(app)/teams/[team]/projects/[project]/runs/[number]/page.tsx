@@ -70,6 +70,8 @@ async function Header({ params }: { params: Params }) {
       cursor={cursor}
       streamUrl={`/api${base}/runs/${found.id}/live`}
       pollUrl={`/api${base}/runs/${found.id}/events`}
+      summaryUrl={`/api${base}/runs/${found.id}/summary`}
+      resultsUrl={`/api${base}/runs/${found.id}/results`}
     />
   );
 }
