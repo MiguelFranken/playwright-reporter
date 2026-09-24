@@ -50,3 +50,5 @@ playwright-report/
 blob-report/
 examples/playwright-demo/.env
 plans
+# Built at release time; not consumed inside the workspace.
+packages/mcp/dist
