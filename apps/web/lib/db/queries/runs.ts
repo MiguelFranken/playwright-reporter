@@ -165,6 +165,37 @@ export async function getRunByNumber(projectId: string, number: number) {
 }
 
 
+/**
+ * Runs by id, as the runs list and the active-run cards render them. A project
+ * page fetches a run it learned about from `run.started` here instead of
+ * re-rendering the route.
+ */
+export async function listRunItems(projectId: string, ids: string[]) {
+  if (ids.length === 0) return [];
+  const rows = await db
+    .select({ run: runs, counts: countsSql, cursor: runCursorSql(sql.raw('"runs"."id"')) })
+    .from(runs)
+    .where(and(eq(runs.projectId, projectId), inArray(runs.id, ids)));
+  const shards = await db.select().from(runShards).where(inArray(runShards.runId, rows.map((r) => r.run.id))).orderBy(asc(runShards.shardIndex));
+  return rows.map((r) => ({
+    ...r.run,
+    counts: parseCounts(r.counts),
+    cursor: r.cursor,
+    shards: shards.filter((sh) => sh.runId === r.run.id),
+  })) as (RunWithCounts & { shards: RunShard[]; cursor: number })[];
+}
+
+/** A run's header data by id: what a live run page settles on once the run has finished. */
+export async function getRunSummary(projectId: string, runId: string) {
+  const [row] = await db
+    .select({ run: runs, counts: countsSql, cursor: runCursorSql(sql.raw('"runs"."id"')) })
+    .from(runs)
+    .where(and(eq(runs.projectId, projectId), eq(runs.id, runId)));
+  if (!row) return null;
+  const shards = await db.select().from(runShards).where(eq(runShards.runId, runId)).orderBy(asc(runShards.shardIndex));
+  return { ...row.run, counts: parseCounts(row.counts), shards, cursor: row.cursor } as RunWithCounts & { shards: RunShard[]; cursor: number };
+}
+
 export interface RunResultFilters {
   /** Exactly these results — how the live views fetch rows they only know from an event. */
   ids?: string[];

@@ -78,4 +78,14 @@ describe('LiveStore', () => {
     vi.advanceTimersByTime(150);
     expect(listener).toHaveBeenCalledTimes(1);
   });
+
+  it('tells event listeners about each new event once', () => {
+    const store = new LiveStore();
+    const heard: number[] = [];
+    store.onEvent((ev) => heard.push(ev.id));
+    store.apply(log(1));
+    store.apply(log(2));
+    store.apply(log(1)); // resent after a reconnect
+    expect(heard).toEqual([1, 2]);
+  });
 });

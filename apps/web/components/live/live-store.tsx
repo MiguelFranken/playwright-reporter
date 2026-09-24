@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { LiveIndicator, type LiveState } from '@miguelfranken/ui/patterns/live-indicator';
-import { LIVE_EVENT_TYPES, type LiveEvent, type LiveEventType } from '@/lib/live/events';
+import { LIVE_EVENT_TYPES, type LiveEvent } from '@/lib/live/events';
 import { LiveStore, type Reducer } from '@/lib/live/store';
 
 const LiveStoreContext = createContext<LiveStore | null>(null);
@@ -57,21 +57,20 @@ function toLiveEvent(id: number, type: string, data: Record<string, unknown>): L
   return { id, type, data } as unknown as LiveEvent;
 }
 
-/** Events after which the page's structure changes (a run appears, a shard ends). */
-const STRUCTURAL: LiveEventType[] = ['run.started', 'run.finished', 'shard.started', 'shard.finished'];
-/** At most one route refresh per this interval on a project page. */
-const REFRESH_THROTTLE_MS = 5000;
 /** A tab in the background this long closes its stream; it resumes from its cursor on return. */
 const HIDDEN_CLOSE_MS = 30_000;
 
 /**
  * Opens the page's event stream and feeds the store.
  *
- * - `run`: one run's stream. It ends with the run; the route is then refreshed
- *   once, because finishing a run settles results in bulk on the server.
- * - `project`: every run of a project. Counts are applied from the events; a
- *   run starting or finishing changes which rows exist, and that refreshes the
- *   route — throttled, and only for those few events.
+ * - `run`: one run's stream. It ends with the run, and `onFinish` then settles
+ *   the page on the server's final numbers (finishing settles results in bulk).
+ * - `project`: every run of a project, for as long as the page is open. The
+ *   views insert a run that starts themselves (see `useRunInserts`).
+ *
+ * The route is re-rendered only as a last resort — when `onFinish` fails —
+ * because a refresh empties the router cache and every link on screen
+ * prefetches again.
  */
 export function LiveConnection({
   streamUrl,
@@ -80,6 +79,7 @@ export function LiveConnection({
   mode = 'run',
   label = 'Live',
   className,
+  onFinish,
 }: {
   streamUrl: string;
   pollUrl?: string;
@@ -87,12 +87,16 @@ export function LiveConnection({
   mode?: 'run' | 'project';
   label?: string;
   className?: string;
+  /** Settles the page once the run has finished; resolves false to fall back to a route refresh. */
+  onFinish?: () => Promise<boolean>;
 }) {
   const store = useLiveStore();
   const router = useRouter();
   const [state, setState] = useState<LiveState>(enabled ? 'connecting' : 'off');
   const routerRef = useRef(router);
   routerRef.current = router;
+  const onFinishRef = useRef(onFinish);
+  onFinishRef.current = onFinish;
 
   useEffect(() => {
     if (!enabled) {
@@ -102,36 +106,27 @@ export function LiveConnection({
     let es: EventSource | null = null;
     let pollTimer: ReturnType<typeof setTimeout> | null = null;
     let hiddenTimer: ReturnType<typeof setTimeout> | null = null;
-    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
-    let lastRefresh = 0;
     let failures = 0;
     let stopped = false;
     let since: number | null = null;
     /** Bumped by every (re)connect, so a poll loop from before it stops. */
     let generation = 0;
 
-    const refresh = (delay: number) => {
-      if (refreshTimer) return;
-      const wait = Math.max(delay, lastRefresh + REFRESH_THROTTLE_MS - Date.now());
-      refreshTimer = setTimeout(() => {
-        refreshTimer = null;
-        lastRefresh = Date.now();
-        routerRef.current.refresh();
-      }, wait);
-    };
-
     const finish = () => {
+      if (stopped) return;
       stopped = true;
       close();
       setState('done');
       store.streamFrom = null;
-      refresh(0);
+      const settle = onFinishRef.current;
+      void (settle ? settle().catch(() => false) : Promise.resolve(false)).then((ok) => {
+        if (!ok) routerRef.current.refresh();
+      });
     };
 
     const receive = (ev: LiveEvent) => {
       store.apply(ev);
       if (mode === 'run' && ev.type === 'run.finished') finish();
-      else if (mode === 'project' && STRUCTURAL.includes(ev.type)) refresh(1000);
     };
 
     const close = () => {
@@ -221,7 +216,6 @@ export function LiveConnection({
       store.streamFrom = null;
       document.removeEventListener('visibilitychange', onVisibility);
       if (hiddenTimer) clearTimeout(hiddenTimer);
-      if (refreshTimer) clearTimeout(refreshTimer);
     };
   }, [store, streamUrl, pollUrl, enabled, mode]);
 

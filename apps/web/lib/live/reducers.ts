@@ -113,8 +113,10 @@ export function reduceHeader<S extends HeaderState>(state: S, ev: LiveEvent): S 
       const shards = state.shards.map((s) => (s.shardIndex === ev.data.shardIndex ? { ...s, status: ev.data.status } : s));
       return { ...state, shards };
     }
-    case 'run.finished':
-      return { ...state, run: { ...state.run, status: ev.data.status } };
+    case 'run.finished': {
+      const { status, durationMs } = ev.data;
+      return { ...state, run: { ...state.run, status, ...(durationMs !== undefined ? { durationMs } : {}) } };
+    }
     default:
       return state;
   }
@@ -344,4 +346,90 @@ export function reduceRunCounts<R extends { id: string; counts: RunCounts; curso
   const next = [...runs];
   next[index] = { ...run, cursor: ev.id, counts: move ? applyMoveToCounts(run.counts, move) : run.counts };
   return next;
+}
+
+type ListedRun = { id: string; counts: RunCounts; cursor?: number; status: string; durationMs: number | null };
+
+/** The runs table: counts, and a finished run's status and duration. */
+export function reduceRunsTable<R extends ListedRun>(runs: R[], ev: LiveEvent): R[] {
+  if (ev.type !== 'run.finished') return reduceRunCounts(runs, ev);
+  const index = runs.findIndex((r) => r.id === ev.data.runId);
+  if (index < 0) return runs;
+  const next = [...runs];
+  const { status, durationMs } = ev.data;
+  next[index] = { ...runs[index], status, durationMs: durationMs ?? runs[index].durationMs };
+  return next;
+}
+
+type ActiveListedRun = ListedRun & { shardTotal: number; shards: { shardIndex: number; status: string }[] };
+
+/** The active-run cards: counts, shard progress, and a finished run leaving. */
+export function reduceActiveRuns<R extends ActiveListedRun>(runs: R[], ev: LiveEvent): R[] {
+  switch (ev.type) {
+    case 'run.finished':
+      return runs.some((r) => r.id === ev.data.runId) ? runs.filter((r) => r.id !== ev.data.runId) : runs;
+    case 'shard.started':
+    case 'shard.finished': {
+      const index = runs.findIndex((r) => r.id === ev.data.runId);
+      if (index < 0) return runs;
+      const run = runs[index];
+      const status = ev.type === 'shard.started' ? 'running' : ev.data.status;
+      const known = run.shards.some((sh) => sh.shardIndex === ev.data.shardIndex);
+      const shards = known
+        ? run.shards.map((sh) => (sh.shardIndex === ev.data.shardIndex ? { ...sh, status } : sh))
+        : [...run.shards, { shardIndex: ev.data.shardIndex, status }].sort((a, b) => a.shardIndex - b.shardIndex);
+      const shardTotal = ev.type === 'shard.started' ? Math.max(run.shardTotal, ev.data.shardTotal) : run.shardTotal;
+      const next = [...runs];
+      next[index] = { ...run, shards, shardTotal };
+      return next;
+    }
+    default:
+      return reduceRunCounts(runs, ev);
+  }
+}
+
+export interface RunListFilters {
+  status?: string;
+  branch?: string;
+  environment?: string;
+  q?: string;
+  days?: number;
+  page?: number;
+}
+
+type FilterableRun = {
+  number: number;
+  status: string;
+  gitBranch: string | null;
+  environment: string | null;
+  gitMessage: string | null;
+  gitShortSha: string | null;
+  startedAt: Date;
+};
+
+/** The same predicate `listRuns` applies in SQL. */
+export function matchesRunFilters(run: FilterableRun, f: RunListFilters, now = Date.now()): boolean {
+  if (f.status && f.status !== 'all' && run.status !== f.status) return false;
+  if (f.branch && run.gitBranch !== f.branch) return false;
+  if (f.environment && run.environment !== f.environment) return false;
+  if (f.days && run.startedAt.getTime() < now - f.days * 86_400_000) return false;
+  if (f.q) {
+    const q = f.q.toLowerCase();
+    const hit =
+      (run.gitMessage ?? '').toLowerCase().includes(q) ||
+      (run.gitBranch ?? '').toLowerCase().includes(q) ||
+      String(run.number) === f.q.replace(/^#/, '') ||
+      (run.gitShortSha ?? '').toLowerCase().startsWith(q);
+    if (!hit) return false;
+  }
+  return true;
+}
+
+/** Dates arrive from a JSON endpoint as strings; the views expect `Date`s. */
+export function reviveDates<T extends object>(row: T): T {
+  const out: Record<string, unknown> = { ...(row as Record<string, unknown>) };
+  for (const [key, value] of Object.entries(out)) {
+    if (key.endsWith('At') && typeof value === 'string' && !Number.isNaN(Date.parse(value))) out[key] = new Date(value);
+  }
+  return out as T;
 }

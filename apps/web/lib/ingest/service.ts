@@ -549,7 +549,12 @@ async function finalizeRun(tx: Tx, project: TokenProject, run: Run, shardStatuse
     .update(runs)
     .set({ status, finishedAt, durationMs: clampDuration(finishedAt.getTime() - run.startedAt.getTime()), lastEventAt: finishedAt })
     .where(eq(runs.id, run.id));
-  await tx.insert(runEvents).values({ runId: run.id, projectId: project.id, type: 'run.finished', payload: { status } });
+
+  // The duration rides along, so a live view can finish the run without a fetch.
+  const durationMs = clampDuration(finishedAt.getTime() - run.startedAt.getTime());
+  await tx
+    .insert(runEvents)
+    .values({ runId: run.id, projectId: project.id, type: 'run.finished', payload: { status, durationMs, finishedAt: finishedAt.toISOString() } });
   return status;
 }
 

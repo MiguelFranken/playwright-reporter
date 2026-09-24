@@ -331,7 +331,8 @@ describe('finishRun', () => {
       .select()
       .from(runEvents)
       .where(and(eq(runEvents.runId, run.id), eq(runEvents.type, 'run.finished')));
-    expect(event.payload).toEqual({ status: 'passed' });
+    // The live views finish the run from the event alone.
+    expect(event.payload).toEqual({ status: 'passed', durationMs: row.durationMs, finishedAt: row.finishedAt!.toISOString() });
   });
 
   test('a single failed result makes the whole run failed', async ({ db, tenant }) => {
