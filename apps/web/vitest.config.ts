@@ -1,3 +1,4 @@
+import { workflow } from '@workflow/vitest';
 import { defineConfig } from 'vitest/config';
 
 const alias = {
@@ -37,6 +38,24 @@ export default defineConfig({
           sequence: { groupOrder: 1 },
           // `isolate` must stay true: the per-file database relies on each file
           // getting a fresh module graph so `lib/db/drizzle` binds to its URL.
+        },
+      },
+      {
+        // Workflows run for real, in process: the plugin compiles the
+        // directives, bundles the workflow and its steps, and serves a local
+        // world. The database setup is the integration project's.
+        resolve: { alias },
+        plugins: [workflow({ rootDir: `${import.meta.dirname}/node_modules/.cache/workflow-vitest` })],
+        test: {
+          name: 'workflow',
+          environment: 'node',
+          include: ['test/workflow/**/*.test.ts'],
+          globalSetup: ['test/integration/global-setup.ts'],
+          setupFiles: ['test/workflow/json-import-hook.ts', 'test/integration/setup.ts'],
+          testTimeout: 60_000,
+          hookTimeout: 120_000,
+          maxWorkers: 2,
+          sequence: { groupOrder: 2 },
         },
       },
     ],
