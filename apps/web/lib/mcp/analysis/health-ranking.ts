@@ -33,7 +33,9 @@ export function isChronic(c: Pick<HealthCandidate, 'streak' | 'runs' | 'failureR
 }
 
 export function rankFixFirst<T extends HealthCandidate>(candidates: T[], limit = 5): Ranked<T>[] {
-  return candidates
+  // The same test can arrive from several candidate lists (most failing, flakiest); rank it once.
+  const unique = [...new Map(candidates.map((c) => [c.testId, c])).values()];
+  return unique
     .map((c) => ({ ...c, impact: c.failed + 0.5 * c.flaky, chronic: isChronic(c) }))
     .filter((c) => c.impact > 0)
     .sort((a, b) => b.impact - a.impact || Number(b.chronic) - Number(a.chronic) || b.lastRunAt.getTime() - a.lastRunAt.getTime())
