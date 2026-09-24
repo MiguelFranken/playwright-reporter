@@ -1,0 +1,6 @@
+/* The app gets these families from next/font; Storybook self-hosts them under
+ * the same family names so the two render identically offline. */
+:root {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+}

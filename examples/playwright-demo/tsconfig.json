@@ -1,0 +1,5 @@
+{
+  "extends": "@repo/typescript-config/base.json",
+  "compilerOptions": { "types": ["node"], "lib": ["esnext", "dom"] },
+  "include": ["tests", "playwright.config.ts"]
+}

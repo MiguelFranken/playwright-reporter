@@ -1,0 +1,14 @@
+/* Admin-panel overrides. Payload's own tokens, nudged toward the design
+ * system's neutral/accent hues so the CMS does not look like a foreign app. */
+:root {
+  --theme-elevation-0: oklch(1 0 0);
+  --color-base-800: oklch(0.302 0.012 264);
+  --color-base-850: oklch(0.252 0.01 264);
+  --color-base-900: oklch(0.214 0.008 264);
+  --color-base-1000: oklch(0.148 0.006 264);
+}
+
+html[data-theme='dark'] {
+  --theme-bg: oklch(0.148 0.006 264);
+  --theme-elevation-0: oklch(0.179 0.007 264);
+}

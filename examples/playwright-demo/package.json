@@ -1,0 +1,20 @@
+{
+  "name": "playwright-demo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:shard1": "PW_REPORTER_CI_RUN_ID=${PW_REPORTER_CI_RUN_ID:-local-shard-demo} playwright test --shard=1/2",
+    "test:shard2": "PW_REPORTER_CI_RUN_ID=${PW_REPORTER_CI_RUN_ID:-local-shard-demo} playwright test --shard=2/2",
+    "check-types": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@repo/reporter": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^24.13.5",
+    "dotenv": "^17.4.2",
+    "typescript": "^7.0.2"
+  }
+}

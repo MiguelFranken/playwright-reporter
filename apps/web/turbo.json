@@ -1,0 +1,23 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", ".env", ".env.*"],
+      "env": [
+        "BASE_URL",
+        "DATABASE_URL",
+        "DATABASE_URL_UNPOOLED",
+        "STORAGE_DRIVER",
+        "STORAGE_LOCAL_DIR",
+        "BLOB_READ_WRITE_TOKEN",
+        "BETTER_AUTH_SECRET",
+        "AUTH_SECRET",
+        "INVITATION_TTL_HOURS",
+        "ARTIFACT_URL_TTL_SECONDS"
+      ]
+    },
+    "check-types": { "outputs": ["*.tsbuildinfo"] }
+  }
+}

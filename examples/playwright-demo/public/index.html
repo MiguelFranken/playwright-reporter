@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Demo App</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 2rem; color: #222; }
+      .card { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; max-width: 420px; }
+      button { padding: .5rem 1rem; border-radius: 6px; border: 1px solid #888; background: #f5f5f5; }
+      #counter { font-weight: bold; }
+    </style>
+  </head>
+  <body>
+    <h1>Demo App</h1>
+    <div class="card">
+      <p>Counter: <span id="counter">0</span></p>
+      <button id="increment">Increment</button>
+      <p><a href="/about.html">About</a></p>
+      <label>Name <input id="name" placeholder="Your name" /></label>
+      <p id="greeting"></p>
+    </div>
+    <script>
+      const c = document.getElementById('counter');
+      document.getElementById('increment').addEventListener('click', () => {
+        c.textContent = String(Number(c.textContent) + 1);
+      });
+      document.getElementById('name').addEventListener('input', (e) => {
+        document.getElementById('greeting').textContent = 'Hello, ' + e.target.value + '!';
+      });
+      console.log('demo app loaded');
+    </script>
+  </body>
+</html>

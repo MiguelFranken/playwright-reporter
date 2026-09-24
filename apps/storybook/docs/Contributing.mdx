@@ -1,0 +1,52 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Docs/Contributing" />
+
+# Contributing
+
+## Running it
+
+```bash
+pnpm turbo run dev --filter=@repo/storybook   # http://localhost:6006
+pnpm turbo run test --filter=@repo/storybook  # every story, in Chromium
+```
+
+The browser tests need Playwright's Chromium once:
+
+```bash
+pnpm --filter @repo/storybook exec playwright install chromium
+```
+
+## Adding a primitive
+
+```bash
+pnpm --filter @repo/ui exec shadcn add <name>
+```
+
+`components.json` lives in `packages/ui`, so the CLI writes into the package and
+generates imports that use the package's public name. Then write the story.
+
+## Writing a story
+
+Stories live next to the component, as `<name>.stories.tsx`. Classic CSF 3:
+
+```tsx
+const meta = { title: 'Primitives/Button', component: Button } satisfies Meta<typeof Button>;
+export default meta;
+type Story = StoryObj<typeof meta>;
+export const Default: Story = {};
+```
+
+CSF factories (`preview.meta()`) are deliberately not used: they would make
+`packages/ui` import the Storybook config in `apps/storybook`, which is a cycle.
+
+Rules worth knowing:
+
+- `title` follows the layer path — `Primitives/…`, `Patterns/…`, `Views/Run/…`, `Pages/…`.
+- Callback props default to `fn()` in `meta.args` so `play` can assert on them.
+- Query by role and accessible name. Never by test id.
+- Base UI portals its overlays, so query Dialog/Select/Tooltip content with
+  `within(document.body)`, not the canvas.
+- Views take fixtures from `src/fixtures`; never inline a large object in a story.
+- Tag Patterns and Views stories `['themed']` to have them run in dark mode too.
+- Relative times must pass the `NOW` fixture, or assertions drift by the day.

@@ -1,0 +1,58 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "ui": "tui",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**", "!.next/dev/**", "storybook-static/**"]
+    },
+    "check-types": {
+      "dependsOn": ["^build", "^check-types"]
+    },
+    "test": {
+      "dependsOn": ["^build"]
+    },
+    "test:unit": {
+      "dependsOn": ["^build"]
+    },
+    "test:integration": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "env": ["TEST_DATABASE_URL", "TEST_POSTGRES_IMAGE", "CI"],
+      "passThroughEnv": ["DOCKER_HOST", "TESTCONTAINERS_*"]
+    },
+    "test:e2e": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "env": ["PW_REPORTER_TOKEN", "PW_REPORTER_URL", "PW_REPORTER_CI_RUN_ID", "CI"]
+    },
+    "dev": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "persistent": true
+    },
+    "start": {
+      "dependsOn": ["build"],
+      "cache": false,
+      "persistent": true
+    },
+    "ci": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "env": [
+        "BASE_URL",
+        "DATABASE_URL",
+        "DATABASE_URL_UNPOOLED",
+        "PAYLOAD_SECRET",
+        "PAYLOAD_SCHEMA",
+        "PREVIEW_SECRET",
+        "WEBSITE_BLOB_READ_WRITE_TOKEN",
+        "SITE_NAME"
+      ]
+    },
+    "db:generate": { "cache": false },
+    "db:migrate": { "cache": false },
+    "db:seed": { "cache": false },
+    "db:studio": { "cache": false, "persistent": true }
+  }
+}

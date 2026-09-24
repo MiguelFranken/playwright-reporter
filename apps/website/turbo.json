@@ -1,0 +1,22 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", ".env", ".env.*", "../../packages/ui/src/**"],
+      "env": [
+        "BASE_URL",
+        "DATABASE_URL",
+        "DATABASE_URL_UNPOOLED",
+        "PAYLOAD_SECRET",
+        "PAYLOAD_SCHEMA",
+        "PREVIEW_SECRET",
+        "WEBSITE_BLOB_READ_WRITE_TOKEN",
+        "SITE_NAME"
+      ]
+    },
+    "test:e2e": { "dependsOn": ["build"], "cache": false, "env": ["BASE_URL", "CI"] },
+    "check-types": { "outputs": ["*.tsbuildinfo"] }
+  }
+}

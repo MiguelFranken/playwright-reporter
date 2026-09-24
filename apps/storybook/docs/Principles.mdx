@@ -1,0 +1,42 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Docs/Principles" />
+
+# Principles
+
+## 1. The UI owns its prop types
+
+A component declares the shape it renders, as a plain exported interface next to
+it. `RunHeader` declares `RunHeaderData` with exactly the seven-odd fields it
+reads — not the whole database row it used to accept. The app's query layer then
+produces that shape, so a SQL projection that stops matching what the UI renders
+fails type-checking.
+
+The dependency direction is the point: the app depends on the design system, and
+the design system never depends on the app or its ORM.
+
+## 2. Wire vocabulary comes from `@repo/protocol`, as types only
+
+`RunStatus`, `TestOutcome`, `AttemptStatus` and friends are imported with
+`import type`, so they are erased at build time and `zod` never reaches the UI
+bundle. The *display* vocabulary is deliberately wider — it adds `running`,
+`flaky` and `incomplete` — and lives in `src/lib/tone.ts`.
+
+## 3. Host integration is a provider or a prop, never a generic
+
+Three things only the app knows: how to render a link, how to navigate, and
+where a resource lives.
+
+- **Links** come from `UiProvider`. The app passes `next/link`; here it is an anchor.
+- **URLs** arrive as `hrefs` builder callbacks (`hrefs.run(42)`) or as resolved strings.
+- **URL state** is controlled — `value` / `onValueChange`. The app binds it to the
+  router in a thin wrapper that stays in the app.
+
+Generics are for components that are genuinely shape-agnostic. A domain view
+knows its domain; it just must not know the database.
+
+## 4. Controlled here, connected there
+
+Every URL-bound control exists twice: a controlled component in `@repo/ui` that a
+story can drive, and a `Url*` wrapper in `apps/web` that binds it to
+`useSearchParams`. The wrapper is three lines and holds all the coupling.

@@ -1,0 +1,40 @@
+{
+  "name": "@repo/reporter",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Playwright reporter that streams test runs to the self-hosted reporter app",
+  "files": ["dist"],
+  "exports": {
+    ".": {
+      "import": { "types": "./dist/index.d.mts", "default": "./dist/index.mjs" },
+      "require": { "types": "./dist/index.d.cts", "default": "./dist/index.cjs" }
+    },
+    "./types": {
+      "import": { "types": "./dist/types.d.mts", "default": "./dist/types.mjs" },
+      "require": { "types": "./dist/types.d.cts", "default": "./dist/types.cjs" }
+    }
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.cts",
+  "scripts": {
+    "build": "tsdown",
+    "check-types": "tsc --noEmit",
+    "test": "vitest run",
+    "test:unit": "vitest run"
+  },
+  "peerDependencies": { "@playwright/test": ">=1.50" },
+  "dependencies": {
+    "@repo/protocol": "workspace:*",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^24.13.5",
+    "tsdown": "0.23.0",
+    "typescript": "^7.0.2",
+    "vitest": "^4.0.0"
+  }
+}

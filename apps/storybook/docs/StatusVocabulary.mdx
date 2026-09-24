@@ -1,0 +1,41 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Docs/Status vocabulary" />
+
+# Status vocabulary
+
+Three vocabularies meet in this UI. Keeping them distinct is what stops the
+badge colours from drifting.
+
+## Protocol statuses
+
+From `@repo/protocol`, imported as types. These are what the reporter actually
+sends over the wire.
+
+- `RunStatus` — a whole run
+- `TestOutcome` — a test's verdict across its attempts
+- `AttemptStatus` — one attempt
+- `AttachmentKind`, `Executor`
+
+## Display statuses
+
+`AnyStatus` in `src/lib/tone.ts` is the protocol union plus three states the UI
+needs but the wire does not carry as a status: `running`, `flaky` and
+`incomplete`. It also accepts both spellings of `timedout`/`timedOut`, because
+both appear in stored data.
+
+## Tones
+
+Every status collapses to one of five tones, and only the tone reaches CSS:
+
+| Tone | Means | Token family |
+| --- | --- | --- |
+| `success` | passed, expected | success |
+| `warning` | flaky, retried, skipped-ish | warning |
+| `danger` | failed, timed out, unexpected, interrupted | danger |
+| `info` | running, in progress | accent |
+| `neutral` | pending, skipped, unknown | neutral |
+
+Reliability scores use a separate four-step `Grade` — `good`, `warn`, `bad`,
+`muted` — which maps onto the same tones. See `Foundations/Colors` for the
+resolved values in both themes.

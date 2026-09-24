@@ -1,0 +1,8 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "build": { "inputs": ["$TURBO_DEFAULT$", "../../packages/ui/src/**"] },
+    "test": { "inputs": ["$TURBO_DEFAULT$", "../../packages/ui/src/**"] },
+    "test:unit": { "inputs": ["$TURBO_DEFAULT$", "../../packages/ui/src/**"] }
+  }
+}

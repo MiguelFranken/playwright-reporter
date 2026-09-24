@@ -1,0 +1,88 @@
+import { eq } from 'drizzle-orm';
+import { resolveTeam } from '@/lib/auth/access';
+import { verifyArtifactSignature } from '@/lib/auth/artifact-url';
+import { db } from '@/lib/db/drizzle';
+import { isUuid } from '@/lib/db/queries/shared';
+import { attachments, projects, runs, teams } from '@/lib/db/schema';
+import { getStorage } from '@/lib/storage';
+
+// Only the trace viewer needs cross-origin access, and only with a signed URL.
+const TRACE_VIEWER_ORIGIN = 'https://trace.playwright.dev';
+
+const CORS = {
+  'access-control-allow-origin': TRACE_VIEWER_ORIGIN,
+  'access-control-allow-methods': 'GET, HEAD, OPTIONS',
+  'access-control-allow-headers': 'Range',
+  'access-control-expose-headers': 'Content-Length, Content-Range, Accept-Ranges',
+  vary: 'Origin',
+};
+
+export async function OPTIONS() {
+  return new Response(null, { status: 204, headers: CORS });
+}
+
+export async function GET(request: Request, { params }: { params: Promise<{ attachmentId: string }> }) {
+  const { attachmentId } = await params;
+  if (!isUuid(attachmentId)) return new Response('not found', { status: 404, headers: CORS });
+
+  const [row] = await db
+    .select({
+      attachment: attachments,
+      teamSlug: teams.slug,
+      projectSlug: projects.slug,
+    })
+    .from(attachments)
+    .innerJoin(runs, eq(runs.id, attachments.runId))
+    .innerJoin(projects, eq(projects.id, runs.projectId))
+    .innerJoin(teams, eq(teams.id, projects.teamId))
+    .where(eq(attachments.id, attachmentId))
+    .limit(1);
+  if (!row) return new Response('not found', { status: 404, headers: CORS });
+
+  const url = new URL(request.url);
+  const signed = verifyArtifactSignature(attachmentId, url.searchParams.get('exp'), url.searchParams.get('sig'));
+  if (!signed && !(await hasSessionAccess(row.teamSlug))) {
+    // 404, not 403: an artifact id must not confirm that a run exists.
+    return new Response('not found', { status: 404, headers: CORS });
+  }
+
+  const { attachment } = row;
+  const storage = getStorage();
+
+  const rangeHeader = request.headers.get('range');
+  let range: { start: number; end?: number } | undefined;
+  if (rangeHeader) {
+    const m = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader);
+    if (m && (m[1] || m[2])) range = { start: Number(m[1] || 0), end: m[2] ? Number(m[2]) : undefined };
+  }
+  const obj = await storage.get(attachment.storageKey, range);
+  if (!obj) return new Response('artifact missing in storage', { status: 404, headers: CORS });
+
+  const disposition = url.searchParams.get('download') !== null ? 'attachment' : 'inline';
+  const headers: Record<string, string> = {
+    ...CORS,
+    'content-type': attachment.contentType || obj.contentType,
+    'accept-ranges': 'bytes',
+    // No longer immutable-forever: access can be revoked.
+    'cache-control': 'private, max-age=3600',
+    'content-disposition': `${disposition}; filename="${encodeURIComponent(attachment.name)}"`,
+    'x-content-type-options': 'nosniff',
+  };
+  if (obj.range) {
+    headers['content-range'] = `bytes ${obj.range.start}-${obj.range.end}/${obj.size}`;
+    headers['content-length'] = String(obj.range.end - obj.range.start + 1);
+    return new Response(obj.stream, { status: 206, headers });
+  }
+  headers['content-length'] = String(obj.size);
+  return new Response(obj.stream, { status: 200, headers });
+}
+
+async function hasSessionAccess(teamSlug: string) {
+  const access = await resolveTeam(teamSlug);
+  return Boolean(access?.can({ artifact: ['read'] }));
+}
+
+export async function HEAD(request: Request, ctx: { params: Promise<{ attachmentId: string }> }) {
+  const res = await GET(request, ctx);
+  return new Response(null, { status: res.status, headers: res.headers });
+}

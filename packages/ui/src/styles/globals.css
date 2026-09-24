@@ -1,0 +1,665 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/* Scan this package's own source for class names, no matter which app imports
+ * this file. Paths in @source resolve relative to the CSS file. */
+@source "../";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ---------------------------------------------------------------------------
+ * Tier 1 — primitives.
+ *
+ * Ramps in OKLCH, one hue per ramp held constant end to end, vividness peaking
+ * mid-ramp, steps denser at the light end. These name a *value* and are never
+ * referenced from a component; only the semantic tier below may point at them.
+ *
+ *   neutral  carries ~85% of the interface (surfaces, borders, text)
+ *   accent   interactive: focus, links, selection, "running"
+ *   success  a passing test        warning  a flaky test
+ *   danger   a failing test
+ * ------------------------------------------------------------------------ */
+:root {
+  /* Neutral — cool (hue 264), reads technical rather than editorial. */
+  --n-50: oklch(0.985 0.002 264);
+  --n-100: oklch(0.971 0.003 264);
+  --n-150: oklch(0.957 0.004 264);
+  --n-200: oklch(0.929 0.005 264);
+  --n-250: oklch(0.905 0.006 264);
+  --n-300: oklch(0.876 0.007 264);
+  --n-400: oklch(0.742 0.011 264);
+  --n-500: oklch(0.586 0.014 264);
+  --n-600: oklch(0.487 0.015 264);
+  --n-700: oklch(0.396 0.014 264);
+  --n-800: oklch(0.302 0.012 264);
+  --n-850: oklch(0.252 0.010 264);
+  --n-900: oklch(0.214 0.008 264);
+  --n-950: oklch(0.179 0.007 264);
+  --n-1000: oklch(0.148 0.006 264);
+
+  /* Accent — blue (hue 255). */
+  --a-50: oklch(0.972 0.013 255);
+  --a-100: oklch(0.937 0.032 255);
+  --a-200: oklch(0.889 0.056 255);
+  --a-300: oklch(0.813 0.090 255);
+  --a-400: oklch(0.708 0.134 255);
+  --a-500: oklch(0.617 0.168 255);
+  --a-600: oklch(0.546 0.180 255);
+  --a-700: oklch(0.471 0.158 255);
+  --a-800: oklch(0.394 0.127 255);
+  --a-900: oklch(0.322 0.098 255);
+  --a-950: oklch(0.262 0.070 255);
+
+  /* Success — green (hue 152). */
+  --s-50: oklch(0.969 0.019 152);
+  --s-100: oklch(0.932 0.044 152);
+  --s-200: oklch(0.879 0.071 152);
+  --s-300: oklch(0.801 0.103 152);
+  --s-400: oklch(0.717 0.126 152);
+  --s-500: oklch(0.640 0.129 152);
+  --s-600: oklch(0.553 0.111 152);
+  --s-700: oklch(0.463 0.092 152);
+  --s-800: oklch(0.383 0.075 152);
+  --s-900: oklch(0.311 0.059 152);
+  --s-950: oklch(0.252 0.044 152);
+
+  /* Warning — amber (hue 78). */
+  --w-50: oklch(0.977 0.022 78);
+  --w-100: oklch(0.948 0.052 78);
+  --w-200: oklch(0.903 0.090 78);
+  --w-300: oklch(0.846 0.124 78);
+  --w-400: oklch(0.791 0.144 78);
+  --w-500: oklch(0.726 0.149 78);
+  --w-600: oklch(0.636 0.131 78);
+  --w-700: oklch(0.531 0.109 78);
+  --w-800: oklch(0.441 0.089 78);
+  --w-900: oklch(0.363 0.072 78);
+  --w-950: oklch(0.283 0.055 78);
+
+  /* Danger — red (hue 25). */
+  --d-50: oklch(0.971 0.014 25);
+  --d-100: oklch(0.939 0.033 25);
+  --d-200: oklch(0.894 0.060 25);
+  --d-300: oklch(0.822 0.098 25);
+  --d-400: oklch(0.716 0.152 25);
+  --d-500: oklch(0.632 0.194 25);
+  --d-600: oklch(0.559 0.194 25);
+  --d-700: oklch(0.478 0.167 25);
+  --d-800: oklch(0.402 0.137 25);
+  --d-900: oklch(0.334 0.110 25);
+  --d-950: oklch(0.268 0.082 25);
+
+  /* Chart categoricals beyond the status hues (teal / violet). */
+  --t-400: oklch(0.742 0.106 196);
+  --t-500: oklch(0.658 0.105 196);
+  --v-400: oklch(0.700 0.132 300);
+  --v-500: oklch(0.612 0.150 300);
+}
+
+/* ---------------------------------------------------------------------------
+ * Tier 2 — semantics. The only tier components reference.
+ * Light theme.
+ * ------------------------------------------------------------------------ */
+:root {
+  /* Surfaces */
+  --background: var(--n-100); /* page, behind everything */
+  --surface: oklch(1 0 0); /* cards, tables, the inset panel */
+  --surface-sunken: var(--n-150); /* wells, code blocks, inputs at rest */
+  --card: var(--surface);
+  --card-foreground: var(--n-950);
+  --popover: oklch(1 0 0);
+  --popover-foreground: var(--n-950);
+  --overlay: oklch(0.179 0.007 264 / 0.45);
+
+  /* Text */
+  --foreground: var(--n-950);
+  --muted-foreground: var(--n-600);
+  --muted: var(--n-150);
+
+  /* Borders — `border` encloses a control, `separator` divides content. */
+  --border: var(--n-200);
+  --border-strong: var(--n-300);
+  --separator: var(--n-200);
+  --input: var(--n-300);
+  --ring: var(--a-500);
+
+  /* Interactive fills. `primary` = most prominent of its group (ink), the
+     accent hue stays reserved for links, focus and live state. */
+  --primary: var(--n-900);
+  --primary-foreground: var(--n-50);
+  --secondary: var(--n-150);
+  --secondary-foreground: var(--n-900);
+  --accent: var(--n-150); /* shadcn's hover/highlight token */
+  --accent-foreground: var(--n-900);
+
+  /* Brand accent */
+  --accent-subtle: var(--a-50);
+  --accent-border: var(--a-200);
+  --accent-solid: var(--a-600);
+  --accent-solid-hover: var(--a-700);
+  --accent-text: var(--a-700);
+  --accent-on-solid: oklch(1 0 0);
+
+  /* Status */
+  --success-subtle: var(--s-50);
+  --success-border: var(--s-200);
+  --success-solid: var(--s-600);
+  --success-text: var(--s-700);
+
+  --warning-subtle: var(--w-50);
+  --warning-border: var(--w-200);
+  --warning-solid: var(--w-500);
+  --warning-text: var(--w-700);
+
+  --danger-subtle: var(--d-50);
+  --danger-border: var(--d-200);
+  --danger-solid: var(--d-600);
+  --danger-text: var(--d-700);
+
+  --info-subtle: var(--a-50);
+  --info-border: var(--a-200);
+  --info-solid: var(--a-600);
+  --info-text: var(--a-700);
+
+  --neutral-subtle: var(--n-150);
+  --neutral-border: var(--n-300);
+  --neutral-solid: var(--n-400);
+  --neutral-text: var(--n-600);
+
+  /* Only ever used as text (on --danger-subtle or a 10% tint) and as a border
+   * or ring — never as a solid fill — so it takes the danger ramp's *text*
+   * step. At --d-600 it renders 4.09:1 on the destructive button and badge,
+   * under the 4.5:1 AA floor; the a11y run in Storybook catches it. */
+  --destructive: var(--d-700);
+  --destructive-foreground: oklch(1 0 0);
+
+  /* Sidebar */
+  --sidebar: var(--n-100);
+  --sidebar-foreground: var(--n-800);
+  --sidebar-primary: var(--n-900);
+  --sidebar-primary-foreground: var(--n-50);
+  --sidebar-accent: var(--n-200);
+  --sidebar-accent-foreground: var(--n-950);
+  --sidebar-border: var(--n-200);
+  --sidebar-ring: var(--a-500);
+
+  /* Charts — categorical series. Status series read their own tokens. */
+  --chart-1: var(--a-500);
+  --chart-2: var(--t-500);
+  --chart-3: var(--v-500);
+  --chart-4: var(--w-500);
+  --chart-5: var(--n-400);
+
+  /* Chart chrome. The grid sits one step off the surface and the axis text one
+   * step above muted: chrome recedes, marks carry the ink. `--chart-surface` is
+   * the colour of the 2px spacer drawn between touching marks, so it must match
+   * whatever the plot is painted on — a card, not the page. */
+  --chart-grid: var(--n-200);
+  --chart-axis: var(--n-500);
+  --chart-cursor: var(--n-150);
+  --chart-surface: var(--surface);
+  --chart-track: var(--n-150);
+
+  /* Elevation. Borders carry structure; shadows carry depth. */
+  --shadow-color: 264 8%;
+  --elevation-1: 0 1px 2px -1px oklch(0.179 0.007 264 / 0.09), 0 1px 1px oklch(0.179 0.007 264 / 0.04);
+  --elevation-2: 0 2px 4px -2px oklch(0.179 0.007 264 / 0.1), 0 4px 10px -3px oklch(0.179 0.007 264 / 0.08);
+  --elevation-3: 0 8px 24px -6px oklch(0.179 0.007 264 / 0.14), 0 2px 6px -2px oklch(0.179 0.007 264 / 0.08);
+
+  --image-outline: oklch(0 0 0 / 0.1);
+
+  --radius: 0.625rem;
+}
+
+/* ---------------------------------------------------------------------------
+ * Dark theme — the same role names repointed. Vividness is reduced and the
+ * dark end widened rather than the light ramp being mechanically reversed.
+ * ------------------------------------------------------------------------ */
+.dark {
+  --background: var(--n-1000);
+  --surface: var(--n-950);
+  --surface-sunken: var(--n-1000);
+  --card: var(--surface);
+  --card-foreground: var(--n-100);
+  --popover: var(--n-900);
+  --popover-foreground: var(--n-100);
+  --overlay: oklch(0.148 0.006 264 / 0.6);
+
+  --foreground: var(--n-100);
+  --muted-foreground: var(--n-400);
+  --muted: var(--n-900);
+
+  --border: var(--n-850);
+  --border-strong: var(--n-800);
+  --separator: var(--n-850);
+  --input: var(--n-800);
+  --ring: var(--a-400);
+
+  --primary: var(--n-100);
+  --primary-foreground: var(--n-950);
+  --secondary: var(--n-900);
+  --secondary-foreground: var(--n-100);
+  --accent: var(--n-900);
+  --accent-foreground: var(--n-50);
+
+  --accent-subtle: var(--a-950);
+  --accent-border: var(--a-800);
+  --accent-solid: var(--a-500);
+  --accent-solid-hover: var(--a-400);
+  --accent-text: var(--a-300);
+  --accent-on-solid: var(--n-1000);
+
+  --success-subtle: var(--s-950);
+  --success-border: var(--s-800);
+  --success-solid: var(--s-500);
+  --success-text: var(--s-300);
+
+  --warning-subtle: var(--w-950);
+  --warning-border: var(--w-800);
+  --warning-solid: var(--w-400);
+  --warning-text: var(--w-300);
+
+  --danger-subtle: var(--d-950);
+  --danger-border: var(--d-800);
+  --danger-solid: var(--d-500);
+  --danger-text: var(--d-300);
+
+  --info-subtle: var(--a-950);
+  --info-border: var(--a-800);
+  --info-solid: var(--a-500);
+  --info-text: var(--a-300);
+
+  --neutral-subtle: var(--n-900);
+  --neutral-border: var(--n-800);
+  --neutral-solid: var(--n-600);
+  --neutral-text: var(--n-400);
+
+  --destructive: var(--d-400);
+  --destructive-foreground: var(--n-50);
+
+  --sidebar: var(--n-1000);
+  --sidebar-foreground: var(--n-400);
+  --sidebar-primary: var(--n-100);
+  --sidebar-primary-foreground: var(--n-950);
+  --sidebar-accent: var(--n-900);
+  --sidebar-accent-foreground: var(--n-50);
+  --sidebar-border: var(--n-900);
+  --sidebar-ring: var(--a-400);
+
+  --chart-1: var(--a-400);
+  --chart-2: var(--t-400);
+  --chart-3: var(--v-400);
+  --chart-4: var(--w-400);
+  --chart-5: var(--n-500);
+
+  --chart-grid: var(--n-900);
+  --chart-axis: var(--n-500);
+  --chart-cursor: var(--n-900);
+  --chart-surface: var(--surface);
+  --chart-track: var(--n-900);
+
+  --elevation-1: 0 1px 2px -1px oklch(0 0 0 / 0.5);
+  --elevation-2: 0 2px 4px -2px oklch(0 0 0 / 0.5), 0 4px 10px -3px oklch(0 0 0 / 0.4);
+  --elevation-3: 0 8px 24px -6px oklch(0 0 0 / 0.6), 0 2px 6px -2px oklch(0 0 0 / 0.4);
+
+  --image-outline: oklch(1 0 0 / 0.1);
+}
+
+@theme inline {
+  --font-sans: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-mono), ui-monospace, "SF Mono", Menlo, monospace;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-overlay: var(--overlay);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-separator: var(--separator);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-accent-subtle: var(--accent-subtle);
+  --color-accent-border: var(--accent-border);
+  --color-accent-solid: var(--accent-solid);
+  --color-accent-solid-hover: var(--accent-solid-hover);
+  --color-accent-text: var(--accent-text);
+  --color-accent-on-solid: var(--accent-on-solid);
+
+  --color-success-subtle: var(--success-subtle);
+  --color-success-border: var(--success-border);
+  --color-success-solid: var(--success-solid);
+  --color-success-text: var(--success-text);
+
+  --color-warning-subtle: var(--warning-subtle);
+  --color-warning-border: var(--warning-border);
+  --color-warning-solid: var(--warning-solid);
+  --color-warning-text: var(--warning-text);
+
+  --color-danger-subtle: var(--danger-subtle);
+  --color-danger-border: var(--danger-border);
+  --color-danger-solid: var(--danger-solid);
+  --color-danger-text: var(--danger-text);
+
+  --color-info-subtle: var(--info-subtle);
+  --color-info-border: var(--info-border);
+  --color-info-solid: var(--info-solid);
+  --color-info-text: var(--info-text);
+
+  --color-neutral-subtle: var(--neutral-subtle);
+  --color-neutral-border: var(--neutral-border);
+  --color-neutral-solid: var(--neutral-solid);
+  --color-neutral-text: var(--neutral-text);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-grid: var(--chart-grid);
+  --color-chart-axis: var(--chart-axis);
+  --color-chart-cursor: var(--chart-cursor);
+  --color-chart-surface: var(--chart-surface);
+  --color-chart-track: var(--chart-track);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --shadow-e1: var(--elevation-1);
+  --shadow-e2: var(--elevation-2);
+  --shadow-e3: var(--elevation-3);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* ---------------------------------------------------------------------------
+ * Typography.
+ *
+ * Tier 1: the raw steps. Tier 2: semantic roles, declared with `@utility` so a
+ * role carries its *whole* style — size, line-height, weight, tracking and,
+ * where the role demands it, case and family. Components name the role
+ * (`text-headline-m`), never its implementation, and every role composes with
+ * variants (`text-title-m md:text-title-l`).
+ *
+ * Plain Tailwind (`text-sm`, `font-medium`) stays fair game for one-off text
+ * that is not a design-system role. See TYPOGRAPHY.md.
+ * ------------------------------------------------------------------------ */
+:root {
+  --type-2xs: 0.625rem; /* 10px */
+  --type-xs: 0.6875rem; /* 11px */
+  --type-sm: 0.75rem; /* 12px */
+  --type-md: 0.8125rem; /* 13px */
+  --type-lg: 0.875rem; /* 14px */
+  --type-xl: 0.9375rem; /* 15px */
+  --type-2xl: 1.125rem; /* 18px */
+  --type-3xl: 1.25rem; /* 20px */
+  --type-4xl: 1.5rem; /* 24px */
+  /* The marketing site's display tier. The app's largest role is 24px; a
+   * landing page needs headlines that carry a whole viewport. */
+  --type-5xl: 2rem; /* 32px */
+  --type-6xl: 2.5rem; /* 40px */
+  --type-7xl: 3.5rem; /* 56px */
+
+  /* Large type needs negative tracking; small uppercase type needs positive. */
+  --type-track-tight: -0.021em;
+  --type-track-display: -0.025em;
+  --type-track-display-xl: -0.03em;
+  --type-track-snug: -0.011em;
+  --type-track-label: 0.055em;
+}
+
+/* Display — marketing only. Hero and section headlines on the website; the
+   app never goes above `title-l`. Tracking tightens as the size grows, which is
+   what keeps a 56px line from reading as loose. */
+@utility text-display-xl {
+  font-size: var(--type-7xl);
+  line-height: 1.05;
+  font-weight: 600;
+  letter-spacing: var(--type-track-display-xl);
+}
+
+@utility text-display-l {
+  font-size: var(--type-6xl);
+  line-height: 1.1;
+  font-weight: 600;
+  letter-spacing: var(--type-track-display);
+}
+
+@utility text-display-m {
+  font-size: var(--type-5xl);
+  line-height: 1.15;
+  font-weight: 600;
+  letter-spacing: var(--type-track-tight);
+}
+
+/* The sentence under a display headline. Larger than `body-m` and looser, so a
+   paragraph of it stays readable at full measure. */
+@utility text-lead {
+  font-size: var(--type-2xl);
+  line-height: 1.55;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+/* Page and section titles. */
+@utility text-title-l {
+  font-size: var(--type-4xl);
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: var(--type-track-tight);
+}
+
+@utility text-title-m {
+  font-size: var(--type-3xl);
+  line-height: 1.25;
+  font-weight: 600;
+  letter-spacing: var(--type-track-tight);
+}
+
+/* Card titles and the headings inside them. */
+@utility text-headline-m {
+  font-size: var(--type-xl);
+  line-height: 1.35;
+  font-weight: 600;
+  letter-spacing: var(--type-track-snug);
+}
+
+@utility text-headline-s {
+  font-size: var(--type-md);
+  line-height: 1.4;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+/* Running text. `body-m` is the interface default. */
+@utility text-body-m {
+  font-size: var(--type-lg);
+  line-height: 1.5;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+@utility text-body-s {
+  font-size: var(--type-md);
+  line-height: 1.55;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+@utility text-body-xs {
+  font-size: var(--type-sm);
+  line-height: 1.45;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+/* Controls, form labels and the emphasised half of a key/value pair. */
+@utility text-label-m {
+  font-size: var(--type-lg);
+  line-height: 1.25;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+@utility text-label-s {
+  font-size: var(--type-sm);
+  line-height: 1.25;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+@utility text-label-xs {
+  font-size: var(--type-2xs);
+  line-height: 1.3;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+/* Section eyebrows: table heads, metric captions, sidebar group labels.
+   The role is always set in caps, so the transform belongs to the role. */
+@utility text-eyebrow {
+  font-size: var(--type-xs);
+  line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: var(--type-track-label);
+  text-transform: uppercase;
+}
+
+/* A headline number. Tabular figures so it never reflows as it updates. */
+@utility text-metric {
+  font-size: var(--type-4xl);
+  line-height: 1.1;
+  font-weight: 600;
+  letter-spacing: var(--type-track-tight);
+  font-variant-numeric: tabular-nums;
+}
+
+@utility text-metric-s {
+  font-size: var(--type-2xl);
+  line-height: 1.15;
+  font-weight: 600;
+  letter-spacing: var(--type-track-snug);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Identifiers, SHAs, file paths and stack traces. */
+@utility text-code-s {
+  font-family: var(--font-mono);
+  font-size: var(--type-sm);
+  line-height: 1.55;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+@utility text-code-xs {
+  font-family: var(--font-mono);
+  font-size: var(--type-xs);
+  line-height: 1.5;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+    font-optical-sizing: auto;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::selection {
+    background-color: var(--accent-subtle);
+    color: var(--accent-text);
+  }
+
+  /* Any value that ticks needs fixed-width digits or the layout jitters. */
+  .tabular-nums,
+  th,
+  td,
+  time,
+  code,
+  kbd {
+    font-variant-numeric: tabular-nums;
+  }
+
+  img,
+  video {
+    outline: 1px solid var(--image-outline);
+    outline-offset: -1px;
+  }
+}
+
+@layer base {
+  /* Motion is a nicety, never the only feedback channel — every animated state
+     here also changes colour, an icon, or a label. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+  /* A raised surface: structure from a hairline, depth from a shadow. */
+  .surface-card {
+    background-color: var(--surface);
+    box-shadow: var(--elevation-1);
+    border: 1px solid var(--border);
+  }
+
+  /* A framed data surface: tables and lists that are not Cards. */
+  .panel {
+    overflow: hidden;
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--border);
+    background-color: var(--surface);
+    box-shadow: var(--elevation-1);
+  }
+
+  .scrollbar-slim {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+}

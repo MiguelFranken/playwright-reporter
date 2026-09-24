@@ -1,0 +1,33 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Docs/Introduction" />
+
+# Design system
+
+This is the catalogue for `@repo/ui`, the package the reporter's web app renders
+itself out of. Everything here runs without Next.js, without a database and
+without an authenticated session — if a component cannot, it does not belong in
+the package.
+
+## The layers
+
+The sidebar is the dependency graph, top to bottom. Nothing ever imports
+something below it.
+
+| Layer | Where | What it is |
+| --- | --- | --- |
+| **Foundations** | `src/styles`, `src/lib` | Colour and typography tokens, `cn`, formatting, tone maps. |
+| **Primitives** | `src/components` | The shadcn / Base UI set: Button, Dialog, Table, Select… |
+| **Patterns** | `src/patterns` | Product-flavoured but data-agnostic: StatusBadge, CountsBar, EmptyState… |
+| **Views** | `src/views` | Presentational domain views driven by a view model: RunsTable, RunHeader… |
+| **Pages** | stories only | Views composed into whole screens, to prove they fit together. |
+
+Feature components — the ones that talk to server actions, `next/navigation` or
+the auth client — stay in `apps/web/components` and are not catalogued here.
+
+## Stories are the specification
+
+Every exported component has at least one story. Anything stateful has a `play`
+function that drives it the way a user would, through roles and accessible
+names. Those stories run as tests in a real browser on every pull request, with
+accessibility checks on each one, so the catalogue cannot quietly rot.
