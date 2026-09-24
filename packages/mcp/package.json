@@ -1,0 +1,49 @@
+{
+  "name": "@miguelfranken/mcp",
+  "version": "0.0.12",
+  "type": "module",
+  "description": "stdio MCP bridge to a self-hosted Playwright Reporter instance, for MCP clients without remote HTTP support",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MiguelFranken/playwright-reporter.git",
+    "directory": "packages/mcp"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "files": [
+    "dist"
+  ],
+  "bin": {
+    "pw-reporter-mcp": "./dist/cli.mjs"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    }
+  },
+  "types": "./dist/index.d.mts",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "check-types": "tsc --noEmit",
+    "test": "vitest run",
+    "test:unit": "vitest run"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/client": "~2.1.0",
+    "@modelcontextprotocol/server": "~2.1.0"
+  },
+  "devDependencies": {
+    "@miguelfranken/typescript-config": "workspace:*",
+    "@types/node": "^24.13.5",
+    "tsdown": "0.23.0",
+    "typescript": "^7.0.2",
+    "vitest": "^4.0.0",
+    "zod": "^4.6.5"
+  }
+}

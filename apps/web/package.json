@@ -16,11 +16,13 @@
     "db:seed": "nub lib/db/seed.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "mcp:docs": "DATABASE_URL=${DATABASE_URL:-postgres://docs@localhost/docs} NODE_OPTIONS=--conditions=react-server nub scripts/gen-mcp-docs.ts"
   },
   "dependencies": {
     "@miguelfranken/protocol": "workspace:*",
     "@miguelfranken/ui": "workspace:*",
+    "@modelcontextprotocol/server": "~2.1.0",
     "@vercel/blob": "^2.8.0",
     "@workflow/world-postgres": "^4.3.7",
     "better-auth": "1.7.5",
@@ -39,6 +41,7 @@
   },
   "devDependencies": {
     "@miguelfranken/typescript-config": "workspace:*",
+    "@modelcontextprotocol/client": "~2.1.0",
     "@tailwindcss/postcss": "4.3.3",
     "@testcontainers/postgresql": "^12.1.0",
     "@types/node": "^24.13.5",

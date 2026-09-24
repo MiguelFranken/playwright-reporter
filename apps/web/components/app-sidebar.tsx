@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  Bot,
   Building2,
   Check,
   ChevronRight,
@@ -112,6 +113,7 @@ const ADMIN_NAV: NavItem[] = [
   { title: 'Teams', href: '/admin/teams', icon: Building2 },
   { title: 'Users', href: '/admin/users', icon: Users },
   { title: 'Storage', href: '/admin/storage', icon: HardDrive },
+  { title: 'MCP', href: '/admin/mcp', icon: Bot },
   { title: 'Audit log', href: '/admin/audit', icon: ScrollText },
 ];
 
@@ -425,6 +427,10 @@ export function UserMenu({ user }: { user: SidebarUser }) {
         <DropdownMenuItem render={<Link href="/account" />}>
           <UserRound className="opacity-60" />
           Account
+        </DropdownMenuItem>
+        <DropdownMenuItem render={<Link href="/account/ai" />}>
+          <Bot className="opacity-60" />
+          AI assistants
         </DropdownMenuItem>
         <div className="flex items-center justify-between gap-2 rounded-md py-1 pe-1 ps-2 text-sm">
           <span className="text-muted-foreground">Theme</span>

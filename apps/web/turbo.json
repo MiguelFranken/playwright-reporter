@@ -24,7 +24,16 @@
         "RUN_STALE_TIMEOUT_MS",
         "RUN_WATCHDOG_DRIVER",
         "WORKFLOW_TARGET_WORLD",
-        "WORKFLOW_POSTGRES_URL"
+        "WORKFLOW_POSTGRES_URL",
+        "MCP_ENABLED",
+        "MCP_DEFAULT_TOOLSETS",
+        "MCP_RESPONSE_BUDGET_CHARS",
+        "MCP_RATE_LIMIT_PER_MINUTE",
+        "MCP_ARTIFACT_URL_TTL_SECONDS",
+        "MCP_INLINE_IMAGE_MAX_BYTES",
+        "MCP_ALLOWED_HOSTS",
+        "PAT_DEFAULT_TTL_DAYS",
+        "PAT_MAX_TTL_DAYS"
       ]
     },
     "check-types": { "outputs": ["*.tsbuildinfo"] }

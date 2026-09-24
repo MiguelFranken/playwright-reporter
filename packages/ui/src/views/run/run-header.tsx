@@ -49,6 +49,7 @@ export function RunHeader({
   counts,
   shards,
   liveIndicator,
+  actions,
   branchHref,
   now = new Date(),
 }: {
@@ -57,6 +58,11 @@ export function RunHeader({
   shards: RunHeaderShard[];
   /** The app fills this with <LiveRefresh />; a story with a static indicator. */
   liveIndicator?: React.ReactNode;
+  /**
+   * Buttons at the end of the title row, e.g. the "Debug with AI" menu. A slot
+   * rather than a flag, so the header stays ignorant of what the app offers.
+   */
+  actions?: React.ReactNode;
   /** The branch's page, resolved by the host; without it the branch is plain text. */
   branchHref?: string;
   /** Reference instant for a still-running run's elapsed time. */
@@ -84,6 +90,7 @@ export function RunHeader({
             {title}
           </h1>
           {liveIndicator}
+          {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
           {run.gitBranch ? (

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { generateToken, hashToken, safeEqualHex } from './tokens';
+import { PAT_PREFIX, generateToken, hashToken, isPersonalToken, safeEqualHex } from './tokens';
 
 describe('generateToken', () => {
   it('returns a prefixed token and the prefix the UI shows', () => {
@@ -16,6 +16,15 @@ describe('generateToken', () => {
     // base64url of 32 bytes is 43 characters with no padding.
     expect(body).toHaveLength(43);
     expect(body).toMatch(/^[A-Za-z0-9_-]+$/);
+  });
+
+  it('mints personal access tokens with their own prefix', () => {
+    const { token, prefix } = generateToken(PAT_PREFIX);
+    expect(token.startsWith('pwr_pat_')).toBe(true);
+    expect(token.slice(PAT_PREFIX.length)).toHaveLength(43);
+    expect(prefix).toBe(token.slice(0, 14));
+    expect(isPersonalToken(token)).toBe(true);
+    expect(isPersonalToken(generateToken().token)).toBe(false);
   });
 
   it('never repeats', () => {

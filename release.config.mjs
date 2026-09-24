@@ -1,7 +1,9 @@
-// semantic-release, run by .github/workflows/release.yml after the reporter is
-// built. It reads the Conventional Commits since the last tag, publishes
-// @miguelfranken/reporter to GitHub Packages and commits the version bump and
-// CHANGELOG.md back, together with a tag and a GitHub release.
+// semantic-release, run by .github/workflows/release.yml after the published
+// packages are built. It reads the Conventional Commits since the last tag,
+// publishes @miguelfranken/reporter and @miguelfranken/mcp to GitHub Packages
+// and commits the version bumps and CHANGELOG.md back, together with a tag and
+// a GitHub release. Both packages share one version (lockstep): one tag, one
+// changelog, and the reporter's release flow unchanged.
 
 /** @type {import('semantic-release').GlobalConfig} */
 export default {
@@ -31,12 +33,21 @@ export default {
     }],
     ['@semantic-release/changelog', { changelogTitle: '# Changelog' }],
     ['@semantic-release/exec', {
-      prepareCmd: 'npm pkg set version=${nextRelease.version} --workspace=packages/reporter',
-      // The registry comes from publishConfig; the workflow provides the token.
-      publishCmd: 'npm publish ./packages/reporter --tag ${nextRelease.channel || "latest"}',
+      // The MCP bridge stamps its version into dist at build time (its User-Agent), so it is rebuilt after the bump.
+      prepareCmd: [
+        'npm pkg set version=${nextRelease.version} --workspace=packages/reporter --workspace=packages/mcp',
+        'npm run build --workspace=packages/mcp',
+      ].join(' && '),
+      // The registry comes from each publishConfig; the workflow provides the token. The reporter goes first: npm has
+      // no multi-package transaction, so if the bridge's publish fails the run stops with the reporter already out,
+      // and that version of @miguelfranken/mcp has to be published by hand before the next release.
+      publishCmd: [
+        'npm publish ./packages/reporter --tag ${nextRelease.channel || "latest"}',
+        'npm publish ./packages/mcp --tag ${nextRelease.channel || "latest"}',
+      ].join(' && '),
     }],
     ['@semantic-release/git', {
-      assets: ['CHANGELOG.md', 'packages/reporter/package.json'],
+      assets: ['CHANGELOG.md', 'packages/reporter/package.json', 'packages/mcp/package.json'],
       message: 'chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}',
     }],
     ['@semantic-release/github', {

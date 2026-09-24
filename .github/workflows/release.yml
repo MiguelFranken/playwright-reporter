@@ -2,9 +2,9 @@ name: Release
 
 # Every push to main is a release candidate. After CI passes, semantic-release
 # reads the Conventional Commits since the last tag; if they call for a
-# release, @miguelfranken/reporter is published to GitHub Packages and the
-# version bump and CHANGELOG.md are committed back, together with a tag and a
-# GitHub release.
+# release, @miguelfranken/reporter and @miguelfranken/mcp (same version) are
+# published to GitHub Packages and the version bumps and CHANGELOG.md are
+# committed back, together with a tag and a GitHub release.
 #
 # Run manually for a dry run: it prints the next version and publishes nothing.
 on:
@@ -47,7 +47,7 @@ jobs:
 
       - uses: jdx/mise-action@v4
       - run: nub ci
-      - run: nub exec turbo run build --ui=stream --filter=@miguelfranken/reporter
+      - run: nub exec turbo run build --ui=stream --filter=@miguelfranken/reporter --filter=@miguelfranken/mcp
 
       # A reference that npm expands, so the token is never written to disk.
       - name: Authenticate with GitHub Packages

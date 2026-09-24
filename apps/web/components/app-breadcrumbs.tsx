@@ -26,6 +26,7 @@ const SECTION_LABELS: Record<string, string> = {
   users: 'Users',
   audit: 'Audit log',
   storage: 'Storage',
+  mcp: 'MCP',
 };
 
 type Crumb = { label: string; href?: string };
@@ -77,6 +78,7 @@ function buildCrumbs(pathname: string, teams: SidebarTeam[]): Crumb[] {
     return crumbs;
   }
 
+  if (pathname.startsWith('/account/ai')) return [{ label: 'Account', href: '/account' }, { label: 'AI assistants' }];
   if (pathname.startsWith('/account')) return [{ label: 'Account' }];
 
   const team = activeTeam(pathname, teams);

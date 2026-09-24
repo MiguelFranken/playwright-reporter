@@ -21,13 +21,18 @@ export type AuditAction =
   | 'project.delete'
   | 'token.create'
   | 'token.revoke'
+  | 'pat.create'
+  | 'pat.revoke'
+  | 'oauth.grant'
+  | 'oauth.revoke'
   | 'user.role'
   | 'user.ban'
   | 'user.unban'
   | 'user.password'
   | 'user.delete'
   | 'storage.retention.update'
-  | 'storage.retention.sweep';
+  | 'storage.retention.sweep'
+  | 'mcp.settings.update';
 
 /**
  * Audit writes are best effort: a failure here must never fail the mutation

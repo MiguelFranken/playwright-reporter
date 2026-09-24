@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { RunCounts } from '@miguelfranken/ui/patterns/counts-bar';
 import { RunErrors, type ErrorGroup } from '@miguelfranken/ui/views/run/run-errors';
 import { RunHeader, type RunHeaderData, type RunHeaderShard } from '@miguelfranken/ui/views/run/run-header';
+import { DebugWithAiMenu } from '@miguelfranken/ui/patterns/debug-with-ai-menu';
 import type { RunResultRow } from '@miguelfranken/ui/views/run/run-result';
 import type { SpecSummary } from '@miguelfranken/ui/views/run/run-specs';
 import type { LiveEvent } from '@/lib/live/events';
@@ -24,7 +25,13 @@ import { LiveConnection, useLivePart, useLivePeek, useLiveStore } from './live-s
 
 type Header = HeaderState<RunHeaderData> & { shards: RunHeaderShard[] };
 
-/** The run's header, its counts and shards kept current, and the page's stream. */
+/**
+ * The run's header, its counts and shards kept current, and the page's stream.
+ *
+ * `aiPrompt` arrives prebuilt from the server (a string, not a builder — trap 1
+ * in packages/ui/AGENTS.md); whether to offer it is decided here from the *live*
+ * counts, so the menu appears as soon as a running run records its first failure.
+ */
 export function LiveRunHeader({
   run,
   counts,
@@ -35,6 +42,8 @@ export function LiveRunHeader({
   summaryUrl,
   resultsUrl,
   branchHref,
+  aiPrompt,
+  aiSetupHref,
 }: {
   run: RunHeaderData;
   counts: RunCounts;
@@ -45,6 +54,10 @@ export function LiveRunHeader({
   summaryUrl: string;
   resultsUrl: string;
   branchHref?: string;
+  /** Scope-only triage prompt for the "Debug with AI" menu. */
+  aiPrompt?: string;
+  /** Where the menu sends users who have not connected an assistant yet. */
+  aiSetupHref?: string;
 }) {
   const store = useLiveStore();
   const header = useLivePart<Header>('header', { run, counts, shards }, cursor, reduceHeader, run);
@@ -56,6 +69,7 @@ export function LiveRunHeader({
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
   }, [running]);
+  const hasFailures = header.counts.failed + header.counts.flaky > 0;
 
   return (
     <RunHeader
@@ -64,6 +78,7 @@ export function LiveRunHeader({
       shards={header.shards}
       branchHref={branchHref}
       now={now}
+      actions={aiPrompt && aiSetupHref && hasFailures ? <DebugWithAiMenu prompt={aiPrompt} setupHref={aiSetupHref} /> : undefined}
       liveIndicator={
         <LiveConnection
           streamUrl={streamUrl}

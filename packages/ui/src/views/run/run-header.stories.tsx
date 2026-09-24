@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, within } from 'storybook/test';
+import { DebugWithAiMenu } from '../../patterns/debug-with-ai-menu';
 import { LiveIndicator } from '../../patterns/live-indicator';
+import { triagePrompt } from '../../lib/ai-handoff';
 import { counts, runHeader, runHeaderShards } from '../../fixtures/runs';
 import { NOW } from '../../fixtures/now';
 import { RunHeader, RunHeaderSkeleton } from './run-header';
@@ -102,6 +104,18 @@ export const CommitLinksOut: Story = {
       'href',
       'https://github.com/acme/web/commit/3b71de0c',
     );
+  },
+};
+
+/** A run with failures offers the AI hand-off at the end of the title row. */
+export const WithActions: Story = {
+  args: {
+    actions: (
+      <DebugWithAiMenu prompt={triagePrompt({ runUrl: 'https://reporter.acme.test/teams/acme/projects/web/runs/128' })} setupHref="/account/ai" />
+    ),
+  },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByRole('button', { name: /debug with ai/i })).toBeVisible();
   },
 };
 

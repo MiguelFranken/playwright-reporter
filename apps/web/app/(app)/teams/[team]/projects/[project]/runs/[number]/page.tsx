@@ -4,6 +4,7 @@ import { RunConfig } from '@miguelfranken/ui/views/run/run-config';
 import { RunHeaderSkeleton } from '@miguelfranken/ui/views/run/run-header';
 import { RunTabsSkeleton } from '@miguelfranken/ui/views/run/run-skeleton';
 import { parseSpecSort, parseSpecStatuses } from '@miguelfranken/ui/lib/spec-filter';
+import { triagePrompt } from '@miguelfranken/ui/lib/ai-handoff';
 import { parseRunTab } from '@/components/run/run-tab';
 import { UrlRunSpecs } from '@/components/run/url-run-specs';
 import { RunTabs } from '@/components/run/run-tabs';
@@ -11,7 +12,8 @@ import { UrlRunSummary } from '@/components/run/url-run-summary';
 import { LiveRunErrors, LiveRunHeader } from '@/components/live/live-run';
 import { LiveStoreProvider } from '@/components/live/live-store';
 import { requireProject } from '@/lib/auth/access';
-import { branchHref, toRunHeaderData } from '@/lib/view-models';
+import { baseUrl } from '@/lib/auth/config';
+import { branchHref, projectHrefs, toRunHeaderData } from '@/lib/view-models';
 import { getRunByNumber, listRunErrorGroupsWithCursor, listRunResults, listRunSpecsWithCursor } from '@/lib/db/queries/runs';
 
 type Params = Promise<{ team: string; project: string; number: string }>;
@@ -73,6 +75,9 @@ async function Header({ params }: { params: Params }) {
       summaryUrl={`/api${base}/runs/${found.id}/summary`}
       resultsUrl={`/api${base}/runs/${found.id}/results`}
       branchHref={runRow.gitBranch ? branchHref(base, runRow.gitBranch) : undefined}
+      // Always sent: the header shows the menu once the live counts include a failure.
+      aiPrompt={triagePrompt({ runUrl: `${baseUrl()}${projectHrefs(base).run(found.number)}` })}
+      aiSetupHref="/account/ai"
     />
   );
 }

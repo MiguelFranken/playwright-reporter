@@ -21,6 +21,8 @@ const PUBLIC = [
   // The Workflow SDK's queue calls these back (the run watchdog); a redirect
   // would break every watchdog in local dev and self-hosted.
   /^\/\.well-known\/workflow\//,
+  // OAuth discovery for MCP clients: fetched by programs, never by a signed-in browser.
+  /^\/\.well-known\/oauth-(authorization-server|protected-resource)(\/|$)/,
   /^\/_next\//,
   /^\/favicon/,
   // The push service worker: browsers fetch it without following redirects.
