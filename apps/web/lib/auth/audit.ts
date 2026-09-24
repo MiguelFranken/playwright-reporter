@@ -29,7 +29,8 @@ export type AuditAction =
   | 'user.password'
   | 'user.delete'
   | 'storage.retention.update'
-  | 'storage.retention.sweep';
+  | 'storage.retention.sweep'
+  | 'mcp.settings.update';
 
 /**
  * Audit writes are best effort: a failure here must never fail the mutation
