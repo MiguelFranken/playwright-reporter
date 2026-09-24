@@ -2,7 +2,11 @@
  * The single place that turns a request into "which team/project may this
  * person touch". Rule for reviewers: **no page, Server Action or route handler
  * under `app/` reaches `lib/db/queries` or `lib/db/drizzle` without first
- * getting its ids from here.** Ingest routes are the exception (token auth).
+ * getting its ids from here (or from `principal.ts`, for bearer-token callers
+ * such as the MCP server).** Ingest routes are the exception (token auth).
+ *
+ * The checks themselves live in `principal.ts`; this module binds them to the
+ * Better Auth session of the current request.
  *
  * Everything returns 404 rather than 403 for a team or project the caller
  * cannot see, so URLs never leak the existence of another team's projects.
@@ -13,26 +17,12 @@ import { and, eq } from 'drizzle-orm';
 import { headers } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
 import { db } from '@/lib/db/drizzle';
-import { projects, teamMembers, teams, type Project, type Team } from '@/lib/db/schema';
+import { teamMembers } from '@/lib/db/schema';
 import { auth } from './auth';
-import { roleCan, type EffectiveRole, type Permission } from './permissions';
+import { roleCan, type Permission } from './permissions';
+import { resolveProjectFor, resolveTeamFor, type CurrentUser, type ProjectAccess, type TeamAccess } from './principal';
 
-export type CurrentUser = {
-  id: string;
-  email: string;
-  name: string;
-  image: string | null;
-  isSuperadmin: boolean;
-};
-
-export type TeamAccess = {
-  user: CurrentUser;
-  team: Team;
-  role: EffectiveRole;
-  can: (permission: Permission) => boolean;
-};
-
-export type ProjectAccess = TeamAccess & { project: Project };
+export type { CurrentUser, ProjectAccess, TeamAccess } from './principal';
 
 /**
  * React `cache` memoizes per request, so a layout, its page and every nested
@@ -70,17 +60,7 @@ export async function requireSuperadmin(): Promise<CurrentUser> {
 /** Team plus the caller's membership in one query. Superadmins get a virtual role. */
 export const resolveTeam = cache(async (teamSlug: string): Promise<TeamAccess | null> => {
   const user = await getCurrentUser();
-  if (!user) return null;
-  const [row] = await db
-    .select({ team: teams, role: teamMembers.role })
-    .from(teams)
-    .leftJoin(teamMembers, and(eq(teamMembers.teamId, teams.id), eq(teamMembers.userId, user.id)))
-    .where(eq(teams.slug, teamSlug))
-    .limit(1);
-  if (!row) return null;
-  const role: EffectiveRole | null = user.isSuperadmin ? 'superadmin' : (row.role ?? null);
-  if (!role) return null;
-  return { user, team: row.team, role, can: (p) => roleCan(role, p) };
+  return user ? resolveTeamFor({ user, grant: null }, teamSlug) : null;
 });
 
 export async function requireTeam(teamSlug: string, permission?: Permission): Promise<TeamAccess> {
@@ -93,15 +73,8 @@ export async function requireTeam(teamSlug: string, permission?: Permission): Pr
 }
 
 export const resolveProject = cache(async (teamSlug: string, projectSlug: string): Promise<ProjectAccess | null> => {
-  const access = await resolveTeam(teamSlug);
-  if (!access) return null;
-  const [project] = await db
-    .select()
-    .from(projects)
-    .where(and(eq(projects.teamId, access.team.id), eq(projects.slug, projectSlug)))
-    .limit(1);
-  if (!project) return null;
-  return { ...access, project };
+  const user = await getCurrentUser();
+  return user ? resolveProjectFor({ user, grant: null }, teamSlug, projectSlug) : null;
 });
 
 export async function requireProject(
