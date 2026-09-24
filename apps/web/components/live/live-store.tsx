@@ -43,8 +43,14 @@ export function useLivePart<T>(name: string, value: T, cursor: number, reduce: R
 /** Another view's live data, e.g. the header's counts on the summary tab. */
 export function useLivePeek<T>(name: string, fallback: T): T {
   const store = useLiveStore();
-  useStoreVersion(store);
-  return store.peek<T>(name) ?? fallback;
+  // The part's value is a stable snapshot between changes. While a boundary
+  // hydrates, React reads the server snapshot — the fallback the server rendered.
+  const value = useSyncExternalStore(
+    store.subscribe,
+    () => store.peek<T>(name),
+    () => undefined,
+  );
+  return value ?? fallback;
 }
 
 function toLiveEvent(id: number, type: string, data: Record<string, unknown>): LiveEvent {
@@ -101,6 +107,8 @@ export function LiveConnection({
     let failures = 0;
     let stopped = false;
     let since: number | null = null;
+    /** Bumped by every (re)connect, so a poll loop from before it stops. */
+    let generation = 0;
 
     const refresh = (delay: number) => {
       if (refreshTimer) return;
@@ -127,6 +135,7 @@ export function LiveConnection({
     };
 
     const close = () => {
+      generation++;
       es?.close();
       es = null;
       if (pollTimer) clearTimeout(pollTimer);
@@ -136,8 +145,9 @@ export function LiveConnection({
     const startPolling = () => {
       if (!pollUrl || stopped) return;
       setState('polling');
+      const mine = generation;
       const tick = async () => {
-        if (stopped) return;
+        if (stopped || generation !== mine) return;
         if (document.hidden) {
           pollTimer = setTimeout(tick, 5000);
           return;
@@ -151,7 +161,7 @@ export function LiveConnection({
         } catch {
           /* keep polling */
         }
-        if (!stopped) pollTimer = setTimeout(tick, 2000);
+        if (!stopped && generation === mine) pollTimer = setTimeout(tick, 2000);
       };
       void tick();
     };
@@ -160,7 +170,7 @@ export function LiveConnection({
       if (stopped) return;
       close();
       since = from;
-      store.streamFrom = from;
+      store.streamStarted(from);
       es = new EventSource(`${streamUrl}?since=${from}`);
       es.onopen = () => {
         failures = 0;

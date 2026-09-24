@@ -55,15 +55,33 @@ const countsSql = sql<RunCounts>`(
  */
 const runCursorSql = (runId: SQL | string) =>
   sql<number>`(select coalesce(max(${runEvents.id}), 0)::bigint from ${runEvents} where ${runEvents.runId} = ${runId})`.mapWith(Number);
-const projectCursorSql = (projectId: string) =>
-  sql<number>`(select coalesce(max(${runEvents.id}), 0)::bigint from ${runEvents} where ${runEvents.projectId} = ${projectId})`.mapWith(Number);
 
 /**
- * An empty result has no row to carry the cursor. `0` — replay every event the
- * client has — is exact then: had any of those events touched this view's
- * data, the snapshot would not have been empty.
+ * An empty result has no row to carry the cursor, so these are read *before*
+ * the view's query. An earlier cursor is exact for an empty snapshot: had any
+ * event after it touched the view's data, the snapshot would not be empty.
  */
-const EMPTY_CURSOR = 0;
+async function runCursorBefore(runId: string) {
+  const [row] = await db.select({ cursor: runCursorSql(runId) }).from(sql`(select 1) as one`);
+  return row?.cursor ?? 0;
+}
+
+/**
+ * A project page's stream starts here. Rows carry their own run's cursor
+ * (a project-wide maximum is not ordered across runs ingesting at once), so
+ * replaying from this earlier point counts nothing twice.
+ */
+async function projectCursorBefore(projectId: string) {
+  // Read as far behind as the stream reads (see `eventsSince`): across runs,
+  // ids commit out of order, and starting past one would skip it.
+  const [row] = await db
+    .select({
+      cursor: sql<number>`(select coalesce(max(${runEvents.id}), 0)::bigint from ${runEvents}
+        where ${runEvents.projectId} = ${projectId} and ${runEvents.createdAt} <= now() - interval '500 milliseconds')`.mapWith(Number),
+    })
+    .from(sql`(select 1) as one`);
+  return row?.cursor ?? 0;
+}
 
 export interface RunFilters {
   status?: string;
@@ -89,8 +107,9 @@ export async function listRuns(projectId: string, filters: RunFilters = {}) {
       ? sql`(${runs.gitMessage} ilike ${'%' + filters.q + '%'} or ${runs.gitBranch} ilike ${'%' + filters.q + '%'} or ${runs.number}::text = ${filters.q.replace(/^#/, '')} or ${runs.gitShortSha} ilike ${filters.q + '%'})`
       : undefined,
   ]);
+  const cursor = await projectCursorBefore(projectId);
   const rows = await db
-    .select({ run: runs, counts: countsSql, cursor: projectCursorSql(projectId) })
+    .select({ run: runs, counts: countsSql, cursor: runCursorSql(sql.raw('"runs"."id"')) })
     .from(runs)
     .where(where)
     .orderBy(desc(runs.startedAt))
@@ -98,8 +117,8 @@ export async function listRuns(projectId: string, filters: RunFilters = {}) {
     .offset((page - 1) * pageSize);
   const [{ total }] = await db.select({ total: sql<number>`count(*)::int` }).from(runs).where(where);
   return {
-    cursor: rows[0]?.cursor ?? EMPTY_CURSOR,
-    rows: rows.slice(0, pageSize).map((r) => ({ ...r.run, counts: parseCounts(r.counts) }) as RunWithCounts),
+    cursor,
+    rows: rows.slice(0, pageSize).map((r) => ({ ...r.run, counts: parseCounts(r.counts), cursor: r.cursor }) as RunWithCounts & { cursor: number }),
     hasMore: rows.length > pageSize,
     total: num(total),
     page,
@@ -113,8 +132,9 @@ export async function listActiveRuns(projectId: string) {
 
 export async function listActiveRunsWithCursor(projectId: string) {
   await markStaleRuns(projectId);
+  const cursor = await projectCursorBefore(projectId);
   const rows = await db
-    .select({ run: runs, counts: countsSql, cursor: projectCursorSql(projectId) })
+    .select({ run: runs, counts: countsSql, cursor: runCursorSql(sql.raw('"runs"."id"')) })
     .from(runs)
     .where(and(eq(runs.projectId, projectId), eq(runs.status, 'running')))
     .orderBy(desc(runs.startedAt))
@@ -123,12 +143,13 @@ export async function listActiveRunsWithCursor(projectId: string) {
     rows.map(async (r) => ({
       ...r.run,
       counts: parseCounts(r.counts),
+      cursor: r.cursor,
       shards: await db.select().from(runShards).where(eq(runShards.runId, r.run.id)).orderBy(asc(runShards.shardIndex)),
     })),
   );
   return {
-    runs: withShards as (RunWithCounts & { shards: RunShard[] })[],
-    cursor: rows[0]?.cursor ?? EMPTY_CURSOR,
+    runs: withShards as (RunWithCounts & { shards: RunShard[]; cursor: number })[],
+    cursor,
   };
 }
 
@@ -209,6 +230,7 @@ export async function listRunSpecs(runId: string): Promise<SpecSummary[]> {
 }
 
 export async function listRunSpecsWithCursor(runId: string): Promise<{ specs: SpecSummary[]; cursor: number }> {
+  const before = await runCursorBefore(runId);
   const rows = await db
     .select({
       cursor: runCursorSql(runId),
@@ -228,7 +250,7 @@ export async function listRunSpecsWithCursor(runId: string): Promise<{ specs: Sp
     .orderBy(asc(tests.file));
   return {
     specs: rows.map(({ cursor: _cursor, ...spec }) => spec),
-    cursor: rows[0]?.cursor ?? EMPTY_CURSOR,
+    cursor: rows[0]?.cursor ?? before,
   };
 }
 
@@ -238,6 +260,7 @@ export async function listRunErrorGroups(runId: string): Promise<ErrorGroup[]> {
 }
 
 export async function listRunErrorGroupsWithCursor(runId: string): Promise<{ groups: ErrorGroup[]; cursor: number }> {
+  const before = await runCursorBefore(runId);
   const rows = await db
     .select({
       cursor: runCursorSql(runId),
@@ -256,7 +279,7 @@ export async function listRunErrorGroupsWithCursor(runId: string): Promise<{ gro
     .orderBy(desc(sql`count(*)`));
   return {
     groups: rows.filter((r) => r.signature).map(({ cursor: _cursor, ...group }) => group) as ErrorGroup[],
-    cursor: rows[0]?.cursor ?? EMPTY_CURSOR,
+    cursor: rows[0]?.cursor ?? before,
   };
 }
 

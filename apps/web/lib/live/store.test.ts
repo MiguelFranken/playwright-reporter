@@ -12,11 +12,27 @@ describe('LiveStore', () => {
 
   it('replays the events a part missed between its snapshot and hydration', () => {
     const store = new LiveStore();
+    store.streamStarted(0);
     store.apply(log(1));
     store.apply(log(2));
     store.apply(log(3));
     store.hydrate('p', 'server', 1, [] as number[], seen);
     expect(store.read<number[]>('p', 'server')).toEqual([2, 3]);
+  });
+
+  it('does not replay across a gap in the log; the restarted stream fills it', () => {
+    const store = new LiveStore();
+    store.streamStarted(10);
+    store.apply(log(11));
+    store.apply(log(12));
+    const need = vi.fn();
+    store.onNeedStream = need;
+    store.hydrate('p', 's', 5, [] as number[], seen);
+    expect(store.peek('p')).toEqual([]);
+    expect(need).toHaveBeenCalledWith(5);
+    // The stream from 5 sends 6…12 again; the part takes each once, in order.
+    for (const id of [6, 7, 8, 9, 10, 11, 12]) store.apply(log(id));
+    expect(store.peek('p')).toEqual([6, 7, 8, 9, 10, 11, 12]);
   });
 
   it('applies each event once per part, at the part’s own cursor', () => {
@@ -35,7 +51,7 @@ describe('LiveStore', () => {
     store.onNeedStream = need;
     store.hydrate('a', 'a', 10, [] as number[], seen);
     expect(need).toHaveBeenLastCalledWith(10);
-    store.streamFrom = 10;
+    store.streamStarted(10);
     store.hydrate('b', 'b', 12, [] as number[], seen);
     expect(need).toHaveBeenCalledTimes(1);
     store.hydrate('c', 'c', 8, [] as number[], seen);

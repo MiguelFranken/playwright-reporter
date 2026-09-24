@@ -202,4 +202,10 @@ describe('reduceRunCounts', () => {
     expect(next[0].counts).toMatchObject({ total: 1, running: 1 });
     expect(next[1]).toBe(runs[1]);
   });
+
+  it('skips an event the row’s own snapshot already reflects', () => {
+    const runs = [{ id: 'run-1', counts: { ...zero, total: 1, running: 1 }, cursor: 5 }];
+    expect(reduceRunCounts(runs, begin(4))).toBe(runs);
+    expect(reduceRunCounts(runs, end(6))[0]).toMatchObject({ cursor: 6, counts: { running: 0, passed: 1 } });
+  });
 });

@@ -44,6 +44,8 @@ export class LiveStore {
   streamFrom: number | null = null;
   /** Set by the connection: start (or restart) the stream from this cursor. */
   onNeedStream: ((since: number) => void) | null = null;
+  /** The log holds every event after this id (up to the newest); older ones may be missing. */
+  private logFrom = Infinity;
 
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);
@@ -96,16 +98,26 @@ export class LiveStore {
     if (this.parts.get(name)?.source === source) return;
     let next = value;
     let at = cursor;
-    for (const ev of this.log) {
-      if (ev.id > at) {
-        next = reduce(next, ev);
-        at = ev.id;
+    // Replaying across a gap would move the cursor past events the log never
+    // had; the restarted stream delivers them in order instead.
+    if (cursor >= this.logFrom) {
+      for (const ev of this.log) {
+        if (ev.id > at) {
+          next = reduce(next, ev);
+          at = ev.id;
+        }
       }
     }
     this.parts.set(name, { source, cursor: at, value: next, reduce: reduce as Reducer<unknown> });
     this.emit(true);
     // The log only holds what the stream sent; anything older has to be sent again.
     if (this.streamFrom === null || cursor < this.streamFrom) this.onNeedStream?.(cursor);
+  }
+
+  /** Called by the connection when a stream starts from `since`. */
+  streamStarted(since: number) {
+    this.streamFrom = since;
+    this.logFrom = Math.min(this.logFrom === Infinity ? since : this.logFrom, since);
   }
 
   /** Replaces some of a part's data with fresher server data, then replays the log over it. */
@@ -127,7 +139,10 @@ export class LiveStore {
       this.log.push(ev);
       this.log.sort((a, b) => a.id - b.id);
     }
-    if (this.log.length > LOG_LIMIT) this.log.splice(0, this.log.length - LOG_LIMIT);
+    if (this.log.length > LOG_LIMIT) {
+      const dropped = this.log.splice(0, this.log.length - LOG_LIMIT);
+      this.logFrom = Math.max(this.logFrom, dropped.at(-1)!.id);
+    }
     let changed = false;
     for (const part of this.parts.values()) {
       if (ev.id <= part.cursor) continue;

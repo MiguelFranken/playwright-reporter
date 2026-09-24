@@ -330,12 +330,18 @@ export function reduceErrorGroups(groups: ErrorGroup[], ev: LiveEvent): ErrorGro
 
 // ---------------------------------------------------------------- runs list
 
-export function reduceRunCounts<R extends { id: string; counts: RunCounts }>(runs: R[], ev: LiveEvent): R[] {
-  const move = moveOf(ev);
-  if (!move) return runs;
+/**
+ * A project page's rows each carry their own run's cursor: a project-wide one
+ * is not ordered across runs that ingest at the same time. An event a row
+ * already reflects is skipped.
+ */
+export function reduceRunCounts<R extends { id: string; counts: RunCounts; cursor?: number }>(runs: R[], ev: LiveEvent): R[] {
   const index = runs.findIndex((r) => r.id === ev.data.runId);
   if (index < 0) return runs;
+  const run = runs[index];
+  if (run.cursor !== undefined && ev.id <= run.cursor) return runs;
+  const move = moveOf(ev);
   const next = [...runs];
-  next[index] = { ...runs[index], counts: applyMoveToCounts(runs[index].counts, move) };
+  next[index] = { ...run, cursor: ev.id, counts: move ? applyMoveToCounts(run.counts, move) : run.counts };
   return next;
 }

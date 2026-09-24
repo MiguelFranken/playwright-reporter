@@ -159,6 +159,11 @@ export async function getRunForProject(project: TokenProject, runId: string): Pr
  */
 export async function ingestEvents(project: TokenProject, run: Run, batch: EventBatch) {
   return db.transaction(async (tx) => {
+    // One ingest transaction per run at a time, so a run's event ids commit in
+    // order. The live views rely on that: a page snapshot's cursor is the
+    // newest id it reflects, and an older id committing after it would be
+    // skipped. Shards contended on this row at the end of the transaction anyway.
+    await tx.select({ id: runs.id }).from(runs).where(eq(runs.id, run.id)).for('no key update');
     const [shard] = await tx
       .select()
       .from(runShards)

@@ -87,21 +87,21 @@ export function useLiveRows(
   const map = useLivePart<RowMap>('rows', initial, cursor, reduceRows, rows);
   const visible = useMemo(() => visibleRows(map, filters), [map, filters]);
 
-  const requested = useRef(new Set<string>());
-  const partialIds = backfill ? visible.filter((r) => r.partial && !requested.current.has(r.id)).map((r) => r.id) : [];
+  // Only requests in flight are remembered: a row that becomes partial again
+  // (recreated from an event after a filter change) is fetched again.
+  const inFlight = useRef(new Set<string>());
+  const partialIds = backfill ? visible.filter((r) => r.partial && !inFlight.current.has(r.id)).map((r) => r.id) : [];
   const key = partialIds.join(',');
   useEffect(() => {
     if (!key) return;
     const timer = setTimeout(async () => {
       const ids = key.split(',').slice(0, BACKFILL_BATCH);
-      for (const id of ids) requested.current.add(id);
+      for (const id of ids) inFlight.current.add(id);
       try {
         const res = await fetch(`${resultsUrl}?ids=${ids.join(',')}`, { cache: 'no-store' });
         if (!res.ok) throw new Error(String(res.status));
         const body = (await res.json()) as { rows: RunResultRow[] };
         const fresh = new Map(body.rows.map((r) => [r.id, r]));
-        // Not readable yet (the event outran the commit); ask again with the next change.
-        for (const id of ids) if (!fresh.has(id)) requested.current.delete(id);
         store.merge<RowMap>(
           'rows',
           (current) => {
@@ -112,8 +112,9 @@ export function useLiveRows(
           (ev: LiveEvent) => (ev.type === 'test.begin' || ev.type === 'attempt.end') && fresh.has(ev.data.resultId),
         );
       } catch {
-        // Try again with the next change.
-        for (const id of ids) requested.current.delete(id);
+        // Tried again with the next change.
+      } finally {
+        for (const id of ids) inFlight.current.delete(id);
       }
     }, BACKFILL_MS);
     return () => clearTimeout(timer);
