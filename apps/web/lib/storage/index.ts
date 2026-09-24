@@ -20,7 +20,7 @@ export function getStorage(): StorageAdapter {
   const driver = storageDriver();
   cached =
     driver === 'vercel-blob'
-      ? new VercelBlobStorageAdapter(baseUrl(), process.env.BLOB_READ_WRITE_TOKEN)
+      ? new VercelBlobStorageAdapter(process.env.BLOB_READ_WRITE_TOKEN)
       : new LocalStorageAdapter(path.resolve(/*turbopackIgnore: true*/ process.cwd(), process.env.STORAGE_LOCAL_DIR ?? '.storage'), baseUrl());
   return cached;
 }

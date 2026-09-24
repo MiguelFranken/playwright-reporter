@@ -1,10 +1,13 @@
 'use client';
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useOptimistic, useTransition } from 'react';
+import { useMemo, useOptimistic, useTransition } from 'react';
 import { RunSpecs, type SpecSummary } from '@miguelfranken/ui/views/run/run-specs';
 import type { RunResultRow } from '@miguelfranken/ui/views/run/run-result';
 import type { SpecFilterChange, SpecFilters } from '@miguelfranken/ui/lib/spec-filter';
+import { useLivePart } from '@/components/live/live-store';
+import { useLiveRows } from '@/components/live/live-run';
+import { reduceSpecs } from '@/lib/live/reducers';
 import { runHrefs } from '@/lib/view-models';
 
 /**
@@ -29,21 +32,33 @@ import { runHrefs } from '@/lib/view-models';
  *   Writing all three keys from one merged state on every change makes the
  *   result the same whichever order they commit in.
  */
+const NO_ROWS: RunResultRow[] = [];
+
 export function UrlRunSpecs({
   base,
   runNumber,
   specs,
+  specsCursor,
   selected,
   rows,
+  cursor,
+  resultsUrl,
   filters,
 }: {
   base: string;
   runNumber: number;
   specs: SpecSummary[];
+  /** The newest event the tallies reflect; see `runCursorSql`. */
+  specsCursor: number;
   selected?: string;
   rows: RunResultRow[] | null;
+  cursor: number;
+  resultsUrl: string;
   filters: SpecFilters;
 }) {
+  const liveSpecs = useLivePart('specs', specs, specsCursor, reduceSpecs);
+  const fileFilter = useMemo(() => ({ file: selected }), [selected]);
+  const liveRows = useLiveRows(rows ?? NO_ROWS, cursor, fileFilter, resultsUrl, { backfill: rows !== null });
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -72,9 +87,9 @@ export function UrlRunSpecs({
   return (
     <RunSpecs
       hrefs={runHrefs(base, runNumber, shown)}
-      specs={specs}
+      specs={liveSpecs}
       selected={selected}
-      rows={rows}
+      rows={rows ? liveRows : null}
       filters={shown}
       isPending={isPending}
       onFilterChange={onFilterChange}

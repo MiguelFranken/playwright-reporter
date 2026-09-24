@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, eq, gt, inArray, lt, sql } from 'drizzle-orm';
+import { and, eq, getTableColumns, gt, inArray, lt, lte, sql } from 'drizzle-orm';
 import {
   classifyAttachment,
   type AttemptEndEvent,
@@ -24,10 +24,11 @@ import {
 } from '@/lib/db/schema';
 import { errorSignature, firstLine } from '@/lib/metrics/error-signature';
 import { baseUrl, getStorage, storageKey } from '@/lib/storage';
+import type { AttemptEndPayload, TestBeginPayload } from '@/lib/live/events';
 import { IngestError, type TokenProject } from './http';
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
-type Outcome = (typeof testResults.$inferInsert)['outcome'];
+type Outcome = NonNullable<(typeof testResults.$inferInsert)['outcome']>;
 
 export const STALE_RUN_MS = 10 * 60 * 1000;
 
@@ -146,8 +147,23 @@ export async function getRunForProject(project: TokenProject, runId: string): Pr
   return run;
 }
 
+/**
+ * Applies one batch of a shard's events.
+ *
+ * The work is set-based: a constant number of statements per batch, however
+ * many events it holds, instead of a handful per event. That matters because
+ * every statement is a network round trip, and the shard row stays locked
+ * until the transaction ends. The events are folded in memory in `seq` order
+ * — a batch can hold a test's begin, a failed attempt, the retry's begin and
+ * the final attempt — and the resulting rows are written once each.
+ */
 export async function ingestEvents(project: TokenProject, run: Run, batch: EventBatch) {
   return db.transaction(async (tx) => {
+    // One ingest transaction per run at a time, so a run's event ids commit in
+    // order. The live views rely on that: a page snapshot's cursor is the
+    // newest id it reflects, and an older id committing after it would be
+    // skipped. Shards contended on this row at the end of the transaction anyway.
+    await tx.select({ id: runs.id }).from(runs).where(eq(runs.id, run.id)).for('no key update');
     const [shard] = await tx
       .select()
       .from(runShards)
@@ -155,71 +171,286 @@ export async function ingestEvents(project: TokenProject, run: Run, batch: Event
       .for('update');
     if (!shard) throw new IngestError(404, 'shard not registered');
     const fresh = batch.events.filter((e) => e.seq > shard.lastSeq).sort((a, b) => a.seq - b.seq);
-    let lastSeq = shard.lastSeq;
+    if (fresh.length === 0) return { accepted: 0, lastSeq: shard.lastSeq };
+
+    const begins = fresh.filter((e): e is TestBeginEvent => e.type === 'test.begin');
+    const ends = fresh.filter((e): e is AttemptEndEvent => e.type === 'attempt.end');
+
+    const testsByKey = await resolveTests(tx, project, begins, ends);
+    const results = await resolveResults(tx, project, run, batch.shardIndex, begins, ends, testsByKey);
+
+    // Attempts first: `onConflictDoNothing` tells us which ones are new, and
+    // only those may touch their result (a redelivered attempt is a no-op).
+    const attemptIds = new Map<AttemptEndEvent, string>();
+    const attemptRows = ends.map((ev) => {
+      const id = randomUUID();
+      attemptIds.set(ev, id);
+      return {
+        id,
+        testResultId: results.get(testsByKey.get(ev.testKey)!.id)!.row.id,
+        retry: ev.retry,
+        status: ev.status,
+        durationMs: clampDuration(ev.durationMs),
+        startedAt: new Date(ev.startedAt),
+        workerIndex: ev.workerIndex,
+        parallelIndex: ev.parallelIndex,
+        errors: ev.errors,
+        steps: ev.steps,
+        stdout: ev.stdout,
+        stderr: ev.stderr,
+        annotations: ev.annotations,
+      };
+    });
+    const insertedAttempts = new Set(
+      attemptRows.length
+        ? (
+            await tx
+              .insert(testAttempts)
+              .values(attemptRows)
+              .onConflictDoNothing({ target: [testAttempts.testResultId, testAttempts.retry] })
+              .returning({ id: testAttempts.id })
+          ).map((a) => a.id)
+        : [],
+    );
+
+    const storage = getStorage();
+    const attachmentRows: (typeof attachments.$inferInsert)[] = [];
+    const eventRows: (typeof runEvents.$inferInsert)[] = [];
+    const touched = new Set<ResultState>();
+
     for (const ev of fresh) {
-      if (ev.type === 'test.begin') await handleTestBegin(tx, project, run, batch.shardIndex, ev);
-      else if (ev.type === 'attempt.end') await handleAttemptEnd(tx, project, run, batch.shardIndex, ev);
-      else await tx.insert(runEvents).values({ runId: run.id, projectId: project.id, type: 'run.log', payload: { level: ev.level, message: ev.message } });
-      lastSeq = Math.max(lastSeq, ev.seq);
+      if (ev.type === 'test.begin') {
+        const test = testsByKey.get(ev.testKey)!;
+        const state = results.get(test.id)!;
+        const payload: TestBeginPayload = {
+          testId: test.id,
+          resultId: state.row.id,
+          title: ev.title,
+          titlePath: ev.titlePath,
+          file: ev.file,
+          project: ev.project,
+          line: ev.line,
+          tags: ev.tags,
+          annotations: ev.annotations,
+          retry: ev.retry,
+          outcome: state.row.outcome,
+          prevOutcome: state.isNew ? null : state.row.outcome,
+        };
+        state.isNew = false;
+        eventRows.push({ runId: run.id, projectId: project.id, type: 'test.begin', payload: { ...payload } });
+      } else if (ev.type === 'attempt.end') {
+        const attemptId = attemptIds.get(ev)!;
+        if (!insertedAttempts.has(attemptId)) continue; // duplicate delivery
+        const test = testsByKey.get(ev.testKey)!;
+        const state = results.get(test.id)!;
+        const prev = { outcome: state.isNew ? null : state.row.outcome, errorSignature: state.row.errorSignature };
+        state.isNew = false;
+        applyAttempt(state.row, ev);
+        touched.add(state);
+        for (const a of ev.attachments) {
+          attachmentRows.push({
+            id: a.id,
+            attemptId,
+            runId: run.id,
+            name: a.name,
+            contentType: a.contentType,
+            kind: classifyAttachment(a.name, a.contentType),
+            storageKey: storageKey({ projectId: project.id, runId: run.id, attemptId, attachmentId: a.id, name: a.name }),
+            storageDriver: storage.name,
+            sizeBytes: a.size ?? null,
+            status: 'pending' as const,
+          });
+        }
+        const payload: AttemptEndPayload = {
+          testId: test.id,
+          resultId: state.row.id,
+          title: test.title,
+          file: test.file,
+          project: test.pwProject,
+          retry: ev.retry,
+          status: ev.status,
+          isFinal: ev.isFinal,
+          durationMs: clampDuration(ev.durationMs),
+          outcome: state.row.outcome,
+          prevOutcome: prev.outcome,
+          resultDurationMs: state.row.durationMs,
+          attemptCount: state.row.attemptCount,
+          errorMessage: state.row.errorMessage,
+          errorSignature: state.row.errorSignature,
+          prevErrorSignature: prev.errorSignature,
+          annotations: state.row.annotations,
+        };
+        eventRows.push({ runId: run.id, projectId: project.id, type: 'attempt.end', payload: { ...payload } });
+      } else {
+        eventRows.push({ runId: run.id, projectId: project.id, type: 'run.log', payload: { level: ev.level, message: ev.message } });
+      }
     }
+
+    if (attachmentRows.length) await tx.insert(attachments).values(attachmentRows).onConflictDoNothing();
+    if (touched.size) await updateResults(tx, [...touched].map((s) => s.row));
+    if (eventRows.length) await tx.insert(runEvents).values(eventRows);
+    const lastSeq = Math.max(shard.lastSeq, ...fresh.map((e) => e.seq));
     await tx.update(runShards).set({ lastSeq }).where(and(eq(runShards.runId, run.id), eq(runShards.shardIndex, batch.shardIndex)));
     await tx.update(runs).set({ lastEventAt: new Date() }).where(eq(runs.id, run.id));
     return { accepted: fresh.length, lastSeq };
   });
 }
 
-async function upsertTest(
-  tx: Tx,
-  project: TokenProject,
-  ev: Pick<TestBeginEvent, 'testKey' | 'pwTestId' | 'file' | 'title' | 'titlePath' | 'project' | 'tags'>,
-) {
-  const [row] = await tx
-    .insert(tests)
-    .values({
-      id: randomUUID(),
-      projectId: project.id,
-      testKey: ev.testKey,
-      pwTestId: ev.pwTestId,
-      file: ev.file,
-      title: ev.title,
-      titlePath: ev.titlePath,
-      pwProject: ev.project,
-      tags: ev.tags,
-    })
-    .onConflictDoUpdate({
-      target: [tests.projectId, tests.testKey],
-      set: { pwTestId: ev.pwTestId, title: ev.title, titlePath: ev.titlePath, tags: ev.tags, file: ev.file, lastSeenAt: new Date() },
-    })
-    .returning({ id: tests.id });
-  return row.id;
+type ResultRow = typeof testResults.$inferSelect;
+type TestRef = { id: string; title: string; file: string; pwProject: string };
+/** A result as the fold sees it; `isNew` until the first event that reports it. */
+type ResultState = { row: ResultRow; isNew: boolean };
+
+/** Upserts the tests the batch begins and finds (or stubs) the ones it only ends. */
+async function resolveTests(tx: Tx, project: TokenProject, begins: TestBeginEvent[], ends: AttemptEndEvent[]) {
+  const byKey = new Map<string, TestRef>();
+  // A batch can begin a test twice (a retry); the last begin describes it best.
+  const latest = new Map(begins.map((ev) => [ev.testKey, ev]));
+  if (latest.size) {
+    const rows = await tx
+      .insert(tests)
+      .values(
+        [...latest.values()].map((ev) => ({
+          id: randomUUID(),
+          projectId: project.id,
+          testKey: ev.testKey,
+          pwTestId: ev.pwTestId,
+          file: ev.file,
+          title: ev.title,
+          titlePath: ev.titlePath,
+          pwProject: ev.project,
+          tags: ev.tags,
+        })),
+      )
+      .onConflictDoUpdate({
+        target: [tests.projectId, tests.testKey],
+        set: {
+          pwTestId: sql`excluded.pw_test_id`,
+          title: sql`excluded.title`,
+          titlePath: sql`excluded.title_path`,
+          tags: sql`excluded.tags`,
+          file: sql`excluded.file`,
+          lastSeenAt: new Date(),
+        },
+      })
+      .returning({ id: tests.id, testKey: tests.testKey, title: tests.title, file: tests.file, pwProject: tests.pwProject });
+    for (const r of rows) byKey.set(r.testKey, r);
+  }
+
+  const unknown = [...new Set(ends.map((ev) => ev.testKey))].filter((k) => !byKey.has(k));
+  if (unknown.length) {
+    const rows = await tx
+      .select({ id: tests.id, testKey: tests.testKey, title: tests.title, file: tests.file, pwProject: tests.pwProject })
+      .from(tests)
+      .where(and(eq(tests.projectId, project.id), inArray(tests.testKey, unknown)));
+    for (const r of rows) byKey.set(r.testKey, r);
+    // The test.begin was lost: record a placeholder rather than drop the attempt.
+    const missing = unknown.filter((k) => !byKey.has(k));
+    if (missing.length) {
+      const stubs = await tx
+        .insert(tests)
+        .values(missing.map((k) => ({ id: randomUUID(), projectId: project.id, testKey: k, pwTestId: '', file: 'unknown', title: k.slice(0, 12), titlePath: [], pwProject: '', tags: [] })))
+        .onConflictDoUpdate({ target: [tests.projectId, tests.testKey], set: { lastSeenAt: new Date() } })
+        .returning({ id: tests.id, testKey: tests.testKey, title: tests.title, file: tests.file, pwProject: tests.pwProject });
+      for (const r of stubs) byKey.set(r.testKey, r);
+    }
+  }
+  return byKey;
 }
 
-async function handleTestBegin(tx: Tx, project: TokenProject, run: Run, shardIndex: number, ev: TestBeginEvent) {
-  const testId = await upsertTest(tx, project, ev);
-  const [result] = await tx
-    .insert(testResults)
-    .values({
-      id: randomUUID(),
-      runId: run.id,
-      testId,
-      projectId: project.id,
-      shardIndex,
-      outcome: 'running',
-      expectedStatus: ev.expectedStatus,
-      startedAt: new Date(ev.startedAt),
-      line: ev.line,
-      column: ev.column,
-      annotations: ev.annotations,
-      tags: ev.tags,
-    })
-    .onConflictDoUpdate({ target: [testResults.runId, testResults.testId], set: { tags: ev.tags } })
-    .returning({ id: testResults.id, outcome: testResults.outcome });
-  await tx.insert(runEvents).values({
-    runId: run.id,
-    projectId: project.id,
-    type: 'test.begin',
-    payload: { testId, resultId: result.id, title: ev.title, file: ev.file, project: ev.project, retry: ev.retry },
-  });
+/** Upserts the results the batch begins and finds (or creates) the ones it only ends. Keyed by test id. */
+async function resolveResults(
+  tx: Tx,
+  project: TokenProject,
+  run: Run,
+  shardIndex: number,
+  begins: TestBeginEvent[],
+  ends: AttemptEndEvent[],
+  testsByKey: Map<string, TestRef>,
+) {
+  const byTest = new Map<string, ResultState>();
+  const firstBegin = new Map<string, TestBeginEvent>();
+  const lastBegin = new Map<string, TestBeginEvent>();
+  for (const ev of begins) {
+    const testId = testsByKey.get(ev.testKey)!.id;
+    if (!firstBegin.has(testId)) firstBegin.set(testId, ev);
+    lastBegin.set(testId, ev);
+  }
+  if (firstBegin.size) {
+    const rows = await tx
+      .insert(testResults)
+      .values(
+        [...firstBegin].map(([testId, ev]) => ({
+          id: randomUUID(),
+          runId: run.id,
+          testId,
+          projectId: project.id,
+          shardIndex,
+          outcome: 'running' as const,
+          expectedStatus: ev.expectedStatus,
+          startedAt: new Date(ev.startedAt),
+          line: ev.line,
+          column: ev.column,
+          annotations: ev.annotations,
+          tags: lastBegin.get(testId)!.tags,
+        })),
+      )
+      .onConflictDoUpdate({ target: [testResults.runId, testResults.testId], set: { tags: sql`excluded.tags` } })
+      // `xmax = 0` holds for a freshly inserted row and not for one the conflict updated.
+      .returning({ ...getTableColumns(testResults), inserted: sql<boolean>`(xmax = 0)` });
+    for (const { inserted, ...row } of rows) byTest.set(row.testId, { row, isNew: inserted });
+  }
+
+  const unknown = [...new Set(ends.map((ev) => testsByKey.get(ev.testKey)!.id))].filter((id) => !byTest.has(id));
+  if (unknown.length) {
+    const rows = await tx
+      .select()
+      .from(testResults)
+      .where(and(eq(testResults.runId, run.id), inArray(testResults.testId, unknown)));
+    for (const row of rows) byTest.set(row.testId, { row, isNew: false });
+    const missing = unknown.filter((id) => !byTest.has(id));
+    if (missing.length) {
+      const startedAt = new Map(ends.map((ev) => [testsByKey.get(ev.testKey)!.id, ev.startedAt]));
+      const created = await tx
+        .insert(testResults)
+        .values(missing.map((testId) => ({ id: randomUUID(), runId: run.id, testId, projectId: project.id, shardIndex, startedAt: new Date(startedAt.get(testId)!) })))
+        .returning();
+      for (const row of created) byTest.set(row.testId, { row, isNew: true });
+    }
+  }
+  return byTest;
+}
+
+/** Folds one attempt into its result, exactly as the per-row update used to. */
+function applyAttempt(row: ResultRow, ev: AttemptEndEvent) {
+  const firstError = ev.errors[0]?.message;
+  const failedAttempt = ev.status === 'failed' || ev.status === 'timedOut' || ev.status === 'interrupted';
+  row.outcome = ev.isFinal ? finalOutcome(ev) : 'running';
+  row.attemptCount = Math.max(row.attemptCount, ev.retry + 1);
+  row.durationMs = Math.min(MAX_DURATION_MS, row.durationMs + clampDuration(ev.durationMs));
+  row.finishedAt = ev.isFinal ? new Date(new Date(ev.startedAt).getTime() + ev.durationMs) : null;
+  row.annotations = ev.annotations;
+  if (failedAttempt && firstError) {
+    row.errorSignature = errorSignature(firstError);
+    row.errorMessage = firstLine(firstError);
+  }
+}
+
+/** One `update … from (values …)` for every result the batch changed. */
+async function updateResults(tx: Tx, rows: ResultRow[]) {
+  const values = sql.join(
+    rows.map(
+      (r) =>
+        sql`(${r.id}::uuid, ${r.outcome}::test_outcome, ${r.attemptCount}::int, ${r.durationMs}::int, ${r.finishedAt ? r.finishedAt.toISOString() : null}::timestamptz, ${JSON.stringify(r.annotations)}::jsonb, ${r.errorSignature}::text, ${r.errorMessage}::text)`,
+    ),
+    sql`, `,
+  );
+  await tx.execute(sql`
+    update ${testResults} as tr set
+      outcome = v.outcome, attempt_count = v.attempt_count, duration_ms = v.duration_ms, finished_at = v.finished_at,
+      annotations = v.annotations, error_signature = v.error_signature, error_message = v.error_message
+    from (values ${values}) as v(id, outcome, attempt_count, duration_ms, finished_at, annotations, error_signature, error_message)
+    where tr.id = v.id`);
 }
 
 /** Exported for the unit test: the precedence between Playwright's status and outcome. */
@@ -230,92 +461,6 @@ export function finalOutcome(ev: AttemptEndEvent): Outcome {
   if (ev.status === 'timedOut') return 'timedout';
   if (ev.status === 'interrupted') return 'interrupted';
   return 'failed';
-}
-
-async function handleAttemptEnd(tx: Tx, project: TokenProject, run: Run, shardIndex: number, ev: AttemptEndEvent) {
-  // Resolve test + result; recreate if test.begin was lost.
-  let [test] = await tx.select({ id: tests.id, title: tests.title, file: tests.file, pwProject: tests.pwProject }).from(tests).where(and(eq(tests.projectId, project.id), eq(tests.testKey, ev.testKey)));
-  if (!test) {
-    const id = await upsertTest(tx, project, { testKey: ev.testKey, pwTestId: '', file: 'unknown', title: ev.testKey.slice(0, 12), titlePath: [], project: '', tags: [] });
-    test = { id, title: ev.testKey.slice(0, 12), file: 'unknown', pwProject: '' };
-  }
-  let [result] = await tx.select().from(testResults).where(and(eq(testResults.runId, run.id), eq(testResults.testId, test.id)));
-  if (!result) {
-    [result] = await tx
-      .insert(testResults)
-      .values({ id: randomUUID(), runId: run.id, testId: test.id, projectId: project.id, shardIndex, startedAt: new Date(ev.startedAt) })
-      .returning();
-  }
-  const attemptId = randomUUID();
-  const inserted = await tx
-    .insert(testAttempts)
-    .values({
-      id: attemptId,
-      testResultId: result.id,
-      retry: ev.retry,
-      status: ev.status,
-      durationMs: clampDuration(ev.durationMs),
-      startedAt: new Date(ev.startedAt),
-      workerIndex: ev.workerIndex,
-      parallelIndex: ev.parallelIndex,
-      errors: ev.errors,
-      steps: ev.steps,
-      stdout: ev.stdout,
-      stderr: ev.stderr,
-      annotations: ev.annotations,
-    })
-    .onConflictDoNothing({ target: [testAttempts.testResultId, testAttempts.retry] })
-    .returning({ id: testAttempts.id });
-  if (inserted.length === 0) return; // duplicate delivery
-  const storage = getStorage();
-  if (ev.attachments.length) {
-    await tx.insert(attachments).values(
-      ev.attachments.map((a) => ({
-        id: a.id,
-        attemptId,
-        runId: run.id,
-        name: a.name,
-        contentType: a.contentType,
-        kind: classifyAttachment(a.name, a.contentType),
-        storageKey: storageKey({ projectId: project.id, runId: run.id, attemptId, attachmentId: a.id, name: a.name }),
-        storageDriver: storage.name,
-        sizeBytes: a.size ?? null,
-        status: 'pending' as const,
-      })),
-    ).onConflictDoNothing();
-  }
-  const firstError = ev.errors[0]?.message;
-  const failedAttempt = ev.status === 'failed' || ev.status === 'timedOut' || ev.status === 'interrupted';
-  const outcome: Outcome = ev.isFinal ? finalOutcome(ev) : 'running';
-  await tx
-    .update(testResults)
-    .set({
-      outcome,
-      attemptCount: sql`greatest(${testResults.attemptCount}, ${ev.retry + 1})`,
-      // The sum is computed as bigint: two in-range integers can still overflow.
-      durationMs: sql`least(${MAX_DURATION_MS}, ${testResults.durationMs}::bigint + ${clampDuration(ev.durationMs)})::int`,
-      finishedAt: ev.isFinal ? new Date(new Date(ev.startedAt).getTime() + ev.durationMs) : null,
-      annotations: ev.annotations,
-      ...(failedAttempt && firstError ? { errorSignature: errorSignature(firstError), errorMessage: firstLine(firstError) } : {}),
-    })
-    .where(eq(testResults.id, result.id));
-  await tx.insert(runEvents).values({
-    runId: run.id,
-    projectId: project.id,
-    type: 'attempt.end',
-    payload: {
-      testId: test.id,
-      resultId: result.id,
-      title: test.title,
-      file: test.file,
-      project: test.pwProject,
-      retry: ev.retry,
-      status: ev.status,
-      outcome,
-      isFinal: ev.isFinal,
-      durationMs: clampDuration(ev.durationMs),
-    },
-  });
 }
 
 // ---------------------------------------------------------------- uploads
@@ -349,10 +494,18 @@ export async function storeUpload(attachment: Attachment, body: ReadableStream<U
   return size;
 }
 
+/**
+ * The reporter's word that a presigned upload landed. The store is asked
+ * rather than believed: the size comes from the stored object, and a missing
+ * one stays pending.
+ */
 export async function completeUpload(attachment: Attachment, size?: number) {
+  const storage = getStorage();
+  const stored = await storage.head(attachment.storageKey);
+  if (!stored) throw new IngestError(409, 'upload not found in storage');
   await db
     .update(attachments)
-    .set({ status: 'uploaded', ...(size !== undefined ? { sizeBytes: size } : {}) })
+    .set({ status: 'uploaded', sizeBytes: stored.size ?? size ?? null })
     .where(eq(attachments.id, attachment.id));
 }
 
@@ -438,10 +591,29 @@ export async function markStaleRuns(projectId: string) {
   }
 }
 
+/**
+ * Events are read half a second behind their transaction's start. Ids come
+ * from a sequence, so two concurrent ingest transactions can commit out of id
+ * order; a reader that jumped its cursor past a later id would never see the
+ * earlier one. `created_at` is the transaction start, and an ingest
+ * transaction is far shorter than the lag.
+ */
+const VISIBILITY_LAG = sql`now() - interval '500 milliseconds'`;
+
 export async function eventsSince(runId: string, afterId: number, limit = 500) {
-  return db.select().from(runEvents).where(and(eq(runEvents.runId, runId), gt(runEvents.id, afterId))).orderBy(runEvents.id).limit(limit);
+  return db
+    .select()
+    .from(runEvents)
+    .where(and(eq(runEvents.runId, runId), gt(runEvents.id, afterId), lte(runEvents.createdAt, VISIBILITY_LAG)))
+    .orderBy(runEvents.id)
+    .limit(limit);
 }
 
 export async function projectEventsSince(projectId: string, afterId: number, limit = 500) {
-  return db.select().from(runEvents).where(and(eq(runEvents.projectId, projectId), gt(runEvents.id, afterId))).orderBy(runEvents.id).limit(limit);
+  return db
+    .select()
+    .from(runEvents)
+    .where(and(eq(runEvents.projectId, projectId), gt(runEvents.id, afterId), lte(runEvents.createdAt, VISIBILITY_LAG)))
+    .orderBy(runEvents.id)
+    .limit(limit);
 }

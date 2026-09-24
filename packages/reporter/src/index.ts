@@ -13,7 +13,7 @@ import type {
 import type { AttachmentRef, AttemptEndEvent, IngestEvent, Step, TestBeginEvent, TestError } from '@miguelfranken/protocol';
 import { IngestClient } from './client';
 import { collectCiInfo, collectGitInfo, collectPlaywrightInfo, collectSystemInfo, detectExecutor } from './metadata';
-import { resolveOptions } from './options';
+import { isListMode, resolveOptions } from './options';
 import { EventQueue } from './queue';
 import type { ReporterOptions, ResolvedOptions } from './types';
 
@@ -67,6 +67,12 @@ export default class PlaywrightReporterApp implements Reporter {
 
   onBegin(config: FullConfig, suite: Suite) {
     if (this.disabled || !this.opts) return;
+    // `playwright test --list` runs the reporters too, but nothing is executed:
+    // reporting it would record an empty run.
+    if (isListMode()) {
+      this.disabled = true;
+      return;
+    }
     const opts = this.opts;
     this.config = config;
     this.startedAt = new Date();
@@ -248,7 +254,9 @@ export default class PlaywrightReporterApp implements Reporter {
         try {
           const size = await this.client.upload(instr, item.source, item.ref.contentType);
           this.uploadedBytes += size;
-          await this.client.completeUpload(runId, item.ref.id, size);
+          // A proxied upload is recorded by the server as it arrives; a presigned
+          // one went straight to storage, so the server has to be told.
+          if (instr.strategy !== 'proxy') await this.client.completeUpload(runId, item.ref.id, size);
         } catch (err) {
           this.warn(`upload of ${item.ref.name} failed: ${(err as Error).message}`);
         }

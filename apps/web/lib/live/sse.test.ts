@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RunEvent } from '@/lib/db/schema';
-import { parseCursor, sseResponse, type SseSource } from './sse';
+import { MAX_STREAM_MS, parseCursor, sseResponse, type SseSource } from './sse';
 
 function request(url = 'http://test.local/live', headers: HeadersInit = {}, signal?: AbortSignal) {
   return new Request(url, { headers, signal });
@@ -123,7 +123,7 @@ describe('sseResponse', () => {
       poll: async () => [event(1, 'run.finished', { status: 'passed' })],
       isDone: async () => true,
     };
-    const collected = await collect(sseResponse(request('http://test.local/live?since=0'), source), 10);
+    const collected = await collect(sseResponse(request('http://test.local/live?since=0'), source), 1500);
     await collected.pump;
 
     expect(collected.text()).toContain('event: run.finished');
@@ -169,5 +169,47 @@ describe('sseResponse', () => {
   it('sends a keep-alive comment on the ping interval', async () => {
     const collected = await collect(sseResponse(request('http://test.local/live?since=0'), { poll: async () => [] }), 16_000);
     expect(collected.text()).toContain(': ping');
+  });
+  it('ends on an endsWith event without asking isDone', async () => {
+    const isDone = vi.fn(async () => false);
+    const source: SseSource = {
+      poll: async (cursor) => (cursor === 0 ? [event(1, 'run.finished', { status: 'passed' })] : []),
+      isDone,
+      endsWith: (ev) => ev.type === 'run.finished',
+    };
+    const collected = await collect(sseResponse(request('http://test.local/live?since=0'), source), 10);
+    await collected.pump;
+
+    expect(collected.text()).toContain('event: done');
+    expect(isDone).not.toHaveBeenCalled();
+  });
+
+  it('asks isDone at most every 30 seconds, not on every poll', async () => {
+    const isDone = vi.fn(async () => false);
+    const poll = vi.fn(async () => []);
+    sseResponse(request('http://test.local/live?since=0'), { poll, isDone });
+    await vi.advanceTimersByTimeAsync(29_000);
+    expect(poll.mock.calls.length).toBeGreaterThan(5);
+    expect(isDone).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(isDone).toHaveBeenCalledTimes(2);
+  });
+
+  it('backs off while idle and polls every second again once events flow', async () => {
+    let calls = 0;
+    const poll = vi.fn(async () => (++calls === 8 ? [event(calls)] : []));
+    sseResponse(request('http://test.local/live?since=0'), { poll });
+    await vi.advanceTimersByTimeAsync(20_000);
+    const times = poll.mock.invocationCallOrder.length;
+    // Three quick polls, then 1.5 s → 2.25 s → 3.4 s → 4 s …, and back to 1 s after the event.
+    expect(times).toBeGreaterThan(8);
+    expect(times).toBeLessThan(15);
+  });
+
+  it('says bye and closes before the function limit, so the client reconnects cleanly', async () => {
+    const collected = await collect(sseResponse(request('http://test.local/live?since=0'), { poll: async () => [] }), MAX_STREAM_MS + 10);
+    await collected.pump;
+    expect(collected.text()).toContain('event: bye');
+    expect(MAX_STREAM_MS).toBeLessThan(300_000);
   });
 });

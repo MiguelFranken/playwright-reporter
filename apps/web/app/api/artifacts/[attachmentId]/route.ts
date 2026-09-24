@@ -17,6 +17,8 @@ const CORS = {
   vary: 'Origin',
 };
 
+const INLINE_MEDIA = new Set(['video', 'screenshot', 'image']);
+
 export async function OPTIONS() {
   return new Response(null, { status: 204, headers: CORS });
 }
@@ -48,6 +50,17 @@ export async function GET(request: Request, { params }: { params: Promise<{ atta
 
   const { attachment } = row;
   const storage = getStorage();
+  const download = url.searchParams.get('download') !== null;
+
+  // Media the browser plays itself is read straight from the store: no function
+  // copies the bytes, and a video seeks with real range requests. Downloads keep
+  // their file name and the trace viewer its CORS headers, so those stay here.
+  if (storage.readUrl && !download && INLINE_MEDIA.has(attachment.kind)) {
+    return new Response(null, {
+      status: 302,
+      headers: { ...CORS, location: await storage.readUrl(attachment.storageKey), 'cache-control': 'private, max-age=600' },
+    });
+  }
 
   const rangeHeader = request.headers.get('range');
   let range: { start: number; end?: number } | undefined;
@@ -58,7 +71,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ atta
   const obj = await storage.get(attachment.storageKey, range);
   if (!obj) return new Response('artifact missing in storage', { status: 404, headers: CORS });
 
-  const disposition = url.searchParams.get('download') !== null ? 'attachment' : 'inline';
+  const disposition = download ? 'attachment' : 'inline';
   const headers: Record<string, string> = {
     ...CORS,
     'content-type': attachment.contentType || obj.contentType,
