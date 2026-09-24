@@ -1,7 +1,20 @@
 /** Auth-related environment configuration, shared by the app and the seed. */
 
+/**
+ * Public origin of the app. An explicit `BASE_URL` wins; on Vercel it falls
+ * back to the project's production domain, or to the deployment's own URL on
+ * previews, so each deployment works without per-environment configuration.
+ */
 export function baseUrl() {
-  return (process.env.BASE_URL ?? 'http://localhost:3000').replace(/\/+$/, '');
+  return (process.env.BASE_URL ?? vercelUrl() ?? 'http://localhost:3000').replace(/\/+$/, '');
+}
+
+function vercelUrl() {
+  const host =
+    process.env.VERCEL_ENV === 'production'
+      ? process.env.VERCEL_PROJECT_PRODUCTION_URL
+      : process.env.VERCEL_URL;
+  return host ? `https://${host}` : undefined;
 }
 
 /**

@@ -1,13 +1,11 @@
 import path from 'node:path';
+import { baseUrl } from '../auth/config';
 import { LocalStorageAdapter } from './local';
 import type { StorageAdapter, StorageDriver } from './types';
 import { VercelBlobStorageAdapter } from './vercel-blob';
 
 export type { StorageAdapter, StorageDriver } from './types';
-
-export function baseUrl() {
-  return (process.env.BASE_URL ?? 'http://localhost:3000').replace(/\/+$/, '');
-}
+export { baseUrl };
 
 export function storageDriver(): StorageDriver {
   const d = process.env.STORAGE_DRIVER;

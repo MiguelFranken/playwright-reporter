@@ -88,8 +88,22 @@ describe('storageDriver', () => {
 describe('baseUrl', () => {
   it('defaults to localhost and strips trailing slashes', () => {
     delete process.env.BASE_URL;
+    delete process.env.VERCEL_ENV;
+    delete process.env.VERCEL_URL;
     expect(baseUrl()).toBe('http://localhost:3000');
     process.env.BASE_URL = 'https://reports.example.test///';
     expect(baseUrl()).toBe('https://reports.example.test');
+  });
+
+  it('falls back to the Vercel production domain, or the deployment URL on previews', () => {
+    delete process.env.BASE_URL;
+    process.env.VERCEL_PROJECT_PRODUCTION_URL = 'reports.example.test';
+    process.env.VERCEL_URL = 'reports-abc123.vercel.app';
+    process.env.VERCEL_ENV = 'production';
+    expect(baseUrl()).toBe('https://reports.example.test');
+    process.env.VERCEL_ENV = 'preview';
+    expect(baseUrl()).toBe('https://reports-abc123.vercel.app');
+    process.env.BASE_URL = 'https://explicit.example.test';
+    expect(baseUrl()).toBe('https://explicit.example.test');
   });
 });

@@ -15,7 +15,10 @@
         "BETTER_AUTH_SECRET",
         "AUTH_SECRET",
         "INVITATION_TTL_HOURS",
-        "ARTIFACT_URL_TTL_SECONDS"
+        "ARTIFACT_URL_TTL_SECONDS",
+        "VERCEL_ENV",
+        "VERCEL_URL",
+        "VERCEL_PROJECT_PRODUCTION_URL"
       ]
     },
     "check-types": { "outputs": ["*.tsbuildinfo"] }
