@@ -9,6 +9,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# Turborepo resolves the package manager from package.json and needs the `nub`
+# binary on PATH; the root devDependency provides it after `nub ci`.
+export PATH="$(cd ../.. && pwd)/node_modules/.bin:$PATH"
+
 (cd ../.. && node_modules/.bin/turbo run build --filter=@repo/web)
 
 if [ "${VERCEL_ENV:-}" = "production" ]; then
