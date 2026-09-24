@@ -1,0 +1,23 @@
+{
+  "name": "demo-shop",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The Acme web shop and its Playwright suite, which feed the live demo",
+  "scripts": {
+    "test:e2e": "playwright test",
+    "plan": "nub scripts/plan.ts",
+    "record": "nub scripts/record.ts",
+    "backfill": "nub scripts/backfill.ts",
+    "check-types": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@miguelfranken/protocol": "workspace:*",
+    "@miguelfranken/reporter": "workspace:*",
+    "@miguelfranken/typescript-config": "workspace:*",
+    "@types/node": "^24.13.5",
+    "dotenv": "^17.4.2",
+    "typescript": "^7.0.2"
+  }
+}

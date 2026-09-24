@@ -9,6 +9,7 @@ import { Badge } from '@miguelfranken/ui/components/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@miguelfranken/ui/components/card';
 import { Skeleton } from '@miguelfranken/ui/components/skeleton';
 import { requireUser } from '@/lib/auth/access';
+import { isDemoUser } from '@/lib/auth/demo';
 import { listMyTeams } from '@/lib/db/queries/teams';
 import { pushConfig } from '@/lib/push/config';
 import { removeMyAvatar, updateMyAvatar } from '@/app/(app)/account/actions';
@@ -40,17 +41,25 @@ async function AccountContent() {
   const user = await requireUser();
   const teams = await listMyTeams(user.id);
   const push = pushConfig();
+  // The demo account is shared by every visitor: nothing about it can change.
+  const demo = isDemoUser(user);
 
   return (
     <>
       <Card>
         <CardHeader>
           <CardTitle>Profile</CardTitle>
-          <CardDescription>How you appear to the rest of your teams.</CardDescription>
+          <CardDescription>
+            {demo ? 'This is the shared demo account. It can look at everything and change nothing.' : 'How you appear to the rest of your teams.'}
+          </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <AvatarUpload name={user.name || user.email} image={user.image} label="Profile image" upload={updateMyAvatar} remove={removeMyAvatar} />
-          <ChangeNameForm name={user.name} />
+          {!demo && (
+            <>
+              <AvatarUpload name={user.name || user.email} image={user.image} label="Profile image" upload={updateMyAvatar} remove={removeMyAvatar} />
+              <ChangeNameForm name={user.name} />
+            </>
+          )}
           <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1.5 text-sm">
             <dt className="text-muted-foreground">Email</dt>
             <dd>{user.email}</dd>
@@ -76,15 +85,17 @@ async function AccountContent() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Password</CardTitle>
-          <CardDescription>Changing it signs out every other session.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ChangePasswordForm />
-        </CardContent>
-      </Card>
+      {!demo && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Password</CardTitle>
+            <CardDescription>Changing it signs out every other session.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ChangePasswordForm />
+          </CardContent>
+        </Card>
+      )}
 
       {push && (
         <Card>
@@ -98,15 +109,17 @@ async function AccountContent() {
         </Card>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Active sessions</CardTitle>
-          <CardDescription>Devices currently signed in with this account.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <SessionsCard />
-        </CardContent>
-      </Card>
+      {!demo && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Active sessions</CardTitle>
+            <CardDescription>Devices currently signed in with this account.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <SessionsCard />
+          </CardContent>
+        </Card>
+      )}
     </>
   );
 }

@@ -1,0 +1,102 @@
+name: Live demo
+
+# Feeds the public demo (`/demo` on the production app) with real runs: every
+# two hours the Acme web shop's suite (examples/demo-shop) runs for the
+# branches `schedule.ts` plans for that slot, and the reporter sends the runs,
+# with their screenshots, videos and traces, to the demo project.
+#
+# Dispatch it with `backfill_days` once, before the schedule starts, to give
+# the demo the history it would have had: every scenario is recorded once and
+# replayed over the past days.
+#
+# Needs the repository variable DEMO_REPORTER_URL and the secret
+# DEMO_REPORTER_TOKEN (an API token of the demo project). The schedule only
+# runs while the variable DEMO_ENABLED is `true`.
+on:
+  schedule:
+    - cron: '17 */2 * * *'
+  workflow_dispatch:
+    inputs:
+      backfill_days:
+        description: Replay this many days of history instead of running the current slot (0 = run the current slot)
+        type: number
+        default: 0
+
+concurrency:
+  group: demo
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CI: true
+  TURBO_TELEMETRY_DISABLED: 1
+
+jobs:
+  plan:
+    name: Plan
+    if: github.event_name == 'workflow_dispatch' && inputs.backfill_days == 0 || github.event_name == 'schedule' && vars.DEMO_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: jdx/mise-action@v4
+      - id: plan
+        run: nub examples/demo-shop/scripts/plan.ts
+
+  e2e:
+    name: ${{ matrix.branch }} (${{ matrix.scenario }}, shard ${{ matrix.shard }})
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-key: demo
+      - run: nub exec turbo run build --ui=stream --filter=@miguelfranken/reporter
+      - uses: ./.github/actions/demo-browsers
+      - name: Run the suite
+        working-directory: examples/demo-shop
+        env:
+          DEMO_SCENARIO: ${{ matrix.scenario }}
+          PW_REPORTER_URL: ${{ vars.DEMO_REPORTER_URL }}
+          PW_REPORTER_TOKEN: ${{ secrets.DEMO_REPORTER_TOKEN }}
+          PW_REPORTER_CI_RUN_ID: demo-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.id }}
+          PW_REPORTER_ENVIRONMENT: ${{ matrix.environment }}
+          PW_REPORTER_TAGS: ${{ matrix.tags }}
+          PW_REPORTER_GIT_BRANCH: ${{ matrix.branch }}
+          PW_REPORTER_GIT_SHA: ${{ matrix.sha }}
+          PW_REPORTER_GIT_MESSAGE: ${{ matrix.message }}
+          PW_REPORTER_GIT_AUTHOR: ${{ matrix.author }}
+          PW_REPORTER_CI_JOB: e2e
+        # Failing tests are part of the story; only a broken setup fails the job.
+        run: nub exec playwright test --shard=${{ matrix.shard }} || echo "::notice::the suite reported failures, as planned for ${{ matrix.scenario }}"
+
+  backfill:
+    name: Backfill ${{ inputs.backfill_days }} days
+    if: github.event_name == 'workflow_dispatch' && inputs.backfill_days > 0
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-key: demo
+      - run: nub exec turbo run build --ui=stream --filter=@miguelfranken/reporter
+      - uses: ./.github/actions/demo-browsers
+      - name: Record every scenario
+        working-directory: examples/demo-shop
+        run: nub scripts/record.ts
+      - name: Replay the history
+        working-directory: examples/demo-shop
+        env:
+          PW_REPORTER_URL: ${{ vars.DEMO_REPORTER_URL }}
+          PW_REPORTER_TOKEN: ${{ secrets.DEMO_REPORTER_TOKEN }}
+        run: nub scripts/backfill.ts --days ${{ inputs.backfill_days }}

@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { headers } from 'next/headers';
 import { actionError, getCurrentUser, type Denied } from '@/lib/auth/access';
 import { auth } from '@/lib/auth/auth';
+import { DEMO_READ_ONLY, isDemoUser } from '@/lib/auth/demo';
 import { deleteAvatar, storeAvatar } from '@/lib/avatars/store';
 import { db } from '@/lib/db/drizzle';
 import { users } from '@/lib/db/schema';
@@ -15,6 +16,7 @@ type Ok = { ok: true };
 export async function updateMyAvatar(formData: FormData): Promise<Ok | Denied> {
   const user = await getCurrentUser();
   if (!user) return actionError('Sign in first.');
+  if (isDemoUser(user)) return actionError(DEMO_READ_ONLY);
 
   const stored = await storeAvatar('users', user.id, formData.get('file'));
   if ('error' in stored) return actionError(stored.error);
@@ -25,6 +27,7 @@ export async function updateMyAvatar(formData: FormData): Promise<Ok | Denied> {
 export async function removeMyAvatar(): Promise<Ok | Denied> {
   const user = await getCurrentUser();
   if (!user) return actionError('Sign in first.');
+  if (isDemoUser(user)) return actionError(DEMO_READ_ONLY);
   return setImage(user.id, null);
 }
 

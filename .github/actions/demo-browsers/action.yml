@@ -1,0 +1,27 @@
+name: Demo browsers
+description: Chromium for the demo shop's suite, cached per Playwright version.
+
+runs:
+  using: composite
+  steps:
+    - name: Get Playwright version
+      id: playwright
+      shell: bash
+      run: echo "version=$(node -p "require('./examples/demo-shop/node_modules/@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+    - name: Cache Playwright browsers
+      id: cache
+      uses: actions/cache@v6
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium
+    - name: Install Chromium
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      working-directory: examples/demo-shop
+      run: nub exec playwright install --with-deps chromium
+    # The browser binary is cached, but its system libraries are not.
+    - name: Install Chromium system dependencies
+      if: steps.cache.outputs.cache-hit == 'true'
+      shell: bash
+      working-directory: examples/demo-shop
+      run: nub exec playwright install-deps chromium

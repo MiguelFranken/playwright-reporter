@@ -5,6 +5,7 @@ import { Suspense } from 'react';
 import { LoginForm } from '@/components/auth/login-form';
 import { Skeleton } from '@miguelfranken/ui/components/skeleton';
 import { getCurrentUser } from '@/lib/auth/access';
+import { demoUserEmail } from '@/lib/auth/demo';
 import { safeNext } from '@/lib/auth/next-param';
 
 export const metadata: Metadata = { title: 'Sign in' };
@@ -40,5 +41,18 @@ async function LoginContent({ searchParams }: { searchParams: SearchParams }) {
   // Reading the session is a request-time read, so it lives inside the boundary.
   const user = await getCurrentUser();
   if (user) redirect(next);
-  return <LoginForm next={next} />;
+  return (
+    <>
+      <LoginForm next={next} />
+      {demoUserEmail() && (
+        // A plain link: `/demo` starts a session, so it must never be prefetched.
+        <p className="text-center text-sm text-muted-foreground">
+          Just looking?{' '}
+          <a href="/demo" className="font-medium text-foreground underline-offset-4 hover:underline">
+            Explore the live demo
+          </a>
+        </p>
+      )}
+    </>
+  );
 }
