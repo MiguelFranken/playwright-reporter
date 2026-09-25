@@ -2,11 +2,10 @@
 
 import { useActionState, useEffect } from 'react';
 import { toast } from 'sonner';
-import { Button } from '@miguelfranken/ui/components/button';
-import { Input } from '@miguelfranken/ui/components/input';
-import { Label } from '@miguelfranken/ui/components/label';
+import { ProjectRenameForm as ProjectRenameFormView } from '@miguelfranken/ui/views/settings/project-rename-form';
 import { renameProject, type RenameState } from '@/app/(app)/teams/[team]/projects/[project]/settings/actions';
 
+/** Binds the project name form to its server action. */
 export function ProjectRenameForm({ teamSlug, projectSlug, name }: { teamSlug: string; projectSlug: string; name: string }) {
   const [state, action, pending] = useActionState<RenameState, FormData>(renameProject, null);
   useEffect(() => {
@@ -15,17 +14,9 @@ export function ProjectRenameForm({ teamSlug, projectSlug, name }: { teamSlug: s
     else toast.error(state.message);
   }, [state]);
   return (
-    <form action={action} className="flex flex-col gap-2">
+    <ProjectRenameFormView name={name} action={action} pending={pending} error={state && !state.ok ? state.message : null}>
       <input type="hidden" name="team" value={teamSlug} />
       <input type="hidden" name="project" value={projectSlug} />
-      <Label htmlFor="project-name">Project name</Label>
-      <div className="flex gap-2">
-        <Input id="project-name" name="name" defaultValue={name} maxLength={80} required className="h-8 max-w-sm" />
-        <Button type="submit" size="sm" disabled={pending}>
-          {pending ? 'Saving…' : 'Save'}
-        </Button>
-      </div>
-      {state && !state.ok ? <p className="text-xs text-destructive">{state.message}</p> : null}
-    </form>
+    </ProjectRenameFormView>
   );
 }
