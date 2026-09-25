@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.29](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.28...v0.0.29) (2026-09-25)
+
+### Bug Fixes
+
+* **ui:** hydration-safe numbers and dates, and remount retention forms on a new saved policy ([#36](https://github.com/MiguelFranken/playwright-reporter/issues/36)) ([7da0b26](https://github.com/MiguelFranken/playwright-reporter/commit/7da0b269ea8af013ed3606f1b8b6c96e31056303))
+
 ## [0.0.28](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.27...v0.0.28) (2026-09-25)
 
 ### Features
