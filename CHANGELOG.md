@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.21](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.20...v0.0.21) (2026-09-25)
+
+### Features
+
+* **web:** S3-compatible artifact storage ([#29](https://github.com/MiguelFranken/playwright-reporter/issues/29)) ([3a8d7c1](https://github.com/MiguelFranken/playwright-reporter/commit/3a8d7c1c36a17e246cf8de525313052611ece74f))
+
 ## [0.0.20](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.19...v0.0.20) (2026-09-25)
 
 ### Features
