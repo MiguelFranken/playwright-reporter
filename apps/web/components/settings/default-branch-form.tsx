@@ -2,16 +2,10 @@
 
 import { useActionState, useEffect } from 'react';
 import { toast } from 'sonner';
-import { Button } from '@miguelfranken/ui/components/button';
-import { Input } from '@miguelfranken/ui/components/input';
-import { Label } from '@miguelfranken/ui/components/label';
+import { DefaultBranchForm as DefaultBranchFormView } from '@miguelfranken/ui/views/settings/default-branch-form';
 import { updateDefaultBranch, type DefaultBranchState } from '@/app/(app)/teams/[team]/projects/[project]/settings/actions';
 
-/**
- * Edits `settings.defaultBranch`. The placeholder is the branch the server
- * would fall back to right now, so an empty field still says what it means;
- * clearing the field returns to that fallback.
- */
+/** Binds the base-branch form to its server action. */
 export function DefaultBranchForm({
   teamSlug,
   projectSlug,
@@ -32,29 +26,9 @@ export function DefaultBranchForm({
     else toast.error(state.message);
   }, [state]);
   return (
-    <form action={action} className="flex flex-col gap-2">
+    <DefaultBranchFormView value={value} fallback={fallback} action={action} pending={pending} error={state && !state.ok ? state.message : null}>
       <input type="hidden" name="team" value={teamSlug} />
       <input type="hidden" name="project" value={projectSlug} />
-      <Label htmlFor="project-default-branch">Base branch</Label>
-      <div className="flex gap-2">
-        <Input
-          id="project-default-branch"
-          name="defaultBranch"
-          defaultValue={value}
-          placeholder={fallback}
-          maxLength={200}
-          aria-describedby="project-default-branch-help"
-          className="h-8 max-w-sm"
-        />
-        <Button type="submit" size="sm" disabled={pending}>
-          {pending ? 'Saving…' : 'Save'}
-        </Button>
-      </div>
-      <p id="project-default-branch-help" className="text-xs text-muted-foreground">
-        Used by AI assistants to tell new failures from ones already failing on the base branch.
-        {value ? null : ` Leave empty to use ${fallback}.`}
-      </p>
-      {state && !state.ok ? <p className="text-xs text-destructive">{state.message}</p> : null}
-    </form>
+    </DefaultBranchFormView>
   );
 }

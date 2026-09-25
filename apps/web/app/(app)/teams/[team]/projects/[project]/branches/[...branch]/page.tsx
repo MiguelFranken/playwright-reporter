@@ -1,11 +1,11 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
-import { Activity, ArrowLeft, Clock, FlaskConical, Gauge, ListChecks, PlayCircle, Repeat, TrendingUp } from 'lucide-react';
+import { Activity, Clock, FlaskConical, Gauge, ListChecks, PlayCircle, Repeat, TrendingUp } from 'lucide-react';
 import { BranchHeader, BranchHeaderSkeleton } from '@miguelfranken/ui/views/branches/branch-header';
 import { MetricCard, toneClass } from '@miguelfranken/ui/patterns/metric-card';
 import { PassFailChart } from '@miguelfranken/ui/views/dashboard/pass-fail-chart';
 import { ChronicFailuresList, FlakyTestsList } from '@miguelfranken/ui/views/dashboard/test-health-lists';
+import { BackLink } from '@miguelfranken/ui/patterns/back-link';
 import { EmptyState } from '@miguelfranken/ui/patterns/empty-state';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@miguelfranken/ui/components/card';
 import { ChartSkeleton, ListRowsSkeleton, MetricCardsSkeleton, TableRowsSkeleton } from '@miguelfranken/ui/patterns/skeletons';
@@ -40,7 +40,7 @@ export default function BranchPage({ params, searchParams }: Props) {
   return (
     <LiveStoreProvider>
       <Suspense fallback={null}>
-        <BackLink params={params} searchParams={searchParams} />
+        <BranchesLink params={params} searchParams={searchParams} />
       </Suspense>
 
       <Suspense fallback={<BranchHeaderSkeleton />}>
@@ -120,17 +120,9 @@ async function scope({ params, searchParams }: Props) {
   return { project, branch: segments.join('/'), sp, range, days: parseRange(range), base: `/teams/${team}/projects/${project.slug}` };
 }
 
-async function BackLink(props: Props) {
+async function BranchesLink(props: Props) {
   const { base, range } = await scope(props);
-  return (
-    <Link
-      href={`${base}/branches${range ? `?range=${range}` : ''}`}
-      className="inline-flex w-fit items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-    >
-      <ArrowLeft className="size-3.5" />
-      Branches
-    </Link>
-  );
+  return <BackLink href={`${base}/branches${range ? `?range=${range}` : ''}`}>Branches</BackLink>;
 }
 
 async function Header(props: Props) {

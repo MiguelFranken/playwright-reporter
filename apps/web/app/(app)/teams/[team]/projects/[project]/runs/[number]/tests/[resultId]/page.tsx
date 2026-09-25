@@ -1,7 +1,8 @@
-import { ArrowLeft, ChevronLeft, ChevronRight, History } from 'lucide-react';
+import { ChevronLeft, ChevronRight, History } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
+import { BackLink } from '@miguelfranken/ui/patterns/back-link';
 import { HistorySparkline } from '@miguelfranken/ui/patterns/history-sparkline';
 import { collapseWs, stripAnsi } from '@miguelfranken/ui/lib/ansi';
 import { ResultAttempts, type AttachmentView, type AttemptView } from '@miguelfranken/ui/views/run/result-attempts';
@@ -118,9 +119,7 @@ async function ResultContent({ params }: Props) {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3">
-        <Link href={runHref} className="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="size-3.5" /> Run #{run.number}
-        </Link>
+        <BackLink href={runHref}>Run #{run.number}</BackLink>
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
