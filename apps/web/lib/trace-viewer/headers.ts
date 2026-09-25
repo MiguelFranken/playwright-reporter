@@ -17,7 +17,9 @@ export function traceViewerHeaders() {
     "media-src 'self' data: blob:",
     "font-src 'self' data:",
     "connect-src 'self'",
-    "frame-src 'self'",
+    // data: is the viewer's own "no snapshot" placeholder; it gets an opaque
+    // origin, so it cannot reach the app's cookies or APIs.
+    "frame-src 'self' data:",
     "worker-src 'self'",
     "object-src 'none'",
     "base-uri 'self'",
