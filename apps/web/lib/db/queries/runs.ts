@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { and, asc, desc, eq, getTableColumns, inArray, sql, type SQL } from 'drizzle-orm';
 import { db } from '@/lib/db/drizzle';
 import { attachments, runEvents, runShards, runs, testAttempts, testResults, tests, type Attachment, type Run, type RunShard, type TestAttempt } from '@/lib/db/schema';
@@ -70,8 +71,11 @@ async function runCursorBefore(runId: string) {
  * A project page's stream starts here. Rows carry their own run's cursor
  * (a project-wide maximum is not ordered across runs ingesting at once), so
  * replaying from this earlier point counts nothing twice.
+ *
+ * Memoized per request: the runs page reads it for both its active runs and
+ * its table, and an earlier cursor is always safe to share.
  */
-async function projectCursorBefore(projectId: string) {
+const projectCursorBefore = cache(async (projectId: string) => {
   // Read as far behind as the stream reads (see `eventsSince`): across runs,
   // ids commit out of order, and starting past one would skip it.
   const [row] = await db
@@ -81,7 +85,7 @@ async function projectCursorBefore(projectId: string) {
     })
     .from(sql`(select 1) as one`);
   return row?.cursor ?? 0;
-}
+});
 
 /**
  * A run as the views show it: a stale run reads as `incomplete` before its
