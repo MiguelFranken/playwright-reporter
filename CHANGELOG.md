@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.0.24](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.23...v0.0.24) (2026-09-25)
+
+### Features
+
+* public REST API over oRPC, TanStack Query for client data, and a docs site in the product's design ([#33](https://github.com/MiguelFranken/playwright-reporter/issues/33)) ([b01fbf3](https://github.com/MiguelFranken/playwright-reporter/commit/b01fbf333dd75fa4e7d58203f24c9f12c46e1f4b))
+
+### Performance Improvements
+
+* **web:** cut sequential database round trips on ingest and project pages ([#32](https://github.com/MiguelFranken/playwright-reporter/issues/32)) ([3e79450](https://github.com/MiguelFranken/playwright-reporter/commit/3e794500a0899b4eca80988ef454799817711855))
+
 ## [0.0.23](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.22...v0.0.23) (2026-09-25)
 
 ### Bug Fixes
