@@ -130,6 +130,8 @@ export interface Scenario {
   environment?: string;
   message?: string;
   shortSha?: string;
+  /** The pull or merge request the run reports. */
+  pr?: { number: number; url?: string; title?: string };
   tags?: string[];
   tests: ScenarioTest[];
   /** Leave the run open (no `finishRun`). */
@@ -163,6 +165,7 @@ export async function playRun(project: TokenProject, scenario: Scenario) {
         sha: (scenario.shortSha ?? 'abc1234').padEnd(40, '0'),
         shortSha: scenario.shortSha ?? 'abc1234',
         message: scenario.message ?? 'Add a thing',
+        ...(scenario.pr ? { prNumber: scenario.pr.number, prUrl: scenario.pr.url, prTitle: scenario.pr.title } : {}),
       },
     }),
   );

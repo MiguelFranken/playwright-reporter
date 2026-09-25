@@ -141,6 +141,8 @@ export async function defaultBranch(projectId: string, settings: Record<string, 
 export interface RunSearch {
   statuses?: RunStatus[];
   branch?: string;
+  /** The pull or merge request's number (GitLab's IID). */
+  prNumber?: number;
   environment?: string;
   author?: string;
   commit?: string;
@@ -158,6 +160,7 @@ function runWhere(projectId: string, f: RunSearch): SQL {
     eq(runs.projectId, projectId),
     f.statuses?.length ? sql`${effectiveStatusSql} in (${sql.join(f.statuses.map((s) => sql`${s}`), sql`, `)})` : undefined,
     f.branch ? eq(runs.gitBranch, f.branch) : undefined,
+    f.prNumber !== undefined ? eq(runs.prNumber, f.prNumber) : undefined,
     f.environment ? eq(runs.environment, f.environment) : undefined,
     f.author ? ilike(runs.gitAuthorName, `%${f.author}%`) : undefined,
     f.commit ? or(ilike(runs.gitSha, `${f.commit}%`), ilike(runs.gitShortSha, `${f.commit}%`)) : undefined,

@@ -35,6 +35,13 @@ export function reliabilitySql(nonSkipped: SQL, failed: SQL, flaky: SQL): SQL {
 
 export const FAILED_OUTCOMES = sql`('failed','timedout')`;
 
+/** postgres.js hands `text[]` back as an array, but a slice of an aggregate can arrive as its literal. */
+export function parseTextArray(v: unknown): string[] {
+  if (Array.isArray(v)) return v.map(String);
+  if (typeof v === 'string' && v.startsWith('{')) return v.slice(1, -1).split(',').filter(Boolean);
+  return [];
+}
+
 export function num(v: unknown): number {
   const n = typeof v === 'string' ? Number(v) : (v as number);
   return Number.isFinite(n) ? n : 0;

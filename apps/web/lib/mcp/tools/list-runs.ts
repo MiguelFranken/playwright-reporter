@@ -23,6 +23,10 @@ const input = z.object({
   ...commonParams,
   status: oneOrMany(z.enum(RUN_STATUSES)).optional().describe('Run status(es). "incomplete" includes abandoned runs.'),
   branch: branchParam,
+  pullRequest: z
+    .union([z.number().int().min(1), z.string().regex(/^[#!]?\d+$/)])
+    .optional()
+    .describe('Pull or merge request number, e.g. 42, "#42" or GitLab\'s "!1524".'),
   environment: environmentParam,
   author: z.string().optional().describe('Part of the commit author name.'),
   commit: z.string().optional().describe('Commit SHA prefix (at least 4 characters).'),
@@ -49,7 +53,7 @@ export const listRuns = defineTool({
   title: 'List runs',
   toolset: 'core',
   description:
-    'Find test runs. Filter by status, branch, environment, author, commit, tag, CI vs local and time window; newest first. Each run carries its pass/fail/flaky counts and a link.',
+    'Find test runs. Filter by status, branch, pull request, environment, author, commit, tag, CI vs local and time window; newest first. Each run carries its pass/fail/flaky counts and a link.',
   input,
   output: outputSchema,
   async handler(args, ctx) {
@@ -59,6 +63,7 @@ export const listRuns = defineTool({
     const filters = {
       statuses: asList(args.status),
       branch: args.branch,
+      prNumber: args.pullRequest === undefined ? undefined : Number(String(args.pullRequest).replace(/^[#!]/, '')),
       environment: args.environment,
       author: args.author,
       commit: args.commit?.trim(),

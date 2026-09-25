@@ -2,6 +2,7 @@ import { ExternalLink } from 'lucide-react';
 import { Link } from '../../provider';
 import { cn } from '../../lib/cn';
 import { commitTitle } from '../../lib/commit';
+import { pullRequestRef } from '../../lib/pull-request';
 import { CountsBar } from '../../patterns/counts-bar';
 import { StatusBadge } from '../../patterns/status-badge';
 import { Badge } from '../../components/badge';
@@ -40,6 +41,8 @@ export interface RunsTableHrefs {
   run: (number: number) => string;
   /** Optional so a host without branch pages can still render the table. */
   branch?: (name: string) => string;
+  /** Likewise for pull request pages; without it the reference links to the git host. */
+  pullRequest?: (number: number) => string;
 }
 
 export function RunsTable({ hrefs, runs }: { hrefs: RunsTableHrefs; runs: RunListItem[] }) {
@@ -114,12 +117,16 @@ function RunRow({ hrefs, run }: { hrefs: RunsTableHrefs; run: RunListItem }) {
             ) : null}
             {run.gitAuthorName ? <span className="truncate">{run.gitAuthorName}</span> : null}
             {run.prNumber ? (
-              run.prUrl ? (
-                <a href={run.prUrl} target="_blank" rel="noreferrer" className="relative z-10 hover:text-foreground hover:underline">
-                  #{run.prNumber}
+              hrefs.pullRequest ? (
+                <Link href={hrefs.pullRequest(run.prNumber)} className="relative z-10 tabular-nums hover:text-foreground hover:underline">
+                  {pullRequestRef(run.prNumber, run.prUrl)}
+                </Link>
+              ) : run.prUrl ? (
+                <a href={run.prUrl} target="_blank" rel="noreferrer" className="relative z-10 tabular-nums hover:text-foreground hover:underline">
+                  {pullRequestRef(run.prNumber, run.prUrl)}
                 </a>
               ) : (
-                <span>#{run.prNumber}</span>
+                <span className="tabular-nums">{pullRequestRef(run.prNumber, run.prUrl)}</span>
               )
             ) : null}
           </div>

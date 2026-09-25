@@ -5,6 +5,7 @@ import { gzipSync } from "node:zlib";
 import { z } from "zod";
 import os from "node:os";
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 //#region ../protocol/dist/index.mjs
 const PROTOCOL_HEADER = "x-pw-reporter-protocol";
 const attemptStatusSchema = z.enum([
@@ -79,8 +80,10 @@ const gitInfoSchema = z.object({
 	authorName: z.string().optional(),
 	authorEmail: z.string().optional(),
 	repoUrl: z.string().optional(),
+	/** The pull or merge request the run belongs to: its number (GitLab's IID), link and title. */
 	prNumber: z.number().int().optional(),
-	prUrl: z.string().optional()
+	prUrl: z.string().optional(),
+	prTitle: z.string().optional()
 });
 const ciInfoSchema = z.object({
 	provider: z.string().optional(),
@@ -413,12 +416,43 @@ function detectCiInfo(env) {
 	return {};
 }
 function collectGitInfo(config, env, overrides = {}) {
+	const info = detectGitInfo(config, env);
 	const merged = {
-		...detectGitInfo(config, env),
+		...info,
 		...overrides
 	};
 	if (overrides.sha) merged.shortSha = overrides.sha.slice(0, 7);
+	if (overrides.prNumber !== void 0 && overrides.prNumber !== info.prNumber) {
+		merged.prUrl = overrides.prUrl;
+		merged.prTitle = overrides.prTitle;
+	}
+	if (merged.prNumber !== void 0 && !merged.prUrl && merged.repoUrl) merged.prUrl = pullRequestUrl(merged.repoUrl, merged.prNumber);
 	return merged;
+}
+/**
+* The web page of pull request `number` on the host of `repoUrl`, for the two
+* hosts whose shape is known: GitLab (`/-/merge_requests/`, also self-hosted)
+* and GitHub (`/pull/`). Anything else gets no link rather than a wrong one.
+*/
+function pullRequestUrl(repoUrl, number) {
+	const base = repoUrl.replace(/\.git$/, "").replace(/\/+$/, "");
+	if (/gitlab/i.test(base)) return `${base}/-/merge_requests/${number}`;
+	if (/github/i.test(base)) return `${base}/pull/${number}`;
+}
+/** A pull request's number from its link: GitHub's `/pull/42`, GitLab's `/-/merge_requests/42`. */
+function numberFromPrUrl(url) {
+	const m = /\/(?:pull|merge_requests)\/(\d+)/.exec(String(url ?? ""));
+	return m ? num(m[1]) : void 0;
+}
+/** GitHub keeps the pull request's title only in the event payload, a JSON file on the runner. */
+function githubEventPrTitle(path) {
+	if (!path) return void 0;
+	try {
+		const title = JSON.parse(readFileSync(path, "utf8"))?.pull_request?.title;
+		return typeof title === "string" && title.trim() ? title.trim() : void 0;
+	} catch {
+		return;
+	}
 }
 function detectGitInfo(config, env) {
 	const info = {};
@@ -436,6 +470,8 @@ function detectGitInfo(config, env) {
 	if (ci) {
 		info.branch ??= ci.branch;
 		info.prUrl ??= ci.prHref;
+		info.prTitle ??= ci.prTitle;
+		info.prNumber ??= numberFromPrUrl(ci.prHref);
 		if (ci.commitHref && !info.repoUrl) info.repoUrl = String(ci.commitHref).replace(/\/(commit|-\/commit)\/.*$/, "");
 	}
 	if (env.GITHUB_ACTIONS) {
@@ -447,6 +483,7 @@ function detectGitInfo(config, env) {
 			if (m) {
 				info.prNumber = num(m[1]);
 				info.prUrl ??= `${info.repoUrl}/pull/${m[1]}`;
+				info.prTitle ??= githubEventPrTitle(env.GITHUB_EVENT_PATH);
 			}
 		}
 	} else if (env.GITLAB_CI) {
@@ -455,6 +492,10 @@ function detectGitInfo(config, env) {
 		info.message ??= env.CI_COMMIT_MESSAGE?.split("\n")[0];
 		info.repoUrl ??= env.CI_PROJECT_URL;
 		info.prNumber ??= num(env.CI_MERGE_REQUEST_IID);
+		if (env.CI_MERGE_REQUEST_IID) {
+			info.prUrl ??= env.CI_MERGE_REQUEST_PROJECT_URL ? `${env.CI_MERGE_REQUEST_PROJECT_URL}/-/merge_requests/${env.CI_MERGE_REQUEST_IID}` : void 0;
+			info.prTitle ??= env.CI_MERGE_REQUEST_TITLE || void 0;
+		}
 	}
 	const cwd = config.rootDir || process.cwd();
 	info.sha ??= git(["rev-parse", "HEAD"], cwd);
@@ -553,6 +594,12 @@ function detectCiRunId(env) {
 	if (env.BUILD_BUILDID) return `azp-${env.BUILD_BUILDID}`;
 	if (env.BUILD_NUMBER && env.JENKINS_URL) return `jenkins-${env.JOB_NAME ?? "job"}-${env.BUILD_NUMBER}`;
 }
+/** A pull request number as typed in an env var or option (`42`, `#42`, `!42`); anything else is none. */
+function prNumber(v) {
+	if (typeof v === "number") return Number.isInteger(v) && v > 0 ? v : void 0;
+	const m = /^[#!]?(\d+)$/.exec(v?.trim() ?? "");
+	return m ? Number(m[1]) : void 0;
+}
 /** Drops unset and blank values, so an empty env var (`E2E_COMMIT_SHA: ""`) overrides nothing. */
 function defined(values) {
 	return Object.fromEntries(Object.entries(values).map(([k, v]) => [k, v?.trim()]).filter(([, v]) => v));
@@ -575,19 +622,27 @@ function resolveOptions(opts = {}, env = process.env) {
 		uploadTimeoutMs: opts.uploadTimeoutMs ?? 12e4,
 		heartbeatIntervalMs: opts.heartbeatIntervalMs ?? envNumber(env.PW_REPORTER_HEARTBEAT_MS) ?? 3e4,
 		maxRetries: 5,
-		git: defined({
+		git: withPrNumber(defined({
 			branch: opts.git?.branch ?? env.PW_REPORTER_GIT_BRANCH,
 			sha: opts.git?.sha ?? env.PW_REPORTER_GIT_SHA,
 			message: opts.git?.message ?? env.PW_REPORTER_GIT_MESSAGE,
 			repoUrl: opts.git?.repoUrl ?? env.PW_REPORTER_GIT_REPO_URL,
-			authorName: opts.git?.authorName ?? env.PW_REPORTER_GIT_AUTHOR
-		}),
+			authorName: opts.git?.authorName ?? env.PW_REPORTER_GIT_AUTHOR,
+			prUrl: opts.git?.prUrl ?? env.PW_REPORTER_PR_URL,
+			prTitle: opts.git?.prTitle ?? env.PW_REPORTER_PR_TITLE
+		}), prNumber(opts.git?.prNumber ?? env.PW_REPORTER_PR_NUMBER)),
 		ci: defined({
 			provider: opts.ci?.provider ?? env.PW_REPORTER_CI_PROVIDER,
 			buildUrl: opts.ci?.buildUrl ?? env.PW_REPORTER_BUILD_URL,
 			buildNumber: opts.ci?.buildNumber ?? env.PW_REPORTER_BUILD_NUMBER,
 			job: opts.ci?.job ?? env.PW_REPORTER_CI_JOB
 		})
+	};
+}
+function withPrNumber(git, number) {
+	return number === void 0 ? git : {
+		...git,
+		prNumber: number
 	};
 }
 /** Whether Playwright was started to list the tests rather than run them. */

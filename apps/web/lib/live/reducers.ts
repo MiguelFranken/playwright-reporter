@@ -400,6 +400,7 @@ export function reduceActiveRuns<R extends ActiveListedRun>(runs: R[], ev: LiveE
 export interface RunListFilters {
   status?: string;
   branch?: string;
+  prNumber?: number;
   environment?: string;
   q?: string;
   days?: number;
@@ -410,6 +411,7 @@ type FilterableRun = {
   number: number;
   status: string;
   gitBranch: string | null;
+  prNumber: number | null;
   environment: string | null;
   gitMessage: string | null;
   gitShortSha: string | null;
@@ -420,6 +422,7 @@ type FilterableRun = {
 export function matchesRunFilters(run: FilterableRun, f: RunListFilters, now = Date.now()): boolean {
   if (f.status && f.status !== 'all' && run.status !== f.status) return false;
   if (f.branch && run.gitBranch !== f.branch) return false;
+  if (f.prNumber !== undefined && run.prNumber !== f.prNumber) return false;
   if (f.environment && run.environment !== f.environment) return false;
   if (f.days && run.startedAt.getTime() < now - f.days * 86_400_000) return false;
   if (f.q) {

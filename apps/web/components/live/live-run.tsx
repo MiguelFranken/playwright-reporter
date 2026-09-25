@@ -42,6 +42,7 @@ export function LiveRunHeader({
   summaryUrl,
   resultsUrl,
   branchHref,
+  pullRequestHref,
   aiPrompt,
   aiSetupHref,
 }: {
@@ -54,6 +55,7 @@ export function LiveRunHeader({
   summaryUrl: string;
   resultsUrl: string;
   branchHref?: string;
+  pullRequestHref?: string;
   /** Scope-only triage prompt for the "Debug with AI" menu. */
   aiPrompt?: string;
   /** Where the menu sends users who have not connected an assistant yet. */
@@ -77,6 +79,7 @@ export function LiveRunHeader({
       counts={header.counts}
       shards={header.shards}
       branchHref={branchHref}
+      pullRequestHref={pullRequestHref}
       now={now}
       actions={aiPrompt && aiSetupHref && hasFailures ? <DebugWithAiMenu prompt={aiPrompt} setupHref={aiSetupHref} /> : undefined}
       liveIndicator={

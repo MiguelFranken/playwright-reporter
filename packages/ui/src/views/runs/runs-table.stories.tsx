@@ -49,6 +49,20 @@ export const CommitLinkIsOptional: Story = {
   },
 };
 
+/** With pull request pages, a run's `#1841` opens the request in the app; without, the git host. */
+export const PullRequestLinks: Story = {
+  args: { hrefs: { ...hrefs, pullRequest: (n: number) => `#pr-${n}` } },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByRole('link', { name: '#1841' })).toHaveAttribute('href', '#pr-1841');
+  },
+};
+
+export const PullRequestLinksToHost: Story = {
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByRole('link', { name: '#1841' })).toHaveAttribute('href', 'https://github.com/acme/web/pull/1841');
+  },
+};
+
 export const Active: Story = {
   render: () => <ActiveRuns hrefs={hrefs} runs={activeRuns} />,
 };

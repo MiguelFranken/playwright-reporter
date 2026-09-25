@@ -44,6 +44,27 @@ export const Running: Story = {
   },
 };
 
+/** A GitLab merge request: `!1524` opens its page in the app, the icon beside it the host. */
+export const WithMergeRequest: Story = {
+  args: {
+    run: {
+      ...runHeader,
+      prNumber: 1524,
+      prUrl: 'https://gitlab.example/mop/ecma/ms_frontend/-/merge_requests/1524',
+      prTitle: 'Stop shared caching of route-prefilled forms and fix stale webapp E2E tests',
+    },
+    pullRequestHref: '#pr-1524',
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('link', { name: /^!1524 Stop shared caching/ })).toHaveAttribute('href', '#pr-1524');
+    await expect(canvas.getByRole('link', { name: 'Open !1524 on the git host' })).toHaveAttribute(
+      'href',
+      'https://gitlab.example/mop/ecma/ms_frontend/-/merge_requests/1524',
+    );
+  },
+};
+
 export const Interrupted: Story = {
   args: {
     run: { ...runHeader, status: 'interrupted' },

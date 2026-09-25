@@ -1,5 +1,6 @@
 import os from 'node:os';
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import type { FullConfig } from '@playwright/test/reporter';
 import type { CiInfo, Executor, GitInfo, PlaywrightInfo, SystemInfo } from '@miguelfranken/protocol';
 
@@ -63,7 +64,42 @@ export function collectGitInfo(config: FullConfig, env: NodeJS.ProcessEnv, overr
   const merged = { ...info, ...overrides };
   // An overridden commit is a different commit: its short sha, not the checkout's.
   if (overrides.sha) merged.shortSha = overrides.sha.slice(0, 7);
+  // Likewise a different pull request: the detected one's link and title describe another.
+  if (overrides.prNumber !== undefined && overrides.prNumber !== info.prNumber) {
+    merged.prUrl = overrides.prUrl;
+    merged.prTitle = overrides.prTitle;
+  }
+  if (merged.prNumber !== undefined && !merged.prUrl && merged.repoUrl) merged.prUrl = pullRequestUrl(merged.repoUrl, merged.prNumber);
   return merged;
+}
+
+/**
+ * The web page of pull request `number` on the host of `repoUrl`, for the two
+ * hosts whose shape is known: GitLab (`/-/merge_requests/`, also self-hosted)
+ * and GitHub (`/pull/`). Anything else gets no link rather than a wrong one.
+ */
+export function pullRequestUrl(repoUrl: string, number: number): string | undefined {
+  const base = repoUrl.replace(/\.git$/, '').replace(/\/+$/, '');
+  if (/gitlab/i.test(base)) return `${base}/-/merge_requests/${number}`;
+  if (/github/i.test(base)) return `${base}/pull/${number}`;
+  return undefined;
+}
+
+/** A pull request's number from its link: GitHub's `/pull/42`, GitLab's `/-/merge_requests/42`. */
+function numberFromPrUrl(url: unknown): number | undefined {
+  const m = /\/(?:pull|merge_requests)\/(\d+)/.exec(String(url ?? ''));
+  return m ? num(m[1]) : undefined;
+}
+
+/** GitHub keeps the pull request's title only in the event payload, a JSON file on the runner. */
+function githubEventPrTitle(path: string | undefined): string | undefined {
+  if (!path) return undefined;
+  try {
+    const title = JSON.parse(readFileSync(path, 'utf8'))?.pull_request?.title;
+    return typeof title === 'string' && title.trim() ? title.trim() : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function detectGitInfo(config: FullConfig, env: NodeJS.ProcessEnv): GitInfo {
@@ -83,6 +119,8 @@ function detectGitInfo(config: FullConfig, env: NodeJS.ProcessEnv): GitInfo {
   if (ci) {
     info.branch ??= ci.branch;
     info.prUrl ??= ci.prHref;
+    info.prTitle ??= ci.prTitle;
+    info.prNumber ??= numberFromPrUrl(ci.prHref);
     if (ci.commitHref && !info.repoUrl) info.repoUrl = String(ci.commitHref).replace(/\/(commit|-\/commit)\/.*$/, '');
   }
   // 2. CI environment variables.
@@ -95,6 +133,7 @@ function detectGitInfo(config: FullConfig, env: NodeJS.ProcessEnv): GitInfo {
       if (m) {
         info.prNumber = num(m[1]);
         info.prUrl ??= `${info.repoUrl}/pull/${m[1]}`;
+        info.prTitle ??= githubEventPrTitle(env.GITHUB_EVENT_PATH);
       }
     }
   } else if (env.GITLAB_CI) {
@@ -103,6 +142,12 @@ function detectGitInfo(config: FullConfig, env: NodeJS.ProcessEnv): GitInfo {
     info.message ??= env.CI_COMMIT_MESSAGE?.split('\n')[0];
     info.repoUrl ??= env.CI_PROJECT_URL;
     info.prNumber ??= num(env.CI_MERGE_REQUEST_IID);
+    if (env.CI_MERGE_REQUEST_IID) {
+      info.prUrl ??= env.CI_MERGE_REQUEST_PROJECT_URL
+        ? `${env.CI_MERGE_REQUEST_PROJECT_URL}/-/merge_requests/${env.CI_MERGE_REQUEST_IID}`
+        : undefined;
+      info.prTitle ??= env.CI_MERGE_REQUEST_TITLE || undefined;
+    }
   }
   // 3. Local git.
   const cwd = config.rootDir || process.cwd();

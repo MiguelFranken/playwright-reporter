@@ -31,7 +31,9 @@ export interface ReporterOptions {
    * The commit under test, for runs where neither a CI provider's variables nor
    * a git checkout say it (a test image in Kubernetes, say). Wins over what the
    * reporter detects. Env: PW_REPORTER_GIT_BRANCH, PW_REPORTER_GIT_SHA,
-   * PW_REPORTER_GIT_MESSAGE, PW_REPORTER_GIT_REPO_URL, PW_REPORTER_GIT_AUTHOR
+   * PW_REPORTER_GIT_MESSAGE, PW_REPORTER_GIT_REPO_URL, PW_REPORTER_GIT_AUTHOR,
+   * and for the pull or merge request PW_REPORTER_PR_NUMBER, PW_REPORTER_PR_URL,
+   * PW_REPORTER_PR_TITLE
    */
   git?: GitOverrides;
   /**
@@ -46,6 +48,10 @@ export interface GitOverrides {
   message?: string;
   repoUrl?: string;
   authorName?: string;
+  /** The pull or merge request (GitLab's IID). Without `prUrl`, the link is derived from `repoUrl` on GitHub and GitLab. */
+  prNumber?: number | string;
+  prUrl?: string;
+  prTitle?: string;
 }
 export interface CiOverrides {
   provider?: string;
@@ -66,8 +72,12 @@ export interface ResolvedOptions {
   uploadTimeoutMs: number;
   heartbeatIntervalMs: number;
   maxRetries: number;
-  git: GitOverrides;
+  git: ResolvedGitOverrides;
   ci: CiOverrides;
 }
+/** The overrides as sent: the pull request number parsed. */
+export type ResolvedGitOverrides = Omit<GitOverrides, 'prNumber'> & {
+  prNumber?: number;
+};
 //#endregion
 //# sourceMappingURL=types.d.mts.map

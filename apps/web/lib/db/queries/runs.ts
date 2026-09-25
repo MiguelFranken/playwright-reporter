@@ -92,6 +92,8 @@ const runColumns = { ...getTableColumns(runs), ...effectiveRunColumns };
 export interface RunFilters {
   status?: string;
   branch?: string;
+  /** The pull or merge request's number (GitLab's IID). */
+  prNumber?: number;
   environment?: string;
   q?: string;
   days?: number;
@@ -106,6 +108,7 @@ export async function listRuns(projectId: string, filters: RunFilters = {}) {
     eq(runs.projectId, projectId),
     filters.status && filters.status !== 'all' ? sql`${effectiveStatusSql} = ${filters.status}` : undefined,
     filters.branch ? eq(runs.gitBranch, filters.branch) : undefined,
+    filters.prNumber !== undefined ? eq(runs.prNumber, filters.prNumber) : undefined,
     filters.environment ? eq(runs.environment, filters.environment) : undefined,
     filters.days ? sql`${runs.startedAt} >= ${sinceDate(filters.days)}` : undefined,
     filters.q
@@ -406,6 +409,22 @@ export async function listBranches(projectId: string) {
     .where(and(eq(runs.projectId, projectId), sql`${runs.gitBranch} is not null`))
     .orderBy(asc(runs.gitBranch));
   return rows.map((r) => r.branch!).filter(Boolean);
+}
+
+/** The pull requests runs reported, newest first, each with the latest title a run gave it. */
+export async function listPullRequests(projectId: string, limit = 200) {
+  const rows = await db
+    .select({
+      number: runs.prNumber,
+      title: sql<string | null>`(array_agg(${runs.git}->>'prTitle' order by ${runs.startedAt} desc) filter (where ${runs.git}->>'prTitle' is not null))[1]`,
+      url: sql<string | null>`(array_agg(${runs.prUrl} order by ${runs.startedAt} desc) filter (where ${runs.prUrl} is not null))[1]`,
+    })
+    .from(runs)
+    .where(and(eq(runs.projectId, projectId), sql`${runs.prNumber} is not null`))
+    .groupBy(runs.prNumber)
+    .orderBy(sql`max(${runs.startedAt}) desc`)
+    .limit(limit);
+  return rows.map((r) => ({ number: r.number!, title: r.title, url: r.url }));
 }
 
 export async function listEnvironments(projectId: string) {

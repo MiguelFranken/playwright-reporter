@@ -254,10 +254,13 @@ describe('runs list reducers', () => {
   });
 
   it('matches the SQL filters for a run that starts while the page is open', () => {
-    const r = { number: 12, status: 'running', gitBranch: 'feature/x', environment: 'local', gitMessage: 'Add footer', gitShortSha: 'abc1234', startedAt: new Date() };
+    const r = { number: 12, status: 'running', gitBranch: 'feature/x', prNumber: 7, environment: 'local', gitMessage: 'Add footer', gitShortSha: 'abc1234', startedAt: new Date() };
     expect(matchesRunFilters(r, {})).toBe(true);
     expect(matchesRunFilters(r, { status: 'failed' })).toBe(false);
     expect(matchesRunFilters(r, { branch: 'main' })).toBe(false);
+    expect(matchesRunFilters(r, { prNumber: 7 })).toBe(true);
+    expect(matchesRunFilters(r, { prNumber: 8 })).toBe(false);
+    expect(matchesRunFilters({ ...r, prNumber: null }, { prNumber: 7 })).toBe(false);
     expect(matchesRunFilters(r, { q: '#12' })).toBe(true);
     expect(matchesRunFilters(r, { q: 'ABC' })).toBe(true);
     expect(matchesRunFilters({ ...r, startedAt: new Date(Date.now() - 9 * 86_400_000) }, { days: 7 })).toBe(false);

@@ -16,17 +16,31 @@ const status = effectiveStatusRaw();
 const rStatus = effectiveStatusRaw('r');
 
 /**
- * Narrows a query to one git branch. Every dashboard aggregate takes one, so
- * the branch page is the dashboard with a `where` added rather than a second
- * copy of each query that could drift from the first.
+ * Narrows a query to one git branch or one pull request. Every dashboard
+ * aggregate takes one, so the branch and pull request pages are the dashboard
+ * with a `where` added rather than a second copy of each query that could
+ * drift from the first.
  */
 export interface BranchScope {
   branch?: string;
+  /** The pull or merge request's number (GitLab's IID). */
+  prNumber?: number;
 }
 
-/** `and <col> = branch`, or nothing. `col` is a trusted column reference, never input. */
-function onBranch(scope: BranchScope, col = 'git_branch') {
-  return scope.branch === undefined ? sql`` : sql` and ${sql.raw(col)} = ${scope.branch}`;
+function isScoped(scope: BranchScope) {
+  return scope.branch !== undefined || scope.prNumber !== undefined;
+}
+
+/**
+ * `and <alias>.git_branch = branch and <alias>.pr_number = n`, or nothing.
+ * `alias` is a trusted table alias, never input.
+ */
+function onBranch(scope: BranchScope, alias?: string) {
+  const col = (name: string) => sql.raw(alias ? `${alias}.${name}` : name);
+  return sql.join([
+    scope.branch === undefined ? sql`` : sql` and ${col('git_branch')} = ${scope.branch}`,
+    scope.prNumber === undefined ? sql`` : sql` and ${col('pr_number')} = ${scope.prNumber}`,
+  ]);
 }
 
 export interface DashboardStats {
@@ -42,17 +56,18 @@ export interface DashboardStats {
 export async function dashboardStats(projectId: string, days: number, scope: BranchScope = {}): Promise<DashboardStats> {
   const since = sinceDate(days);
   // On a branch, "new" means new *to that branch*: its first result there
-  // falls inside the range, wherever else the test had already run.
+  // falls inside the range, wherever else the test had already run. Likewise
+  // for a pull request.
   const newTests =
-    scope.branch === undefined
+    !isScoped(scope)
       ? sql`select count(*) as n from ${tests} where project_id = ${projectId} and first_seen_at >= ${since}`
       : sql`select count(*) as n from (
               select tr.test_id from ${testResults} tr join ${runs} r on r.id = tr.run_id
-              where r.project_id = ${projectId}${onBranch(scope, 'r.git_branch')}
+              where r.project_id = ${projectId}${onBranch(scope, 'r')}
               group by tr.test_id having min(r.started_at) >= ${since}) t`;
   const [[tracked], [newT], [runAgg], [rel]] = await Promise.all([
     db.execute<{ n: string }>(
-      sql`select count(distinct tr.test_id) as n from ${testResults} tr join ${runs} r on r.id = tr.run_id where r.project_id = ${projectId} and r.started_at >= ${since}${onBranch(scope, 'r.git_branch')}`,
+      sql`select count(distinct tr.test_id) as n from ${testResults} tr join ${runs} r on r.id = tr.run_id where r.project_id = ${projectId} and r.started_at >= ${since}${onBranch(scope, 'r')}`,
     ),
     db.execute<{ n: string }>(newTests),
     db.execute<{ finished: string; passed: string; avg_ms: string | null }>(
@@ -69,7 +84,7 @@ export async function dashboardStats(projectId: string, days: number, scope: Bra
               sql`count(*) filter (where tr.outcome = 'flaky')`,
             )} as score
             from ${testResults} tr join ${runs} r on r.id = tr.run_id
-            where r.project_id = ${projectId} and r.started_at >= ${since}${onBranch(scope, 'r.git_branch')}
+            where r.project_id = ${projectId} and r.started_at >= ${since}${onBranch(scope, 'r')}
             group by tr.test_id) s where score is not null`,
     ),
   ]);
@@ -135,7 +150,7 @@ const healthCte = (projectId: string, since: string, scope: BranchScope) => sql`
     select tr.test_id, tr.outcome, tr.started_at, tr.duration_ms, r.number,
            row_number() over (partition by tr.test_id order by tr.started_at desc) as rn
     from ${testResults} tr join ${runs} r on r.id = tr.run_id
-    where r.project_id = ${projectId} and r.started_at >= ${since}${onBranch(scope, 'r.git_branch')} and tr.outcome not in ('running','skipped')
+    where r.project_id = ${projectId} and r.started_at >= ${since}${onBranch(scope, 'r')} and tr.outcome not in ('running','skipped')
   ),
   agg as (
     select test_id,
@@ -186,7 +201,7 @@ export async function passFailTrend(projectId: string, limit = 30, scope: Branch
                count(*) filter (where tr.outcome = 'flaky')::int as flaky,
                count(*) filter (where tr.outcome = 'skipped')::int as skipped
         from ${runs} r left join ${testResults} tr on tr.run_id = r.id
-        where r.project_id = ${projectId} and ${rStatus} <> 'running'${onBranch(scope, 'r.git_branch')}
+        where r.project_id = ${projectId} and ${rStatus} <> 'running'${onBranch(scope, 'r')}
         group by r.id order by r.started_at desc limit ${limit}`,
   );
   return Array.from(rows)

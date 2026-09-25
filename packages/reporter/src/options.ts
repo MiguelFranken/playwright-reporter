@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { CiOverrides, GitOverrides, ReporterOptions, ResolvedOptions } from './types';
+import type { CiOverrides, ReporterOptions, ResolvedGitOverrides, ResolvedOptions } from './types';
 
 function envBool(v: string | undefined): boolean | undefined {
   if (v === undefined) return undefined;
@@ -20,6 +20,13 @@ export function detectCiRunId(env: NodeJS.ProcessEnv): string | undefined {
   if (env.BUILD_BUILDID) return `azp-${env.BUILD_BUILDID}`;
   if (env.BUILD_NUMBER && env.JENKINS_URL) return `jenkins-${env.JOB_NAME ?? 'job'}-${env.BUILD_NUMBER}`;
   return undefined;
+}
+
+/** A pull request number as typed in an env var or option (`42`, `#42`, `!42`); anything else is none. */
+function prNumber(v: number | string | undefined): number | undefined {
+  if (typeof v === 'number') return Number.isInteger(v) && v > 0 ? v : undefined;
+  const m = /^[#!]?(\d+)$/.exec(v?.trim() ?? '');
+  return m ? Number(m[1]) : undefined;
 }
 
 /** Drops unset and blank values, so an empty env var (`E2E_COMMIT_SHA: ""`) overrides nothing. */
@@ -55,13 +62,18 @@ export function resolveOptions(
     uploadTimeoutMs: opts.uploadTimeoutMs ?? 120_000,
     heartbeatIntervalMs: opts.heartbeatIntervalMs ?? envNumber(env.PW_REPORTER_HEARTBEAT_MS) ?? 30_000,
     maxRetries: 5,
-    git: defined<GitOverrides>({
-      branch: opts.git?.branch ?? env.PW_REPORTER_GIT_BRANCH,
-      sha: opts.git?.sha ?? env.PW_REPORTER_GIT_SHA,
-      message: opts.git?.message ?? env.PW_REPORTER_GIT_MESSAGE,
-      repoUrl: opts.git?.repoUrl ?? env.PW_REPORTER_GIT_REPO_URL,
-      authorName: opts.git?.authorName ?? env.PW_REPORTER_GIT_AUTHOR,
-    }),
+    git: withPrNumber(
+      defined<ResolvedGitOverrides>({
+        branch: opts.git?.branch ?? env.PW_REPORTER_GIT_BRANCH,
+        sha: opts.git?.sha ?? env.PW_REPORTER_GIT_SHA,
+        message: opts.git?.message ?? env.PW_REPORTER_GIT_MESSAGE,
+        repoUrl: opts.git?.repoUrl ?? env.PW_REPORTER_GIT_REPO_URL,
+        authorName: opts.git?.authorName ?? env.PW_REPORTER_GIT_AUTHOR,
+        prUrl: opts.git?.prUrl ?? env.PW_REPORTER_PR_URL,
+        prTitle: opts.git?.prTitle ?? env.PW_REPORTER_PR_TITLE,
+      }),
+      prNumber(opts.git?.prNumber ?? env.PW_REPORTER_PR_NUMBER),
+    ),
     ci: defined<CiOverrides>({
       provider: opts.ci?.provider ?? env.PW_REPORTER_CI_PROVIDER,
       buildUrl: opts.ci?.buildUrl ?? env.PW_REPORTER_BUILD_URL,
@@ -69,6 +81,10 @@ export function resolveOptions(
       job: opts.ci?.job ?? env.PW_REPORTER_CI_JOB,
     }),
   };
+}
+
+function withPrNumber(git: ResolvedGitOverrides, number: number | undefined): ResolvedGitOverrides {
+  return number === undefined ? git : { ...git, prNumber: number };
 }
 
 /** Whether Playwright was started to list the tests rather than run them. */
