@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.18](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.17...v0.0.18) (2026-09-25)
+
+### Features
+
+* **web:** self-host the Playwright Trace Viewer and embed it in the result page ([#25](https://github.com/MiguelFranken/playwright-reporter/issues/25)) ([c88b7be](https://github.com/MiguelFranken/playwright-reporter/commit/c88b7be6ed5cf38be8671f9bf23ebd4febcbc04c))
+
 ## [0.0.17](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.16...v0.0.17) (2026-09-25)
 
 ### Features
