@@ -36,8 +36,18 @@ export interface RetentionPolicyFormProps {
   preview?: React.ReactNode;
 }
 
-/** Admin → Storage: whether expired artifacts are deleted, and after how long, per kind. */
-export function RetentionPolicyForm({ policy, kinds, action, pending = false, onFieldsChange, preview }: RetentionPolicyFormProps) {
+/**
+ * Admin → Storage: whether expired artifacts are deleted, and after how long, per kind.
+ *
+ * The fields are uncontrolled and start from `policy`, so a new saved policy
+ * (the page re-rendered after a save) remounts the form rather than changing
+ * the default values of inputs that are already on screen.
+ */
+export function RetentionPolicyForm(props: RetentionPolicyFormProps) {
+  return <PolicyFields key={JSON.stringify(props.policy)} {...props} />;
+}
+
+function PolicyFields({ policy, kinds, action, pending = false, onFieldsChange, preview }: RetentionPolicyFormProps) {
   const [enabled, setEnabled] = useState(policy.enabled ? 'on' : 'off');
   const [days, setDays] = useState(String(policy.days));
   const fields = useFormFields(onFieldsChange, [enabled]);
@@ -131,7 +141,9 @@ export function RetentionPolicySource({ source, updatedAt, now }: RetentionPolic
   }
   if (!updatedAt) return null;
   return (
-    <p className="text-body-s text-muted-foreground" title={formatDateTime(updatedAt)}>
+    // Read off the clock, which has moved on between the server render and
+    // hydration: the gap is expected, so React is told not to warn about it.
+    <p className="text-body-s text-muted-foreground" title={formatDateTime(updatedAt)} suppressHydrationWarning>
       Last changed {formatRelative(updatedAt, { now })}.
     </p>
   );

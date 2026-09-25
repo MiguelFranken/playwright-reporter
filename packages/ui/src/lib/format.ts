@@ -33,8 +33,8 @@ export function formatRelative(
  * Pinned to one locale and to UTC because views render on the server and then
  * hydrate in the browser: the server's locale and time zone are not the
  * visitor's, and a string that differs between the two fails hydration. The
- * same rule as the numbers (`toLocaleString('en-US')`) and the day labels of
- * the admin charts.
+ * same rule as the numbers (`formatNumber`) and the day labels of the admin
+ * charts. `src/lib/hydration.test.ts` fails on an unpinned call.
  */
 const DATE_TIME = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' });
 
@@ -42,6 +42,26 @@ export function formatDateTime(date: Date | string | null | undefined): string {
   if (!date) return '–';
   const d = typeof date === 'string' ? new Date(date) : date;
   return `${DATE_TIME.format(d)} UTC`;
+}
+
+const TIME = new Intl.DateTimeFormat('en-US', { timeStyle: 'medium', timeZone: 'UTC' });
+
+/** A time of day, e.g. "6:02:14 PM UTC". Pinned like `formatDateTime`, for the same reason. */
+export function formatTime(date: Date | string | null | undefined): string {
+  if (!date) return '–';
+  const d = typeof date === 'string' ? new Date(date) : date;
+  return `${TIME.format(d)} UTC`;
+}
+
+const NUMBER = new Intl.NumberFormat('en-US', { maximumFractionDigits: 3 });
+
+/**
+ * A count, e.g. "1,234". Pinned to one locale like `formatDateTime`: an
+ * unpinned `toLocaleString()` renders "1,234" on the server and "1.234" in a
+ * German browser, and the page fails to hydrate once a number reaches 1,000.
+ */
+export function formatNumber(n: number): string {
+  return NUMBER.format(n);
 }
 
 export function formatPercent(v: number | null | undefined, digits = 0): string {

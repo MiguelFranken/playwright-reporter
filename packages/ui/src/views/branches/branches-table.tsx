@@ -7,7 +7,7 @@ import { Badge } from '../../components/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/table';
 import { NO_BRANCH_LABEL, passRateClass } from '../../lib/branch';
 import { cn } from '../../lib/cn';
-import { formatDateTime, formatDuration, formatPercent, formatRelative } from '../../lib/format';
+import { formatDateTime, formatDuration, formatNumber, formatPercent, formatRelative } from '../../lib/format';
 import type { AnyStatus } from '../../lib/tone';
 
 /** One git branch in the branches list, summarised over the selected range. */
@@ -100,7 +100,7 @@ function BranchRow({ hrefs, row: r, now }: { hrefs: BranchesTableHrefs; row: Bra
       <TableCell>
         <HistorySparkline history={r.recentStatuses} />
       </TableCell>
-      <TableCell className="text-right tabular-nums">{r.runs.toLocaleString()}</TableCell>
+      <TableCell className="text-right tabular-nums">{formatNumber(r.runs)}</TableCell>
       <TableCell className={cn('text-right font-medium tabular-nums', passRateClass(r.passRate))}>{formatPercent(r.passRate)}</TableCell>
       <TableCell className="text-right tabular-nums text-muted-foreground">{formatDuration(r.avgDurationMs)}</TableCell>
       <TableCell>

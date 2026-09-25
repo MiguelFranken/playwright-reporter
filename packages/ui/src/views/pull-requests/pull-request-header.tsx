@@ -3,7 +3,7 @@ import { Link } from '../../provider';
 import { Badge } from '../../components/badge';
 import { Skeleton } from '../../components/skeleton';
 import { StatusBadge } from '../../patterns/status-badge';
-import { formatDateTime, formatRelative } from '../../lib/format';
+import { formatDateTime, formatNumber, formatRelative } from '../../lib/format';
 import { pullRequestNoun, pullRequestRef } from '../../lib/pull-request';
 import type { AnyStatus } from '../../lib/tone';
 
@@ -93,7 +93,7 @@ export function PullRequestHeader({
           <span className="inline-flex items-center gap-1.5" title={`First run ${formatDateTime(pr.firstRunAt)}`}>
             <CalendarClock className="size-3.5" aria-hidden />
             <span suppressHydrationWarning>
-              {pr.runs.toLocaleString()} {pr.runs === 1 ? 'run' : 'runs'} · first {formatRelative(pr.firstRunAt, { now })}
+              {formatNumber(pr.runs)} {pr.runs === 1 ? 'run' : 'runs'} · first {formatRelative(pr.firstRunAt, { now })}
             </span>
           </span>
         </div>

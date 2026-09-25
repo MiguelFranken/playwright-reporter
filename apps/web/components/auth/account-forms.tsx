@@ -10,6 +10,7 @@ import {
   type SessionRow,
 } from '@miguelfranken/ui/views/account/account-forms';
 import { authClient } from '@/lib/auth/client';
+import { formatDateTime } from '@miguelfranken/ui/lib/format';
 
 export function ChangeNameForm({ name }: { name: string }) {
   const router = useRouter();
@@ -67,7 +68,7 @@ export function SessionsCard() {
       setSessions(
         (data ?? []).map((s) => ({
           id: s.id,
-          createdAt: new Date(s.createdAt).toLocaleString(),
+          createdAt: formatDateTime(s.createdAt),
           userAgent: s.userAgent ?? null,
           ipAddress: s.ipAddress ?? null,
         })),

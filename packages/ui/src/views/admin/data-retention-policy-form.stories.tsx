@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { useState } from 'react';
+import { expect, fn, spyOn, userEvent, within } from 'storybook/test';
 import { DATA_RETENTION_POLICY, DUE_PREVIEW } from '../../fixtures/admin';
 import { NOW, ago } from '../../fixtures/now';
 import { DataRetentionDue } from './database';
@@ -77,6 +78,38 @@ export const ReportsFields: Story = {
 
     await userEvent.click(canvas.getByRole('switch', { name: 'Clean up what has expired' }));
     await expect(report).toHaveBeenLastCalledWith(expect.objectContaining({ runDays: '45', housekeeping: 'off' }));
+  },
+};
+
+/**
+ * The page re-renders with the policy just saved: the form starts over from it
+ * instead of swapping the default values of inputs already on screen (which
+ * Base UI warns about, and which left the old values showing).
+ */
+export const TakesTheSavedPolicy: Story = {
+  render: function Render(args) {
+    const [policy, setPolicy] = useState(args.policy);
+    return (
+      <div className="flex flex-col gap-4">
+        <DataRetentionPolicyForm {...args} policy={policy} />
+        <button type="button" onClick={() => setPolicy({ ...policy, keepLatestRuns: 5, eventDays: 3, auditDays: 365 })}>
+          Saved elsewhere
+        </button>
+      </div>
+    );
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const errors = spyOn(console, 'error');
+    try {
+      await userEvent.click(canvas.getByRole('button', { name: 'Saved elsewhere' }));
+      await expect(canvas.getByLabelText('Always keep the latest (runs)')).toHaveValue(5);
+      await expect(canvas.getByLabelText('Keep live events for (days)')).toHaveValue(3);
+      await expect(canvas.getByLabelText('Keep the audit log for (days)')).toHaveValue(365);
+      await expect(errors).not.toHaveBeenCalledWith(expect.stringContaining('default value'));
+    } finally {
+      errors.mockRestore();
+    }
   },
 };
 

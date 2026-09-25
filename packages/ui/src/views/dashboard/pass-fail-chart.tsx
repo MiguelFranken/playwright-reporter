@@ -35,7 +35,7 @@ import {
   compactNumber,
   halfOverHalf,
 } from '../../lib/chart';
-import { formatDateTime } from '../../lib/format';
+import { formatDateTime, formatNumber } from '../../lib/format';
 
 export interface TrendDatum {
   runNumber: number;
@@ -158,10 +158,10 @@ export function PassFailChart({ data }: { data: TrendDatum[] }) {
         rows.length > 0 ? (
           <ChartStats
             items={[
-              { label: 'Runs', value: rows.length.toLocaleString() },
-              { label: 'Tests run', value: totals.executed.toLocaleString() },
-              { label: 'Failed', value: totals.failed.toLocaleString(), tone: totals.failed > 0 ? 'danger' : undefined },
-              { label: 'Flaky', value: totals.flaky.toLocaleString(), tone: totals.flaky > 0 ? 'warning' : undefined },
+              { label: 'Runs', value: formatNumber(rows.length) },
+              { label: 'Tests run', value: formatNumber(totals.executed) },
+              { label: 'Failed', value: formatNumber(totals.failed), tone: totals.failed > 0 ? 'danger' : undefined },
+              { label: 'Flaky', value: formatNumber(totals.flaky), tone: totals.flaky > 0 ? 'warning' : undefined },
             ]}
           />
         ) : null
@@ -341,7 +341,7 @@ function runLabel(_: unknown, payload: readonly { payload?: TrendDatum }[] | und
     <span>
       Run #{p.runNumber}{' '}
       <span className="font-normal text-muted-foreground" suppressHydrationWarning>
-        · {new Date(p.startedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+        · {formatDateTime(p.startedAt)}
       </span>
     </span>
   );

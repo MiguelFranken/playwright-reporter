@@ -1,5 +1,6 @@
 import { ArrowDownRight, ArrowRight, ArrowUpRight } from 'lucide-react';
 import { cn } from '../lib/cn';
+import { formatNumber } from '../lib/format';
 import { toneText, type Tone } from '../lib/tone';
 
 /**
@@ -149,8 +150,8 @@ export function ChartDelta({
 }
 
 function formatMagnitude(n: number): string {
-  if (n >= 100) return Math.round(n).toLocaleString();
-  return (Math.round(n * 10) / 10).toLocaleString();
+  if (n >= 100) return formatNumber(Math.round(n));
+  return formatNumber(Math.round(n * 10) / 10);
 }
 
 export interface LegendChip {
