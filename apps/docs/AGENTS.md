@@ -16,7 +16,7 @@ Mono, radius, elevation, the typography roles) and `fumadocs-ui/css/shadcn.css`,
 the design system's tokens. The rest of that file only adapts Fumadocs' chrome, and follows the app:
 
 - **Layout:** Fumadocs' notebook layout: a top bar with the tabs (**Guides**, **REST API** — the `root: true` folders
-  `(guides)` and `api`), a grey sidebar and a white page, as in the app.
+  `(guides)` and `api`), a white page with the sidebar on the same white, set off by a hairline.
 - **Colour:** ink for primary actions, the accent (`--accent-*`) only for links, focus, the active item and eyebrows;
   status tones for callouts. Never raw colours.
 - **Type:** the roles (`text-eyebrow`, `text-display-m`, `text-lead`, `text-headline-m`, `text-body-s`, …), not ad-hoc
