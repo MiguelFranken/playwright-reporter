@@ -47,7 +47,9 @@ jobs:
       - name: Base branch document
         id: base
         run: |
-          if git show "origin/${{ github.base_ref }}:docs/openapi.json" > "$RUNNER_TEMP/openapi-base.json" 2>/dev/null; then
+          # Inside the workspace: the oasdiff action runs in a container that
+          # mounts the workspace, not the runner's temp directory.
+          if git show "origin/${{ github.base_ref }}:docs/openapi.json" > openapi-base.json 2>/dev/null; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "::notice::docs/openapi.json does not exist on ${{ github.base_ref }} yet; nothing to compare."
@@ -56,7 +58,7 @@ jobs:
         if: steps.base.outputs.exists == 'true'
         uses: oasdiff/oasdiff-action/breaking@5e81b5c380accc6b523f9d32a637ca630e33620b # v0.1.17
         with:
-          base: ${{ runner.temp }}/openapi-base.json
+          base: openapi-base.json
           revision: docs/openapi.json
           fail-on: ERR
           review: false
