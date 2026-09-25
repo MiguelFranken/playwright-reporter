@@ -53,7 +53,16 @@ function gzipLargeBody(init: RequestInit): RequestInit {
   return { ...init, headers, body: new Blob([new Uint8Array(gzipSync(init.body))]) };
 }
 
-export function createIngestApi(opts: ResolvedOptions, log: (msg: string) => void): IngestApi {
+/** What a client of the ingest API needs to know. */
+export type IngestApiOptions = Pick<ResolvedOptions, 'serverUrl' | 'token' | 'maxRetries'>;
+
+/**
+ * The typed ingest API: `api.runs.start(…)`, `api.runs.events({ runId, … })`.
+ * Retries what can be retried (network errors, 5xx, 408, 429) up to
+ * `maxRetries` times with exponential backoff; a call can override it with
+ * `{ context: { retry, timeoutMs } }`.
+ */
+export function createIngestApi(opts: IngestApiOptions, log: (msg: string) => void = () => undefined): IngestApi {
   const link = new OpenAPILink<CallContext>(ingestContract, {
     origin: opts.serverUrl,
     url: INGEST_PREFIX,
