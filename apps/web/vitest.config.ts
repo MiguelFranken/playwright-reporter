@@ -16,7 +16,7 @@ export default defineConfig({
         test: {
           name: 'unit',
           environment: 'node',
-          include: ['lib/**/*.test.ts', 'app/**/*.test.ts'],
+          include: ['lib/**/*.test.ts', 'app/**/*.test.ts', 'proxy.test.ts'],
           exclude: ['test/**', 'node_modules/**'],
           setupFiles: ['test/helpers/unit-setup.ts'],
           // `pnpm test:all` runs the fast project first; the groups must also
