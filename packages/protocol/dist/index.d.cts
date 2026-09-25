@@ -547,6 +547,15 @@ export declare const uploadUrlsResponseSchema: z.ZodObject<{
   }, z.core.$strip>>;
 }, z.core.$strip>;
 export type UploadUrlsResponse = z.infer<typeof uploadUrlsResponseSchema>;
+/** Confirms a presigned upload; proxy uploads are confirmed by the upload itself. */
+export declare const completeUploadRequestSchema: z.ZodObject<{
+  size: z.ZodOptional<z.ZodNumber>;
+}, z.core.$strip>;
+export type CompleteUploadRequest = z.infer<typeof completeUploadRequestSchema>;
+export declare const completeUploadResponseSchema: z.ZodObject<{
+  ok: z.ZodBoolean;
+}, z.core.$strip>;
+export type CompleteUploadResponse = z.infer<typeof completeUploadResponseSchema>;
 export declare const runFinishSchema: z.ZodObject<{
   shardIndex: z.ZodNumber;
   status: z.ZodEnum<{

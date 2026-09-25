@@ -206,6 +206,9 @@ const uploadInstructionSchema = zod.z.object({
 	headers: zod.z.record(zod.z.string(), zod.z.string())
 });
 const uploadUrlsResponseSchema = zod.z.object({ uploads: zod.z.array(uploadInstructionSchema) });
+/** Confirms a presigned upload; proxy uploads are confirmed by the upload itself. */
+const completeUploadRequestSchema = zod.z.object({ size: zod.z.number().int().nonnegative().optional() });
+const completeUploadResponseSchema = zod.z.object({ ok: zod.z.boolean() });
 const runFinishSchema = zod.z.object({
 	shardIndex: zod.z.number().int(),
 	status: runStatusSchema,
@@ -258,6 +261,8 @@ exports.attemptEndEventSchema = attemptEndEventSchema;
 exports.attemptStatusSchema = attemptStatusSchema;
 exports.ciInfoSchema = ciInfoSchema;
 exports.classifyAttachment = classifyAttachment;
+exports.completeUploadRequestSchema = completeUploadRequestSchema;
+exports.completeUploadResponseSchema = completeUploadResponseSchema;
 exports.eventBatchResponseSchema = eventBatchResponseSchema;
 exports.eventBatchSchema = eventBatchSchema;
 exports.executorSchema = executorSchema;
