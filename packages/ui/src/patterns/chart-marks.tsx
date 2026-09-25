@@ -74,6 +74,20 @@ export function SoloBar({ x, y, width, height, fill, radius = CHART_MARK.radius 
   return <path d={roundedTop(x, y, width, height, radius)} fill={fill} />;
 }
 
+/**
+ * A single horizontal bar: square at the baseline on the left, rounded at the
+ * data-end on the right.
+ */
+export function SoloBarRight({ x, y, width, height, fill, radius = CHART_MARK.radius }: SegmentProps) {
+  if (x === undefined || y === undefined || !width || !height || width <= 0) return null;
+  return <path d={roundedRight(x, y, width, height, radius)} fill={fill} />;
+}
+
+function roundedRight(x: number, y: number, w: number, h: number, radius: number): string {
+  const r = Math.max(0, Math.min(radius, h / 2, w));
+  return `M${x},${y}L${x + w - r},${y}Q${x + w},${y} ${x + w},${y + r}L${x + w},${y + h - r}Q${x + w},${y + h} ${x + w - r},${y + h}L${x},${y + h}Z`;
+}
+
 function rect(x: number, y: number, w: number, h: number): string {
   return `M${x},${y}h${w}v${h}h${-w}Z`;
 }

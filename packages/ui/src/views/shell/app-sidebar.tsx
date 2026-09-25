@@ -6,6 +6,7 @@ import {
   Check,
   ChevronRight,
   ChevronsUpDown,
+  Database,
   FlaskConical,
   Folder,
   GitBranch,
@@ -110,6 +111,7 @@ const ADMIN_NAV: NavItem[] = [
   { title: 'Teams', href: '/admin/teams', icon: Building2 },
   { title: 'Users', href: '/admin/users', icon: Users },
   { title: 'Storage', href: '/admin/storage', icon: HardDrive },
+  { title: 'Database', href: '/admin/database', icon: Database },
   { title: 'MCP', href: '/admin/mcp', icon: Bot },
   { title: 'Audit log', href: '/admin/audit', icon: ScrollText },
 ];
