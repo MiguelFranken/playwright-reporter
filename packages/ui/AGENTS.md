@@ -72,8 +72,9 @@ that cannot run in Storybook.
 | calls a server action, `next/navigation`, `useSearchParams`, the auth client, SSE, a service worker, `canvas`, `window.confirm` or `toast` | a connected wrapper in `apps/web/components` |
 
 Domains under `src/views/`: `run`, `runs`, `explorer`, `dashboard`, `branches`,
-`settings` (project settings), `account` (the signed-in user's own page),
-`admin` (superadmin screens), `connect` (the OAuth consent screen). Add a folder
+`settings` (project settings), `teams` (team settings), `account` (the
+signed-in user's own page), `admin` (superadmin screens), `auth` (sign-in and
+invitations), `connect` (the OAuth consent screen), `shell` (the sidebar). Add a folder
 when a new area of the app appears; its story titles are `Views/<Domain>/…`.
 
 ### Moving a component out of `apps/web`
@@ -88,7 +89,8 @@ wrapper should end up a screenful of hooks and one JSX element.
 2. **Side effects become callbacks.** A server action call turns into
    `onRevoke(row)`, `onSubmit(values)`, `onCheckedChange(next)`. The wrapper
    does the `startTransition`, the `toast`, the `window.confirm` and the
-   `router.refresh()`.
+   `router.refresh()`. Hooks such as `usePathname` become props (`pathname`),
+   and URLs the view links to arrive as `href` builders (`projectHref(row)`).
 3. **Pending state comes in as a prop.** `pending` for a single control,
    `pendingId` for a list where one row is busy. The view only disables and
    relabels (`Revoking…`); it never owns the transition.
@@ -96,7 +98,9 @@ wrapper should end up a screenful of hooks and one JSX element.
    `action: (formData: FormData) => void` plus `pending` and `error`, so the
    wrapper can pass the `useActionState` dispatcher and progressive enhancement
    keeps working. Field `name`s are part of the contract with the server action
-   — keep them.
+   — keep them. A form that calls a client API instead (the auth client) takes
+   `onSubmit(values)` plus `pending` and `error`; to clear it after success, the
+   wrapper remounts it with a new `key`.
 5. **Slots for app-only controls.** When one button in an otherwise
    presentational view is connected (a "Test connection" that calls a server
    action), take it as a `ReactNode` slot rather than a callback plus a result
@@ -106,7 +110,10 @@ wrapper should end up a screenful of hooks and one JSX element.
    (`unsupported`, `blocked`, `off`, `on`) to a view that renders each one.
 7. **Keep the text and accessible names identical.** Integration and e2e tests
    in the app query by them.
-8. **Write the stories before deleting the old markup**: default, empty,
+8. **Reach for the shared patterns first**: `TypeToConfirmDialog` for
+   irreversible deletes, `CreateWithSlugDialog` for anything that gets a URL,
+   `OneTimeSecret` and `TokenRevealDialog` for secrets shown once.
+9. **Write the stories before deleting the old markup**: default, empty,
    pending, error, long text, and a `play` that drives every callback and
    asserts it with `fn()`.
 
