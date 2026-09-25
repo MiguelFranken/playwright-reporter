@@ -158,7 +158,27 @@ describe('collectGitInfo', () => {
       message: 'Subject line',
       repoUrl: 'https://gitlab.test/acme/app',
       prNumber: 77,
+      prUrl: 'https://gitlab.test/acme/app/-/merge_requests/77',
     });
+  });
+
+  it('links and titles a GitLab merge request from its own variables', () => {
+    const info = collectGitInfo(config(), {
+      GITLAB_CI: 'true',
+      CI_PROJECT_URL: 'https://gitlab.test/fork/app',
+      CI_MERGE_REQUEST_PROJECT_URL: 'https://gitlab.test/acme/app',
+      CI_MERGE_REQUEST_IID: '77',
+      CI_MERGE_REQUEST_TITLE: 'Fix the checkout',
+    });
+    expect(info).toMatchObject({ prNumber: 77, prUrl: 'https://gitlab.test/acme/app/-/merge_requests/77', prTitle: 'Fix the checkout' });
+  });
+
+  it('takes the pull request from Playwright’s CI info', () => {
+    const info = collectGitInfo(
+      config({ metadata: { ci: { prHref: 'https://github.com/acme/app/pull/9', prTitle: 'Add search' } } } as Partial<FullConfig>),
+      {},
+    );
+    expect(info).toMatchObject({ prNumber: 9, prUrl: 'https://github.com/acme/app/pull/9', prTitle: 'Add search' });
   });
 
   it('derives the short sha when only the full one is known', () => {
@@ -235,6 +255,21 @@ describe('git and CI overrides', () => {
       repoUrl: 'https://gitlab.example/mop/app',
     });
     expect(info).toMatchObject({ sha: 'abcdef1234567890', shortSha: 'abcdef1', branch: 'stage', repoUrl: 'https://gitlab.example/mop/app' });
+  });
+
+  it('link an overridden pull request on its repository', () => {
+    const info = collectGitInfo(bare, {}, { repoUrl: 'https://gitlab.example/mop/app', prNumber: 1524, prTitle: 'Stop caching' });
+    expect(info).toMatchObject({ prNumber: 1524, prUrl: 'https://gitlab.example/mop/app/-/merge_requests/1524', prTitle: 'Stop caching' });
+  });
+
+  it('drop the detected pull request’s link and title for another one', () => {
+    const info = collectGitInfo(bare, { GITLAB_CI: 'true', CI_PROJECT_URL: 'https://gitlab.test/a/b', CI_MERGE_REQUEST_IID: '1', CI_MERGE_REQUEST_TITLE: 'One' }, { prNumber: 2 });
+    expect(info).toMatchObject({ prNumber: 2, prUrl: 'https://gitlab.test/a/b/-/merge_requests/2' });
+    expect(info.prTitle).toBeUndefined();
+  });
+
+  it('leave a pull request on an unknown host without a link', () => {
+    expect(collectGitInfo(bare, {}, { repoUrl: 'https://git.example/a/b', prNumber: 3 }).prUrl).toBeUndefined();
   });
 
   it('leave detected CI fields alone that they do not set', () => {

@@ -1,4 +1,4 @@
-import { Clock, ExternalLink, GitBranch, GitCommitHorizontal, Server, Tag, User } from 'lucide-react';
+import { Clock, ExternalLink, GitBranch, GitCommitHorizontal, GitPullRequest, Server, Tag, User } from 'lucide-react';
 import { Link } from '../../provider';
 import { CountsBar } from '../../patterns/counts-bar';
 import { Skeleton } from '../../components/skeleton';
@@ -7,6 +7,7 @@ import { Badge } from '../../components/badge';
 import type { RunCounts } from '../../patterns/counts-bar';
 import type { AnyStatus } from '../../lib/tone';
 import { formatDateTime, formatDuration, formatRelative } from '../../lib/format';
+import { pullRequestNoun, pullRequestRef } from '../../lib/pull-request';
 
 /**
  * Exactly the fields the header reads — it used to take a whole database row
@@ -32,6 +33,10 @@ export interface RunHeaderData {
   ciBuildNumber: string | null;
   ciBuildUrl: string | null;
   tags: string[];
+  /** The pull or merge request the run belongs to, when the reporter knows it. */
+  prNumber?: number | null;
+  prUrl?: string | null;
+  prTitle?: string | null;
   /** When the reporter was last heard from; explains an abandoned run. */
   lastEventAt?: Date | null;
 }
@@ -51,6 +56,7 @@ export function RunHeader({
   liveIndicator,
   actions,
   branchHref,
+  pullRequestHref,
   now = new Date(),
 }: {
   run: RunHeaderData;
@@ -65,6 +71,8 @@ export function RunHeader({
   actions?: React.ReactNode;
   /** The branch's page, resolved by the host; without it the branch is plain text. */
   branchHref?: string;
+  /** The pull request's page, likewise; without it the reference links to the git host. */
+  pullRequestHref?: string;
   /** Reference instant for a still-running run's elapsed time. */
   now?: Date;
 }) {
@@ -106,6 +114,7 @@ export function RunHeader({
               </span>
             )
           ) : null}
+          {run.prNumber ? <PullRequestLink run={run} number={run.prNumber} href={pullRequestHref} /> : null}
           {run.environment ? <Badge variant="secondary">{run.environment}</Badge> : null}
           {sha ? (
             shaHref ? (
@@ -187,6 +196,42 @@ export function RunHeader({
         </div>
       ) : null}
     </div>
+  );
+}
+
+/** `!1524 Title` to the request's page, and a way out to the git host beside it. */
+function PullRequestLink({ run, number, href }: { run: RunHeaderData; number: number; href?: string }) {
+  const ref = pullRequestRef(number, run.prUrl);
+  const label = (
+    <>
+      <GitPullRequest className="size-3.5 shrink-0" />
+      <span className="tabular-nums">{ref}</span>
+      {run.prTitle ? <span className="max-w-80 truncate">{run.prTitle}</span> : null}
+    </>
+  );
+  const title = run.prTitle ? `${pullRequestNoun(run.prUrl)} ${ref}: ${run.prTitle}` : `${pullRequestNoun(run.prUrl)} ${ref}`;
+  const className = 'inline-flex min-w-0 items-center gap-1.5 hover:text-foreground hover:underline';
+  return (
+    <span className="inline-flex min-w-0 items-center gap-1.5">
+      {href ? (
+        <Link href={href} className={className} title={title}>
+          {label}
+        </Link>
+      ) : run.prUrl ? (
+        <a href={run.prUrl} target="_blank" rel="noreferrer" className={className} title={title}>
+          {label}
+        </a>
+      ) : (
+        <span className="inline-flex min-w-0 items-center gap-1.5" title={title}>
+          {label}
+        </span>
+      )}
+      {href && run.prUrl ? (
+        <a href={run.prUrl} target="_blank" rel="noreferrer" className="hover:text-foreground" aria-label={`Open ${ref} on the git host`}>
+          <ExternalLink className="size-3" />
+        </a>
+      ) : null}
+    </span>
   );
 }
 

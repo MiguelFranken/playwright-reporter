@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm';
 import { db } from '@/lib/db/drizzle';
 import { runs } from '@/lib/db/schema';
 import { effectiveStatusRaw } from '@/lib/runs/staleness';
-import { num, sinceDate } from './shared';
+import { num, parseTextArray, sinceDate } from './shared';
 
 /** Declared by the views that render them; see `@miguelfranken/ui/views/branches`. */
 import type { BranchHeaderData } from '@miguelfranken/ui/views/branches/branch-header';
@@ -82,11 +82,4 @@ export async function getBranchOverview(projectId: string, branch: string): Prom
     lastMessage: (row.last_message as string | null) ?? null,
     lastAuthor: (row.last_author as string | null) ?? null,
   };
-}
-
-/** postgres.js hands `text[]` back as an array, but a slice of an aggregate can arrive as its literal. */
-function parseTextArray(v: unknown): string[] {
-  if (Array.isArray(v)) return v.map(String);
-  if (typeof v === 'string' && v.startsWith('{')) return v.slice(1, -1).split(',').filter(Boolean);
-  return [];
 }

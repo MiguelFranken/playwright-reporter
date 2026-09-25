@@ -72,7 +72,7 @@ that cannot run in Storybook.
 | calls a server action, `next/navigation`, `useSearchParams`, the auth client, SSE, a service worker, `canvas`, `window.confirm` or `toast` | a connected wrapper in `apps/web/components` |
 
 Domains under `src/views/`: `run`, `runs`, `explorer`, `dashboard`, `branches`,
-`settings` (project settings), `teams` (team settings), `account` (the
+`pull-requests`, `settings` (project settings), `teams` (team settings), `account` (the
 signed-in user's own page), `admin` (superadmin screens), `auth` (sign-in and
 invitations), `connect` (the OAuth consent screen), `shell` (the sidebar). Add a folder
 when a new area of the app appears; its story titles are `Views/<Domain>/…`.

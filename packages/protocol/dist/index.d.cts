@@ -97,6 +97,7 @@ export declare const gitInfoSchema: z.ZodObject<{
   repoUrl: z.ZodOptional<z.ZodString>;
   prNumber: z.ZodOptional<z.ZodNumber>;
   prUrl: z.ZodOptional<z.ZodString>;
+  prTitle: z.ZodOptional<z.ZodString>;
 }, z.core.$strip>;
 export type GitInfo = z.infer<typeof gitInfoSchema>;
 export declare const ciInfoSchema: z.ZodObject<{
@@ -171,6 +172,7 @@ export declare const runStartSchema: z.ZodObject<{
     repoUrl: z.ZodOptional<z.ZodString>;
     prNumber: z.ZodOptional<z.ZodNumber>;
     prUrl: z.ZodOptional<z.ZodString>;
+    prTitle: z.ZodOptional<z.ZodString>;
   }, z.core.$strip>;
   ci: z.ZodObject<{
     provider: z.ZodOptional<z.ZodString>;

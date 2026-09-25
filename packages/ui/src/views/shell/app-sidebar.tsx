@@ -10,6 +10,7 @@ import {
   FlaskConical,
   Folder,
   GitBranch,
+  GitPullRequest,
   HardDrive,
   LayoutDashboard,
   ListChecks,
@@ -103,6 +104,7 @@ const PROJECT_NAV = [
   { segment: 'runs', title: 'Test Runs', icon: Play },
   { segment: 'tests', title: 'Test Explorer', icon: ListChecks },
   { segment: 'branches', title: 'Branches', icon: GitBranch },
+  { segment: 'pull-requests', title: 'Pull requests', icon: GitPullRequest },
   { segment: 'settings', title: 'Settings', icon: Settings },
 ];
 

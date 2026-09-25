@@ -8,8 +8,9 @@ import { LiveConnection, LiveStoreProvider } from '@/components/live/live-store'
 import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
 import { FilterSkeleton, TableRowsSkeleton } from '@miguelfranken/ui/patterns/skeletons';
 import { requireProject } from '@/lib/auth/access';
-import { listActiveRunsWithCursor, listBranches, listEnvironments, listRuns } from '@/lib/db/queries/runs';
+import { listActiveRunsWithCursor, listBranches, listEnvironments, listPullRequests, listRuns } from '@/lib/db/queries/runs';
 import { parsePage, parseRange } from '@/lib/db/queries/shared';
+import { pullRequestRef } from '@miguelfranken/ui/lib/pull-request';
 import { toRunListItem } from '@/lib/view-models';
 
 type Params = Promise<{ team: string; project: string }>;
@@ -27,6 +28,11 @@ const STATUS_OPTIONS = [
 
 function first(v: string | string[] | undefined) {
   return Array.isArray(v) ? v[0] : v;
+}
+
+/** `?pr=1524`; anything that is not a number filters nothing. */
+function parsePullRequest(v: string | undefined) {
+  return v && /^\d{1,9}$/.test(v) ? Number(v) : undefined;
 }
 
 export default function RunsPage({ params, searchParams }: Props) {
@@ -52,7 +58,7 @@ export default function RunsPage({ params, searchParams }: Props) {
         <UrlSearch placeholder="Search commit, branch or #number" className="lg:min-w-72" />
         <div className="flex flex-wrap items-center gap-2">
           <UrlSelect param="status" placeholder="Status" allLabel="All statuses" options={STATUS_OPTIONS} />
-          <Suspense fallback={<FilterSkeleton widths={[150, 170]} />}>
+          <Suspense fallback={<FilterSkeleton widths={[150, 170, 170]} />}>
             <Facets params={params} />
           </Suspense>
           <RangeToggle param="range" options={[7, 30, 90]} allowAll />
@@ -75,10 +81,22 @@ async function LiveBadge({ params }: { params: Params }) {
 async function Facets({ params }: { params: Params }) {
   const { team, project: projectSlug } = await params;
   const { project } = await requireProject(team, projectSlug);
-  const [branches, environments] = await Promise.all([listBranches(project.id), listEnvironments(project.id)]);
+  const [branches, pullRequests, environments] = await Promise.all([listBranches(project.id), listPullRequests(project.id), listEnvironments(project.id)]);
   return (
     <>
       <UrlSelect param="branch" placeholder="Branch" allLabel="All branches" options={branches.map((b) => ({ value: b, label: b }))} />
+      {pullRequests.length > 0 ? (
+        <UrlSelect
+          param="pr"
+          placeholder="Pull request"
+          allLabel="All pull requests"
+          className="max-w-64"
+          options={pullRequests.map((p) => {
+            const ref = pullRequestRef(p.number, p.url);
+            return { value: String(p.number), label: p.title ? `${ref} ${p.title}` : ref };
+          })}
+        />
+      ) : null}
       <UrlSelect param="env" placeholder="Environment" allLabel="All environments" options={environments.map((e) => ({ value: e, label: e }))} />
     </>
   );
@@ -100,12 +118,13 @@ async function Results({ params, searchParams }: Props) {
   const filters = {
     status: first(sp.status),
     branch: first(sp.branch),
+    prNumber: parsePullRequest(first(sp.pr)),
     environment: first(sp.env),
     q: first(sp.q),
     days: range ? parseRange(range) : undefined,
     page: parsePage(first(sp.page)),
   };
-  const hasFilters = Boolean(filters.status || filters.branch || filters.environment || filters.q || range);
+  const hasFilters = Boolean(filters.status || filters.branch || filters.prNumber !== undefined || filters.environment || filters.q || range);
   const result = await listRuns(project.id, filters);
 
   if (result.rows.length === 0) {

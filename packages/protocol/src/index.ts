@@ -82,8 +82,10 @@ export const gitInfoSchema = z.object({
   authorName: z.string().optional(),
   authorEmail: z.string().optional(),
   repoUrl: z.string().optional(),
+  /** The pull or merge request the run belongs to: its number (GitLab's IID), link and title. */
   prNumber: z.number().int().optional(),
   prUrl: z.string().optional(),
+  prTitle: z.string().optional(),
 });
 export type GitInfo = z.infer<typeof gitInfoSchema>;
 

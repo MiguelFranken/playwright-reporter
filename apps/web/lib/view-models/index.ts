@@ -37,9 +37,14 @@ export function toRunListItem<T extends RunRowLike>(run: T): T & Pick<RunListIte
   };
 }
 
-/** Same, for the run header — which reads the identical git fields. */
-export function toRunHeaderData<T extends RunRowLike>(run: T): T & Pick<RunHeaderData, 'gitCommitUrl' | 'gitShortSha'> {
-  return toRunListItem(run);
+/**
+ * Same, for the run header — which reads the identical git fields, and the
+ * pull request's title, which only the stored git metadata has.
+ */
+export function toRunHeaderData<T extends RunRowLike & { git?: { prTitle?: string } | null }>(
+  run: T,
+): T & Pick<RunHeaderData, 'gitCommitUrl' | 'gitShortSha' | 'prTitle'> {
+  return { ...toRunListItem(run), prTitle: run.git?.prTitle ?? null };
 }
 
 /**
@@ -51,11 +56,17 @@ export function branchHref(base: string, name: string) {
   return `${base}/branches/${name.split('/').map(encodeURIComponent).join('/')}`;
 }
 
+/** A pull or merge request's page, by its number (GitLab's IID). */
+export function pullRequestHref(base: string, number: number) {
+  return `${base}/pull-requests/${number}`;
+}
+
 /** The href builders a project's views need, all rooted at one base path. */
 export function projectHrefs(base: string) {
   return {
     run: (number: number) => `${base}/runs/${number}`,
     branch: (name: string) => branchHref(base, name),
+    pullRequest: (number: number) => pullRequestHref(base, number),
     test: (testId: string) => `${base}/tests/${testId}`,
     result: (runNumber: number, resultId: string) => `${base}/runs/${runNumber}/tests/${resultId}`,
   };

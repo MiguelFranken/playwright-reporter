@@ -53,7 +53,7 @@ Structured output fields: `project`, `window`, `defaultBranch`, `branches`, `env
 
 **List runs** · toolset `core`
 
-Find test runs. Filter by status, branch, environment, author, commit, tag, CI vs local and time window; newest first. Each run carries its pass/fail/flaky counts and a link.
+Find test runs. Filter by status, branch, pull request, environment, author, commit, tag, CI vs local and time window; newest first. Each run carries its pass/fail/flaky counts and a link.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -62,6 +62,7 @@ Find test runs. Filter by status, branch, environment, author, commit, tag, CI v
 | `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
 | `status` | `"running"` \| `"passed"` \| `"failed"` \| `"timedout"` \| `"interrupted"` \| `"incomplete"` \| `"running"` \| `"passed"` \| `"failed"` \| `"timedout"` \| `"interrupted"` \| `"incomplete"`[] |  | Run status(es). "incomplete" includes abandoned runs. |
 | `branch` | string |  | Git branch name, e.g. "main". |
+| `pullRequest` | integer (1–9007199254740991) \| string |  | Pull or merge request number, e.g. 42, "#42" or GitLab's "!1524". |
 | `environment` | string |  | Environment label the reporter sent, e.g. "staging". |
 | `author` | string |  | Part of the commit author name. |
 | `commit` | string |  | Commit SHA prefix (at least 4 characters). |

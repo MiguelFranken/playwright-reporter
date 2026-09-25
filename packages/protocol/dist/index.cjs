@@ -75,8 +75,10 @@ const gitInfoSchema = zod.z.object({
 	authorName: zod.z.string().optional(),
 	authorEmail: zod.z.string().optional(),
 	repoUrl: zod.z.string().optional(),
+	/** The pull or merge request the run belongs to: its number (GitLab's IID), link and title. */
 	prNumber: zod.z.number().int().optional(),
-	prUrl: zod.z.string().optional()
+	prUrl: zod.z.string().optional(),
+	prTitle: zod.z.string().optional()
 });
 const ciInfoSchema = zod.z.object({
 	provider: zod.z.string().optional(),

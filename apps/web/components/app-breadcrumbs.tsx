@@ -18,6 +18,7 @@ const SECTION_LABELS: Record<string, string> = {
   runs: 'Test Runs',
   tests: 'Test Explorer',
   branches: 'Branches',
+  'pull-requests': 'Pull requests',
   settings: 'Settings',
   members: 'Members',
   general: 'General',
@@ -94,6 +95,7 @@ function buildCrumbs(pathname: string, teams: SidebarTeam[]): Crumb[] {
     crumbs.push({ label: project?.name ?? rest[1], href: `${base}/dashboard` });
     if (rest[2]) crumbs.push({ label: SECTION_LABELS[rest[2]] ?? titleCase(rest[2]), href: `${base}/${rest[2]}` });
     if (rest[2] === 'branches' && rest[3]) crumbs.push({ label: rest.slice(3).map(decodeSegment).join('/') });
+    else if (rest[2] === 'pull-requests' && rest[3]) crumbs.push({ label: `#${rest[3]}` });
     else if (rest[3]) crumbs.push({ label: rest[2] === 'runs' ? `Run #${rest[3]}` : titleCase(rest[3]) });
   } else if (rest[0] === 'settings') {
     crumbs.push({ label: 'Team settings', href: `${teamBase}/settings/members` });

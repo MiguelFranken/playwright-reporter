@@ -96,6 +96,13 @@ describe('options', () => {
     expect(o?.git).toEqual({ branch: 'stage', repoUrl: 'https://gitlab.example/mop/app' });
     expect(o?.ci).toEqual({ buildUrl: 'https://logs.example/1' });
   });
+  it('reads the pull request from env, with or without its sigil', () => {
+    const env = { PW_REPORTER_TOKEN: 't', PW_REPORTER_URL: 'http://x', PW_REPORTER_PR_URL: 'https://gitlab.example/a/-/merge_requests/7', PW_REPORTER_PR_TITLE: 'Fix' };
+    expect(resolveOptions({}, { ...env, PW_REPORTER_PR_NUMBER: '!7' })?.git).toEqual({ prNumber: 7, prUrl: env.PW_REPORTER_PR_URL, prTitle: 'Fix' });
+    expect(resolveOptions({}, { ...env, PW_REPORTER_PR_NUMBER: '#7' })?.git.prNumber).toBe(7);
+    expect(resolveOptions({}, { ...env, PW_REPORTER_PR_NUMBER: 'seven' })?.git.prNumber).toBeUndefined();
+    expect(resolveOptions({ git: { prNumber: '12' } }, env)?.git.prNumber).toBe(12);
+  });
   it('prefers explicit options over env', () => {
     const o = resolveOptions({ token: 't', serverUrl: 'http://x', git: { branch: 'main' } }, { PW_REPORTER_GIT_BRANCH: 'stage' });
     expect(o?.git.branch).toBe('main');
