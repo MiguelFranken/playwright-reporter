@@ -22,6 +22,13 @@ vi.mock('next/headers', () => ({
   },
 }));
 
+// `connection()` marks a route handler as request-time only (no prerendering)
+// and throws outside a request scope, which is where the handlers run here.
+vi.mock('next/server', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/server')>()),
+  connection: async () => undefined,
+}));
+
 // `revalidatePath`/`revalidateTag` throw outside a request scope; the Server
 // Actions under test call them as their last step.
 vi.mock('next/cache', () => ({
