@@ -79,8 +79,24 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      # The S3 stub for the S3 storage suites: LocalStack, S3 only. Pinned to
+      # a community image that runs without an auth token; newer images need one.
+      localstack:
+        image: localstack/localstack:4.14.0
+        env:
+          SERVICES: s3
+          # Check presigned signatures as S3 does, so a tampered upload fails.
+          S3_SKIP_SIGNATURE_VALIDATION: '0'
+        ports:
+          - 4566:4566
+        options: >-
+          --health-cmd "curl -fsS http://localhost:4566/_localstack/health"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 24
     env:
       TEST_DATABASE_URL: postgres://postgres:test@localhost:5432/postgres
+      TEST_S3_ENDPOINT: http://localhost:4566
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup
