@@ -503,6 +503,15 @@ importers:
       '@miguelfranken/typescript-config':
         specifier: workspace:*
         version: link:../typescript-config
+      '@orpc/client':
+        specifier: 2.0.0-beta.40
+        version: 2.0.0-beta.40
+      '@orpc/contract':
+        specifier: 2.0.0-beta.40
+        version: 2.0.0-beta.40
+      '@orpc/openapi':
+        specifier: 2.0.0-beta.40
+        version: 2.0.0-beta.40
       '@playwright/test':
         specifier: ^1.63.0
         version: 1.63.0
