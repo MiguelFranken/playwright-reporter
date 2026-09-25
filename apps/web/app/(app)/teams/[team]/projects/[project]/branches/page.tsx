@@ -1,11 +1,12 @@
-import { Suspense } from 'react';
 import { BranchesTable } from '@miguelfranken/ui/views/branches/branches-table';
+import { Pagination } from '@/components/filters/pagination';
+import { ResultsBoundary } from '@/components/filters/results-boundary';
 import { RangeToggle, UrlSearch } from '@/components/filters/url-filters';
 import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
 import { TableRowsSkeleton } from '@miguelfranken/ui/patterns/skeletons';
 import { requireProject } from '@/lib/auth/access';
 import { branchList } from '@/lib/db/queries/branches';
-import { parseRange } from '@/lib/db/queries/shared';
+import { parsePage, parseRange } from '@/lib/db/queries/shared';
 import { projectHrefs } from '@/lib/view-models';
 
 type Params = Promise<{ team: string; project: string }>;
@@ -26,9 +27,9 @@ export default function BranchesPage({ params, searchParams }: Props) {
         <RangeToggle />
       </div>
 
-      <Suspense fallback={<TableRowsSkeleton rows={10} columns={[34, 12, 8, 10, 10, 16, 10]} className="panel" />}>
+      <ResultsBoundary searchParams={searchParams} fallback={<TableRowsSkeleton rows={10} columns={[34, 12, 8, 10, 10, 16, 10]} className="panel" />}>
         <Results params={params} searchParams={searchParams} />
-      </Suspense>
+      </ResultsBoundary>
     </>
   );
 }
@@ -38,13 +39,16 @@ async function Results({ params, searchParams }: Props) {
   const { project } = await requireProject(team, projectSlug);
   const base = `/teams/${team}/projects/${project.slug}`;
   const q = first(sp.q);
-  const rows = await branchList(project.id, parseRange(first(sp.range)), { q });
+  const result = await branchList(project.id, parseRange(first(sp.range)), { q, page: parsePage(first(sp.page)) });
   return (
-    <BranchesTable
-      hrefs={projectHrefs(base)}
-      rows={rows}
-      emptyTitle={q ? 'No branches match this search' : 'No runs in this range'}
-      emptyDescription={q ? 'Try a shorter search or a wider time range.' : 'Runs grouped by git branch will appear here.'}
-    />
+    <>
+      <BranchesTable
+        hrefs={projectHrefs(base)}
+        rows={result.rows}
+        emptyTitle={q ? 'No branches match this search' : 'No runs in this range'}
+        emptyDescription={q ? 'Try a shorter search or a wider time range.' : 'Runs grouped by git branch will appear here.'}
+      />
+      <Pagination page={result.page} pageSize={result.pageSize} total={result.total} />
+    </>
   );
 }

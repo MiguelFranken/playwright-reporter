@@ -12,6 +12,7 @@ import { ChartSkeleton, ListRowsSkeleton, MetricCardsSkeleton, TableRowsSkeleton
 import { formatDuration, formatPercent } from '@miguelfranken/ui/lib/format';
 import { cn } from '@miguelfranken/ui/lib/cn';
 import { Pagination } from '@/components/filters/pagination';
+import { ResultsBoundary } from '@/components/filters/results-boundary';
 import { RangeToggle } from '@/components/filters/url-filters';
 import { LiveRunsTable } from '@/components/live/live-runs';
 import { LiveConnection, LiveStoreProvider } from '@/components/live/live-store';
@@ -100,9 +101,14 @@ export default function BranchPage({ params, searchParams }: Props) {
             <LiveBadge params={params} searchParams={searchParams} />
           </Suspense>
         </div>
-        <Suspense fallback={<TableRowsSkeleton rows={10} columns={[12, 34, 16, 20, 8, 10]} className="panel" />}>
+        {/* The list is every run, whatever the range: only its page reloads it. */}
+        <ResultsBoundary
+          searchParams={searchParams}
+          omit={['range']}
+          fallback={<TableRowsSkeleton rows={10} columns={[12, 34, 16, 20, 8, 10]} className="panel" />}
+        >
           <Runs params={params} searchParams={searchParams} />
-        </Suspense>
+        </ResultsBoundary>
       </section>
     </LiveStoreProvider>
   );
