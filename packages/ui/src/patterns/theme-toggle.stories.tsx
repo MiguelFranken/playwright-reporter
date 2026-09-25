@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { expect, within } from 'storybook/test';
-import { ThemeToggle } from './theme-toggle';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '../components/dropdown-menu';
+import { ThemeMenuItem, ThemeToggle } from './theme-toggle';
 
 /**
  * The toggle reads next-themes, which the preview provides — but the preview
@@ -23,5 +24,22 @@ export const Default: Story = {};
 export const IsLabelled: Story = {
   play: async ({ canvasElement }) => {
     await expect(within(canvasElement).getByRole('button', { name: /toggle theme/i })).toBeVisible();
+  },
+};
+
+/** Inside a dropdown menu the toggle is a menu item, so the menu holds nothing but items. */
+export const InAMenu: Story = {
+  render: () => (
+    <DropdownMenu>
+      <DropdownMenuTrigger render={<button type="button" className="rounded-md border px-3 py-1.5 text-sm" />}>Account</DropdownMenuTrigger>
+      <DropdownMenuContent>
+        <ThemeMenuItem />
+      </DropdownMenuContent>
+    </DropdownMenu>
+  ),
+  play: async ({ canvasElement }) => {
+    await userEvent.click(within(canvasElement).getByRole('button', { name: 'Account' }));
+    const item = await within(document.body).findByRole('menuitem', { name: /Theme/ });
+    await waitFor(() => expect(item).toBeVisible());
   },
 };

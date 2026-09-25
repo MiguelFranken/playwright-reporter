@@ -11,8 +11,8 @@ import { Label } from '../../components/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/table';
 import { accessScopeItems, DEFAULT_ACCESS_SCOPE, type AccessScopeOption } from '../../lib/access-scope';
-import { CopyButton } from '../../patterns/copy-button';
 import { EmptyState } from '../../patterns/empty-state';
+import { TokenRevealDialog, type RevealedToken } from '../../patterns/token-reveal-dialog';
 import { Link } from '../../provider';
 
 export interface PersonalTokenRow {
@@ -41,11 +41,7 @@ export interface CreateTokenValues {
   scope: string;
 }
 
-export interface CreatedToken {
-  /** The secret, shown exactly once. */
-  token: string;
-  name: string;
-}
+export type CreatedToken = RevealedToken;
 
 const EXPIRY_CHOICES = [7, 30, 60, 90, 180, 365];
 
@@ -240,40 +236,21 @@ export function CreateTokenDialog({
   );
 }
 
-/** Shows a new token's secret, the one time it can be seen. */
+/** Shows a new token's secret once, and where to put it next. */
 export function TokenCreatedDialog({ created, onDismiss, setupHref }: { created: CreatedToken | null; onDismiss: () => void; setupHref: string }) {
   return (
-    <Dialog open={created !== null} onOpenChange={(open) => (!open ? onDismiss() : null)}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Token created</DialogTitle>
-          <DialogDescription>
-            Copy the token for <span className="font-medium text-foreground">{created?.name}</span> now. It will not be shown again.
-          </DialogDescription>
-        </DialogHeader>
-        {created ? (
-          <>
-            <div className="flex items-center gap-2 rounded-md border bg-muted/50 p-2">
-              <code className="min-w-0 flex-1 break-all text-code-s">{created.token}</code>
-              <CopyButton value={created.token} label="Copy token" successMessage="Token copied" />
-            </div>
-            <Alert>
-              <KeyRound />
-              <AlertTitle>Next: connect your assistant</AlertTitle>
-              <AlertDescription>
-                <Link href={setupHref} className="underline underline-offset-2">
-                  AI assistants
-                </Link>{' '}
-                has ready-made configuration for each client. Keep the token out of version control.
-              </AlertDescription>
-            </Alert>
-          </>
-        ) : null}
-        <DialogFooter>
-          <Button onClick={onDismiss}>Done</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <TokenRevealDialog created={created} onDismiss={onDismiss}>
+      <Alert>
+        <KeyRound />
+        <AlertTitle>Next: connect your assistant</AlertTitle>
+        <AlertDescription>
+          <Link href={setupHref} className="underline underline-offset-2">
+            AI assistants
+          </Link>{' '}
+          has ready-made configuration for each client. Keep the token out of version control.
+        </AlertDescription>
+      </Alert>
+    </TokenRevealDialog>
   );
 }
 
