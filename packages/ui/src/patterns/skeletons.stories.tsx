@@ -41,7 +41,7 @@ export const SideBySide: Story = {
         <CardHeader>
           <CardTitle>Loading</CardTitle>
         </CardHeader>
-        <CardContent className="px-0">
+        <CardContent flush>
           <TableRowsSkeleton rows={4} columns={[40, 30, 15, 15]} />
         </CardContent>
       </Card>
@@ -49,7 +49,7 @@ export const SideBySide: Story = {
         <CardHeader>
           <CardTitle>Loaded</CardTitle>
         </CardHeader>
-        <CardContent className="px-0">
+        <CardContent flush>
           <Table>
             <TableHeader className="sr-only">
               <TableRow>

@@ -70,7 +70,7 @@ export default function BranchPage({ params, searchParams }: Props) {
             </CardTitle>
             <CardDescription>Tests on this branch that passed only after a retry.</CardDescription>
           </CardHeader>
-          <CardContent className="px-0 py-0">
+          <CardContent flush className="py-0">
             <Suspense fallback={<ListRowsSkeleton />}>
               <Flaky params={params} searchParams={searchParams} />
             </Suspense>
@@ -85,7 +85,7 @@ export default function BranchPage({ params, searchParams }: Props) {
             </CardTitle>
             <CardDescription>Tests failing 5+ times in a row on this branch, or in at least 70% of its runs.</CardDescription>
           </CardHeader>
-          <CardContent className="px-0 py-0">
+          <CardContent flush className="py-0">
             <Suspense fallback={<ListRowsSkeleton />}>
               <Chronic params={params} searchParams={searchParams} />
             </Suspense>

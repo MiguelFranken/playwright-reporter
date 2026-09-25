@@ -55,7 +55,7 @@ export default function AdminStoragePage() {
           <CardTitle>Usage</CardTitle>
           <CardDescription>Artifacts by kind. “Due” is what the saved policy expires on the next sweep, counted even while retention is off.</CardDescription>
         </CardHeader>
-        <CardContent className="overflow-x-auto px-0">
+        <CardContent flush className="overflow-x-auto">
           <Suspense fallback={<TableRowsSkeleton rows={6} columns={[20, 15, 15, 15, 15]} />}>
             <UsageData />
           </Suspense>
@@ -73,7 +73,7 @@ export default function AdminStoragePage() {
             <ForceDeleteButton expected={EVICT_CONFIRMATION} />
           </div>
         </CardHeader>
-        <CardContent className="overflow-x-auto px-0">
+        <CardContent flush className="overflow-x-auto">
           <Suspense fallback={<TableRowsSkeleton rows={4} columns={[20, 15, 15, 15, 25]} />}>
             <SweepsData />
           </Suspense>

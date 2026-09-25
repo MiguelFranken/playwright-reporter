@@ -16,7 +16,7 @@ export default function AdminTeamsPage() {
           <CardTitle>All teams</CardTitle>
           <CardDescription>Every team on this instance.</CardDescription>
         </CardHeader>
-        <CardContent className="px-0 py-0">
+        <CardContent flush className="py-0">
           <Suspense fallback={<TableRowsSkeleton columns={[30, 25, 15, 15]} />}>
             <TeamsData />
           </Suspense>
