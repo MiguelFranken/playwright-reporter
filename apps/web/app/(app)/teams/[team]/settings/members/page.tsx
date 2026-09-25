@@ -3,6 +3,7 @@ import { MembersCard, type InvitationRow, type MemberRow } from '@/components/te
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@miguelfranken/ui/components/card';
 import { Skeleton } from '@miguelfranken/ui/components/skeleton';
 import { requireTeam } from '@/lib/auth/access';
+import { membersVisibleTo } from '@/lib/auth/demo';
 import type { TeamRoleName } from '@/lib/auth/permissions';
 import { listPendingInvitations, listTeamMembers } from '@/lib/db/queries/teams';
 import { formatDateTime, formatRelative } from '@miguelfranken/ui/lib/format';
@@ -27,7 +28,7 @@ async function MembersContent({ params }: { params: Params }) {
     canManage ? listPendingInvitations(access.team.id) : Promise.resolve([]),
   ]);
 
-  const memberRows: MemberRow[] = members.map((m) => ({
+  const memberRows: MemberRow[] = membersVisibleTo(access.user, members).map((m) => ({
     userId: m.userId,
     name: m.name,
     email: m.email,
