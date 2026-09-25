@@ -1,0 +1,38 @@
+---
+title: Introduction
+icon: House
+description: Every Playwright run, live, in one place — self-hosted.
+---
+
+import { Bot, ChartLine, Cloud, Film, GitBranch, Layers, Radio, ShieldCheck, Skull } from 'lucide-react';
+
+Playwright Reporter is a reporter you add to your Playwright config and a self-hosted Next.js app it streams to. The app
+shows runs **while they run**, keeps their history, screenshots, videos and traces, and tells you which tests are
+flaky, slow or broken.
+
+## What you get
+
+<Cards>
+  <Card icon={<Radio />} title="Live runs" description="Results, steps and attachments appear within a second or two, while the tests are still running." />
+  <Card icon={<Layers />} title="Sharding built in" description="Shards that share a CI run id become one run, auto-detected on GitHub and GitLab." />
+  <Card icon={<Film />} title="Every artifact" description="Screenshots, videos, visual diffs and traces in Playwright's Trace Viewer, served by the app itself." />
+  <Card icon={<ChartLine />} title="History and trends" description="Pass rates, durations and flaky tests over time, per project, test, branch and pull request." />
+  <Card icon={<GitBranch />} title="Git and CI aware" description="Branch, commit, author, pull request and build link, from Playwright, CI variables or the checkout." />
+  <Card icon={<Skull />} title="No zombie runs" description="A run whose reporter died reads as abandoned, recorded by a durable watchdog." />
+  <Card icon={<Bot />} title="AI assistants over MCP" description="Claude, Cursor, Copilot and ChatGPT read your test history and debug failures with evidence." />
+  <Card icon={<ShieldCheck />} title="Teams and roles" description="Superadmins, team admins, members and viewers; teams can't see each other's projects." />
+  <Card icon={<Cloud />} title="Runs anywhere" description="PostgreSQL, and the filesystem, Vercel Blob or any S3-compatible bucket, on Vercel, Docker or Kubernetes." />
+</Cards>
+
+## How it fits together
+
+| Part | What it is |
+| --- | --- |
+| `@miguelfranken/reporter` | The Playwright reporter. Streams runs to the app with a project token; never fails your tests. |
+| The app (`apps/web`) | Next.js, PostgreSQL, Better Auth. The UI, the ingest API, the MCP server and the REST API. |
+| `@miguelfranken/mcp` | A stdio bridge to the app's MCP server, for clients that only start local servers. |
+
+<Callout title="Try it first">
+  The [live demo](https://playwright-reporter-nine.vercel.app/demo) signs you in as a read-only viewer of a real
+  project: a scheduled workflow runs a web shop's suite every two hours.
+</Callout>

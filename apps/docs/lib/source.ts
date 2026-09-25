@@ -1,5 +1,6 @@
 import { loader } from 'fumadocs-core/source';
 import { llms } from 'fumadocs-core/source/llms';
+import { lucideIconsPlugin } from 'fumadocs-core/source/plugins/lucide-icons';
 import { defineDocs } from 'fumadocs-mdx/macro';
 import { openapi } from './openapi';
 
@@ -22,7 +23,7 @@ export const source = loader(
   },
   {
     baseUrl: '/docs',
-    plugins: [openapi.loaderPlugin()],
+    plugins: [lucideIconsPlugin(), openapi.loaderPlugin()],
   },
 );
 

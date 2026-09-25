@@ -1,0 +1,11 @@
+{
+  "title": "Using the app",
+  "icon": "LayoutDashboard",
+  "defaultOpen": true,
+  "pages": [
+    "runs",
+    "tests",
+    "branches-and-pull-requests",
+    "account"
+  ]
+}

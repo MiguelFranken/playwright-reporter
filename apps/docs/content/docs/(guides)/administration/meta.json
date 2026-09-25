@@ -1,0 +1,11 @@
+{
+  "title": "Administration",
+  "icon": "ShieldCheck",
+  "defaultOpen": true,
+  "pages": [
+    "index",
+    "users-and-teams",
+    "projects-and-tokens",
+    "retention"
+  ]
+}

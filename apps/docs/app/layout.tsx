@@ -9,13 +9,13 @@ export const metadata: Metadata = {
   description: 'Set up, run and use Playwright Reporter: self-hosted Playwright test reports, history and flaky-test analytics.',
 };
 
-const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
-const mono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' });
+const sans = Inter({ subsets: ['latin'], variable: '--font-sans', display: 'swap' });
+const mono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono', display: 'swap' });
 
 export default function Layout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} ${mono.variable}`} suppressHydrationWarning>
-      <body className="flex min-h-screen flex-col font-sans">
+    <html lang="en" className={`${sans.variable} ${mono.variable}`} suppressHydrationWarning>
+      <body className="flex min-h-dvh flex-col bg-background font-sans text-foreground antialiased">
         <RootProvider>{children}</RootProvider>
       </body>
     </html>

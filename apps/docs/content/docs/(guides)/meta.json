@@ -1,0 +1,14 @@
+{
+  "title": "Guides",
+  "description": "Set up, run and use Playwright Reporter",
+  "icon": "BookOpen",
+  "root": true,
+  "pages": [
+    "index",
+    "getting-started",
+    "using",
+    "deployment",
+    "administration",
+    "ai-assistants"
+  ]
+}

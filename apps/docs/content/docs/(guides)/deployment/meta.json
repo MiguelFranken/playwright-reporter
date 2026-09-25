@@ -1,0 +1,12 @@
+{
+  "title": "Deployment",
+  "icon": "Server",
+  "defaultOpen": true,
+  "pages": [
+    "index",
+    "vercel",
+    "docker-kubernetes",
+    "storage",
+    "configuration"
+  ]
+}
