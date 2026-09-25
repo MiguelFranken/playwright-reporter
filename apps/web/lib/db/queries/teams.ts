@@ -93,6 +93,21 @@ export async function listPendingInvitations(teamId: string) {
 }
 
 export async function listAuditLogs(opts: { teamId?: string; actorId?: string; limit?: number } = {}) {
+  return auditLogQuery(opts).limit(opts.limit ?? 200);
+}
+
+/** One page of the audit log, newest first, with the count of every entry. */
+export async function listAuditLogPage(opts: { page?: number; pageSize?: number } = {}) {
+  const pageSize = opts.pageSize ?? 50;
+  const page = opts.page ?? 1;
+  const [rows, [{ total }]] = await Promise.all([
+    auditLogQuery({}).limit(pageSize).offset((page - 1) * pageSize),
+    db.select({ total: sql<number>`count(*)::int` }).from(auditLogs),
+  ]);
+  return { rows, total: Number(total), page, pageSize };
+}
+
+function auditLogQuery(opts: { teamId?: string; actorId?: string }) {
   const where = [
     opts.teamId ? eq(auditLogs.teamId, opts.teamId) : undefined,
     opts.actorId ? eq(auditLogs.actorId, opts.actorId) : undefined,
@@ -114,28 +129,37 @@ export async function listAuditLogs(opts: { teamId?: string; actorId?: string; l
     .leftJoin(teams, eq(teams.id, auditLogs.teamId))
     .where(where.length ? and(...where) : undefined)
     .orderBy(desc(auditLogs.id))
-    .limit(opts.limit ?? 200);
+    .$dynamic();
 }
 
 // --------------------------------------------------------------------- users
 
-export async function listUsers(q?: string) {
+/** One page of the instance's accounts, by email, with the count of every match. */
+export async function listUsers(q?: string, opts: { page?: number; pageSize?: number } = {}) {
   const term = q?.trim().toLowerCase();
-  return db
-    .select({
-      id: users.id,
-      name: users.name,
-      email: users.email,
-      role: users.role,
-      banned: users.banned,
-      banReason: users.banReason,
-      createdAt: users.createdAt,
-      teamCount: sql<number>`(select count(*)::int from team_members tm where tm.user_id = users.id)`,
-    })
-    .from(users)
-    .where(term ? sql`lower(${users.name}) like ${`%${term}%`} or lower(${users.email}) like ${`%${term}%`}` : undefined)
-    .orderBy(asc(users.email))
-    .limit(200);
+  const pageSize = opts.pageSize ?? 50;
+  const page = opts.page ?? 1;
+  const where = term ? sql`lower(${users.name}) like ${`%${term}%`} or lower(${users.email}) like ${`%${term}%`}` : undefined;
+  const [rows, [{ total }]] = await Promise.all([
+    db
+      .select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        role: users.role,
+        banned: users.banned,
+        banReason: users.banReason,
+        createdAt: users.createdAt,
+        teamCount: sql<number>`(select count(*)::int from team_members tm where tm.user_id = users.id)`,
+      })
+      .from(users)
+      .where(where)
+      .orderBy(asc(users.email))
+      .limit(pageSize)
+      .offset((page - 1) * pageSize),
+    db.select({ total: sql<number>`count(*)::int` }).from(users).where(where),
+  ]);
+  return { rows, total: Number(total), page, pageSize };
 }
 
 export async function getUserById(id: string) {

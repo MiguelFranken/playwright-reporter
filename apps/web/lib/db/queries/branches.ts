@@ -18,7 +18,15 @@ export const RECENT_RUNS = 10;
 
 export interface BranchListFilters {
   q?: string;
-  limit?: number;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface BranchListPage {
+  rows: BranchListRow[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 /**
@@ -26,8 +34,10 @@ export interface BranchListFilters {
  * figures as the dashboard's branch summary, plus the shape of the latest runs
  * and their typical duration, which the summary has no room for.
  */
-export async function branchList(projectId: string, days: number, filters: BranchListFilters = {}): Promise<BranchListRow[]> {
+export async function branchList(projectId: string, days: number, filters: BranchListFilters = {}): Promise<BranchListPage> {
   const q = filters.q?.trim();
+  const pageSize = filters.pageSize ?? 25;
+  const page = filters.page ?? 1;
   const rows = await db.execute<Record<string, unknown>>(
     sql`select git_branch as branch,
                (array_agg(environment order by started_at desc))[1] as environment,
@@ -38,13 +48,21 @@ export async function branchList(projectId: string, days: number, filters: Branc
                (array_agg(${status}::text order by started_at desc))[1:${RECENT_RUNS}] as recent_statuses,
                avg(duration_ms) filter (where status in ('passed','failed')) as avg_duration_ms,
                case when count(*) filter (where ${status} <> 'running') = 0 then null
-                    else count(*) filter (where status = 'passed')::float / count(*) filter (where ${status} <> 'running') end as pass_rate
+                    else count(*) filter (where status = 'passed')::float / count(*) filter (where ${status} <> 'running') end as pass_rate,
+               -- Counted over the groups, before the limit: the page's total in the same pass.
+               count(*) over ()::int as total
         from ${runs}
         where project_id = ${projectId} and started_at >= ${sinceDate(days)}
               ${q ? sql`and git_branch ilike ${'%' + q + '%'}` : sql``}
-        group by git_branch order by max(started_at) desc limit ${filters.limit ?? 200}`,
+        group by git_branch order by max(started_at) desc, git_branch asc nulls last
+        limit ${pageSize} offset ${(page - 1) * pageSize}`,
   );
-  return Array.from(rows).map((r) => ({
+  const list = Array.from(rows);
+  return {
+    total: list.length ? num(list[0].total) : 0,
+    page,
+    pageSize,
+    rows: list.map((r) => ({
     branch: (r.branch as string | null) ?? null,
     environment: (r.environment as string | null) ?? null,
     runs: num(r.runs),
@@ -54,7 +72,8 @@ export async function branchList(projectId: string, days: number, filters: Branc
     recentStatuses: parseTextArray(r.recent_statuses),
     avgDurationMs: r.avg_duration_ms === null ? null : num(r.avg_duration_ms),
     passRate: r.pass_rate === null ? null : num(r.pass_rate),
-  }));
+    })),
+  };
 }
 
 /** The branch as a whole, over all time — what its page's header states. `null` when it has never run. */

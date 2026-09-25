@@ -51,12 +51,12 @@ export default function AdminOverviewPage() {
 
 async function InstanceStats() {
   await requireSuperadmin();
-  const [teams, users, size, days] = await Promise.all([listAllTeams(), listUsers(), databaseSize(), ingestByDay(30)]);
+  const [teams, users, size, days] = await Promise.all([listAllTeams(), listUsers(undefined, { pageSize: 1 }), databaseSize(), ingestByDay(30)]);
   const projectCount = teams.reduce((sum, t) => sum + t.projectCount, 0);
   return (
     <>
       <StatCard icon={Building2} label="Teams" value={teams.length} href="/admin/teams" />
-      <StatCard icon={Users} label="Users" value={users.length} href="/admin/users" />
+      <StatCard icon={Users} label="Users" value={users.total} href="/admin/users" />
       <StatCard icon={FolderKanban} label="Projects" value={projectCount} href="/admin/teams" />
       {/* The line is test results ingested per day over the last 30 days. */}
       <StatCard

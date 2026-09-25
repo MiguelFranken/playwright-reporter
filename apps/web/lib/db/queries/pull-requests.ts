@@ -26,7 +26,15 @@ const prTitle = sql`git->>'prTitle'`;
 
 export interface PullRequestListFilters {
   q?: string;
-  limit?: number;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface PullRequestListPage {
+  rows: PullRequestListRow[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 /**
@@ -35,8 +43,10 @@ export interface PullRequestListFilters {
  * A request is its number within the project; its branch, title and link are
  * whatever its latest run reported.
  */
-export async function pullRequestList(projectId: string, days: number, filters: PullRequestListFilters = {}): Promise<PullRequestListRow[]> {
+export async function pullRequestList(projectId: string, days: number, filters: PullRequestListFilters = {}): Promise<PullRequestListPage> {
   const q = filters.q?.trim();
+  const pageSize = filters.pageSize ?? 25;
+  const page = filters.page ?? 1;
   const number = q?.replace(/^[#!]/, '');
   const rows = await db.execute<Record<string, unknown>>(
     sql`select pr_number as number,
@@ -52,7 +62,9 @@ export async function pullRequestList(projectId: string, days: number, filters: 
                (array_agg(${status}::text order by started_at desc))[1:${RECENT_RUNS}] as recent_statuses,
                avg(duration_ms) filter (where status in ('passed','failed')) as avg_duration_ms,
                case when count(*) filter (where ${status} <> 'running') = 0 then null
-                    else count(*) filter (where status = 'passed')::float / count(*) filter (where ${status} <> 'running') end as pass_rate
+                    else count(*) filter (where status = 'passed')::float / count(*) filter (where ${status} <> 'running') end as pass_rate,
+               -- Counted over the groups that pass the having clause, before the limit.
+               count(*) over ()::int as total
         from ${runs}
         where project_id = ${projectId} and pr_number is not null and started_at >= ${sinceDate(days)}
         group by pr_number
@@ -63,9 +75,15 @@ export async function pullRequestList(projectId: string, days: number, filters: 
                      or bool_or(${prTitle} ilike ${'%' + q + '%'})`
             : sql``
         }
-        order by max(started_at) desc limit ${filters.limit ?? 200}`,
+        order by max(started_at) desc, pr_number desc
+        limit ${pageSize} offset ${(page - 1) * pageSize}`,
   );
-  return Array.from(rows).map((r) => ({
+  const list = Array.from(rows);
+  return {
+    total: list.length ? num(list[0].total) : 0,
+    page,
+    pageSize,
+    rows: list.map((r) => ({
     number: num(r.number),
     title: (r.title as string | null) ?? null,
     url: (r.url as string | null) ?? null,
@@ -79,7 +97,8 @@ export async function pullRequestList(projectId: string, days: number, filters: 
     recentStatuses: parseTextArray(r.recent_statuses),
     avgDurationMs: r.avg_duration_ms === null ? null : num(r.avg_duration_ms),
     passRate: r.pass_rate === null ? null : num(r.pass_rate),
-  }));
+    })),
+  };
 }
 
 /** The request as a whole, over all time — what its page's header states. `null` when no run reported it. */
