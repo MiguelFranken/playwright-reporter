@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect } from 'react';
+import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { ActiveRuns, type ActiveRun } from '@miguelfranken/ui/views/runs/active-runs';
 import { RunsTable, type RunListItem } from '@miguelfranken/ui/views/runs/runs-table';
 import type { LiveEvent } from '@/lib/live/events';
-import { matchesRunFilters, reduceActiveRuns, reduceRunsTable, reviveDates, type RunListFilters } from '@/lib/live/reducers';
-import type { LiveStore } from '@/lib/live/store';
+import { matchesRunFilters, reduceActiveRuns, reduceRunsTable, type RunListFilters } from '@/lib/live/reducers';
+import { orpc, projectRefOf, type ProjectRef } from '@/lib/rpc/client';
 import { projectHrefs } from '@/lib/view-models';
 import { useLivePart, useLiveStore } from './live-store';
 
@@ -21,16 +22,18 @@ const INSERT_MS = 500;
  * through the part's reducer; the replay after the insert is exact because
  * each row carries its own cursor.
  */
-function useRunInserts<T extends { id: string }>(name: string, itemsUrl: string, insert: (current: T[], fresh: T[]) => T[]) {
+function useRunInserts<T extends { id: string }>(name: string, base: string, insert: (current: T[], fresh: T[]) => T[]) {
   const store = useLiveStore();
+  const queryClient = useQueryClient();
   useEffect(() => {
+    const ref = projectRefOf(base);
     const queued = new Set<string>();
     let timer: ReturnType<typeof setTimeout> | null = null;
     const flush = async () => {
       timer = null;
       const ids = [...queued];
       queued.clear();
-      const fresh = await fetchRuns<T>(store, itemsUrl, ids);
+      const fresh = (await fetchRuns(queryClient, ref, ids)) as unknown as T[];
       if (!fresh.length) return;
       const idSet = new Set(fresh.map((r) => r.id));
       store.merge<T[]>(name, (current) => insert(current, fresh), (ev) => idSet.has(ev.data.runId));
@@ -42,27 +45,24 @@ function useRunInserts<T extends { id: string }>(name: string, itemsUrl: string,
       queued.add(ev.data.runId);
       timer ??= setTimeout(() => void flush(), INSERT_MS);
     });
-  }, [store, name, itemsUrl, insert]);
+  }, [store, queryClient, name, base, insert]);
 }
 
-/** Both lists want the same new run; the request is shared. */
-const pending = new WeakMap<LiveStore, Map<string, Promise<unknown[]>>>();
-
-async function fetchRuns<T extends object>(store: LiveStore, itemsUrl: string, ids: string[]): Promise<T[]> {
+/**
+ * Both lists want the same new run: the query key is the sorted ids, so the
+ * two lists share one request (and its answer, for a few seconds).
+ */
+async function fetchRuns(queryClient: QueryClient, ref: ProjectRef, ids: string[]) {
   if (!ids.length) return [];
-  let byKey = pending.get(store);
-  if (!byKey) pending.set(store, (byKey = new Map()));
-  const key = ids.sort().join(',');
-  let request = byKey.get(key);
-  if (!request) {
-    request = fetch(`${itemsUrl}?ids=${key}`, { cache: 'no-store' })
-      .then((res) => (res.ok ? res.json() : { runs: [] }))
-      .then((body: { runs: T[] }) => body.runs.map((r) => reviveDates(r)))
-      .catch(() => []);
-    byKey.set(key, request);
-    setTimeout(() => byKey.delete(key), 10_000);
+  try {
+    const { runs } = await queryClient.fetchQuery({
+      ...orpc.runs.items.queryOptions({ input: { ...ref, ids: [...ids].sort() } }),
+      staleTime: 10_000,
+    });
+    return runs;
+  } catch {
+    return [];
   }
-  return (await request) as T[];
 }
 
 /**
@@ -85,7 +85,7 @@ export function LiveRunsTable({
 }) {
   const live = useLivePart('runs-table', runs, cursor, reduceRunsTable);
   const page = filters.page ?? 1;
-  useRunInserts<Listed>('runs-table', `/api${base}/runs/items`, insertIntoTable(filters, page, pageSize));
+  useRunInserts<Listed>('runs-table', base, insertIntoTable(filters, page, pageSize));
   // A finished run can leave a status filter; the rest matched when the server listed them.
   const shown = live.filter((r) => matchesRunFilters(r, { status: filters.status }));
   return <RunsTable hrefs={projectHrefs(base)} runs={shown} />;
@@ -114,7 +114,7 @@ function insertIntoTable(filters: RunListFilters, page: number, pageSize: number
 
 export function LiveActiveRuns({ base, runs, cursor }: { base: string; runs: ActiveListed[]; cursor: number }) {
   const live = useLivePart('active-runs', runs, cursor, reduceActiveRuns);
-  useRunInserts<ActiveListed>('active-runs', `/api${base}/runs/items`, insertActive);
+  useRunInserts<ActiveListed>('active-runs', base, insertActive);
   return <ActiveRuns hrefs={projectHrefs(base)} runs={live} />;
 }
 

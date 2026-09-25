@@ -102,6 +102,11 @@ describe('formatDateTime', () => {
     expect(formatDateTime(iso)).toMatch(/2026/);
   });
 
+  it('renders the same string on every machine: en-US, in UTC', () => {
+    expect(formatDateTime('2026-09-25T18:02:00.000Z')).toBe('Sep 25, 2026, 6:02 PM UTC');
+    expect(formatDateTime('2026-09-25T23:30:00.000Z')).toBe('Sep 25, 2026, 11:30 PM UTC');
+  });
+
   it('shows a dash without a date', () => {
     expect(formatDateTime(null)).toBe('–');
     expect(formatDateTime(undefined)).toBe('–');

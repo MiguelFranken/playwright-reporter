@@ -1,0 +1,43 @@
+---
+title: Runs
+description: Follow a run live, triage its failures and open every artifact.
+---
+
+A **run** is one execution of your suite. Shards that share a CI run id become one run, so a matrix of eight shards
+still reads as a single row.
+
+## The runs list
+
+**Test Runs** lists every run of the project, newest first, with its status, commit, branch, environment and the
+pass/fail/flaky counts. **Active runs** at the top shows what is running right now. Runs that start while the page is
+open are inserted as they arrive; nothing needs a refresh. Filter by status, branch and environment, search by
+commit message, branch, short SHA or `#number`, and narrow the window to 7, 30 or 90 days.
+
+## One run
+
+A run's page has four tabs:
+
+| Tab | What it shows |
+| --- | --- |
+| **Summary** | Counts by outcome and every test, failures first, filterable by outcome and error signature. |
+| **Specs** | Tallies per spec file; pick a file to see its tests. |
+| **Errors** | Failures grouped by error signature, so twenty tests failing for one reason are one group. |
+| **Configuration** | The Playwright version, projects, shards and system details the reporter sent. |
+
+While the run is in progress, every tab follows it live. Once it finishes, the page settles on the final numbers.
+
+## One result
+
+Open a test to see each attempt with its error, the failing step, the code snippet around the failing line,
+stdout and stderr, and its attachments: screenshots, visual diffs, videos and traces. Traces open in Playwright's
+Trace Viewer, served by the app itself, so they work behind a VPN.
+
+<Callout title="Debug with AI">
+  Failed results and runs carry a **Debug with AI** menu that hands a ready-made prompt to your assistant. See
+  [AI assistants](/docs/ai-assistants).
+</Callout>
+
+## Abandoned runs
+
+A run whose reporter stopped talking — a killed process, a CI job cut off — reads as **Abandoned** after five minutes.
+If the reporter speaks up again, it goes back to running.

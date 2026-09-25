@@ -1,0 +1,33 @@
+---
+title: Authentication
+description: Personal access tokens, their restrictions, and what a token can see.
+---
+
+The API takes **personal access tokens**. Create one under **Account → Access tokens**:
+
+- It is **read-only** and **always expires** (90 days by default, at most 365).
+- It can be limited to **one team** or **one project**.
+- It is shown once and stored hashed. Revoke it there, and it stops working at once.
+
+Send it as a bearer token:
+
+```bash
+curl -H "Authorization: Bearer pwr_pat_…" https://reporter.example.com/api/v1/me
+```
+
+`GET /me` is the way to check a token: it answers with who the token acts as, its scopes, expiry and restrictions, and
+the teams and projects it can read.
+
+## What a token can see
+
+Exactly what its owner sees in the app, **right now**, narrowed to the token's restrictions. Removing somebody from a
+team takes effect on their tokens immediately. A project the token cannot read is a `404`, like a project that does
+not exist, so a token never learns what other teams have.
+
+## Tokens the API refuses
+
+| Token | Why |
+| --- | --- |
+| A project API token (`pwr_…`) | It belongs to the reporter and can only upload runs. |
+| An OAuth access token (`pwr_oat_…`) | It was granted to an AI connector for the MCP server, and is only valid there. |
+| The demo account's tokens | The shared demo account cannot use the API. |

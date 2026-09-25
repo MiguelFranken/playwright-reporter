@@ -11,7 +11,6 @@ import {
   reduceHeader,
   reduceRows,
   reduceRunsTable,
-  reviveDates,
   reduceRunCounts,
   reduceSpecs,
   visibleRows,
@@ -264,10 +263,5 @@ describe('runs list reducers', () => {
     expect(matchesRunFilters(r, { q: '#12' })).toBe(true);
     expect(matchesRunFilters(r, { q: 'ABC' })).toBe(true);
     expect(matchesRunFilters({ ...r, startedAt: new Date(Date.now() - 9 * 86_400_000) }, { days: 7 })).toBe(false);
-  });
-
-  it('revives the dates a JSON endpoint sends as strings', () => {
-    const at = '2026-09-24T10:00:00.000Z';
-    expect(reviveDates({ startedAt: at, finishedAt: null, gitMessage: 'x' })).toEqual({ startedAt: new Date(at), finishedAt: null, gitMessage: 'x' });
   });
 });

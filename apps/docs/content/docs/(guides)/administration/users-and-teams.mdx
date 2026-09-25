@@ -1,0 +1,36 @@
+---
+title: Users and teams
+description: Roles, invitations, passwords and how teams are kept apart.
+---
+
+A user has one **instance role**, and one **team role** per team they belong to.
+
+| Instance role | Can |
+| --- | --- |
+| `superadmin` | Everything in every team, plus **Administration**: create and delete teams, manage and ban users, set a temporary password, read the audit log. |
+| `user` | Nothing outside their team memberships. |
+
+| Team role | Read | Project operations | People | Team |
+| --- | --- | --- | --- | --- |
+| `admin` | Yes | All, including creating and deleting projects | Invite, remove, change role, revoke | Rename (deleting is superadmin-only) |
+| `member` | Yes | Rename, manage ingest tokens, delete runs | No | No |
+| `viewer` | Yes, except the ingest tokens | No | No | No |
+
+A team always keeps at least one admin: the last one can't be demoted or removed, except by a superadmin.
+
+## Inviting somebody
+
+The app sends no email. **Team settings → Members → Invite** produces a link that is shown **once**; hand it over
+yourself. It is bound to one email, expires after 7 days (`INVITATION_TTL_HOURS`) and works once. **New link** rotates
+it, **Revoke** cancels it, and **Add existing user** adds somebody who already has an account straight away.
+
+## A forgotten password
+
+There is no reset email yet. A superadmin opens **Administration → Users**, clicks **Password**, and hands over the
+temporary password shown once. The user changes it under **Account**.
+
+## Isolation
+
+A team's URLs answer 404 rather than 403 for anyone outside it, so they don't reveal that a project exists. The same
+holds for tokens: the REST API and the MCP server see exactly what the token's owner sees, narrowed to the teams or
+project the token was restricted to.

@@ -1,0 +1,49 @@
+---
+title: REST API
+description: Read runs, results, tests and verdicts from scripts, CI and your own tools.
+---
+
+Every instance serves a read-only REST API under `/api/v1`. It answers from the same code as the
+[MCP server](/docs/ai-assistants): the same projects, the same verdicts, the same errors.
+
+```bash
+curl -H "Authorization: Bearer $PW_REPORTER_PAT" \
+  "https://reporter.example.com/api/v1/projects/acme/web/runs?status=failed&branch=main&limit=5"
+```
+
+| | |
+| --- | --- |
+| Base URL | `https://<your instance>/api/v1` |
+| Authentication | A personal access token, `Authorization: Bearer pwr_pat_…`. See [Authentication](/docs/api/authentication). |
+| Format | JSON. Dates are ISO 8601 strings. Errors are problem details. See [Errors and limits](/docs/api/errors-and-limits). |
+| Description | OpenAPI 3.1, at `/api/v1/openapi.json` on your instance, with its own URL as the server. |
+| Versioning | Changes within `v1` only add. A breaking change would get `/api/v2`. |
+
+## Addressing things
+
+Projects are addressed by their slugs, as in the app's URLs: `/projects/{team}/{project}`. Inside a project:
+
+- a **run** by its number (`128`), its id, `latest` or `latest-failed` — `latest` can be scoped with `branch` and
+  `environment`;
+- a **result** (one test in one run), a **test** (across runs) and an **attachment** by their ids, which other
+  answers return.
+
+Every object carries a `url` into the app, for the full picture.
+
+## Endpoints
+
+| | |
+| --- | --- |
+| `GET /me`, `GET /projects` | The token, and what it can read. |
+| `…/filters`, `…/health` | Filter values, and where the project stands. |
+| `…/runs`, `…/runs/{run}`, `…/runs/{run}/results` | Runs and their results. |
+| `…/results/{result}`, `…/attachments/{attachment}` | One result in full, one attachment. |
+| `…/tests`, `…/tests/{test}` | Tests across runs, and one test's history. |
+| `…/runs/{run}/failure-groups`, `…/runs/{run}/compare`, `…/runs/{run}/rerun-command`, `…/results/{result}/failure-context`, `…/tests/{test}/flakiness`, `…/tests/{test}/verify-fix` | Diagnostics. |
+
+The **Reference** section documents every parameter and field, generated from the code.
+
+## Pagination
+
+Lists take `limit` (1–100, default 20) and answer with `total` and an opaque `nextCursor`. Pass it back as `cursor`,
+with the other parameters unchanged, for the next page; `null` means there is none.

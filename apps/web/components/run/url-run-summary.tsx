@@ -5,6 +5,7 @@ import type { RunResultRow } from '@miguelfranken/ui/views/run/run-result';
 import type { RunCounts } from '@miguelfranken/ui/patterns/counts-bar';
 import { useUrlParams } from '@/components/filters/url-filters';
 import { useLiveRows, useLiveRunCounts } from '@/components/live/live-run';
+import type { RunRef } from '@/lib/rpc/client';
 import { runHrefs } from '@/lib/view-models';
 
 /**
@@ -25,7 +26,7 @@ export function UrlRunSummary({
   counts,
   rows,
   cursor,
-  resultsUrl,
+  runRef,
   filters,
 }: {
   base: string;
@@ -33,11 +34,12 @@ export function UrlRunSummary({
   counts: RunCounts;
   rows: RunResultRow[];
   cursor: number;
-  resultsUrl: string;
+  /** The run as the RPC procedures address it, for fetching rows the stream only announced. */
+  runRef: RunRef;
   filters: RunSummaryFilters & { signature?: string };
 }) {
   const { set, isPending } = useUrlParams();
-  const liveRows = useLiveRows(rows, cursor, filters, resultsUrl);
+  const liveRows = useLiveRows(rows, cursor, filters, runRef);
   const liveCounts = useLiveRunCounts(counts);
   return (
     <RunSummary

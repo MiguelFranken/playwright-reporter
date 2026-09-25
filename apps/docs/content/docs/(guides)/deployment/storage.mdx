@@ -1,0 +1,70 @@
+---
+title: Artifact storage
+description: Where screenshots, videos and traces live.
+---
+
+Screenshots, videos, traces and avatars go to one of three stores, chosen with `STORAGE_DRIVER`:
+
+| Driver | For | Uploads | Setup |
+| --- | --- | --- | --- |
+| `local` | Development, a single server with a persistent volume | Through the app | `STORAGE_LOCAL_DIR`, default `.storage` |
+| `vercel-blob` | Vercel | Presigned, straight to Blob | A **private** Blob store, `BLOB_READ_WRITE_TOKEN` |
+| `s3` | Docker, Kubernetes, anywhere with a bucket | Presigned, straight to the bucket | `S3_BUCKET` and the settings below |
+
+Without `STORAGE_DRIVER` the app uses `vercel-blob` on Vercel and `local` everywhere else. With a presigned driver the
+reporter uploads each artifact to the store itself, so no artifact passes through the app and there is no size limit.
+Switching drivers doesn't move existing artifacts.
+
+## S3 and S3-compatible stores
+
+`STORAGE_DRIVER=s3` works with AWS S3 and any store that speaks its API: Cloudflare R2, MinIO, Hetzner Object Storage,
+DigitalOcean Spaces, Neon Object Storage and others.
+
+| Variable | |
+| --- | --- |
+| `S3_BUCKET` | The bucket; required. |
+| `S3_REGION` | E.g. `eu-central-1`, `auto` for R2. |
+| `S3_ENDPOINT` | The store's API endpoint; unset for AWS. |
+| `S3_FORCE_PATH_STYLE` | `true` for path-style URLs, which MinIO and most self-hosted stores need. |
+| `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_SESSION_TOKEN` | Static credentials; unset to use the AWS default credential chain. |
+| `S3_KEY_PREFIX` | Stores every object under this prefix, so several deployments can share a bucket. |
+| `S3_RETENTION` | Who deletes expired artifacts: `app` (default) or `lifecycle`. See [Retention](/docs/administration/retention). |
+
+<Tabs items={['AWS S3', 'Cloudflare R2', 'MinIO']}>
+<Tab value="AWS S3">
+
+```ini
+STORAGE_DRIVER=s3
+S3_BUCKET=acme-playwright-artifacts
+S3_REGION=eu-central-1
+```
+
+</Tab>
+<Tab value="Cloudflare R2">
+
+```ini
+STORAGE_DRIVER=s3
+S3_BUCKET=playwright-artifacts
+S3_REGION=auto
+S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
+S3_ACCESS_KEY_ID=...
+S3_SECRET_ACCESS_KEY=...
+```
+
+</Tab>
+<Tab value="MinIO">
+
+```ini
+STORAGE_DRIVER=s3
+S3_BUCKET=playwright-artifacts
+S3_ENDPOINT=https://minio.internal.example.com
+S3_FORCE_PATH_STYLE=true
+S3_ACCESS_KEY_ID=...
+S3_SECRET_ACCESS_KEY=...
+```
+
+</Tab>
+</Tabs>
+
+The bucket stays **private**; every read goes through a presigned URL or the app. `S3_ENDPOINT` must be reachable from
+where your tests run and from your users' browsers. No bucket CORS rule is needed.

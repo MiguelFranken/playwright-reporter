@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type { RunCounts } from '@miguelfranken/ui/patterns/counts-bar';
 import { RunErrors, type ErrorGroup } from '@miguelfranken/ui/views/run/run-errors';
 import { RunHeader, type RunHeaderData, type RunHeaderShard } from '@miguelfranken/ui/views/run/run-header';
@@ -12,13 +13,13 @@ import {
   reduceErrorGroups,
   reduceHeader,
   reduceRows,
-  reviveDates,
   visibleRows,
   type HeaderState,
   type LiveRow,
   type RowFilters,
   type RowMap,
 } from '@/lib/live/reducers';
+import { orpc, type RunRef } from '@/lib/rpc/client';
 import { runHrefs } from '@/lib/view-models';
 import type { LiveStore } from '@/lib/live/store';
 import { LiveConnection, useLivePart, useLivePeek, useLiveStore } from './live-store';
@@ -39,8 +40,7 @@ export function LiveRunHeader({
   cursor,
   streamUrl,
   pollUrl,
-  summaryUrl,
-  resultsUrl,
+  runRef,
   branchHref,
   pullRequestHref,
   aiPrompt,
@@ -52,8 +52,8 @@ export function LiveRunHeader({
   cursor: number;
   streamUrl: string;
   pollUrl: string;
-  summaryUrl: string;
-  resultsUrl: string;
+  /** The run as the RPC procedures address it, for settling on its final numbers. */
+  runRef: RunRef;
   branchHref?: string;
   pullRequestHref?: string;
   /** Scope-only triage prompt for the "Debug with AI" menu. */
@@ -62,6 +62,7 @@ export function LiveRunHeader({
   aiSetupHref?: string;
 }) {
   const store = useLiveStore();
+  const queryClient = useQueryClient();
   const header = useLivePart<Header>('header', { run, counts, shards }, cursor, reduceHeader, run);
   const running = header.run.status === 'running';
   // A running run's elapsed time is derived from the clock, not from events.
@@ -87,7 +88,7 @@ export function LiveRunHeader({
           streamUrl={streamUrl}
           pollUrl={pollUrl}
           enabled={run.status === 'running'}
-          onFinish={() => settleFinishedRun(store, summaryUrl, resultsUrl)}
+          onFinish={() => settleFinishedRun(store, queryClient, runRef)}
         />
       }
     />
@@ -100,38 +101,39 @@ export function LiveRunHeader({
  * summary request (plus the rows still shown as running) replaces what a
  * route refresh used to do — without emptying the router cache.
  */
-async function settleFinishedRun(store: LiveStore, summaryUrl: string, resultsUrl: string): Promise<boolean> {
-  const parts = ['specs', 'errors'].filter((p) => store.peek(p) !== undefined);
-  const res = await fetch(`${summaryUrl}?parts=${parts.join(',')}`, { cache: 'no-store' });
-  if (!res.ok) return false;
-  const body = (await res.json()) as {
-    header: { run: RunHeaderData; counts: RunCounts; shards: RunHeaderShard[] };
-    specs: SpecSummary[] | null;
-    errors: ErrorGroup[] | null;
-  };
-  const never = () => false;
-  store.merge<Header>('header', () => ({ ...body.header, run: reviveDates(body.header.run) }), never);
-  if (body.specs) store.merge<SpecSummary[]>('specs', () => body.specs!, never);
-  if (body.errors) store.merge<ErrorGroup[]>('errors', () => body.errors!, never);
+async function settleFinishedRun(store: LiveStore, queryClient: QueryClient, runRef: RunRef): Promise<boolean> {
+  const parts = (['specs', 'errors'] as const).filter((p) => store.peek(p) !== undefined);
+  try {
+    const body = await queryClient.fetchQuery({ ...orpc.runs.summary.queryOptions({ input: { ...runRef, parts: [...parts] } }), staleTime: 0 });
+    const never = () => false;
+    store.merge<Header>('header', () => body.header, never);
+    if (body.specs) store.merge<SpecSummary[]>('specs', () => body.specs!, never);
+    if (body.errors) store.merge<ErrorGroup[]>('errors', () => body.errors!, never);
 
-  const rows = store.peek<RowMap>('rows');
-  const open = rows ? [...rows.values()].filter((r) => r.outcome === 'running').map((r) => r.id) : [];
-  for (let i = 0; i < open.length; i += BACKFILL_BATCH) {
-    const ids = open.slice(i, i + BACKFILL_BATCH);
-    const page = await fetch(`${resultsUrl}?ids=${ids.join(',')}`, { cache: 'no-store' });
-    if (!page.ok) return false;
-    const fresh = ((await page.json()) as { rows: RunResultRow[] }).rows;
-    store.merge<RowMap>(
-      'rows',
-      (current) => {
-        const next = new Map(current);
-        for (const row of fresh) next.set(row.id, row);
-        return next;
-      },
-      never,
-    );
+    const rows = store.peek<RowMap>('rows');
+    const open = rows ? [...rows.values()].filter((r) => r.outcome === 'running').map((r) => r.id) : [];
+    for (let i = 0; i < open.length; i += BACKFILL_BATCH) {
+      const fresh = await fetchRows(queryClient, runRef, open.slice(i, i + BACKFILL_BATCH));
+      store.merge<RowMap>(
+        'rows',
+        (current) => {
+          const next = new Map(current);
+          for (const row of fresh) next.set(row.id, row);
+          return next;
+        },
+        never,
+      );
+    }
+    return true;
+  } catch {
+    return false;
   }
-  return true;
+}
+
+/** Result rows by id, always fresh: a row is asked for because it changed. */
+async function fetchRows(queryClient: QueryClient, runRef: RunRef, ids: string[]): Promise<RunResultRow[]> {
+  const { rows } = await queryClient.fetchQuery({ ...orpc.runs.results.queryOptions({ input: { ...runRef, ids } }), staleTime: 0 });
+  return rows;
 }
 
 /** The run's counts as the header currently has them. */
@@ -159,10 +161,12 @@ export function useLiveRows(
   rows: RunResultRow[],
   cursor: number,
   filters: RowFilters,
-  resultsUrl: string,
+  runRef: RunRef,
   { backfill = true }: { backfill?: boolean } = {},
 ): LiveRow[] {
   const store = useLiveStore();
+  const queryClient = useQueryClient();
+  const { team, project, runId } = runRef;
   const initial = useMemo(() => new Map(rows.map((r) => [r.id, r as LiveRow])) as RowMap, [rows]);
   const map = useLivePart<RowMap>('rows', initial, cursor, reduceRows, rows);
   const visible = useMemo(() => visibleRows(map, filters), [map, filters]);
@@ -178,10 +182,7 @@ export function useLiveRows(
       const ids = key.split(',').slice(0, BACKFILL_BATCH);
       for (const id of ids) inFlight.current.add(id);
       try {
-        const res = await fetch(`${resultsUrl}?ids=${ids.join(',')}`, { cache: 'no-store' });
-        if (!res.ok) throw new Error(String(res.status));
-        const body = (await res.json()) as { rows: RunResultRow[] };
-        const fresh = new Map(body.rows.map((r) => [r.id, r]));
+        const fresh = new Map((await fetchRows(queryClient, { team, project, runId }, ids)).map((r) => [r.id, r]));
         store.merge<RowMap>(
           'rows',
           (current) => {
@@ -198,7 +199,7 @@ export function useLiveRows(
       }
     }, BACKFILL_MS);
     return () => clearTimeout(timer);
-  }, [key, resultsUrl, store]);
+  }, [key, team, project, runId, store, queryClient]);
 
   return visible;
 }

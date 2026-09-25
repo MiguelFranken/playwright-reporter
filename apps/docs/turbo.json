@@ -1,0 +1,15 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      // The REST API reference is rendered from the document apps/web generates.
+      "inputs": ["$TURBO_DEFAULT$", "../../docs/openapi.json"],
+      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**"]
+    },
+    "check-types": {
+      "inputs": ["$TURBO_DEFAULT$", "../../docs/openapi.json"]
+    }
+  }
+}

@@ -135,11 +135,14 @@ export function RunHeader({
               {run.gitAuthorName}
             </span>
           ) : null}
-          <span className="inline-flex items-center gap-1.5" title={formatDateTime(run.startedAt)}>
+          {/* The age and a running run's elapsed time are read off the clock, which
+              has moved on between the server render and hydration; the gap is
+              expected, so React is told not to warn about these two texts. */}
+          <span className="inline-flex items-center gap-1.5" title={formatDateTime(run.startedAt)} suppressHydrationWarning>
             <Clock className="size-3.5" />
-            {formatRelative(run.startedAt)}
+            {formatRelative(run.startedAt, { now })}
           </span>
-          <span className="tabular-nums" title="Duration">
+          <span className="tabular-nums" title="Duration" suppressHydrationWarning>
             {formatDuration(duration)}
           </span>
           <Badge variant="outline" className="uppercase">

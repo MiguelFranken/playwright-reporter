@@ -1,25 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import { ExplorerTable, type ExplorerRow } from '@miguelfranken/ui/views/explorer/explorer-table';
 import type { ExplorerSort, SortDir } from '@miguelfranken/ui/lib/explorer-sort';
 import { TestDrawer } from '@miguelfranken/ui/views/explorer/test-drawer';
-import { TestOverview, type TestOverviewData, type TestOverviewPreview } from '@miguelfranken/ui/views/explorer/test-overview';
+import { TestOverview, type TestOverviewPreview } from '@miguelfranken/ui/views/explorer/test-overview';
 import { useUrlParams } from '@/components/filters/url-filters';
+import { orpc, type ProjectRef } from '@/lib/rpc/client';
 import { projectHrefs } from '@/lib/view-models';
-
-/** What `/api/…/tests/[testId]/overview` answers with. */
-type OverviewResponse = TestOverviewData & {
-  test: { id: string; title: string; file: string; pwProject: string };
-};
-
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
-
-/** JSON has no date type; the views read `Date`s, so they are rebuilt on arrival. */
-function reviveDates(_key: string, value: unknown) {
-  return typeof value === 'string' && ISO_DATE.test(value) ? new Date(value) : value;
-}
 
 /** The part of a row the drawer can render before its own query answers. */
 function toPreview(row: ExplorerRow): TestOverviewPreview {
@@ -58,7 +48,7 @@ function toPreview(row: ExplorerRow): TestOverviewPreview {
  */
 export function UrlExplorer({
   base,
-  apiBase,
+  projectRef,
   rows,
   sort,
   dir,
@@ -67,8 +57,8 @@ export function UrlExplorer({
 }: {
   /** Path prefix for in-app links, e.g. `/teams/a/projects/b`. */
   base: string;
-  /** Path prefix for this project's API routes. */
-  apiBase: string;
+  /** The project's slugs, for the drawer's own query. */
+  projectRef: ProjectRef;
   rows: ExplorerRow[];
   sort: ExplorerSort;
   dir: SortDir;
@@ -82,14 +72,20 @@ export function UrlExplorer({
   const [selected, setSelected] = useState<string | null>(initialTestId ?? null);
 
   // Overviews are kept for as long as the page lives: re-opening a row already
-  // looked at should cost nothing, and the window they were fetched for is part
-  // of the key so a range change cannot serve a stale one.
-  const [cache] = useState(() => new Map<string, OverviewResponse>());
-  const [, forceRender] = useState(0);
-  const cacheKey = selected ? `${selected}:${days}` : null;
-  const overview = cacheKey ? (cache.get(cacheKey) ?? null) : null;
-
-  const failedRef = useRef(new Set<string>());
+  // looked at costs nothing, and the window they were fetched for is part of
+  // the query key so a range change cannot serve a stale one. A failed fetch
+  // leaves the summary from the row on screen rather than an error over data
+  // that is perfectly good; it is not retried on every render.
+  const { data: overview = null, error } = useQuery({
+    ...orpc.tests.overview.queryOptions({ input: { ...projectRef, testId: selected ?? '', days } }),
+    enabled: selected !== null,
+    staleTime: Infinity,
+    gcTime: Infinity,
+    retry: false,
+  });
+  useEffect(() => {
+    if (error) console.error('Failed to load test overview', error);
+  }, [error]);
 
   /** Moves the selection now and reconciles the URL without a server round trip. */
   const select = useCallback(
@@ -103,29 +99,6 @@ export function UrlExplorer({
     },
     [pathname, searchParams],
   );
-
-  useEffect(() => {
-    if (!selected || !cacheKey || cache.has(cacheKey) || failedRef.current.has(cacheKey)) return;
-    const controller = new AbortController();
-    fetch(`${apiBase}/tests/${selected}/overview?range=${days}`, { signal: controller.signal })
-      .then(async (response) => {
-        if (!response.ok) throw new Error(`${response.status}`);
-        return JSON.parse(await response.text(), reviveDates) as OverviewResponse;
-      })
-      .then((data) => {
-        cache.set(cacheKey, data);
-        forceRender((n) => n + 1);
-      })
-      .catch((error: unknown) => {
-        if (controller.signal.aborted) return;
-        // A failed fetch leaves the summary from the row on screen rather than
-        // an error page over data that is perfectly good; it is just not retried
-        // on every render.
-        failedRef.current.add(cacheKey);
-        console.error('Failed to load test overview', error);
-      });
-    return () => controller.abort();
-  }, [apiBase, cache, cacheKey, days, selected]);
 
   const selectedRow = selected ? rows.find((r) => r.testId === selected) : undefined;
   const header = selectedRow

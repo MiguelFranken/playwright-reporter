@@ -1,0 +1,17 @@
+---
+title: These docs, for agents
+description: llms.txt, Markdown pages and an MCP server for the documentation itself.
+---
+
+These docs are written for people and readable by agents:
+
+| | |
+| --- | --- |
+| `/llms.txt` | The index ([llmstxt.org](https://llmstxt.org)): every page with its description. |
+| `/llms-full.txt` | Every page as Markdown, in one file. |
+| `/docs/<page>.md` | One page as Markdown, e.g. `/docs/deployment/vercel.md`. Each page also has **Copy Markdown** and "Open in ChatGPT / Claude" buttons. |
+| `/api/mcp` | An MCP server with `search`, `list_pages` and `get_page`, so an assistant can look things up while it helps you. |
+
+```bash
+claude mcp add --transport http playwright-reporter-docs https://<docs-domain>/api/mcp
+```

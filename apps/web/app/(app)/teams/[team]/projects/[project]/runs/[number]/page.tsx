@@ -58,11 +58,11 @@ const run = cache(async (params: Params) => {
   const { project } = await requireProject(team, projectSlug);
   const found = await getRunByNumber(project.id, runNumber);
   if (!found) notFound();
-  return { run: found, base: `/teams/${team}/projects/${project.slug}` };
+  return { run: found, base: `/teams/${team}/projects/${project.slug}`, runRef: { team, project: project.slug, runId: found.id } };
 });
 
 async function Header({ params }: { params: Params }) {
-  const { run: found, base } = await run(params);
+  const { run: found, base, runRef } = await run(params);
   const { counts, shards, cursor, ...runRow } = found;
   return (
     <LiveRunHeader
@@ -72,8 +72,7 @@ async function Header({ params }: { params: Params }) {
       cursor={cursor}
       streamUrl={`/api${base}/runs/${found.id}/live`}
       pollUrl={`/api${base}/runs/${found.id}/events`}
-      summaryUrl={`/api${base}/runs/${found.id}/summary`}
-      resultsUrl={`/api${base}/runs/${found.id}/results`}
+      runRef={runRef}
       branchHref={runRow.gitBranch ? branchHref(base, runRow.gitBranch) : undefined}
       pullRequestHref={runRow.prNumber ? pullRequestHref(base, runRow.prNumber) : undefined}
       // Always sent: the header shows the menu once the live counts include a failure.
@@ -86,9 +85,8 @@ async function Header({ params }: { params: Params }) {
 async function Body({ params, searchParams }: Props) {
   const sp = await searchParams;
   const tab = parseRunTab(sp.tab);
-  const { run: found, base } = await run(params);
+  const { run: found, base, runRef } = await run(params);
   const { counts, shards: _shards, cursor, ...runRow } = found;
-  const resultsUrl = `/api${base}/runs/${found.id}/results`;
 
   let content: React.ReactNode;
   switch (tab) {
@@ -114,7 +112,7 @@ async function Body({ params, searchParams }: Props) {
           selected={sp.file}
           rows={rows}
           cursor={cursor}
-          resultsUrl={resultsUrl}
+          runRef={runRef}
           filters={specFilters}
         />
       );
@@ -138,7 +136,7 @@ async function Body({ params, searchParams }: Props) {
           counts={counts}
           rows={rows}
           cursor={cursor}
-          resultsUrl={resultsUrl}
+          runRef={runRef}
           filters={filters}
         />
       );

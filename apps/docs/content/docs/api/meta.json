@@ -1,0 +1,7 @@
+{
+  "title": "REST API",
+  "description": "Read runs, results and verdicts over HTTP",
+  "icon": "Braces",
+  "root": true,
+  "pages": ["---Guides---", "index", "authentication", "errors-and-limits", "---Reference---", "...reference"]
+}

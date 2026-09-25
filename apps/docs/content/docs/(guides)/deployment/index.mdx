@@ -1,0 +1,18 @@
+---
+title: Deployment overview
+description: What an instance needs, and where it can run.
+---
+
+An instance is one Next.js app (`apps/web`) with a PostgreSQL database. Everything else is optional or has a default.
+
+| Needs | Options |
+| --- | --- |
+| **PostgreSQL** | Any PostgreSQL; [Neon](https://neon.tech) recommended. Two connection strings: pooled for the app, direct for migrations. |
+| **Artifact storage** | The local filesystem, a private Vercel Blob store, or any S3-compatible bucket. See [Artifact storage](/docs/deployment/storage). |
+| **A scheduler** (optional) | For daily retention sweeps: Vercel Cron, or any cron that calls two endpoints. A finished run starts a sweep anyway when none ran for 12 hours. |
+| **A durable watchdog** | Marks runs whose reporter died as abandoned. Built in on Vercel; the Postgres world of the Workflow SDK elsewhere. |
+
+<Cards>
+  <Card title="Vercel" href="/docs/deployment/vercel" description="The shortest path: import, set a few variables, deploy." />
+  <Card title="Docker and Kubernetes" href="/docs/deployment/docker-kubernetes" description="A regular Next.js server, replicas and a bucket." />
+</Cards>

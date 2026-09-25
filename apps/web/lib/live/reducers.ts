@@ -436,12 +436,3 @@ export function matchesRunFilters(run: FilterableRun, f: RunListFilters, now = D
   }
   return true;
 }
-
-/** Dates arrive from a JSON endpoint as strings; the views expect `Date`s. */
-export function reviveDates<T extends object>(row: T): T {
-  const out: Record<string, unknown> = { ...(row as Record<string, unknown>) };
-  for (const [key, value] of Object.entries(out)) {
-    if (key.endsWith('At') && typeof value === 'string' && !Number.isNaN(Date.parse(value))) out[key] = new Date(value);
-  }
-  return out as T;
-}

@@ -7,6 +7,7 @@ import type { RunResultRow } from '@miguelfranken/ui/views/run/run-result';
 import type { SpecFilterChange, SpecFilters } from '@miguelfranken/ui/lib/spec-filter';
 import { useLivePart } from '@/components/live/live-store';
 import { useLiveRows } from '@/components/live/live-run';
+import type { RunRef } from '@/lib/rpc/client';
 import { reduceSpecs } from '@/lib/live/reducers';
 import { runHrefs } from '@/lib/view-models';
 
@@ -42,7 +43,7 @@ export function UrlRunSpecs({
   selected,
   rows,
   cursor,
-  resultsUrl,
+  runRef,
   filters,
 }: {
   base: string;
@@ -53,12 +54,13 @@ export function UrlRunSpecs({
   selected?: string;
   rows: RunResultRow[] | null;
   cursor: number;
-  resultsUrl: string;
+  /** The run as the RPC procedures address it, for fetching rows the stream only announced. */
+  runRef: RunRef;
   filters: SpecFilters;
 }) {
   const liveSpecs = useLivePart('specs', specs, specsCursor, reduceSpecs);
   const fileFilter = useMemo(() => ({ file: selected }), [selected]);
-  const liveRows = useLiveRows(rows ?? NO_ROWS, cursor, fileFilter, resultsUrl, { backfill: rows !== null });
+  const liveRows = useLiveRows(rows ?? NO_ROWS, cursor, fileFilter, runRef, { backfill: rows !== null });
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();

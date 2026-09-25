@@ -1,0 +1,9 @@
+{
+  "title": "Getting started",
+  "icon": "Rocket",
+  "defaultOpen": true,
+  "pages": [
+    "quick-start",
+    "reporter"
+  ]
+}
