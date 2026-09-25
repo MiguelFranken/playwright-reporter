@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.16](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.15...v0.0.16) (2026-09-25)
+
+### Performance Improvements
+
+* **web:** cut proxy invocations, runs-page queries and unneeded builds ([#21](https://github.com/MiguelFranken/playwright-reporter/issues/21)) ([f003add](https://github.com/MiguelFranken/playwright-reporter/commit/f003add78f9c1ec0043e8045b63fe1d9068c4d12))
+
 ## [0.0.15](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.14...v0.0.15) (2026-09-24)
 
 ### Bug Fixes
