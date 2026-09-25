@@ -601,7 +601,8 @@ Semantic-release passt dazu:
 **Entschieden:**
 
 - **E3:** oRPC v2, exakt gepinnt (`2.0.0-beta.40`), mit den Leitplanken aus Abschnitt 5.
-- **E4:** Fumadocs als eigenes App `apps/docs`, dazu Scalar pro Instanz unter `/api/docs`.
+- **E4:** Fumadocs als eigenes App `apps/docs`. Kein Scalar: Jede Instanz liefert nur die Spezifikation als JSON
+  unter `/api/v1/openapi.json` aus. Die API-Referenz rendert ausschließlich Fumadocs (`fumadocs-openapi`).
 - **E1:** Fehler als Problem Details (RFC 9457).
 - **E2:** Slugs im Pfad.
 - **TanStack Query** kommt für die Daten, die Client-Komponenten nachladen.
@@ -637,7 +638,7 @@ Damit gibt es die Logik genau einmal. REST und MCP können nicht auseinanderlauf
 2. **REST v1:**
    - Endpunkte aus Abschnitt 4, Phase 1, soweit es MCP-Tools gibt, dazu Phase 2 (Diagnose)
    - `me`, `teams`, `projects`
-   - `/api/v1/openapi.json`, Scalar unter `/api/docs`
+   - `/api/v1/openapi.json` (reines JSON, ohne Referenz-UI in der App)
    - generierte `docs/openapi.json` mit Test gegen Drift
    - Integrationstests
 3. **Interne RPC und TanStack Query:**
@@ -665,3 +666,25 @@ Damit gibt es die Logik genau einmal. REST und MCP können nicht auseinanderlauf
 - Markdown-Antworten per `Accept`
 - Umzug der SSE-Streams auf oRPC
 - Deployment der Doku-Seite (Domain und Hosting richtet ihr ein)
+
+### Stand der Umsetzung (2026-09-25)
+
+| Schritt | Stand |
+| --- | --- |
+| 1. oRPC-Grundlage | ✅ `apps/web/lib/api/{base,auth,errors,from-tool,handler}.ts`, oRPC `2.0.0-beta.40` exakt gepinnt |
+| 2. REST v1 | ✅ 17 Endpunkte unter `/api/v1`, `/api/v1/openapi.json`, `docs/openapi.json` mit Drift-Test, Integrationstests |
+| 3. Interne RPC und TanStack Query | ✅ `/api/rpc` mit `runs.items`, `runs.results`, `runs.summary`, `tests.overview`; Explorer-Drawer auf `useQuery`, Live-Nachladen über `fetchQuery`; die vier alten Route Handler sind entfernt |
+| 4. Doku `apps/docs` | ✅ Fumadocs mit Guides, API-Referenz aus `docs/openapi.json`, `llms.txt`, Markdown pro Seite, Docs-MCP unter `/api/mcp` |
+| 5. CI | ✅ Job „REST API contract“ (`oasdiff breaking`) gegen den Basis-Branch; greift ab dem ersten PR, nach dem `main` die Datei hat |
+| 6. README und AGENTS.md | ✅ |
+
+Abweichungen vom Plan:
+
+- **Kein Scalar**, auf Wunsch. Die Instanz liefert nur `/api/v1/openapi.json` aus, die Referenz rendert
+  `fumadocs-openapi` mit dem eigenen Playground. `fumadocs-openapi` bringt zwei kleine Parser-Bibliotheken von Scalar als
+  interne Abhängigkeiten mit (`@scalar/json-magic`, `@scalar/openapi-upgrader`). Die optionale UI
+  `@scalar/api-client-react` ist nicht installiert.
+- **OAuth-Tokens** gelten nur für MCP (Audience-Bindung nach RFC 8707). Die REST-API nimmt Personal Access Tokens.
+- **Das Rate-Limit** teilt sich eine Token-Quote mit MCP (`MCP_RATE_LIMIT_PER_MINUTE`).
+- **Deployment der Doku-Seite** steht noch aus. Beim Hosting auf Vercel gilt: Hobby ist nur für nicht-kommerzielle
+  Nutzung erlaubt (siehe Abschnitt 6).

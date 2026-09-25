@@ -21,6 +21,7 @@
   <a href="#artifact-storage">Storage</a> ·
   <a href="#users-and-teams">Users &amp; teams</a> ·
   <a href="#ai-assistants-mcp">AI assistants</a> ·
+  <a href="#rest-api">REST API</a> ·
   <a href="#deploying">Deploying</a> ·
   <a href="#contributing">Contributing</a>
 </p>
@@ -41,6 +42,7 @@
 - 🔔 **Push notifications**: the browser tells you when a run starts or finishes
 - 🤖 **AI assistants over MCP**: Claude, Cursor, Copilot, ChatGPT and friends read your test history, debug failures
   with evidence (flaky or broken, last green commit, screenshot) and check whether a fix held
+- 🔌 **A REST API**: runs, results, tests and the same verdicts as MCP, read-only, with an OpenAPI 3.1 description
 - 👥 **Teams, roles and invitations**: superadmins, team admins, members and viewers; teams can't see each other's
   projects
 - 🛡️ **Never fails your tests**: network errors are retried and then logged, the run goes on
@@ -430,6 +432,24 @@ your assistant.
 
 </details>
 
+## REST API
+
+Every instance serves a read-only REST API under `/api/v1`, authenticated with the same personal access tokens as the
+MCP server (**Account → Access tokens**):
+
+```bash
+curl -H "Authorization: Bearer pwr_pat_…" \
+  "https://reporter.example.com/api/v1/projects/acme/web/runs?status=failed&limit=5"
+```
+
+Its endpoints are the MCP tools over HTTP (runs, results, tests, failure groups, run diffs, flakiness verdicts, fix
+verification, re-run commands) and answer from the same code, so both see the same data and give the same verdicts.
+Errors are RFC 9457 problem details with the MCP error codes, lists page with `limit` and `nextCursor`, and the
+per-token rate limit is shared with MCP (`MCP_RATE_LIMIT_PER_MINUTE`). The instance describes itself at
+`/api/v1/openapi.json`. The document is generated from the router in `apps/web/lib/api` (`nub run api:docs` in
+`apps/web`) and committed as [`docs/openapi.json`](docs/openapi.json); a unit test fails when it drifts, and CI fails a
+pull request that breaks it. The [docs site](apps/docs) renders it as the API reference.
+
 ## Deploying
 
 ### Vercel
@@ -539,8 +559,9 @@ genuinely flaky and failures come with real screenshots, videos and traces.
 
 | Path | |
 | --- | --- |
-| [`apps/web`](apps/web) | Next.js 16 app: auth, ingest API, live (SSE) endpoints, artifact serving, and the feature components that bind the design system to them |
+| [`apps/web`](apps/web) | Next.js 16 app: auth, ingest API, live (SSE) endpoints, the REST API (`/api/v1`) and the UI's own RPC API (`/api/rpc`, through TanStack Query), artifact serving, and the feature components that bind the design system to them |
 | [`apps/website`](apps/website) | the marketing site: Next.js 16 and Payload CMS |
+| [`apps/docs`](apps/docs) | the documentation site: Next.js 16 and Fumadocs, with the REST API reference, `llms.txt` and an MCP endpoint |
 | [`apps/storybook`](apps/storybook) | Storybook 10 for the design system; config only, no components of its own |
 | [`packages/reporter`](packages/reporter) | the Playwright reporter, `@miguelfranken/reporter`, bundled with tsdown |
 | [`packages/mcp`](packages/mcp) | the stdio bridge to the MCP server, `@miguelfranken/mcp`, for clients that only start local servers |
