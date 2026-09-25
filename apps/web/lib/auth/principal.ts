@@ -85,17 +85,23 @@ export async function resolveTeamFor(p: Principal, teamSlug: string): Promise<Te
   return role ? toAccess(p, row.team, role) : null;
 }
 
+/**
+ * One round trip: every project page waits on this before its first query.
+ * The membership comes back in the same row and is checked before the project
+ * is returned, exactly as `resolveProjectByIdFor` does.
+ */
 export async function resolveProjectFor(p: Principal, teamSlug: string, projectSlug: string): Promise<ProjectAccess | null> {
-  const access = await resolveTeamFor(p, teamSlug);
-  if (!access) return null;
-  const [project] = await db
-    .select()
+  const [row] = await db
+    .select({ project: projects, team: teams, role: teamMembers.role })
     .from(projects)
-    .where(and(eq(projects.teamId, access.team.id), eq(projects.slug, projectSlug)))
+    .innerJoin(teams, eq(teams.id, projects.teamId))
+    .leftJoin(teamMembers, and(eq(teamMembers.teamId, teams.id), eq(teamMembers.userId, p.user.id)))
+    .where(and(eq(teams.slug, teamSlug), eq(projects.slug, projectSlug)))
     .limit(1);
-  if (!project) return null;
-  if (p.grant?.projectId && project.id !== p.grant.projectId) return null;
-  return { ...access, project };
+  if (!row) return null;
+  if (p.grant?.projectId && row.project.id !== p.grant.projectId) return null;
+  const role = effectiveRole(p, row.team.id, row.role ?? null);
+  return role ? { ...toAccess(p, row.team, role), project: row.project } : null;
 }
 
 export async function resolveProjectByIdFor(p: Principal, projectId: string): Promise<ProjectAccess | null> {

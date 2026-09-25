@@ -62,6 +62,22 @@ describe('principal resolvers', () => {
     expect(await resolveProjectByIdFor(pinned, second.id)).toBeNull();
   });
 
+  test('a project slug resolves only inside its own team, and only for members', async ({ db, tenant }) => {
+    // Same project slug in a team the user is not a member of.
+    const other = await createTenant(db, { projectSlug: tenant.project.slug });
+    const me = pat(tenant.adminUser);
+    expect((await resolveProjectFor(me, tenant.team.slug, tenant.project.slug))?.project.id).toBe(tenant.project.id);
+    expect(await resolveProjectFor(me, other.team.slug, tenant.project.slug)).toBeNull();
+    expect(await resolveProjectFor(me, tenant.team.slug, 'missing')).toBeNull();
+    expect(await resolveProjectFor(me, 'missing', tenant.project.slug)).toBeNull();
+
+    await db.insert(teamMembers).values({ teamId: other.team.id, userId: tenant.adminUser.id, role: 'viewer' });
+    const access = await resolveProjectFor(me, other.team.slug, tenant.project.slug);
+    expect(access?.project.id).toBe(other.project.id);
+    expect(access?.team.id).toBe(other.team.id);
+    expect(access?.role).toBe('viewer');
+  });
+
   test('removing a membership takes effect on the next resolution', async ({ db, tenant }) => {
     const viewer = await createMember(db, tenant.team.id, 'viewer');
     expect((await resolveProjectByIdFor(pat(viewer), tenant.project.id))?.role).toBe('viewer');
