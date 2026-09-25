@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { Suspense } from 'react';
 import { AccessTokensCard } from '@/components/account/access-tokens-card';
 import { ConnectedAppsCard } from '@/components/account/connected-apps-card';
@@ -7,9 +6,9 @@ import { ChangeNameForm, ChangePasswordForm, SessionsCard } from '@/components/a
 import { AvatarUpload } from '@/components/avatar-upload';
 import { PushSettings } from '@/components/notifications/push-settings';
 import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
-import { Badge } from '@miguelfranken/ui/components/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@miguelfranken/ui/components/card';
 import { Skeleton } from '@miguelfranken/ui/components/skeleton';
+import { ProfileDetails } from '@miguelfranken/ui/views/account/profile-details';
 import { requireUser } from '@/lib/auth/access';
 import { patDefaultTtlDays, patMaxTtlDays } from '@/lib/auth/config';
 import { isDemoUser } from '@/lib/auth/demo';
@@ -76,28 +75,11 @@ async function AccountContent() {
               <ChangeNameForm name={user.name} />
             </>
           )}
-          <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1.5 text-sm">
-            <dt className="text-muted-foreground">Email</dt>
-            <dd>{user.email}</dd>
-            <dt className="text-muted-foreground">Instance role</dt>
-            <dd>
-              <Badge variant={user.isSuperadmin ? 'default' : 'secondary'}>{user.isSuperadmin ? 'Superadmin' : 'User'}</Badge>
-            </dd>
-            <dt className="text-muted-foreground">Teams</dt>
-            <dd className="flex flex-wrap gap-1.5">
-              {teams.length === 0 ? (
-                <span className="text-muted-foreground">None</span>
-              ) : (
-                teams.map((t) => (
-                  <Link key={t.id} href={`/teams/${t.slug}`}>
-                    <Badge variant="outline">
-                      {t.name} · {t.role}
-                    </Badge>
-                  </Link>
-                ))
-              )}
-            </dd>
-          </dl>
+          <ProfileDetails
+            email={user.email}
+            isSuperadmin={user.isSuperadmin}
+            teams={teams.map((t) => ({ id: t.id, name: t.name, role: t.role, href: `/teams/${t.slug}` }))}
+          />
         </CardContent>
       </Card>
 

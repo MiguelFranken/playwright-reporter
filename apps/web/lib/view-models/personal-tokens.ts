@@ -1,5 +1,5 @@
 import { formatDateTime, formatRelative } from '@miguelfranken/ui/lib/format';
-import type { PersonalTokenRow } from '@/components/account/access-tokens-card';
+import type { PersonalTokenRow } from '@miguelfranken/ui/views/account/access-tokens';
 import type { PersonalTokenListRow } from '@/lib/db/queries/personal-tokens';
 
 /** The list row the token tables render, with every date pre-formatted on the server. */
