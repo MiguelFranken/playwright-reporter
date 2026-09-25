@@ -45,8 +45,9 @@ async function seed(tenant: Tenant) {
 describe('pullRequestList', () => {
   test('lists each request in the range, most recently active first, with its latest title and link', async ({ tenant }) => {
     await seed(tenant);
-    const rows = await pullRequestList(tenant.project.id, 30);
+    const { rows, total } = await pullRequestList(tenant.project.id, 30);
 
+    expect(total).toBe(2);
     expect(rows.map((r) => r.number)).toEqual([318, 1524]);
     expect(rows[0]).toMatchObject({ title: 'Guest cart', branch: 'feature/cart', runs: 1, lastRunNumber: 4, lastStatus: 'failed', passRate: 0 });
     // The 40-day-old run is outside the range; the untitled run still counts.
@@ -65,12 +66,22 @@ describe('pullRequestList', () => {
 
   test('finds a request by number, with or without its sigil, by branch or by title', async ({ tenant }) => {
     await seed(tenant);
-    const numbers = async (q: string) => (await pullRequestList(tenant.project.id, 30, { q })).map((r) => r.number);
+    const numbers = async (q: string) => (await pullRequestList(tenant.project.id, 30, { q })).rows.map((r) => r.number);
     expect(await numbers('!1524')).toEqual([1524]);
     expect(await numbers('318')).toEqual([318]);
     expect(await numbers('CART')).toEqual([318]);
     expect(await numbers('prefilled')).toEqual([1524]);
     expect(await numbers('nope')).toEqual([]);
+  });
+
+  test('pages through the requests, counting all of them on every page', async ({ tenant }) => {
+    await seed(tenant);
+    const first = await pullRequestList(tenant.project.id, 30, { pageSize: 1 });
+    const second = await pullRequestList(tenant.project.id, 30, { pageSize: 1, page: 2 });
+    expect(first).toMatchObject({ total: 2, page: 1, pageSize: 1 });
+    expect(first.rows.map((r) => r.number)).toEqual([318]);
+    expect(second.rows.map((r) => r.number)).toEqual([1524]);
+    expect(second.total).toBe(2);
   });
 });
 

@@ -2,6 +2,7 @@ import { PlayCircle } from 'lucide-react';
 import { Suspense } from 'react';
 import { EmptyState } from '@miguelfranken/ui/patterns/empty-state';
 import { Pagination } from '@/components/filters/pagination';
+import { ResultsBoundary } from '@/components/filters/results-boundary';
 import { RangeToggle, UrlSearch, UrlSelect } from '@/components/filters/url-filters';
 import { LiveActiveRuns, LiveRunsTable } from '@/components/live/live-runs';
 import { LiveConnection, LiveStoreProvider } from '@/components/live/live-store';
@@ -65,9 +66,9 @@ export default function RunsPage({ params, searchParams }: Props) {
         </div>
       </div>
 
-      <Suspense fallback={<TableRowsSkeleton rows={10} columns={[12, 34, 16, 20, 8, 10]} className="panel" />}>
+      <ResultsBoundary searchParams={searchParams} fallback={<TableRowsSkeleton rows={10} columns={[12, 34, 16, 20, 8, 10]} className="panel" />}>
         <Results params={params} searchParams={searchParams} />
-      </Suspense>
+      </ResultsBoundary>
     </LiveStoreProvider>
   );
 }

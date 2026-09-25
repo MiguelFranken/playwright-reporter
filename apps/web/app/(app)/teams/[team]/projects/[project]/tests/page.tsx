@@ -3,6 +3,7 @@ import { Suspense } from 'react';
 import { EmptyState } from '@miguelfranken/ui/patterns/empty-state';
 import { UrlExplorer } from '@/components/explorer/url-explorer';
 import { Pagination } from '@/components/filters/pagination';
+import { ResultsBoundary } from '@/components/filters/results-boundary';
 import { RangeToggle, UrlSearch, UrlSelect } from '@/components/filters/url-filters';
 import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
 import { FilterSkeleton, TableRowsSkeleton } from '@miguelfranken/ui/patterns/skeletons';
@@ -55,9 +56,14 @@ export default function TestsPage({ params, searchParams }: Props) {
         </div>
       </div>
 
-      <Suspense fallback={<TableRowsSkeleton rows={10} columns={[34, 12, 14, 10, 10, 10]} className="panel" />}>
+      {/* `test` only opens the drawer; the table stays as it is. */}
+      <ResultsBoundary
+        searchParams={searchParams}
+        omit={['test']}
+        fallback={<TableRowsSkeleton rows={10} columns={[34, 12, 14, 10, 10, 10]} className="panel" />}
+      >
         <Results params={params} searchParams={searchParams} />
-      </Suspense>
+      </ResultsBoundary>
     </>
   );
 }

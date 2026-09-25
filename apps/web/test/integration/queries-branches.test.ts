@@ -38,8 +38,9 @@ async function seed(tenant: Tenant) {
 describe('branchList', () => {
   test('lists each branch in the range, most recently active first', async ({ tenant }) => {
     await seed(tenant);
-    const rows = await branchList(tenant.project.id, 30);
+    const { rows, total } = await branchList(tenant.project.id, 30);
 
+    expect(total).toBe(2);
     expect(rows.map((r) => r.branch)).toEqual(['feature/cart', 'main']);
     expect(rows[0]).toMatchObject({ runs: 1, environment: 'preview', lastRunNumber: 4, lastStatus: 'failed', passRate: 0, recentStatuses: ['failed'] });
     // The 40-day-old run is outside the range, so neither counted nor drawn.
@@ -50,8 +51,18 @@ describe('branchList', () => {
 
   test('filters by a case-insensitive substring of the branch name', async ({ tenant }) => {
     await seed(tenant);
-    expect((await branchList(tenant.project.id, 30, { q: 'CART' })).map((r) => r.branch)).toEqual(['feature/cart']);
-    expect(await branchList(tenant.project.id, 30, { q: 'nope' })).toEqual([]);
+    expect((await branchList(tenant.project.id, 30, { q: 'CART' })).rows.map((r) => r.branch)).toEqual(['feature/cart']);
+    expect(await branchList(tenant.project.id, 30, { q: 'nope' })).toMatchObject({ rows: [], total: 0 });
+  });
+
+  test('pages through the branches, counting all of them on every page', async ({ tenant }) => {
+    await seed(tenant);
+    const first = await branchList(tenant.project.id, 30, { pageSize: 1 });
+    const second = await branchList(tenant.project.id, 30, { pageSize: 1, page: 2 });
+    expect(first).toMatchObject({ total: 2, page: 1, pageSize: 1 });
+    expect(first.rows.map((r) => r.branch)).toEqual(['feature/cart']);
+    expect(second).toMatchObject({ total: 2, page: 2 });
+    expect(second.rows.map((r) => r.branch)).toEqual(['main']);
   });
 });
 
