@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.0.17](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.16...v0.0.17) (2026-09-25)
+
+### Features
+
+* **web:** force delete every stored artifact from Admin → Storage ([#23](https://github.com/MiguelFranken/playwright-reporter/issues/23)) ([4774308](https://github.com/MiguelFranken/playwright-reporter/commit/47743089f051b48b6a48b86b73226956eb86f385))
+
+### Bug Fixes
+
+* **ui:** align flush card tables with the card header ([#24](https://github.com/MiguelFranken/playwright-reporter/issues/24)) ([33e6b4c](https://github.com/MiguelFranken/playwright-reporter/commit/33e6b4c96b351347fdd2610876a454d84e538df7))
+
 ## [0.0.16](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.15...v0.0.16) (2026-09-25)
 
 ### Performance Improvements

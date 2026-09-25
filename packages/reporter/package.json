@@ -1,6 +1,6 @@
 {
   "name": "@miguelfranken/reporter",
-  "version": "0.0.16",
+  "version": "0.0.17",
   "type": "module",
   "description": "Playwright reporter that streams test runs to the self-hosted reporter app",
   "license": "MIT",
