@@ -7,26 +7,15 @@ import { COOKIE_PREFIX } from '@/lib/auth/config';
  * *not* a security boundary: every page, action and route handler re-checks
  * through `lib/auth/access.ts`. Its job is to send signed-out visitors to
  * `/login` instead of rendering a shell they cannot use.
+ *
+ * Paths that never need the check are kept out by `config.matcher`, so the
+ * proxy does not run for them at all; this list holds the public *pages*.
  */
 const PUBLIC = [
   /^\/login$/,
   /^\/invite\//,
   // Signs visitors in as the read-only demo account (`lib/auth/demo.ts`).
   /^\/demo$/,
-  // Every route handler authorizes itself — by ingest token, Better Auth
-  // session, or a signed artifact URL — and answers with a status code.
-  // Redirecting an API request to an HTML login page would only confuse the
-  // caller (an `EventSource`, the reporter, or the trace viewer).
-  /^\/api\//,
-  // The Workflow SDK's queue calls these back (the run watchdog); a redirect
-  // would break every watchdog in local dev and self-hosted.
-  /^\/\.well-known\/workflow\//,
-  // OAuth discovery for MCP clients: fetched by programs, never by a signed-in browser.
-  /^\/\.well-known\/oauth-(authorization-server|protected-resource)(\/|$)/,
-  /^\/_next\//,
-  /^\/favicon/,
-  // The push service worker: browsers fetch it without following redirects.
-  /^\/push-sw\.js$/,
 ];
 
 export function proxy(request: NextRequest) {
@@ -40,4 +29,21 @@ export function proxy(request: NextRequest) {
   return NextResponse.next();
 }
 
-export const config = { matcher: ['/((?!_next/static|_next/image).*)'] };
+/**
+ * Skipped entirely (the proxy is billed per invocation, and ingest traffic is
+ * most of it):
+ * - `api/`: every route handler authorizes itself — by ingest token, Better
+ *   Auth session, or a signed artifact URL — and answers with a status code.
+ *   Redirecting an API request to an HTML login page would only confuse the
+ *   caller (an `EventSource`, the reporter, or the trace viewer).
+ * - `.well-known/workflow/`: the Workflow SDK's queue calls these back (the run
+ *   watchdog); a redirect would break every watchdog in local dev and self-hosted.
+ * - `.well-known/oauth-`: OAuth discovery for MCP clients, fetched by programs.
+ * - `_next/`, `favicon*`, and `push-sw.js` (browsers fetch the push service
+ *   worker without following redirects).
+ *
+ * Must stay a literal: Next.js reads it statically at build time.
+ */
+export const config = {
+  matcher: ['/((?!api/|_next/|\\.well-known/workflow/|\\.well-known/oauth-|favicon|push-sw\\.js$).*)'],
+};
