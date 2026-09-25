@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from 'next';
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import { ThemeProvider } from 'next-themes';
 import { Toaster } from '@miguelfranken/ui/components/sonner';
+import { QueryProvider } from '@/components/query-provider';
 import { AppUiProvider } from '@/components/ui-provider';
 
 export const metadata: Metadata = {
@@ -23,10 +24,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" suppressHydrationWarning className={`${sans.variable} ${mono.variable}`}>
       <body className="min-h-dvh bg-background font-sans text-foreground antialiased">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <AppUiProvider>
-            {children}
-            <Toaster />
-          </AppUiProvider>
+          <QueryProvider>
+            <AppUiProvider>
+              {children}
+              <Toaster />
+            </AppUiProvider>
+          </QueryProvider>
         </ThemeProvider>
       </body>
     </html>

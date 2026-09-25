@@ -125,7 +125,7 @@ async function Results({ params, searchParams }: Props) {
     <>
       <UrlExplorer
         base={base}
-        apiBase={`/api/teams/${team}/projects/${project.slug}`}
+        projectRef={{ team, project: project.slug }}
         rows={result.rows}
         sort={sort}
         dir={dir}
