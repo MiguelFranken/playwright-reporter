@@ -5,6 +5,8 @@
     <content url="file://$MODULE_DIR$">
       <excludeFolder url="file://$MODULE_DIR$/apps/web/.storage" />
       <excludeFolder url="file://$MODULE_DIR$/examples/playwright-demo/test-results" />
+      <excludeFolder url="file://$MODULE_DIR$/apps/web/.vercel" />
+      <excludeFolder url="file://$MODULE_DIR$/apps/website/.media" />
       <excludePattern pattern=".turbo" />
       <excludePattern pattern="dist" />
     </content>
