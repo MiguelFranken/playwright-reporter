@@ -3,9 +3,9 @@
   "configurations": [
     {
       "name": "web",
-      "runtimeExecutable": "pnpm",
+      "runtimeExecutable": "nub",
       "runtimeArgs": [
-        "--filter",
+        "run", "--filter",
         "@miguelfranken/web",
         "dev"
       ],
@@ -13,9 +13,9 @@
     },
     {
       "name": "website",
-      "runtimeExecutable": "pnpm",
+      "runtimeExecutable": "nub",
       "runtimeArgs": [
-        "--filter",
+        "run", "--filter",
         "@miguelfranken/website",
         "dev"
       ],
@@ -23,9 +23,9 @@
     },
     {
       "name": "storybook",
-      "runtimeExecutable": "pnpm",
+      "runtimeExecutable": "nub",
       "runtimeArgs": [
-        "--filter",
+        "run", "--filter",
         "@miguelfranken/storybook",
         "dev"
       ],

@@ -1,9 +1,8 @@
 'use client';
 
-import { BellOff, BellRing, Send } from 'lucide-react';
 import { useEffect, useState, useTransition } from 'react';
 import { toast } from 'sonner';
-import { Button } from '@miguelfranken/ui/components/button';
+import { PushNotifications } from '@miguelfranken/ui/views/account/push-notifications';
 import {
   deletePushSubscription,
   getPushPreferences,
@@ -39,7 +38,8 @@ function applicationServerKey(base64url: string) {
 
 /**
  * Turns run notifications on or off for this browser. Each browser subscribes
- * on its own; the settings below apply to this one only.
+ * on its own; the settings below apply to this one only. This component owns
+ * the service worker and the subscription; the design system renders each state.
  */
 export function PushSettings({ publicKey }: { publicKey: string }) {
   const [state, setState] = useState<State>({ kind: 'loading' });
@@ -122,70 +122,16 @@ export function PushSettings({ publicKey }: { publicKey: string }) {
       if (!result.ok) toast.error(result.message);
     });
 
-  switch (state.kind) {
-    case 'loading':
-      return <p className="text-sm text-muted-foreground">Checking this browser…</p>;
-    case 'unsupported':
-      return (
-        <p className="text-sm text-muted-foreground">
-          This browser cannot show push notifications. On iPhone and iPad, add the app to your Home Screen first.
-        </p>
-      );
-    case 'blocked':
-      return (
-        <p className="text-sm text-muted-foreground">
-          Notifications are blocked for this site. Allow them in your browser’s site settings, then reload the page.
-        </p>
-      );
-    case 'off':
-      return (
-        <div className="flex flex-col items-start gap-3">
-          <p className="text-sm text-muted-foreground">Get a notification when a run starts or finishes in any of your teams’ projects.</p>
-          <Button size="sm" onClick={enable} disabled={pending}>
-            <BellRing data-icon="inline-start" />
-            {pending ? 'Turning on…' : 'Turn on notifications'}
-          </Button>
-        </div>
-      );
-    case 'on': {
-      const { endpoint, prefs } = state;
-      return (
-        <div className="flex flex-col gap-4">
-          <fieldset className="flex flex-col gap-2" disabled={pending}>
-            <legend className="mb-1 text-sm font-medium">Notify me when a run</legend>
-            <Checkbox
-              label="Starts"
-              checked={prefs.notifyStarted}
-              onChange={(v) => update(endpoint, { ...prefs, notifyStarted: v })}
-            />
-            <Checkbox
-              label="Finishes, with its result"
-              checked={prefs.notifyFinished}
-              onChange={(v) => update(endpoint, { ...prefs, notifyFinished: v })}
-            />
-          </fieldset>
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" onClick={() => test(endpoint)} disabled={pending}>
-              <Send data-icon="inline-start" />
-              Send a test
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => disable(endpoint)} disabled={pending}>
-              <BellOff data-icon="inline-start" />
-              Turn off in this browser
-            </Button>
-          </div>
-        </div>
-      );
-    }
-  }
-}
-
-function Checkbox({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
+  const endpoint = state.kind === 'on' ? state.endpoint : null;
   return (
-    <label className="flex w-fit items-center gap-2 text-sm">
-      <input type="checkbox" className="size-4 accent-primary" checked={checked} onChange={(e) => onChange(e.target.checked)} />
-      {label}
-    </label>
+    <PushNotifications
+      state={state.kind === 'on' ? { kind: 'on', prefs: state.prefs } : state}
+      pending={pending}
+      onEnable={enable}
+      onDisable={() => endpoint && disable(endpoint)}
+      onPreferencesChange={(prefs) => endpoint && update(endpoint, prefs)}
+      onTest={() => endpoint && test(endpoint)}
+    />
   );
 }
 

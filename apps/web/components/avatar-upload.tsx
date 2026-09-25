@@ -1,12 +1,10 @@
 'use client';
 
-import { ImageUp, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useRef, useTransition } from 'react';
+import { useTransition } from 'react';
 import { toast } from 'sonner';
-import { Button } from '@miguelfranken/ui/components/button';
-import { ProfileAvatar } from '@/components/profile-avatar';
-import { AVATAR_MAX_BYTES, AVATAR_SIZE, AVATAR_TYPES } from '@/lib/avatars';
+import { AvatarPicker } from '@miguelfranken/ui/patterns/avatar-picker';
+import { AVATAR_MAX_BYTES, AVATAR_SIZE, AVATAR_TYPES, displayableAvatar } from '@/lib/avatars';
 
 type Result = { ok: true } | { ok: false; message: string };
 
@@ -32,7 +30,6 @@ export function AvatarUpload({
   remove: () => Promise<Result>;
 }) {
   const router = useRouter();
-  const input = useRef<HTMLInputElement>(null);
   const [pending, startTransition] = useTransition();
 
   const run = (action: () => Promise<Result>, success: string) =>
@@ -46,9 +43,7 @@ export function AvatarUpload({
       router.refresh();
     });
 
-  const onFile = (file: File | undefined) => {
-    if (input.current) input.current.value = ''; // picking the same file again should fire again
-    if (!file) return;
+  const onFile = (file: File) =>
     run(async () => {
       const blob = await toSquare(file).catch(() => null);
       if (!blob) return { ok: false, message: 'That file could not be read as an image.' };
@@ -57,36 +52,17 @@ export function AvatarUpload({
       formData.set('file', blob, 'avatar');
       return upload(formData);
     }, `${label} updated.`);
-  };
 
   return (
-    <div className="flex items-center gap-4">
-      <ProfileAvatar name={name} image={image} shape={shape} className="size-16" fallbackClassName="text-lg" />
-      <div className="flex flex-col gap-1.5">
-        <div className="flex gap-2">
-          <Button type="button" variant="outline" size="sm" disabled={pending} onClick={() => input.current?.click()}>
-            <ImageUp data-icon="inline-start" />
-            {pending ? 'Saving…' : image ? 'Replace image' : 'Upload image'}
-          </Button>
-          {image ? (
-            <Button type="button" variant="ghost" size="sm" disabled={pending} onClick={() => run(remove, `${label} removed.`)}>
-              <Trash2 data-icon="inline-start" />
-              Remove
-            </Button>
-          ) : null}
-        </div>
-        <p className="text-xs text-muted-foreground">PNG, JPEG, WebP or GIF. Cropped to a square.</p>
-      </div>
-      <input
-        ref={input}
-        type="file"
-        accept={AVATAR_TYPES.join(',')}
-        className="sr-only"
-        tabIndex={-1}
-        aria-hidden
-        onChange={(e) => onFile(e.target.files?.[0])}
-      />
-    </div>
+    <AvatarPicker
+      name={name}
+      image={displayableAvatar(image)}
+      shape={shape}
+      accept={AVATAR_TYPES}
+      pending={pending}
+      onFileSelect={onFile}
+      onRemove={() => run(remove, `${label} removed.`)}
+    />
   );
 }
 

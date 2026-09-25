@@ -1,10 +1,9 @@
-import { PlugZap, ShieldAlert } from 'lucide-react';
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
 import { ConsentForm } from '@/components/oauth/consent-form';
-import { Card, CardDescription, CardHeader, CardTitle } from '@miguelfranken/ui/components/card';
 import { Skeleton } from '@miguelfranken/ui/components/skeleton';
+import { ConnectBrand, ConnectNotice } from '@miguelfranken/ui/views/connect/consent-card';
 import { getCurrentUser } from '@/lib/auth/access';
 import { isDemoUser } from '@/lib/auth/demo';
 import { listAccessibleProjects } from '@/lib/auth/principal';
@@ -42,26 +41,15 @@ async function ConnectContent({ searchParams }: { searchParams: SearchParams }) 
   if (!validation.ok && validation.kind === 'redirect') redirect(validation.redirectTo);
   if (validation.ok && isDemoUser(user)) {
     return (
-      <Card className="w-full max-w-md">
-        <CardHeader className="items-center text-center">
-          <CardTitle>The demo account cannot connect assistants</CardTitle>
-          <CardDescription>It is shared by every visitor. Sign in with your own account to connect {validation.request.client.clientName}.</CardDescription>
-        </CardHeader>
-      </Card>
+      <ConnectNotice
+        icon={false}
+        title="The demo account cannot connect assistants"
+        description={`It is shared by every visitor. Sign in with your own account to connect ${validation.request.client.clientName}.`}
+      />
     );
   }
   if (!validation.ok) {
-    return (
-      <Card className="w-full max-w-md">
-        <CardHeader className="items-center text-center">
-          <div className="mx-auto mb-2 flex size-10 items-center justify-center rounded-lg bg-muted">
-            <ShieldAlert className="size-5 text-muted-foreground" />
-          </div>
-          <CardTitle>This connection request is not valid</CardTitle>
-          <CardDescription>{validation.message} Start the connection again from your assistant.</CardDescription>
-        </CardHeader>
-      </Card>
-    );
+    return <ConnectNotice title="This connection request is not valid" description={`${validation.message} Start the connection again from your assistant.`} />;
   }
 
   const { request } = validation;
@@ -77,17 +65,13 @@ async function ConnectContent({ searchParams }: { searchParams: SearchParams }) 
 
   return (
     <div className="flex w-full max-w-md flex-col gap-4">
-      <div className="flex items-center justify-center gap-2 text-sm font-semibold">
-        <PlugZap className="size-4" /> Playwright Reporter
-      </div>
+      <ConnectBrand />
       <ConsentForm
         request={query}
         clientName={request.client.clientName}
-        clientUri={request.client.clientUri}
         verified={request.client.kind === 'cimd'}
         redirectHost={redirectHost}
         userLabel={`${user.name} <${user.email}>`}
-        scopes={request.scopes}
         teams={teams.map((t) => ({ value: t.id, label: t.name }))}
         projects={projects.map((p) => ({ value: p.project.id, label: `${p.team.slug}/${p.project.slug}` }))}
         isSuperadmin={user.isSuperadmin}

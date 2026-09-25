@@ -8,6 +8,7 @@
  */
 import { createAccessControl } from 'better-auth/plugins/access';
 import { defaultStatements } from 'better-auth/plugins/admin/access';
+import type { TeamRole } from '@miguelfranken/ui/lib/team-roles';
 
 export const statements = {
   // `user` and `session` come from the admin plugin and gate its own endpoints
@@ -71,14 +72,11 @@ export function roleCan(role: EffectiveRole, permission: Permission): boolean {
   return roles[role].authorize(Object.fromEntries(entries) as never).success === true;
 }
 
-export const TEAM_ROLE_LABELS: Record<TeamRoleName, string> = {
-  admin: 'Admin',
-  member: 'Member',
-  viewer: 'Viewer',
-};
-
-export const TEAM_ROLE_DESCRIPTIONS: Record<TeamRoleName, string> = {
-  admin: 'Full access to the team: projects, tokens, members and invitations.',
-  member: 'Can operate projects: rename, manage tokens, delete runs.',
-  viewer: 'Read-only. Cannot see or create ingest tokens.',
-};
+/**
+ * Display names live in the design system; these assertions fail `check-types`
+ * the moment its role union and this permission model disagree.
+ */
+export { TEAM_ROLE_DESCRIPTIONS, TEAM_ROLE_LABELS } from '@miguelfranken/ui/lib/team-roles';
+type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+const teamRolesMatch: Same<TeamRoleName, TeamRole> = true;
+void teamRolesMatch;
