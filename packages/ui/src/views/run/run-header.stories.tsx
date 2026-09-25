@@ -23,7 +23,16 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Failed: Story = {};
+/**
+ * The start time is relative to `now` and its tooltip is an absolute UTC time,
+ * so the server render and the browser's hydration produce the same markup.
+ */
+export const Failed: Story = {
+  play: async ({ canvasElement }) => {
+    const started = within(canvasElement).getByTitle(/^[A-Z][a-z]{2} \d{1,2}, \d{4}, \d{1,2}:\d{2} [AP]M UTC$/);
+    await expect(started).toHaveTextContent(/ ago$/);
+  },
+};
 
 export const Passed: Story = {
   args: {

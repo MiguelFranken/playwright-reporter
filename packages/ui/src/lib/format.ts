@@ -27,10 +27,21 @@ export function formatRelative(
   return `${formatDistanceToNowStrict(d, { addSuffix: true })}`;
 }
 
+/**
+ * An absolute timestamp, e.g. "Sep 25, 2026, 6:02 PM UTC".
+ *
+ * Pinned to one locale and to UTC because views render on the server and then
+ * hydrate in the browser: the server's locale and time zone are not the
+ * visitor's, and a string that differs between the two fails hydration. The
+ * same rule as the numbers (`toLocaleString('en-US')`) and the day labels of
+ * the admin charts.
+ */
+const DATE_TIME = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' });
+
 export function formatDateTime(date: Date | string | null | undefined): string {
   if (!date) return '–';
   const d = typeof date === 'string' ? new Date(date) : date;
-  return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  return `${DATE_TIME.format(d)} UTC`;
 }
 
 export function formatPercent(v: number | null | undefined, digits = 0): string {
