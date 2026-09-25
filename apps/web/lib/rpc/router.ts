@@ -9,20 +9,24 @@
  * other non-JSON values survive the trip, so the views get what the queries
  * return.
  *
- * Every procedure resolves the project through `lib/auth/access.ts` first, and
- * answers NOT_FOUND for a project the caller cannot read — the same 404 the
- * pages give.
+ * Every project procedure resolves the project through `lib/auth/access.ts`
+ * first, and answers NOT_FOUND for a project the caller cannot read — the same
+ * 404 the pages give. The `admin` procedures do the same for anyone who is not
+ * a superadmin.
  */
 import 'server-only';
 import { ORPCError, os } from '@orpc/server';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { getCurrentUser, resolveProject } from '@/lib/auth/access';
+import { policyFromForm as dataPolicyFromForm } from '@/lib/data-retention';
+import { duePreview } from '@/lib/data-retention/stats';
 import { db } from '@/lib/db/drizzle';
 import { getTestOverview } from '@/lib/db/queries/explorer';
 import { getRunSummary, listRunErrorGroupsWithCursor, listRunItems, listRunResults, listRunSpecsWithCursor } from '@/lib/db/queries/runs';
 import { isUuid, parseRange } from '@/lib/db/queries/shared';
 import { runs } from '@/lib/db/schema';
+import { policyFromForm as artifactPolicyFromForm, retentionStats } from '@/lib/storage/retention';
 import { toRunHeaderData, toRunListItem } from '@/lib/view-models';
 
 /** How many runs or result rows one call may ask for; the live views ask in batches of these sizes. */
@@ -38,6 +42,22 @@ const authed = os.use(async ({ next }) => {
   if (!(await getCurrentUser())) throw new ORPCError('UNAUTHORIZED');
   return next();
 });
+
+/** Admin procedures answer NOT_FOUND to anyone else — the same 404 the admin pages give. */
+const superadmin = authed.use(async ({ next }) => {
+  if (!(await getCurrentUser())?.isSuperadmin) throw new ORPCError('NOT_FOUND');
+  return next();
+});
+
+/**
+ * A policy form's fields as the form would post them. The preview parses them
+ * with the save action's own `policyFromForm`, so it refuses exactly what the
+ * save would, with the same message.
+ */
+const formFields = z
+  .record(z.string().max(64), z.string().max(64))
+  .refine((fields) => Object.keys(fields).length <= 32, 'Too many fields');
+const formOf = (fields: Record<string, string>) => ({ get: (name: string) => fields[name] ?? null });
 
 async function readableProjectId(team: string, slug: string): Promise<string> {
   const access = await resolveProject(team, slug);
@@ -105,6 +125,26 @@ export const appRouter = {
       const overview = await getTestOverview(projectId, input.testId, parseRange(String(input.days), 30));
       if (!overview) throw new ORPCError('NOT_FOUND');
       return overview;
+    }),
+  },
+
+  admin: {
+    /**
+     * What the data retention form would delete if saved as it is being
+     * edited: the "Due" card's numbers for an unsaved policy.
+     */
+    dataRetentionDue: superadmin.input(z.object({ fields: formFields })).handler(async ({ input }) => {
+      const policy = dataPolicyFromForm(formOf(input.fields));
+      if (typeof policy === 'string') return { ok: false as const, message: policy };
+      return { ok: true as const, enabled: policy.enabled, due: await duePreview(policy) };
+    }),
+
+    /** What the storage retention form would expire if saved as it is being edited, by kind. */
+    artifactRetentionDue: superadmin.input(z.object({ fields: formFields })).handler(async ({ input }) => {
+      const policy = artifactPolicyFromForm(formOf(input.fields));
+      if (typeof policy === 'string') return { ok: false as const, message: policy };
+      const rows = await retentionStats(policy);
+      return { ok: true as const, enabled: policy.enabled, rows: rows.map(({ kind, dueCount, dueBytes }) => ({ kind, dueCount, dueBytes })) };
     }),
   },
 };

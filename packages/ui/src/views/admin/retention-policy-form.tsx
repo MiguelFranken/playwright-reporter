@@ -1,23 +1,15 @@
 'use client';
 
-import type { AttachmentKind } from '@miguelfranken/protocol';
 import { useState } from 'react';
 import { Button } from '../../components/button';
 import { Input } from '../../components/input';
 import { Label } from '../../components/label';
 import { SegmentedControl } from '../../components/segmented-control';
+import { ARTIFACT_KIND_LABELS, type ArtifactKind } from '../../lib/artifact-kind';
 import { formatDateTime, formatRelative } from '../../lib/format';
+import { useFormFields, type FormFields } from '../../hooks/use-form-fields';
 
-export type ArtifactKind = AttachmentKind;
-
-export const ARTIFACT_KIND_LABELS: Record<ArtifactKind, string> = {
-  screenshot: 'Screenshots',
-  video: 'Videos',
-  trace: 'Traces',
-  image: 'Images',
-  text: 'Text',
-  other: 'Other',
-};
+export { ARTIFACT_KIND_LABELS, type ArtifactKind } from '../../lib/artifact-kind';
 
 export interface RetentionPolicyValue {
   enabled: boolean;
@@ -35,15 +27,23 @@ export interface RetentionPolicyFormProps {
    */
   action: (formData: FormData) => void;
   pending?: boolean;
+  /**
+   * The form's fields, under the names it posts, each time the user changes
+   * one — for a preview of what saving would expire. Not called on mount.
+   */
+  onFieldsChange?: (fields: FormFields) => void;
+  /** Shown above the Save button: the host's `PolicyPreview` of the changes. */
+  preview?: React.ReactNode;
 }
 
 /** Admin → Storage: whether expired artifacts are deleted, and after how long, per kind. */
-export function RetentionPolicyForm({ policy, kinds, action, pending = false }: RetentionPolicyFormProps) {
+export function RetentionPolicyForm({ policy, kinds, action, pending = false, onFieldsChange, preview }: RetentionPolicyFormProps) {
   const [enabled, setEnabled] = useState(policy.enabled ? 'on' : 'off');
   const [days, setDays] = useState(String(policy.days));
+  const fields = useFormFields(onFieldsChange, [enabled]);
 
   return (
-    <form action={action} className="flex flex-col gap-5">
+    <form action={action} ref={fields.ref} onChange={fields.onChange} className="flex flex-col gap-5">
       <input type="hidden" name="enabled" value={enabled} />
       <div className="flex flex-col gap-1.5">
         <Label id="retention-enabled-label">Delete expired artifacts</Label>
@@ -100,6 +100,8 @@ export function RetentionPolicyForm({ policy, kinds, action, pending = false }: 
         </div>
         <p className="text-xs text-muted-foreground">Videos and traces are the large ones: a shorter lifetime for them frees the most space.</p>
       </fieldset>
+
+      {preview}
 
       <Button type="submit" size="sm" disabled={pending} className="self-start">
         {pending ? 'Saving…' : 'Save policy'}

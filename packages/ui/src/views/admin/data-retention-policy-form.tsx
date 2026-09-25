@@ -7,6 +7,7 @@ import { Input } from '../../components/input';
 import { Label } from '../../components/label';
 import { SegmentedControl } from '../../components/segmented-control';
 import { Switch } from '../../components/switch';
+import { useFormFields, type FormFields } from '../../hooks/use-form-fields';
 import { formatDateTime, formatRelative } from '../../lib/format';
 
 export interface DataRetentionPolicyValue {
@@ -34,10 +35,24 @@ export interface DataRetentionPolicyFormProps {
    * word: deleting a run deletes its artifacts too.
    */
   artifactDays?: number | null;
+  /**
+   * The form's fields, under the names it posts, each time the user changes
+   * one — for a preview of what saving would delete. Not called on mount.
+   */
+  onFieldsChange?: (fields: FormFields) => void;
+  /** Shown above the Save button: the host's `PolicyPreview` of the changes. */
+  preview?: React.ReactNode;
 }
 
 /** Admin → Database: whether old run history is deleted, and what else is cleaned up. */
-export function DataRetentionPolicyForm({ policy, action, pending = false, artifactDays = null }: DataRetentionPolicyFormProps) {
+export function DataRetentionPolicyForm({
+  policy,
+  action,
+  pending = false,
+  artifactDays = null,
+  onFieldsChange,
+  preview,
+}: DataRetentionPolicyFormProps) {
   const id = useId();
   const [enabled, setEnabled] = useState(policy.enabled ? 'on' : 'off');
   const [housekeeping, setHousekeeping] = useState(policy.housekeeping);
@@ -45,9 +60,10 @@ export function DataRetentionPolicyForm({ policy, action, pending = false, artif
 
   const runs = Number(runDays);
   const cutsArtifacts = Number.isFinite(runs) && runs > 0 && (artifactDays === null || runs < artifactDays);
+  const fields = useFormFields(onFieldsChange, [enabled, housekeeping]);
 
   return (
-    <form action={action} className="flex flex-col gap-5">
+    <form action={action} ref={fields.ref} onChange={fields.onChange} className="flex flex-col gap-5">
       <input type="hidden" name="enabled" value={enabled} />
       <input type="hidden" name="housekeeping" value={housekeeping ? 'on' : 'off'} />
 
@@ -127,6 +143,8 @@ export function DataRetentionPolicyForm({ policy, action, pending = false, artif
           </AlertDescription>
         </Alert>
       ) : null}
+
+      {preview}
 
       <Button type="submit" size="sm" disabled={pending} className="self-start">
         {pending ? 'Saving…' : 'Save policy'}

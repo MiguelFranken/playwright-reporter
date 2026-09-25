@@ -1,5 +1,6 @@
 import { FlaskConical } from 'lucide-react';
 import { Suspense } from 'react';
+import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
 import { EmptyState } from '@miguelfranken/ui/patterns/empty-state';
 import { UrlExplorer } from '@/components/explorer/url-explorer';
 import { Pagination } from '@/components/filters/pagination';
@@ -8,9 +9,11 @@ import { RangeToggle, UrlSearch, UrlSelect } from '@/components/filters/url-filt
 import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
 import { FilterSkeleton, TableRowsSkeleton } from '@miguelfranken/ui/patterns/skeletons';
 import { requireProject } from '@/lib/auth/access';
-import { EXPLORER_SORTS, exploreTests, type ExplorerSort } from '@/lib/db/queries/explorer';
+import { EXPLORER_SORTS, exploreTests, getTestOverview, type ExplorerSort } from '@/lib/db/queries/explorer';
 import { listEnvironments, listPlatforms, listTestTags } from '@/lib/db/queries/runs';
-import { parsePage, parseRange } from '@/lib/db/queries/shared';
+import { isUuid, parsePage, parseRange } from '@/lib/db/queries/shared';
+import { makeServerQueryClient } from '@/lib/rpc/prefetch';
+import { testOverviewQuery } from '@/lib/rpc/queries';
 
 type SearchParams = Record<string, string | string[] | undefined>;
 type Params = Promise<{ team: string; project: string }>;
@@ -97,8 +100,25 @@ async function Results({ params, searchParams }: Props) {
   const tags = list(sp.tags);
   const testId = first(sp.test);
 
-  // The selected test is not part of this query: the drawer fetches its own
-  // overview from the client, so selecting a row never re-runs the table.
+  // The selected test is not part of this query: the drawer has its own, so
+  // selecting a row never re-runs the table. For a shared `?test=` link that
+  // query starts here, beside the table's, and streams to the drawer when it
+  // is ready — the page does not wait for it, and the browser does not ask
+  // for it again once the drawer has opened.
+  const queries = makeServerQueryClient();
+  const projectRef = { team, project: project.slug };
+  if (testId && isUuid(testId)) {
+    void queries.prefetchQuery({
+      ...testOverviewQuery(projectRef, testId, days),
+      queryFn: async () => {
+        const overview = await getTestOverview(project.id, testId, days);
+        // Not a test of this project: the drawer falls back to its row, as it does for a failed fetch.
+        if (!overview) throw new Error('Test not found');
+        return overview;
+      },
+    });
+  }
+
   const result = await exploreTests(project.id, {
     q: first(sp.q) || undefined,
     days,
@@ -123,15 +143,17 @@ async function Results({ params, searchParams }: Props) {
 
   return (
     <>
-      <UrlExplorer
-        base={base}
-        projectRef={{ team, project: project.slug }}
-        rows={result.rows}
-        sort={sort}
-        dir={dir}
-        days={days}
-        initialTestId={testId}
-      />
+      <HydrationBoundary state={dehydrate(queries)}>
+        <UrlExplorer
+          base={base}
+          projectRef={projectRef}
+          rows={result.rows}
+          sort={sort}
+          dir={dir}
+          days={days}
+          initialTestId={testId}
+        />
+      </HydrationBoundary>
       <Pagination page={result.page} pageSize={result.pageSize} total={result.total} />
     </>
   );

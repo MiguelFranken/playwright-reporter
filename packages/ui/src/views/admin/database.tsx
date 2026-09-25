@@ -61,7 +61,16 @@ export interface DuePreviewValue {
 }
 
 /** What the saved policy deletes on the next sweep, shown even while it is off. */
-export function DataRetentionDue({ due, enabled }: { due: DuePreviewValue; enabled: boolean }) {
+export function DataRetentionDue({
+  due,
+  enabled,
+  caption,
+}: {
+  due: DuePreviewValue;
+  enabled: boolean;
+  /** Replaces the line under the numbers; `null` drops it (a `PolicyPreview` says what they are). */
+  caption?: React.ReactNode;
+}) {
   const n = (v: number) => v.toLocaleString('en-US');
   const stats: Stat[] = [
     { label: 'Runs', value: n(due.runs), tone: due.runs > 0 ? 'warning' : undefined },
@@ -75,11 +84,12 @@ export function DataRetentionDue({ due, enabled }: { due: DuePreviewValue; enabl
   return (
     <div className="flex flex-col gap-3">
       <StatGrid stats={stats} columns={3} />
-      <p className="text-body-xs text-muted-foreground">
-        {enabled
-          ? 'Deleted on the next sweep.'
-          : 'A preview: data retention is off, so nothing is deleted until it is turned on.'}
-      </p>
+      {caption === null ? null : (
+        <p className="text-body-xs text-muted-foreground">
+          {caption ??
+            (enabled ? 'Deleted on the next sweep.' : 'A preview: data retention is off, so nothing is deleted until it is turned on.')}
+        </p>
+      )}
     </div>
   );
 }
