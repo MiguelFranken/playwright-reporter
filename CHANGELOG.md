@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.26](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.25...v0.0.26) (2026-09-25)
+
+### Bug Fixes
+
+* **docs:** put the sidebar on the page's white surface ([1a244fe](https://github.com/MiguelFranken/playwright-reporter/commit/1a244fe4bfec505d0fc20805818eac8225c27cf8))
+
 ## [0.0.25](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.24...v0.0.25) (2026-09-25)
 
 ### Features
