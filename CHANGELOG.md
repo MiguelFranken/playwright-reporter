@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.19](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.18...v0.0.19) (2026-09-25)
+
+### Features
+
+* **ui:** hand Debug with AI prompts to Claude Code and Codex ([#26](https://github.com/MiguelFranken/playwright-reporter/issues/26)) ([522eeb9](https://github.com/MiguelFranken/playwright-reporter/commit/522eeb949323a15983a81516f2d2cb9803fd2afb))
+* **web:** database data retention policy and usage metrics ([#27](https://github.com/MiguelFranken/playwright-reporter/issues/27)) ([a24fdb8](https://github.com/MiguelFranken/playwright-reporter/commit/a24fdb8495539d42744df70b7afd085f62f170d6))
+
 ## [0.0.18](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.17...v0.0.18) (2026-09-25)
 
 ### Features
