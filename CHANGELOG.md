@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.27](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.26...v0.0.27) (2026-09-25)
+
+### Features
+
+* **web:** prefetch the explorer drawer and tighten TanStack Query caching ([#34](https://github.com/MiguelFranken/playwright-reporter/issues/34)) ([4a70a76](https://github.com/MiguelFranken/playwright-reporter/commit/4a70a76eefd8e0443a70870fdc1430a0cf17be8f))
+
 ## [0.0.26](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.25...v0.0.26) (2026-09-25)
 
 ### Bug Fixes
