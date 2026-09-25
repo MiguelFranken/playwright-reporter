@@ -24,9 +24,15 @@ export function protectedResourceMetadata() {
   };
 }
 
+/**
+ * The documents come from deployment config alone (never the request), so the
+ * CDN may keep them for a day; a new deployment starts with an empty cache.
+ */
+const CACHE_CONTROL = 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800';
+
 function respond(request: Request, body: unknown) {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
-  return Response.json(body, { headers: { ...CORS, 'cache-control': 'public, max-age=3600' } });
+  return Response.json(body, { headers: { ...CORS, 'cache-control': CACHE_CONTROL } });
 }
 
 export const protectedResourceResponse = async (request: Request) => respond(request, protectedResourceMetadata());
