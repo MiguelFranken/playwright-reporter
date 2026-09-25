@@ -15,7 +15,7 @@ import { requireProject } from '@/lib/auth/access';
 import { projectHrefs } from '@/lib/view-models';
 import { branchSummary, chronicFailures, dashboardStats, mostFlakyTests, passFailTrend } from '@/lib/db/queries/dashboard';
 import { parseRange } from '@/lib/db/queries/shared';
-import { formatDuration, formatPercent } from '@miguelfranken/ui/lib/format';
+import { formatDuration, formatNumber, formatPercent } from '@miguelfranken/ui/lib/format';
 import { reliabilityLabel } from '@/lib/metrics/score';
 import { cn } from '@miguelfranken/ui/lib/cn';
 
@@ -122,8 +122,8 @@ async function Stats(props: Props) {
       <MetricCard
         icon={ListChecks}
         label="Tracked tests"
-        value={stats.trackedTests.toLocaleString()}
-        subtext={stats.newTests > 0 ? `+${stats.newTests.toLocaleString()} new in the last ${days} days` : 'No new tests in this range'}
+        value={formatNumber(stats.trackedTests)}
+        subtext={stats.newTests > 0 ? `+${formatNumber(stats.newTests)} new in the last ${days} days` : 'No new tests in this range'}
       />
       <MetricCard
         icon={Activity}

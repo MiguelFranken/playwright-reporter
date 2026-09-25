@@ -8,7 +8,7 @@ import { Badge } from '../../components/badge';
 import { Button } from '../../components/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../components/collapsible';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/tabs';
-import { formatBytes, formatDuration } from '../../lib/format';
+import { formatBytes, formatDuration, formatTime } from '../../lib/format';
 import { cn } from '../../lib/cn';
 import { stripAnsi } from '../../lib/ansi';
 
@@ -72,7 +72,7 @@ function AttemptCard({ attempt }: { attempt: AttemptView }) {
         <StatusBadge status={attempt.status} />
         <span className="text-xs text-muted-foreground tabular-nums">{formatDuration(attempt.durationMs)}</span>
         <span className="text-xs text-muted-foreground">worker {attempt.workerIndex}</span>
-        <span className="ml-auto text-xs text-muted-foreground">{new Date(attempt.startedAt).toLocaleTimeString()}</span>
+        <span className="ml-auto text-xs text-muted-foreground">{formatTime(attempt.startedAt)}</span>
       </header>
       <Tabs value={tab} onValueChange={(v) => setTab(String(v))} className="gap-0">
         {/* The trigger carries 12px of its own padding, so the strip adds 4 —

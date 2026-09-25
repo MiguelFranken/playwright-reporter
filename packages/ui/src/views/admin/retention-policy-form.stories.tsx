@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { useState } from 'react';
+import { expect, fn, spyOn, userEvent, within } from 'storybook/test';
 import { RETENTION_POLICY, STORAGE_USAGE } from '../../fixtures/admin';
 import { NOW, ago } from '../../fixtures/now';
 import { PolicyPreview } from './policy-preview';
@@ -67,6 +68,34 @@ export const ReportsFields: Story = {
 
     await userEvent.click(canvas.getByRole('radio', { name: 'Keep forever' }));
     await expect(report).toHaveBeenLastCalledWith(expect.objectContaining({ enabled: 'off', 'days.screenshot': '3' }));
+  },
+};
+
+/** The page re-renders with the policy just saved: the per-kind fields start over from it. */
+export const TakesTheSavedPolicy: Story = {
+  render: function Render(args) {
+    const [policy, setPolicy] = useState(args.policy);
+    return (
+      <div className="flex flex-col gap-4">
+        <RetentionPolicyForm {...args} policy={policy} />
+        <button type="button" onClick={() => setPolicy({ ...policy, overrides: { video: 3 } })}>
+          Saved elsewhere
+        </button>
+      </div>
+    );
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const errors = spyOn(console, 'error');
+    try {
+      await expect(canvas.getByLabelText('Traces')).toHaveValue(14);
+      await userEvent.click(canvas.getByRole('button', { name: 'Saved elsewhere' }));
+      await expect(canvas.getByLabelText('Videos')).toHaveValue(3);
+      await expect(canvas.getByLabelText('Traces')).toHaveValue(null);
+      await expect(errors).not.toHaveBeenCalledWith(expect.stringContaining('default value'));
+    } finally {
+      errors.mockRestore();
+    }
   },
 };
 

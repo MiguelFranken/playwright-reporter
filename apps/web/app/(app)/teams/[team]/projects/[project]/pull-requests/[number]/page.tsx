@@ -9,7 +9,7 @@ import { BackLink } from '@miguelfranken/ui/patterns/back-link';
 import { EmptyState } from '@miguelfranken/ui/patterns/empty-state';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@miguelfranken/ui/components/card';
 import { ChartSkeleton, ListRowsSkeleton, MetricCardsSkeleton, TableRowsSkeleton } from '@miguelfranken/ui/patterns/skeletons';
-import { formatDuration, formatPercent } from '@miguelfranken/ui/lib/format';
+import { formatDuration, formatNumber, formatPercent } from '@miguelfranken/ui/lib/format';
 import { cn } from '@miguelfranken/ui/lib/cn';
 import { Pagination } from '@/components/filters/pagination';
 import { ResultsBoundary } from '@/components/filters/results-boundary';
@@ -152,8 +152,8 @@ async function Stats(props: Props) {
       <MetricCard
         icon={ListChecks}
         label="Tests run"
-        value={stats.trackedTests.toLocaleString()}
-        subtext={stats.newTests > 0 ? `+${stats.newTests.toLocaleString()} new to this request in ${days} days` : `No new tests in the last ${days} days`}
+        value={formatNumber(stats.trackedTests)}
+        subtext={stats.newTests > 0 ? `+${formatNumber(stats.newTests)} new to this request in ${days} days` : `No new tests in the last ${days} days`}
       />
       <MetricCard
         icon={Activity}

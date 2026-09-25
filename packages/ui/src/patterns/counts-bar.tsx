@@ -1,4 +1,5 @@
 import { cn } from '../lib/cn';
+import { formatNumber } from '../lib/format';
 
 /**
  * The outcome tally a run reports. Declared here because this is what renders
@@ -63,7 +64,7 @@ export function CountsBar({
   const segs = SEGMENTS.map((s) => ({ ...s, n: counts[s.key] })).filter((s) => s.n > 0);
   const shown = segs.length > 0 ? segs : [{ ...SEGMENTS[0], n: 0 }];
   const summary = segs.map((s) => `${s.n} ${s.label}`).join(', ');
-  const label = `${denom.toLocaleString()} ${denom === 1 ? 'test' : 'tests'}`;
+  const label = `${formatNumber(denom)} ${denom === 1 ? 'test' : 'tests'}`;
 
   return (
     <div className={cn('flex flex-col', density === 'compact' ? 'gap-2' : 'gap-1.5', className)}>

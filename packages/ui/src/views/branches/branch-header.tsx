@@ -3,7 +3,7 @@ import { Link } from '../../provider';
 import { Badge } from '../../components/badge';
 import { Skeleton } from '../../components/skeleton';
 import { StatusBadge } from '../../patterns/status-badge';
-import { formatDateTime, formatRelative } from '../../lib/format';
+import { formatDateTime, formatNumber, formatRelative } from '../../lib/format';
 import type { AnyStatus } from '../../lib/tone';
 
 /** A branch over all of its history — what its page leads with, whatever range is selected below. */
@@ -69,7 +69,7 @@ export function BranchHeader({
           <span className="inline-flex items-center gap-1.5" title={`First run ${formatDateTime(b.firstRunAt)}`}>
             <CalendarClock className="size-3.5" aria-hidden />
             <span suppressHydrationWarning>
-              {b.runs.toLocaleString()} {b.runs === 1 ? 'run' : 'runs'} · first {formatRelative(b.firstRunAt, { now })}
+              {formatNumber(b.runs)} {b.runs === 1 ? 'run' : 'runs'} · first {formatRelative(b.firstRunAt, { now })}
             </span>
           </span>
         </div>

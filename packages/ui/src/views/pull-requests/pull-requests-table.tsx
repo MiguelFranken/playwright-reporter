@@ -7,7 +7,7 @@ import { Badge } from '../../components/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/table';
 import { passRateClass } from '../../lib/branch';
 import { cn } from '../../lib/cn';
-import { formatDateTime, formatDuration, formatPercent, formatRelative } from '../../lib/format';
+import { formatDateTime, formatDuration, formatNumber, formatPercent, formatRelative } from '../../lib/format';
 import { pullRequestNoun, pullRequestRef } from '../../lib/pull-request';
 import type { AnyStatus } from '../../lib/tone';
 
@@ -128,7 +128,7 @@ function PullRequestRow({ hrefs, row: r, now }: { hrefs: PullRequestsTableHrefs;
       <TableCell>
         <HistorySparkline history={r.recentStatuses} />
       </TableCell>
-      <TableCell className="text-right tabular-nums">{r.runs.toLocaleString()}</TableCell>
+      <TableCell className="text-right tabular-nums">{formatNumber(r.runs)}</TableCell>
       <TableCell className={cn('text-right font-medium tabular-nums', passRateClass(r.passRate))}>{formatPercent(r.passRate)}</TableCell>
       <TableCell className="text-right tabular-nums text-muted-foreground">{formatDuration(r.avgDurationMs)}</TableCell>
       <TableCell>
