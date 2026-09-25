@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../components/dropdown-menu';
-import { cursorPromptLink, vscodePromptLink } from '../lib/ai-handoff';
+import { PROMPT_HANDOFF_TARGETS } from '../lib/ai-handoff';
 import { Link } from '../provider';
 
 /**
@@ -55,14 +55,12 @@ export function DebugWithAiMenu({
           <Copy />
           Copy prompt
         </DropdownMenuItem>
-        <DropdownMenuLinkItem href={cursorPromptLink(prompt)} closeOnClick>
-          <ExternalLink />
-          Open in Cursor
-        </DropdownMenuLinkItem>
-        <DropdownMenuLinkItem href={vscodePromptLink(prompt)} closeOnClick>
-          <ExternalLink />
-          Open in VS Code
-        </DropdownMenuLinkItem>
+        {PROMPT_HANDOFF_TARGETS.map((target) => (
+          <DropdownMenuLinkItem key={target.id} href={target.link(prompt)} closeOnClick>
+            <ExternalLink />
+            Open in {target.label}
+          </DropdownMenuLinkItem>
+        ))}
         <DropdownMenuSeparator />
         <DropdownMenuLinkItem render={<Link href={setupHref} />} closeOnClick>
           <Settings2 />

@@ -32,6 +32,26 @@ export function triagePrompt({ runUrl }: { runUrl: string }): string {
 }
 
 /**
+ * Opens a new Claude Code terminal session with the prompt pre-filled; the user still presses Enter.
+ *
+ * verify: Claude Code documents `claude-cli://open?q=…` (v2.1.91+, `q` up to 5,000 characters,
+ * https://code.claude.com/docs/en/deep-links). The handler registers itself after the first interactive prompt.
+ */
+export function claudeCodePromptLink(prompt: string): string {
+  return `claude-cli://open?q=${encodeURIComponent(prompt)}`;
+}
+
+/**
+ * Opens a new Codex chat (the desktop app) with the prompt in the composer; the user still sends it.
+ *
+ * verify: Codex documents `codex://new?prompt=…` for a new local chat
+ * (https://learn.chatgpt.com/docs/reference/commands). Re-check the host and parameter name if Codex changes it.
+ */
+export function codexPromptLink(prompt: string): string {
+  return `codex://new?prompt=${encodeURIComponent(prompt)}`;
+}
+
+/**
  * Opens Cursor's chat with the prompt pre-filled; the user still presses send.
  *
  * verify: Cursor documents `cursor://anysphere.cursor-deeplink/prompt?text=…` for prompt deeplinks
@@ -50,3 +70,21 @@ export function cursorPromptLink(prompt: string): string {
 export function vscodePromptLink(prompt: string): string {
   return `vscode://GitHub.Copilot-Chat/chat?prompt=${encodeURIComponent(prompt)}`;
 }
+
+/** One assistant the menu can hand a prompt to through a deep link. */
+export type PromptHandoffTarget = {
+  id: string;
+  label: string;
+  link: (prompt: string) => string;
+};
+
+/**
+ * Every assistant the "Debug with AI" menu offers, in menu order — the most used first.
+ * Adding an assistant is one entry here plus a link builder above.
+ */
+export const PROMPT_HANDOFF_TARGETS: readonly PromptHandoffTarget[] = [
+  { id: 'claude-code', label: 'Claude Code', link: claudeCodePromptLink },
+  { id: 'codex', label: 'Codex', link: codexPromptLink },
+  { id: 'cursor', label: 'Cursor', link: cursorPromptLink },
+  { id: 'vscode', label: 'VS Code', link: vscodePromptLink },
+];
