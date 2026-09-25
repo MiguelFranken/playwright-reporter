@@ -10,6 +10,15 @@ import { audit } from '@/lib/auth/audit';
 import { auth } from '@/lib/auth/auth';
 import { validateSlug } from '@/lib/auth/slug';
 import { deleteAvatar } from '@/lib/avatars/store';
+import {
+  PURGE_CONFIRMATION,
+  getDataRetentionPolicy,
+  policyFromForm as dataPolicyFromForm,
+  purgeRunHistory as purgeAllRunHistory,
+  saveDataRetentionPolicy,
+  sweepExpiredData,
+  type DataSweepCounts,
+} from '@/lib/data-retention';
 import { db } from '@/lib/db/drizzle';
 import { getUserById } from '@/lib/db/queries/teams';
 import { attachments, projects, runs, teamMembers, teams, users } from '@/lib/db/schema';
@@ -275,4 +284,60 @@ export async function forceEvictStorage(
   revalidatePath('/admin/storage');
   if (result.error) return actionError(`The eviction stopped: ${result.error}`);
   return { ok: true, expiredCount: result.expiredCount, expiredBytes: result.expiredBytes, hasMore: result.hasMore };
+}
+
+// ---------------------------------------------------------------- database
+
+export type DataRetentionFormState = { ok: boolean; message: string } | null;
+
+type DataSweepSummary = { deleted: DataSweepCounts; artifactBytes: number; hasMore: boolean };
+
+/** `useActionState` shape; the fields are read by `policyFromForm` in `lib/data-retention`. */
+export async function updateDataRetentionPolicy(_prev: DataRetentionFormState, formData: FormData): Promise<DataRetentionFormState> {
+  const actor = await superadmin();
+  if (denied(actor)) return actor;
+
+  const policy = dataPolicyFromForm(formData);
+  if (typeof policy === 'string') return actionError(policy);
+
+  const before = await getDataRetentionPolicy();
+  await saveDataRetentionPolicy(policy, actor.actorId);
+  await audit('database.retention.update', { actorId: actor.actorId, target: { from: before.policy, to: policy } });
+  revalidatePath('/admin/database');
+  return { ok: true, message: policy.enabled ? 'Data retention policy saved.' : 'Saved. Nothing is deleted until data retention is turned on.' };
+}
+
+/** "Run now": one bounded sweep, so the button answers within a request. */
+export async function runDataSweep(): Promise<Ok<DataSweepSummary> | Denied> {
+  const actor = await superadmin();
+  if (denied(actor)) return actor;
+
+  const result = await sweepExpiredData({ trigger: 'manual', budgetMs: 45_000 });
+  if (result.status === 'disabled') return actionError('Turn data retention on and save the policy first.');
+  await audit('database.retention.sweep', {
+    actorId: actor.actorId,
+    target: { sweepId: result.sweepId, deleted: result.deleted, artifactBytes: result.artifactBytes, error: result.error },
+  });
+  revalidatePath('/admin/database');
+  if (result.error) return actionError(`The sweep stopped: ${result.error}`);
+  return { ok: true, deleted: result.deleted, artifactBytes: result.artifactBytes, hasMore: result.hasMore };
+}
+
+/**
+ * "Purge history": deletes every finished run of the instance, ignoring the
+ * policy. Bounded like "Run now"; a large history may need a second press.
+ */
+export async function purgeRunHistory(confirmation: string): Promise<Ok<DataSweepSummary> | Denied> {
+  const actor = await superadmin();
+  if (denied(actor)) return actor;
+  if (confirmation !== PURGE_CONFIRMATION) return actionError(`Type “${PURGE_CONFIRMATION}” to confirm.`);
+
+  const result = await purgeAllRunHistory({ budgetMs: 45_000 });
+  await audit('database.purge', {
+    actorId: actor.actorId,
+    target: { sweepId: result.sweepId, deleted: result.deleted, artifactBytes: result.artifactBytes, error: result.error },
+  });
+  revalidatePath('/admin/database');
+  if (result.error) return actionError(`The purge stopped: ${result.error}`);
+  return { ok: true, deleted: result.deleted, artifactBytes: result.artifactBytes, hasMore: result.hasMore };
 }
