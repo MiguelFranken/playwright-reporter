@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { storageContract } from '@/test/helpers/storage-contract';
 import { LocalStorageAdapter } from './local';
 
 let root: string;
@@ -155,3 +156,6 @@ describe('name', () => {
     expect(storage.retention).toBe('app');
   });
 });
+
+// The same suite runs against S3 in `test/integration/s3-storage.test.ts`.
+storageContract('local', () => storage);

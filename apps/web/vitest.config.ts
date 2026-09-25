@@ -30,7 +30,8 @@ export default defineConfig({
           name: 'integration',
           environment: 'node',
           include: ['test/integration/**/*.test.ts'],
-          globalSetup: ['test/integration/global-setup.ts'],
+          // Postgres for every file, and the S3 stub for the S3 storage suites.
+          globalSetup: ['test/integration/global-setup.ts', 'test/integration/s3-global-setup.ts'],
           setupFiles: ['test/integration/setup.ts'],
           testTimeout: 30_000,
           hookTimeout: 120_000,
