@@ -496,7 +496,7 @@ export async function uploadInstructions(run: Run, attachmentIds: string[]): Pro
   return Promise.all(
     rows.map(async (a) => ({
       attachmentId: a.id,
-      ...(await storage.createUpload(a.storageKey, { contentType: a.contentType, size: a.sizeBytes ?? undefined, attachmentId: a.id })),
+      ...(await storage.createUpload(a.storageKey, { contentType: a.contentType, size: a.sizeBytes ?? undefined, attachmentId: a.id, kind: a.kind })),
     })),
   );
 }
