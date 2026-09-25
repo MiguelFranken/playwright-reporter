@@ -1,6 +1,8 @@
 import { Alert, AlertDescription, AlertTitle } from '../../components/alert';
 import { Badge } from '../../components/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/table';
+import { StatGrid, type Stat } from '../../patterns/stat-grid';
+import { ARTIFACT_KIND_LABELS, type ArtifactKind } from '../../lib/artifact-kind';
 import { formatBytes, formatDateTime, formatRelative } from '../../lib/format';
 
 export interface StoreScheduleProps {
@@ -74,6 +76,32 @@ export interface StorageUsageRow {
   dueBytes: number;
   expiredCount: number;
   expiredBytes: number;
+}
+
+/**
+ * What a retention policy expires on its next sweep: the total, then each kind
+ * that has anything due, largest first. The numbers are `StorageUsageTable`'s
+ * "Due" column, told as a sentence for the form's preview.
+ */
+export function StorageDue({ rows, enabled }: { rows: Pick<StorageUsageRow, 'kind' | 'dueCount' | 'dueBytes'>[]; enabled: boolean }) {
+  const count = rows.reduce((sum, r) => sum + r.dueCount, 0);
+  const bytes = rows.reduce((sum, r) => sum + r.dueBytes, 0);
+  const kinds = rows.filter((r) => r.dueCount > 0).sort((a, b) => b.dueBytes - a.dueBytes);
+  const stats: Stat[] = [
+    { label: 'Artifacts', value: count.toLocaleString('en-US'), tone: count > 0 ? 'warning' : undefined },
+    { label: 'Space freed', value: formatBytes(bytes) },
+    ...kinds.map((r) => ({
+      label: ARTIFACT_KIND_LABELS[r.kind as ArtifactKind] ?? r.kind,
+      value: r.dueCount.toLocaleString('en-US'),
+      hint: formatBytes(r.dueBytes),
+    })),
+  ];
+  return (
+    <div className="flex flex-col gap-3">
+      <StatGrid stats={stats} columns={3} />
+      {enabled ? null : <p className="text-body-xs text-muted-foreground">Retention would still be off: nothing is deleted until it is turned on.</p>}
+    </div>
+  );
 }
 
 /** Artifacts by kind, with a total row. */

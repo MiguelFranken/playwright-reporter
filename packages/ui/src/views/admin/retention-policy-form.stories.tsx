@@ -1,8 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, fn, userEvent, within } from 'storybook/test';
-import { RETENTION_POLICY } from '../../fixtures/admin';
+import { RETENTION_POLICY, STORAGE_USAGE } from '../../fixtures/admin';
 import { NOW, ago } from '../../fixtures/now';
+import { PolicyPreview } from './policy-preview';
 import { RetentionPolicyForm, RetentionPolicySource } from './retention-policy-form';
+import { StorageDue } from './storage';
 
 const KINDS = ['screenshot', 'video', 'trace', 'image', 'text', 'other'] as const;
 
@@ -11,7 +13,7 @@ const meta = {
   component: RetentionPolicyForm,
   parameters: { layout: 'padded' },
   tags: ['themed'],
-  args: { policy: RETENTION_POLICY, kinds: KINDS, action: fn() },
+  args: { policy: RETENTION_POLICY, kinds: KINDS, action: fn(), onFieldsChange: fn() },
   decorators: [
     (Story) => (
       <div className="max-w-xl">
@@ -50,6 +52,35 @@ export const Submits: Story = {
     await expect(data.get('days')).toBe('30');
     await expect(data.get('days.screenshot')).toBe('10');
     await expect(data.get('days.video')).toBe('7');
+  },
+};
+
+/** Every change reports the fields under their posted names, the segmented control's hidden input included. */
+export const ReportsFields: Story = {
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const report = args.onFieldsChange as ReturnType<typeof fn>;
+    await expect(report).not.toHaveBeenCalled();
+
+    await userEvent.type(canvas.getByLabelText('Screenshots'), '3');
+    await expect(report).toHaveBeenLastCalledWith(expect.objectContaining({ days: '30', 'days.screenshot': '3', 'days.video': '7' }));
+
+    await userEvent.click(canvas.getByRole('radio', { name: 'Keep forever' }));
+    await expect(report).toHaveBeenLastCalledWith(expect.objectContaining({ enabled: 'off', 'days.screenshot': '3' }));
+  },
+};
+
+/** The host's preview sits above the Save button. */
+export const WithPreview: Story = {
+  args: {
+    preview: (
+      <PolicyPreview status="ready">
+        <StorageDue rows={STORAGE_USAGE} enabled />
+      </PolicyPreview>
+    ),
+  },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByRole('region', { name: 'If you save these changes' })).toBeVisible();
   },
 };
 

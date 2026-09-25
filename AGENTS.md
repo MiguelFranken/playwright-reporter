@@ -62,6 +62,8 @@ test in `packages/ui` fails the build if it imports `next/*`, `drizzle-orm`,
   Build query options that more than one call site shares (a prefetch and the `useQuery` it warms) in
   `lib/rpc/queries.ts`, so the key and the cache policy cannot drift apart. The query client lives in the root layout
   and outlives navigations: sign-in and sign-out clear it. React Query Devtools load in `next dev` only.
+  When a page already knows what a client query will ask for (a shared link), start it on the server without
+  awaiting it and pass it through `HydrationBoundary` (`lib/rpc/prefetch.ts`): it streams, nothing waits on it.
 - **After a Server Action**, don't call `router.refresh()` when the action already calls `revalidatePath`: the action's
   response carries the re-rendered page, and a refresh renders it a second time.
 - **The public REST API** is `apps/web/lib/api` (oRPC's OpenAPI handler under `/api/v1`). It is a contract: v1 only
