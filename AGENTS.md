@@ -59,6 +59,11 @@ test in `packages/ui` fails the build if it imports `next/*`, `drizzle-orm`,
 - **Data a client component loads after render** (a drawer, a live view catching up) is a procedure in
   `apps/web/lib/rpc/router.ts`, called through TanStack Query with the typed `orpc` utils from `lib/rpc/client.ts`.
   Don't add a JSON route handler for it. Pages still read the database on the server.
+  Build query options that more than one call site shares (a prefetch and the `useQuery` it warms) in
+  `lib/rpc/queries.ts`, so the key and the cache policy cannot drift apart. The query client lives in the root layout
+  and outlives navigations: sign-in and sign-out clear it. React Query Devtools load in `next dev` only.
+- **After a Server Action**, don't call `router.refresh()` when the action already calls `revalidatePath`: the action's
+  response carries the re-rendered page, and a refresh renders it a second time.
 - **The public REST API** is `apps/web/lib/api` (oRPC's OpenAPI handler under `/api/v1`). It is a contract: v1 only
   grows. Endpoints wrap MCP tools with `fromTool`, so logic lives once. After changing it, regenerate the document with
   `nub run api:docs` in `apps/web`; a unit test fails on drift, and CI fails a breaking change against `main`.

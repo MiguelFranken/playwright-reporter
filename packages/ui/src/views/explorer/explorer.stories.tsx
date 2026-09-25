@@ -43,6 +43,7 @@ const meta = {
     dir: 'desc' as SortDir,
     onSortChange: fn(),
     onSelectTest: fn(),
+    onTestIntent: fn(),
   },
   parameters: { layout: 'padded' },
   tags: ['themed'],
@@ -108,6 +109,22 @@ export const SelectsARow: Story = {
     row.focus();
     await userEvent.keyboard('{Enter}');
     await expect(args.onSelectTest).toHaveBeenLastCalledWith('t1');
+  },
+};
+
+/** Hovering or focusing a row reports it as the likely next selection, so the host can prefetch; leaving clears it. */
+export const ReportsIntent: Story = {
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const rows = canvas.getAllByRole('row');
+    await userEvent.hover(canvas.getByText('restores the applied discount code'));
+    await expect(args.onTestIntent).toHaveBeenLastCalledWith('t2');
+
+    await userEvent.unhover(canvas.getByText('restores the applied discount code'));
+    await expect(args.onTestIntent).toHaveBeenLastCalledWith(null);
+
+    rows[1]!.focus();
+    await expect(args.onTestIntent).toHaveBeenLastCalledWith('t1');
   },
 };
 

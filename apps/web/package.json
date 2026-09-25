@@ -54,6 +54,7 @@
     "@miguelfranken/typescript-config": "workspace:*",
     "@modelcontextprotocol/client": "~2.1.0",
     "@tailwindcss/postcss": "4.3.3",
+    "@tanstack/react-query-devtools": "5.103.2",
     "@testcontainers/postgresql": "^12.1.0",
     "@types/node": "^24.13.5",
     "@types/react": "19.3.0",

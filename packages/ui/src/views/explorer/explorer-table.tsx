@@ -70,6 +70,7 @@ export function ExplorerTable({
   activeTestId,
   onSortChange,
   onSelectTest,
+  onTestIntent,
   isPending,
 }: {
   hrefs: ExplorerTableHrefs;
@@ -80,6 +81,12 @@ export function ExplorerTable({
   /** Sorting and selection are the host's state; the table only reports intent. */
   onSortChange: (sort: ExplorerSort, dir: SortDir) => void;
   onSelectTest: (testId: string) => void;
+  /**
+   * The row a click is likely to select next: the one under the pointer or
+   * with focus, and `null` once the pointer leaves it. Lets the host prefetch
+   * what the selection will show.
+   */
+  onTestIntent?: (testId: string | null) => void;
   isPending?: boolean;
 }) {
   const onSort = (col: Column) => {
@@ -139,6 +146,9 @@ export function ExplorerTable({
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') onSelectTest(row.testId);
                 }}
+                onPointerEnter={() => onTestIntent?.(row.testId)}
+                onPointerLeave={() => onTestIntent?.(null)}
+                onFocus={() => onTestIntent?.(row.testId)}
                 tabIndex={0}
               >
                 <TableCell className="max-w-md whitespace-normal py-2.5">
