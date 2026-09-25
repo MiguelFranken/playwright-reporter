@@ -14,7 +14,14 @@ import { db } from '@/lib/db/drizzle';
 import { getUserById } from '@/lib/db/queries/teams';
 import { attachments, projects, runs, teamMembers, teams, users } from '@/lib/db/schema';
 import { getStorage } from '@/lib/storage';
-import { getRetentionPolicy, policyFromForm, saveRetentionPolicy, sweepExpiredArtifacts } from '@/lib/storage/retention';
+import {
+  EVICT_CONFIRMATION,
+  evictAllArtifacts,
+  getRetentionPolicy,
+  policyFromForm,
+  saveRetentionPolicy,
+  sweepExpiredArtifacts,
+} from '@/lib/storage/retention';
 
 type Ok<T extends object = object> = { ok: true } & T;
 
@@ -246,5 +253,26 @@ export async function runRetentionSweep(): Promise<
   });
   revalidatePath('/admin/storage');
   if (result.error) return actionError(`The sweep stopped: ${result.error}`);
+  return { ok: true, expiredCount: result.expiredCount, expiredBytes: result.expiredBytes, hasMore: result.hasMore };
+}
+
+/**
+ * "Force delete": evicts every live artifact from the store, ignoring the
+ * policy. Bounded like "Run now"; a large store may need a second press.
+ */
+export async function forceEvictStorage(
+  confirmation: string,
+): Promise<Ok<{ expiredCount: number; expiredBytes: number; hasMore: boolean }> | Denied> {
+  const actor = await superadmin();
+  if (denied(actor)) return actor;
+  if (confirmation !== EVICT_CONFIRMATION) return actionError(`Type “${EVICT_CONFIRMATION}” to confirm.`);
+
+  const result = await evictAllArtifacts({ budgetMs: 45_000 });
+  await audit('storage.evict', {
+    actorId: actor.actorId,
+    target: { sweepId: result.sweepId, expired: result.expiredCount, bytes: result.expiredBytes, error: result.error },
+  });
+  revalidatePath('/admin/storage');
+  if (result.error) return actionError(`The eviction stopped: ${result.error}`);
   return { ok: true, expiredCount: result.expiredCount, expiredBytes: result.expiredBytes, hasMore: result.hasMore };
 }

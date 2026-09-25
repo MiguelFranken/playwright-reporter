@@ -1,5 +1,5 @@
 import { Suspense } from 'react';
-import { RetentionPolicyForm, RunSweepButton } from '@/components/admin/retention-card';
+import { ForceDeleteButton, RetentionPolicyForm, RunSweepButton } from '@/components/admin/retention-card';
 import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
 import { ListRowsSkeleton, TableRowsSkeleton } from '@miguelfranken/ui/patterns/skeletons';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@miguelfranken/ui/components/card';
@@ -9,6 +9,7 @@ import { requireSuperadmin } from '@/lib/auth/access';
 import { getStorage } from '@/lib/storage';
 import {
   ATTACHMENT_KINDS,
+  EVICT_CONFIRMATION,
   INGEST_SWEEP_INTERVAL_MS,
   getRetentionPolicy,
   ingestSweepEnabled,
@@ -67,7 +68,10 @@ export default function AdminStoragePage() {
             <CardTitle>Recent sweeps</CardTitle>
             <CardDescription>The last ten, from the scheduler, finished runs, or this page.</CardDescription>
           </div>
-          <RunSweepButton />
+          <div className="flex gap-2">
+            <RunSweepButton />
+            <ForceDeleteButton expected={EVICT_CONFIRMATION} />
+          </div>
         </CardHeader>
         <CardContent className="overflow-x-auto px-0">
           <Suspense fallback={<TableRowsSkeleton rows={4} columns={[20, 15, 15, 15, 25]} />}>

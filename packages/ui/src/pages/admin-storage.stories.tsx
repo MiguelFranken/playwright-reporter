@@ -7,6 +7,7 @@ import { RETENTION_POLICY, RETENTION_SWEEPS, STORAGE_USAGE } from '../fixtures/a
 import { NOW, ago } from '../fixtures/now';
 import { PageHeader } from '../patterns/page-header';
 import { RetentionPolicyForm, RetentionPolicySource } from '../views/admin/retention-policy-form';
+import { ForceDeleteStorage } from '../views/admin/force-delete-storage';
 import { RetentionSweepsTable, StorageUsageTable, StoreSchedule } from '../views/admin/storage';
 
 const meta = {
@@ -67,10 +68,13 @@ export const Default: Story = {
             <CardTitle>Recent sweeps</CardTitle>
             <CardDescription>The last ten, from the scheduler, finished runs, or this page.</CardDescription>
           </div>
-          <Button size="sm" variant="outline">
-            <Play data-icon="inline-start" />
-            Run now
-          </Button>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline">
+              <Play data-icon="inline-start" />
+              Run now
+            </Button>
+            <ForceDeleteStorage open={false} onOpenChange={() => {}} expected="delete all artifacts" onConfirm={() => {}} />
+          </div>
         </CardHeader>
         <CardContent className="overflow-x-auto px-0">
           <RetentionSweepsTable sweeps={RETENTION_SWEEPS} now={NOW} />

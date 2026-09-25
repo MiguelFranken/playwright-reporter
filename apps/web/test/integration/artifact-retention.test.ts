@@ -8,13 +8,15 @@ import { access } from 'node:fs/promises';
 import path from 'node:path';
 import { eq, inArray } from 'drizzle-orm';
 import type { AttachmentRef } from '@miguelfranken/protocol';
-import { runRetentionSweep, updateRetentionPolicy } from '@/app/(app)/admin/actions';
+import { forceEvictStorage, runRetentionSweep, updateRetentionPolicy } from '@/app/(app)/admin/actions';
 import { GET as artifactRoute } from '@/app/api/artifacts/[attachmentId]/route';
 import { GET as cronRoute } from '@/app/api/cron/artifact-retention/route';
 import { artifactSweeps, attachments, auditLogs, instanceSettings, type Attachment } from '@/lib/db/schema';
 import { getAttachmentForProject, storeUpload } from '@/lib/ingest/service';
 import { getStorage, type StorageAdapter } from '@/lib/storage';
 import {
+  EVICT_CONFIRMATION,
+  evictAllArtifacts,
   getRetentionPolicy,
   markMissingExpired,
   retentionStats,
@@ -322,6 +324,43 @@ describe('triggers', () => {
     await uploadedArtifacts(db, tenant, [{ kind: 'trace', ageDays: 2, bytes: 42 }]);
     expect(await runRetentionSweep()).toEqual({ ok: true, expiredCount: 1, expiredBytes: 42, hasMore: false });
     const [log] = await db.select().from(auditLogs).where(eq(auditLogs.action, 'storage.retention.sweep'));
+    expect(log).toMatchObject({ actorId: admin.id, target: { expired: 1, bytes: 42 } });
+  });
+});
+
+describe('force delete', () => {
+  test('evicts every live artifact, even with retention off, and logs a force sweep', async ({ db, tenant, storage }) => {
+    const rows = await uploadedArtifacts(db, tenant, [
+      { kind: 'video', ageDays: 0, bytes: 100 },
+      { kind: 'trace', ageDays: 400, bytes: 20 },
+      { kind: 'screenshot', ageDays: 1, bytes: 3 },
+    ]);
+    // Even a store that expires objects itself has the bytes deleted.
+    const result = await evictAllArtifacts({ storage: wrapStorage({ retention: 'provider' }), batchSize: 2 });
+    expect(result).toMatchObject({ status: 'done', expiredCount: 3, expiredBytes: 123, hasMore: false, error: null });
+
+    const after = await rowsById(db, rows.map((r) => r.id));
+    for (const r of rows) {
+      expect(after.get(r.id)).toMatchObject({ status: 'expired', expiredAt: expect.any(Date) });
+      expect(await stored(storage, r.storageKey)).toBe(false);
+    }
+    expect((await db.select().from(artifactSweeps)).map((s) => s.trigger)).toEqual(['force']);
+    expect(await evictAllArtifacts()).toMatchObject({ expiredCount: 0 });
+  });
+
+  test('the admin action is for superadmins, needs the phrase exactly, and is audited', async ({ db, tenant, actor }) => {
+    await uploadedArtifacts(db, tenant, [{ kind: 'video', ageDays: 0, bytes: 42 }]);
+
+    actor.signIn(tenant.adminUser);
+    expect(await forceEvictStorage(EVICT_CONFIRMATION)).toEqual({ ok: false, message: 'Superadmins only.' });
+
+    const admin = await superadmin();
+    actor.signIn(admin);
+    expect(await forceEvictStorage('delete')).toMatchObject({ ok: false });
+    expect(await db.select().from(artifactSweeps)).toHaveLength(0);
+
+    expect(await forceEvictStorage(EVICT_CONFIRMATION)).toEqual({ ok: true, expiredCount: 1, expiredBytes: 42, hasMore: false });
+    const [log] = await db.select().from(auditLogs).where(eq(auditLogs.action, 'storage.evict'));
     expect(log).toMatchObject({ actorId: admin.id, target: { expired: 1, bytes: 42 } });
   });
 });
