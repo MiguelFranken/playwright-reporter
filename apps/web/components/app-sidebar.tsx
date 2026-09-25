@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import { useTransition } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { SignOutButton } from '@miguelfranken/ui/views/auth/invitation';
 import {
   SidebarNav as SidebarNavView,
@@ -40,10 +41,13 @@ export function PlainSignOutButton({ next = '/login' }: { next?: string }) {
 
 function useSignOut(next: string) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [pending, startTransition] = useTransition();
   const signOut = () =>
     startTransition(async () => {
       await authClient.signOut();
+      // The query cache outlives navigations; the next account must not see this one's data.
+      queryClient.clear();
       router.push(next);
       router.refresh();
     });

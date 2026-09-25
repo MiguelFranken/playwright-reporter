@@ -1,6 +1,5 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 import { useTransition } from 'react';
 import { toast } from 'sonner';
 import { AvatarPicker } from '@miguelfranken/ui/patterns/avatar-picker';
@@ -29,7 +28,6 @@ export function AvatarUpload({
   upload: (formData: FormData) => Promise<Result>;
   remove: () => Promise<Result>;
 }) {
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
 
   const run = (action: () => Promise<Result>, success: string) =>
@@ -40,7 +38,6 @@ export function AvatarUpload({
         return;
       }
       toast.success(success);
-      router.refresh();
     });
 
   const onFile = (file: File) =>

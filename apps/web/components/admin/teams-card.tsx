@@ -46,7 +46,6 @@ export function AdminTeamsCard({ teams }: { teams: AdminTeamRow[] }) {
           }
           toast.success(`${team.name} was deleted.`);
           setToDelete(null);
-          router.refresh();
         })
       }
     />

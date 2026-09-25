@@ -1,7 +1,6 @@
 'use client';
 
 import { Play } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { useActionState, useEffect, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { forceEvictStorage, runRetentionSweep, updateRetentionPolicy, type RetentionFormState } from '@/app/(app)/admin/actions';
@@ -24,7 +23,6 @@ export function RetentionPolicyForm({ policy, kinds }: { policy: RetentionPolicy
 }
 
 export function RunSweepButton() {
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
   return (
     <Button
@@ -42,7 +40,6 @@ export function RunSweepButton() {
               `Expired ${res.expiredCount} artifact${res.expiredCount === 1 ? '' : 's'}${freed}.${res.hasMore ? ' More are due: run it again.' : ''}`,
             );
           }
-          router.refresh();
         })
       }
     >
@@ -53,7 +50,6 @@ export function RunSweepButton() {
 }
 
 export function ForceDeleteButton({ expected }: { expected: string }) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   return (
@@ -73,7 +69,6 @@ export function ForceDeleteButton({ expected }: { expected: string }) {
               `Deleted ${res.expiredCount} artifact${res.expiredCount === 1 ? '' : 's'} (${formatBytes(res.expiredBytes)}).${res.hasMore ? ' Some are left: run it again.' : ''}`,
             );
           }
-          router.refresh();
         })
       }
     />

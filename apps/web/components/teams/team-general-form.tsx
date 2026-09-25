@@ -24,9 +24,9 @@ export function TeamGeneralForm({ teamSlug, name }: { teamSlug: string; name: st
             return;
           }
           toast.success('Team updated.');
-          // The slug is part of the URL, so a rename has to navigate.
+          // The slug is part of the URL, so a rename has to navigate. Otherwise
+          // the action's revalidation has already re-rendered the page.
           if (res.slug !== teamSlug) router.replace(`/teams/${res.slug}/settings/general`);
-          else router.refresh();
         })
       }
     />

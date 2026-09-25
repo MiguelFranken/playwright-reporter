@@ -1,7 +1,6 @@
 'use client';
 
 import { Play } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { useActionState, useEffect, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { purgeRunHistory, runDataSweep, updateDataRetentionPolicy, type DataRetentionFormState } from '@/app/(app)/admin/actions';
@@ -34,7 +33,6 @@ function summary(deleted: DataSweepCounts, artifactBytes: number, hasMore: boole
 }
 
 export function RunDataSweepButton() {
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
   return (
     <Button
@@ -46,7 +44,6 @@ export function RunDataSweepButton() {
           const res = await runDataSweep();
           if (!res.ok) toast.error(res.message);
           else toast.success(summary(res.deleted, res.artifactBytes, res.hasMore));
-          router.refresh();
         })
       }
     >
@@ -57,7 +54,6 @@ export function RunDataSweepButton() {
 }
 
 export function PurgeRunHistoryButton({ expected }: { expected: string }) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   return (
@@ -75,7 +71,6 @@ export function PurgeRunHistoryButton({ expected }: { expected: string }) {
             setOpen(false);
             toast.success(summary(res.deleted, res.artifactBytes, res.hasMore));
           }
-          router.refresh();
         })
       }
     />

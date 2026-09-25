@@ -1,15 +1,19 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ExplorerTable, type ExplorerRow } from '@miguelfranken/ui/views/explorer/explorer-table';
 import type { ExplorerSort, SortDir } from '@miguelfranken/ui/lib/explorer-sort';
 import { TestDrawer } from '@miguelfranken/ui/views/explorer/test-drawer';
 import { TestOverview, type TestOverviewPreview } from '@miguelfranken/ui/views/explorer/test-overview';
 import { useUrlParams } from '@/components/filters/url-filters';
-import { orpc, type ProjectRef } from '@/lib/rpc/client';
+import type { ProjectRef } from '@/lib/rpc/client';
+import { testOverviewQuery } from '@/lib/rpc/queries';
 import { projectHrefs } from '@/lib/view-models';
+
+/** How long the pointer rests on a row before its overview is prefetched. */
+const INTENT_MS = 120;
 
 /** The part of a row the drawer can render before its own query answers. */
 function toPreview(row: ExplorerRow): TestOverviewPreview {
@@ -44,7 +48,10 @@ function toPreview(row: ExplorerRow): TestOverviewPreview {
  * The drawer then opens on the click itself rather than on its data. It paints
  * the header and the whole summary from the row that was clicked, and fetches
  * the history, the errors and the environment breakdown underneath — so the
- * only placeholders on screen are for the parts genuinely not known yet.
+ * only placeholders on screen are for the parts genuinely not known yet. And
+ * "underneath" usually means "already": hovering or focusing a row prefetches
+ * its overview, so by the time the click lands the request is in flight or
+ * done.
  */
 export function UrlExplorer({
   base,
@@ -71,18 +78,23 @@ export function UrlExplorer({
   const searchParams = useSearchParams();
   const [selected, setSelected] = useState<string | null>(initialTestId ?? null);
 
-  // Overviews are kept for as long as the page lives: re-opening a row already
-  // looked at costs nothing, and the window they were fetched for is part of
-  // the query key so a range change cannot serve a stale one. A failed fetch
-  // leaves the summary from the row on screen rather than an error over data
-  // that is perfectly good; it is not retried on every render.
+  const queryClient = useQueryClient();
   const { data: overview = null, error } = useQuery({
-    ...orpc.tests.overview.queryOptions({ input: { ...projectRef, testId: selected ?? '', days } }),
+    ...testOverviewQuery(projectRef, selected ?? '', days),
     enabled: selected !== null,
-    staleTime: Infinity,
-    gcTime: Infinity,
-    retry: false,
   });
+  // A row the pointer rests on for a moment is prefetched; one it only crosses
+  // on the way elsewhere is not. Fresh cache entries are left alone, so moving
+  // back and forth costs nothing.
+  const intentTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const onIntent = useCallback(
+    (testId: string | null) => {
+      clearTimeout(intentTimer.current);
+      if (testId) intentTimer.current = setTimeout(() => void queryClient.prefetchQuery(testOverviewQuery(projectRef, testId, days)), INTENT_MS);
+    },
+    [queryClient, projectRef, days],
+  );
+  useEffect(() => () => clearTimeout(intentTimer.current), []);
   useEffect(() => {
     if (error) console.error('Failed to load test overview', error);
   }, [error]);
@@ -126,6 +138,7 @@ export function UrlExplorer({
         isPending={isPending}
         onSortChange={(nextSort, nextDir) => set({ sort: nextSort, dir: nextDir })}
         onSelectTest={select}
+        onTestIntent={onIntent}
       />
       {selected ? (
         <TestDrawer
