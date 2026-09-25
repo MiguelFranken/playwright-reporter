@@ -57,6 +57,8 @@ describe('formatBytes', () => {
     [1536, '1.5 KB'],
     [1024 * 1024, '1.0 MB'],
     [5 * 1024 * 1024, '5.0 MB'],
+    [1024 ** 3, '1.0 GB'],
+    [12.9 * 1024 ** 3, '12.9 GB'],
   ] as const)('renders %i as %s', (bytes, expected) => {
     expect(formatBytes(bytes)).toBe(expected);
   });

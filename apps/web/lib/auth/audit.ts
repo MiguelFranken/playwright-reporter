@@ -33,6 +33,9 @@ export type AuditAction =
   | 'storage.retention.update'
   | 'storage.retention.sweep'
   | 'storage.evict'
+  | 'database.retention.update'
+  | 'database.retention.sweep'
+  | 'database.purge'
   | 'mcp.settings.update';
 
 /**

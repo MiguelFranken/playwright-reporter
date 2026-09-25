@@ -78,6 +78,8 @@ process.env.RUN_WATCHDOG_DRIVER = 'none';
 // call `sweepAfterIngest` directly and switch this back on where they do.
 process.env.ARTIFACT_RETENTION_INGEST_SWEEP = 'off';
 delete process.env.ARTIFACT_RETENTION_DAYS;
+process.env.DATA_RETENTION_INGEST_SWEEP = 'off';
+delete process.env.DATA_RETENTION_DAYS;
 delete process.env.CRON_SECRET;
 // Pinned, not unset: dotenv never overrides a set variable, so a developer's
 // `.env.local` cannot change the timeout the tests assume.

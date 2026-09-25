@@ -128,6 +128,8 @@ export const runs = pgTable(
     index('runs_project_started_idx').on(t.projectId, t.startedAt),
     index('runs_project_branch_idx').on(t.projectId, t.gitBranch),
     index('runs_project_status_idx').on(t.projectId, t.status),
+    // The data retention sweep's scan and the ingest charts: every project, by time.
+    index('runs_started_idx').on(t.startedAt),
   ],
 );
 
