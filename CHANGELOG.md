@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.20](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.19...v0.0.20) (2026-09-25)
+
+### Features
+
+* pull and merge requests: reported with each run, filterable, and a page of their own ([#28](https://github.com/MiguelFranken/playwright-reporter/issues/28)) ([e467e54](https://github.com/MiguelFranken/playwright-reporter/commit/e467e543c6d859391f045caba33f3baaf1da2414))
+
 ## [0.0.19](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.18...v0.0.19) (2026-09-25)
 
 ### Features
