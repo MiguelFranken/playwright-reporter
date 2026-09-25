@@ -25,7 +25,7 @@ export const OpensAnAnswer: Story = {
     const trigger = canvas.getByRole('button', { name: /replace the playwright trace viewer/i });
     await userEvent.click(trigger);
     await expect(trigger).toHaveAttribute('aria-expanded', 'true');
-    await expect(await canvas.findByText(/trace\.playwright\.dev/)).toBeVisible();
+    await expect(await canvas.findByText(/embeds the Playwright Trace Viewer/)).toBeVisible();
   },
 };
 
