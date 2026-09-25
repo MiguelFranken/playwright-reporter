@@ -236,7 +236,7 @@ describe.each(ERAS)('debug tools (%s)', (era) => {
 
     const traced = await call(client, 'get_artifact', { attachment: trace.id });
     expect(traced.structuredContent).toMatchObject({ delivered: 'link' });
-    expect((traced.structuredContent as { traceViewerUrl: string }).traceViewerUrl).toMatch(/^https:\/\/trace\.playwright\.dev\/\?trace=http%3A%2F%2Ftest\.local%2Fapi%2Fartifacts%2F/);
+    expect((traced.structuredContent as { traceViewerUrl: string }).traceViewerUrl).toMatch(/^http:\/\/test\.local\/trace\/index\.html\?trace=http%3A%2F%2Ftest\.local%2Fapi%2Fartifacts%2F/);
 
     const db = (await import('@/lib/db/drizzle')).db;
     await db.update(attachments).set({ status: 'expired' }).where(eq(attachments.id, shot.id));

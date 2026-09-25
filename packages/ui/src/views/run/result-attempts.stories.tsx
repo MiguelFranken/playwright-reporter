@@ -36,8 +36,21 @@ export const ArtifactsExpired: Story = {
     await expect(canvas.getAllByText('Expired').length).toBeGreaterThan(0);
     await expect(canvas.queryByRole('img')).toBeNull();
     await userEvent.click(canvas.getByRole('tab', { name: /trace/i }));
-    await expect(canvas.queryByRole('link', { name: /trace viewer|download/i })).toBeNull();
+    await expect(canvas.queryByText(/full screen|download/i)).toBeNull();
     await expect(canvas.getByText('expired')).toBeInTheDocument();
+  },
+};
+
+/** An uploaded trace opens embedded, with a way out to a full tab and to the zip. */
+export const TraceEmbedded: Story = {
+  args: { attempts: [failedAttempt] },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('tab', { name: /trace/i }));
+    await expect(canvas.getByTitle('Trace Viewer: trace.zip')).toBeInTheDocument();
+    // Link-rendered buttons carry role="button", so find them by their label.
+    await expect(canvas.getByText(/open full screen/i).closest('a')).toHaveAttribute('target', '_blank');
+    await expect(canvas.getByText(/download/i).closest('a')).toHaveAttribute('href', '#trace-download?download');
   },
 };
 

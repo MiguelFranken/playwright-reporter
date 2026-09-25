@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev --turbopack",
-    "build": "next build",
+    "dev": "node scripts/copy-trace-viewer.mjs && next dev --turbopack",
+    "build": "node scripts/copy-trace-viewer.mjs && next build",
     "start": "next start",
     "check-types": "tsc --noEmit",
     "test": "vitest run --project unit",
@@ -51,6 +51,7 @@
     "@workflow/vitest": "^4.0.25",
     "autoprefixer": "^10.6.1",
     "drizzle-kit": "^0.31.10",
+    "playwright-core": "^1.63.0",
     "postcss": "^8.5.28",
     "tailwindcss": "4.3.3",
     "typescript": "^7.0.2",

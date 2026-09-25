@@ -96,7 +96,7 @@ export function home(ctx: SeedContext): PageData {
         bullets: [
           { text: 'Every attempt, with its steps and their timings' },
           { text: 'Screenshots, video and the visual diff, inline' },
-          { text: 'The trace opens in trace.playwright.dev through a signed URL' },
+          { text: 'The trace opens in the Playwright Trace Viewer, embedded and served by the app' },
         ],
         visual: { kind: 'demo', demo: 'result-attempts', frame: 'browser' },
       },
@@ -225,7 +225,7 @@ export function home(ctx: SeedContext): PageData {
             capability: 'Trace viewer',
             cells: [
               { state: 'yes' },
-              { state: 'partial', note: 'Links into trace.playwright.dev' },
+              { state: 'yes', note: 'Embedded, served by your app' },
               { state: 'partial', note: 'Usually links out too' },
             ],
           },
@@ -248,7 +248,7 @@ export function home(ctx: SeedContext): PageData {
           {
             question: 'Does it replace the Playwright trace viewer?',
             answer: paragraphs(
-              'No, and it does not try to. It stores the trace and hands it to trace.playwright.dev through a signed URL, which is the tool you already know.',
+              'No, and it does not try to. It embeds the Playwright Trace Viewer, the tool you already know, served from your own deployment, so traces never reach a third party.',
             ),
           },
           {

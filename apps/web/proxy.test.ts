@@ -20,11 +20,13 @@ describe('proxy matcher', () => {
     '/.well-known/oauth-authorization-server/api/auth',
     '/favicon.ico',
     '/push-sw.js',
+    '/trace/index.html',
+    '/trace/sw.bundle.js',
   ])('skips %s', (url) => {
     expect(matches(url)).toBe(false);
   });
 
-  it.each(['/', '/login', '/demo', '/teams/acme/projects/web/runs', '/apiary', '/push-sw.jsx'])('runs on %s', (url) => {
+  it.each(['/', '/login', '/demo', '/teams/acme/projects/web/runs', '/apiary', '/push-sw.jsx', '/traces'])('runs on %s', (url) => {
     expect(matches(url)).toBe(true);
   });
 });

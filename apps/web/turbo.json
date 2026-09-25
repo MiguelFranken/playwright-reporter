@@ -5,6 +5,9 @@
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env", ".env.*"],
+      // public/trace is copied from playwright-core during the build; a cache
+      // hit must restore it too, or the deployment ships without the viewer.
+      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**", "public/trace/**"],
       "env": [
         "BASE_URL",
         "DATABASE_URL",
