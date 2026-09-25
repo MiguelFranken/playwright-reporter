@@ -201,6 +201,39 @@ deletes nothing. An object found missing on first read is also marked expired. S
 `applyRetentionPolicy` to push the saved policy to the bucket. The save fails if that call fails, so the two
 never silently disagree.
 
+### Data retention
+
+Run history grows the database with every run: each result carries its attempts, steps, errors and logs, and
+the live event log records every step of a run in progress. Superadmins set how long it is kept under
+**Administration → Database**, separately from the artifact policy. The page also shows how full the database is
+(size by table, what one result costs, the growth at the current rate), how much was ingested per day or week, the
+projects holding the most rows, and what the saved policy would delete next. Like artifact retention it is **off**
+until somebody turns it on; `DATA_RETENTION_DAYS` opts a deployment in until a policy is saved.
+
+A **sweep** (`apps/web/lib/data-retention`) applies the policy, in batches and within a time budget:
+
+1. Finished runs that started longer ago than the run lifetime are deleted with everything under them — except the
+   newest few of every project, however old, so a quiet project keeps its history. Their live artifacts are deleted
+   from the store in the same transaction; a failing store rolls the batch back. Runs in progress are never touched,
+   and run numbers keep counting up.
+2. Tests no run refers to any more are removed from the catalogue.
+3. The live event log of finished runs goes after a few days (7 by default): it only feeds the live views.
+4. Audit entries go after their lifetime, when one is set. By default the audit log is kept forever.
+5. Housekeeping: sessions, verifications, OAuth codes and tokens and unaccepted invitations a week past their
+   expiry, idle rate-limit rows, and sweep logs older than 180 days.
+
+Deleting a run deletes its artifacts too, so the run lifetime caps the artifact lifetime; the policy form says so
+when it is shorter. Postgres reuses the space of deleted rows, so the database stops growing rather than shrinking
+on disk. **Purge history** deletes every finished run at once, whatever the policy says; teams, projects, members
+and tokens stay.
+
+| Trigger | Where | Setup |
+| --- | --- | --- |
+| Scheduler | Vercel Cron, daily at 03:47 UTC (`apps/web/vercel.json`, production only) | set `CRON_SECRET` in the project |
+| Scheduler | Docker / Kubernetes: any cron calling `GET /api/cron/data-retention` with `Authorization: Bearer $CRON_SECRET` | set `CRON_SECRET` |
+| A finished run | anywhere but Vercel previews, when no data sweep started in the last 12 hours | none; `DATA_RETENTION_INGEST_SWEEP=off` turns it off |
+| Run now | the button on the admin page | none |
+
 ## Users and teams
 
 Everything behind `/teams/...` requires a session, and there is no self-registration: accounts come from an
@@ -318,16 +351,18 @@ your assistant.
 2. Set `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `BETTER_AUTH_SECRET`, `STORAGE_DRIVER=vercel-blob` and connect a
    **private** Blob store (`BLOB_READ_WRITE_TOKEN`). `BASE_URL` defaults to the production domain, and previews use
    their deployment URL; extra domains that should be able to sign in go in `TRUSTED_ORIGINS`. Set `CRON_SECRET`
-   (`openssl rand -hex 32`) so the daily [artifact retention](#artifact-retention) cron is accepted.
+   (`openssl rand -hex 32`) so the daily [artifact](#artifact-retention) and [data retention](#data-retention) crons
+   are accepted.
 3. Run `nub run db:seed` once against the production database, with `SEED_SUPERADMIN_EMAIL` (and optionally
    `SEED_VIEWER_EMAIL`) set, to create the first accounts.
 
 ### Docker and Kubernetes
 
 Run `apps/web` as a regular Next.js server, apply migrations with `nub run db:migrate`, and set
-`RUN_WATCHDOG_DRIVER=workflow` with the Postgres world, see [Abandoned runs](#abandoned-runs). Artifact retention
-needs nothing more: a finished run starts a sweep when none ran for 12 hours. For a fixed schedule, set `CRON_SECRET`
-and call `/api/cron/artifact-retention` from a CronJob, see [Artifact retention](#artifact-retention).
+`RUN_WATCHDOG_DRIVER=workflow` with the Postgres world, see [Abandoned runs](#abandoned-runs). Artifact and data
+retention need nothing more: a finished run starts a sweep when none ran for 12 hours. For a fixed schedule, set
+`CRON_SECRET` and call `/api/cron/artifact-retention` and `/api/cron/data-retention` from a CronJob, see
+[Artifact retention](#artifact-retention) and [Data retention](#data-retention).
 
 ## The marketing website
 
