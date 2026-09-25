@@ -1,12 +1,14 @@
-import { Building2, FolderKanban, ScrollText, Users } from 'lucide-react';
+import { Building2, Database, FolderKanban, ScrollText, Users } from 'lucide-react';
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
 import { ListRowsSkeleton, MetricCardsSkeleton } from '@miguelfranken/ui/patterns/skeletons';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@miguelfranken/ui/components/card';
+import { Sparkline } from '@miguelfranken/ui/patterns/sparkline';
 import { requireSuperadmin } from '@/lib/auth/access';
+import { databaseSize, ingestByDay } from '@/lib/data-retention/stats';
 import { listAllTeams, listAuditLogs, listUsers } from '@/lib/db/queries/teams';
-import { formatRelative } from '@miguelfranken/ui/lib/format';
+import { formatBytes, formatRelative } from '@miguelfranken/ui/lib/format';
 
 /**
  * The headings, card frames and copy never change, so they are part of the
@@ -17,8 +19,8 @@ export default function AdminOverviewPage() {
     <>
       <PageHeader title="Administration" description="Instance-wide teams, accounts and activity." />
 
-      <section className="grid gap-4 sm:grid-cols-3">
-        <Suspense fallback={<MetricCardsSkeleton count={3} />}>
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Suspense fallback={<MetricCardsSkeleton count={4} />}>
           <InstanceStats />
         </Suspense>
       </section>
@@ -49,13 +51,21 @@ export default function AdminOverviewPage() {
 
 async function InstanceStats() {
   await requireSuperadmin();
-  const [teams, users] = await Promise.all([listAllTeams(), listUsers()]);
+  const [teams, users, size, days] = await Promise.all([listAllTeams(), listUsers(), databaseSize(), ingestByDay(30)]);
   const projectCount = teams.reduce((sum, t) => sum + t.projectCount, 0);
   return (
     <>
       <StatCard icon={Building2} label="Teams" value={teams.length} href="/admin/teams" />
       <StatCard icon={Users} label="Users" value={users.length} href="/admin/users" />
       <StatCard icon={FolderKanban} label="Projects" value={projectCount} href="/admin/teams" />
+      {/* The line is test results ingested per day over the last 30 days. */}
+      <StatCard
+        icon={Database}
+        label="Database"
+        value={formatBytes(size.totalBytes)}
+        href="/admin/database"
+        trend={days.map((d) => d.results)}
+      />
     </>
   );
 }
@@ -87,7 +97,19 @@ async function RecentActivity() {
   );
 }
 
-function StatCard({ icon: Icon, label, value, href }: { icon: React.ElementType; label: string; value: number; href: string }) {
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  href,
+  trend,
+}: {
+  icon: React.ElementType;
+  label: string;
+  value: React.ReactNode;
+  href: string;
+  trend?: number[];
+}) {
   return (
     <Link href={href} className="rounded-xl outline-none focus-visible:ring-[3px] focus-visible:ring-ring/25">
       <Card size="sm" className="gap-2 transition-colors duration-150 hover:border-border-strong">
@@ -95,7 +117,10 @@ function StatCard({ icon: Icon, label, value, href }: { icon: React.ElementType;
           <CardTitle className="text-eyebrow text-muted-foreground">{label}</CardTitle>
           <Icon className="size-3.5 text-muted-foreground" />
         </CardHeader>
-        <CardContent className="text-metric">{value}</CardContent>
+        <CardContent className="flex items-end justify-between gap-3">
+          <span className="text-metric">{value}</span>
+          {trend ? <Sparkline data={trend} className="h-8 w-24" /> : null}
+        </CardContent>
       </Card>
     </Link>
   );

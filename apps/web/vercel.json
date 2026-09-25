@@ -4,5 +4,8 @@
   "buildCommand": "bash scripts/vercel-build.sh",
   "ignoreCommand": "bash scripts/vercel-ignore.sh",
   "regions": ["fra1"],
-  "crons": [{ "path": "/api/cron/artifact-retention", "schedule": "17 3 * * *" }]
+  "crons": [
+    { "path": "/api/cron/artifact-retention", "schedule": "17 3 * * *" },
+    { "path": "/api/cron/data-retention", "schedule": "47 3 * * *" }
+  ]
 }
