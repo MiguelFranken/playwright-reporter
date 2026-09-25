@@ -4,7 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { formatBytes, formatDateTime, formatRelative } from '../../lib/format';
 
 export interface StoreScheduleProps {
-  /** The storage driver's name, e.g. `local` or `vercel-blob`. */
+  /** The storage driver's name, e.g. `local`, `vercel-blob` or `s3`. */
   driver: string;
   /** Who deletes expired objects: this app during a sweep, or the provider's own lifecycle rules. */
   retention: 'app' | 'provider';
@@ -14,10 +14,12 @@ export interface StoreScheduleProps {
   cronSecretSet: boolean;
   /** Hours between sweeps after finished runs, or `null` when that sweep is off. */
   ingestSweepHours: number | null;
+  /** A `provider` store whose lifecycle rules this app writes when the policy is saved. */
+  managesLifecycle?: boolean;
 }
 
 /** Admin → Storage: what deletes expired artifacts, and when. */
-export function StoreSchedule({ driver, retention, onVercel, cronSecretSet, ingestSweepHours }: StoreScheduleProps) {
+export function StoreSchedule({ driver, retention, onVercel, cronSecretSet, ingestSweepHours, managesLifecycle = false }: StoreScheduleProps) {
   return (
     <div className="flex flex-col gap-4 text-sm">
       <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2">
@@ -46,8 +48,10 @@ export function StoreSchedule({ driver, retention, onVercel, cronSecretSet, inge
         <Alert>
           <AlertTitle>The store expires objects itself</AlertTitle>
           <AlertDescription>
-            Set the same lifetimes here as in the provider&apos;s lifecycle rules. A sweep then only marks artifacts as expired, so old runs say so
-            instead of showing a broken link; it never deletes anything.
+            {managesLifecycle
+              ? 'Saving the policy writes it to the bucket as lifecycle rules, one per kind. '
+              : 'Set the same lifetimes here as in the provider\u2019s lifecycle rules. '}
+            A sweep then only marks artifacts as expired, so old runs say so instead of showing a broken link; it never deletes anything.
           </AlertDescription>
         </Alert>
       ) : null}

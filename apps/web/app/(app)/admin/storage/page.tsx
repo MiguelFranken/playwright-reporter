@@ -104,6 +104,7 @@ async function StoreData() {
       onVercel={Boolean(process.env.VERCEL)}
       cronSecretSet={Boolean(process.env.CRON_SECRET)}
       ingestSweepHours={ingestSweepEnabled() ? INGEST_SWEEP_INTERVAL_MS / 3_600_000 : null}
+      managesLifecycle={Boolean(storage.applyRetentionPolicy)}
     />
   );
 }

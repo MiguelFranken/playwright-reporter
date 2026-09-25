@@ -53,6 +53,57 @@ export const StorageBlobMisconfigured: Story = {
   },
 };
 
+const S3 = { bucket: 'acme-playwright-artifacts', region: 'eu-central-1', endpoint: null, keyPrefix: '', lifecycle: false };
+
+/** AWS S3: bucket and region, the sweep deletes expired artifacts. */
+export const StorageS3: Story = {
+  render: () => (
+    <Framed title="Storage" description="Where screenshots, videos and traces are kept.">
+      <StorageCard driver="s3" localDir="" blobConfigured={false} s3={S3} />
+    </Framed>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('acme-playwright-artifacts')).toBeVisible();
+    await expect(canvas.getByText('AWS S3')).toBeVisible();
+  },
+};
+
+/** An S3-compatible store on its own endpoint, with a key prefix and lifecycle rules. */
+export const StorageS3Compatible: Story = {
+  render: () => (
+    <Framed title="Storage" description="Where screenshots, videos and traces are kept.">
+      <StorageCard
+        driver="s3"
+        localDir=""
+        blobConfigured={false}
+        s3={{
+          bucket: 'playwright-reporter-artifacts-production-eu-central-1-acme-corporation',
+          region: 'auto',
+          endpoint: 'https://0123456789abcdef0123456789abcdef.r2.cloudflarestorage.com',
+          keyPrefix: 'reporter/production/',
+          lifecycle: true,
+        }}
+      />
+    </Framed>
+  ),
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByText(/lifecycle rules, written by this app/)).toBeVisible();
+  },
+};
+
+/** `STORAGE_DRIVER=s3` without a usable configuration. */
+export const StorageS3Misconfigured: Story = {
+  render: () => (
+    <Framed title="Storage" description="Where screenshots, videos and traces are kept.">
+      <StorageCard driver="s3" localDir="" blobConfigured={false} s3={null} s3Error="STORAGE_DRIVER=s3 needs S3_BUCKET." />
+    </Framed>
+  ),
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByText('STORAGE_DRIVER=s3 needs S3_BUCKET.')).toBeVisible();
+  },
+};
+
 export const Reporter: Story = {
   render: () => (
     <Framed title="Reporter setup" description="Add this to the project's Playwright config.">
