@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.22](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.21...v0.0.22) (2026-09-25)
+
+### Bug Fixes
+
+* **web:** hide superadmins from the demo account's team member list ([#30](https://github.com/MiguelFranken/playwright-reporter/issues/30)) ([dbf037b](https://github.com/MiguelFranken/playwright-reporter/commit/dbf037b04483d30d5589cfd69c3b0adf8e8f7466))
+
 ## [0.0.21](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.20...v0.0.21) (2026-09-25)
 
 ### Features
