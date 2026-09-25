@@ -7310,55 +7310,50 @@
   "components": {
     "schemas": {
       "Problem": {
-        "$ref": "#/$defs/Problem",
-        "$defs": {
-          "Problem": {
-            "type": "object",
-            "properties": {
-              "type": {
-                "type": "string",
-                "description": "Always \"about:blank\"; branch on `code` instead."
-              },
-              "title": {
-                "type": "string",
-                "description": "The HTTP status phrase."
-              },
-              "status": {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991,
-                "description": "The HTTP status code, repeated."
-              },
-              "code": {
-                "type": "string",
-                "description": "Stable machine-readable code: BAD_REQUEST, INVALID_ARGUMENT, PROJECT_REQUIRED, UNAUTHORIZED, INSUFFICIENT_SCOPE, NOT_FOUND, AMBIGUOUS, ARTIFACT_UNAVAILABLE, ARTIFACT_EXPIRED, RATE_LIMITED, INTERNAL_SERVER_ERROR."
-              },
-              "detail": {
-                "type": "string",
-                "description": "What went wrong, for a person."
-              },
-              "hint": {
-                "description": "What to do about it, when there is something to do.",
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "details": {
-                "description": "Structured context: validation issues, or the candidates of an ambiguous test reference."
-              }
-            },
-            "required": [
-              "type",
-              "title",
-              "status",
-              "code",
-              "detail",
-              "hint"
-            ],
-            "additionalProperties": false
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Always \"about:blank\"; branch on `code` instead."
+          },
+          "title": {
+            "type": "string",
+            "description": "The HTTP status phrase."
+          },
+          "status": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "The HTTP status code, repeated."
+          },
+          "code": {
+            "type": "string",
+            "description": "Stable machine-readable code: BAD_REQUEST, INVALID_ARGUMENT, PROJECT_REQUIRED, UNAUTHORIZED, INSUFFICIENT_SCOPE, NOT_FOUND, AMBIGUOUS, ARTIFACT_UNAVAILABLE, ARTIFACT_EXPIRED, RATE_LIMITED, INTERNAL_SERVER_ERROR."
+          },
+          "detail": {
+            "type": "string",
+            "description": "What went wrong, for a person."
+          },
+          "hint": {
+            "description": "What to do about it, when there is something to do.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "details": {
+            "description": "Structured context: validation issues, or the candidates of an ambiguous test reference."
           }
-        }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code",
+          "detail",
+          "hint"
+        ],
+        "additionalProperties": false
       }
     },
     "securitySchemes": {

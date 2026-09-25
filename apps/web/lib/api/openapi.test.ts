@@ -24,6 +24,16 @@ describe('docs/openapi.json', () => {
     }
   });
 
+  it('has no reference that points nowhere', async () => {
+    const doc = await openApiDocument();
+    const text = JSON.stringify(doc);
+    const refs = [...new Set([...text.matchAll(/"\$ref":"([^"]+)"/g)].map((m) => m[1]))];
+    for (const ref of refs) {
+      const target = ref.replace(/^#\//, '').split('/').reduce<unknown>((node, key) => (node as Record<string, unknown> | undefined)?.[key], doc);
+      expect(target, ref).toBeDefined();
+    }
+  });
+
   it('exposes no MCP-only arguments', async () => {
     const doc = await openApiDocument();
     const names = Object.values(doc.paths ?? {}).flatMap((item) =>

@@ -62,7 +62,6 @@ export async function openApiDocument(servers: Server[] = [INSTANCE_SERVER]): Pr
   const schemas = (doc.components ??= {}).schemas ?? {};
   const problem = z.toJSONSchema(problemSchema, { target: 'draft-2020-12' }) as Record<string, unknown>;
   delete problem.$schema;
-  delete problem.id;
   doc.components.schemas = { ...schemas, Problem: problem as never };
   doc.components.securitySchemes = {
     bearerAuth: { type: 'http', scheme: 'bearer', description: 'A personal access token (`pwr_pat_…`) from Account → Access tokens, with the `read` scope.' },

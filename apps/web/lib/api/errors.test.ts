@@ -17,6 +17,11 @@ describe('problem details', () => {
     });
   });
 
+  it('names REST endpoints instead of MCP tools in messages and hints', () => {
+    const error = fromToolError(new ToolError('NOT_FOUND', 'Result x not found in acme/web.', 'Call list_run_results to find results of a run.'));
+    expect(problemBody(error).hint).toBe('Call GET …/runs/{run}/results to find results of a run.');
+  });
+
   it('reports oRPC input validation issues as details of a 400', () => {
     const error = new ORPCError('BAD_REQUEST', { message: 'Input validation failed', data: { issues: [{ path: ['limit'] }] } });
     expect(problemBody(error)).toMatchObject({ status: 400, code: 'BAD_REQUEST', details: [{ path: ['limit'] }], hint: null });

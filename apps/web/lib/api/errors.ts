@@ -81,14 +81,38 @@ export const problemSchema = z
     detail: z.string().describe('What went wrong, for a person.'),
     hint: z.string().nullable().describe('What to do about it, when there is something to do.'),
     details: z.unknown().optional().describe('Structured context: validation issues, or the candidates of an ambiguous test reference.'),
-  })
-  .meta({ id: 'Problem' });
+  });
+
+/** The REST endpoint of each MCP tool, for hints written in terms of tools ("Call find_tests …"). */
+const TOOL_ENDPOINTS: Record<string, string> = {
+  whoami: 'GET /me',
+  list_filters: 'GET …/filters',
+  list_runs: 'GET …/runs',
+  get_run: 'GET …/runs/{run}',
+  list_run_results: 'GET …/runs/{run}/results',
+  get_result: 'GET …/results/{result}',
+  find_tests: 'GET …/tests',
+  get_test_history: 'GET …/tests/{test}',
+  project_health: 'GET …/health',
+  get_failure_context: 'GET …/results/{result}/failure-context',
+  check_flakiness: 'GET …/tests/{test}/flakiness',
+  summarize_failures: 'GET …/runs/{run}/failure-groups',
+  compare_runs: 'GET …/runs/{run}/compare',
+  verify_fix: 'GET …/tests/{test}/verify-fix',
+  get_artifact: 'GET …/attachments/{attachment}',
+  get_rerun_command: 'GET …/runs/{run}/rerun-command',
+};
+const TOOL_NAME = new RegExp(`\\b(${Object.keys(TOOL_ENDPOINTS).join('|')})\\b`, 'g');
+
+export function restHint(hint: string): string {
+  return hint.replace(TOOL_NAME, (name) => TOOL_ENDPOINTS[name]);
+}
 
 /** A tool's error, as the REST API reports it. */
 export function fromToolError(error: ToolError): ORPCError<string, ProblemData> {
   return new ORPCError(error.code, {
-    message: error.message,
-    data: { hint: error.hint ?? null, details: error.details ?? undefined },
+    message: restHint(error.message),
+    data: { hint: error.hint ? restHint(error.hint) : null, details: error.details ?? undefined },
     cause: error,
   });
 }
