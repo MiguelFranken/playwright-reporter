@@ -37,7 +37,7 @@ export default function AdminOverviewPage() {
             .
           </CardDescription>
         </CardHeader>
-        <CardContent className="px-0">
+        <CardContent flush>
           <Suspense fallback={<ListRowsSkeleton rows={6} />}>
             <RecentActivity />
           </Suspense>

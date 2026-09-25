@@ -65,7 +65,7 @@ export default function DashboardPage({ params, searchParams }: Props) {
               </Suspense>
             </CardAction>
           </CardHeader>
-          <CardContent className="px-0 py-0">
+          <CardContent flush className="py-0">
             <Suspense fallback={<TableRowsSkeleton rows={5} columns={[40, 12, 24, 14]} />}>
               <Branches params={params} searchParams={searchParams} />
             </Suspense>
@@ -80,7 +80,7 @@ export default function DashboardPage({ params, searchParams }: Props) {
             </CardTitle>
             <CardDescription>Tests that passed only after a retry, ranked by flaky rate.</CardDescription>
           </CardHeader>
-          <CardContent className="px-0 py-0">
+          <CardContent flush className="py-0">
             <Suspense fallback={<ListRowsSkeleton />}>
               <Flaky params={params} searchParams={searchParams} />
             </Suspense>
@@ -96,7 +96,7 @@ export default function DashboardPage({ params, searchParams }: Props) {
           </CardTitle>
           <CardDescription>Tests failing 5+ times in a row, or in at least 70% of their runs.</CardDescription>
         </CardHeader>
-        <CardContent className="px-0 py-0">
+        <CardContent flush className="py-0">
           <Suspense fallback={<ListRowsSkeleton />}>
             <Chronic params={params} searchParams={searchParams} />
           </Suspense>

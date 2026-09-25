@@ -18,7 +18,7 @@ export default function AdminUsersPage({ searchParams }: { searchParams: SearchP
           <CardTitle>All accounts</CardTitle>
           <CardDescription>Search by name or email address.</CardDescription>
         </CardHeader>
-        <CardContent className="px-0 py-0">
+        <CardContent flush className="py-0">
           <Suspense fallback={<TableRowsSkeleton columns={[28, 32, 12, 12]} />}>
             <UsersData searchParams={searchParams} />
           </Suspense>

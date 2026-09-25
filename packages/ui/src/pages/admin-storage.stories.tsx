@@ -56,7 +56,7 @@ export const Default: Story = {
           <CardTitle>Usage</CardTitle>
           <CardDescription>Artifacts by kind. “Due” is what the saved policy expires on the next sweep, counted even while retention is off.</CardDescription>
         </CardHeader>
-        <CardContent className="overflow-x-auto px-0">
+        <CardContent flush className="overflow-x-auto">
           <StorageUsageTable rows={STORAGE_USAGE} />
         </CardContent>
       </Card>
@@ -72,7 +72,7 @@ export const Default: Story = {
             Run now
           </Button>
         </CardHeader>
-        <CardContent className="overflow-x-auto px-0">
+        <CardContent flush className="overflow-x-auto">
           <RetentionSweepsTable sweeps={RETENTION_SWEEPS} now={NOW} />
         </CardContent>
       </Card>

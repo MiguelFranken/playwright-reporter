@@ -29,7 +29,7 @@ const meta = {
   decorators: [
     (Story) => (
       <Card className="max-w-5xl gap-0 py-0">
-        <CardContent className="px-0">
+        <CardContent flush>
           <Story />
         </CardContent>
       </Card>

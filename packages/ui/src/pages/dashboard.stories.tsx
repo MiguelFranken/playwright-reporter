@@ -38,7 +38,7 @@ function Panel({ title, description, children }: { title: string; description?: 
         <CardTitle>{title}</CardTitle>
         {description ? <CardDescription>{description}</CardDescription> : null}
       </CardHeader>
-      <CardContent className="px-0">{children}</CardContent>
+      <CardContent flush>{children}</CardContent>
     </Card>
   );
 }

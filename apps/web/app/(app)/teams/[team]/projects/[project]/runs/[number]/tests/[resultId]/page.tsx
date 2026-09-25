@@ -193,7 +193,7 @@ async function ResultContent({ params }: Props) {
           <CardTitle className="text-base">History</CardTitle>
           <HistorySparkline history={history.map((h) => h.outcome)} cells={15} />
         </CardHeader>
-        <CardContent className="overflow-x-auto p-0">
+        <CardContent flush className="overflow-x-auto py-0">
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">

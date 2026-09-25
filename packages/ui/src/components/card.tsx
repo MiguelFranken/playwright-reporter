@@ -68,11 +68,23 @@ function CardAction({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
-function CardContent({ className, ...props }: React.ComponentProps<"div">) {
+/**
+ * `flush` drops the side padding so a table runs edge to edge, and hands the
+ * card's spacing to the table's first and last columns so they line up with the
+ * header's title.
+ */
+function CardContent({
+  className,
+  flush = false,
+  ...props
+}: React.ComponentProps<"div"> & { flush?: boolean }) {
   return (
     <div
       data-slot="card-content"
-      className={cn("px-(--card-spacing)", className)}
+      className={cn(
+        flush ? "px-0 [--table-inset:var(--card-spacing)]" : "px-(--card-spacing)",
+        className
+      )}
       {...props}
     />
   )
