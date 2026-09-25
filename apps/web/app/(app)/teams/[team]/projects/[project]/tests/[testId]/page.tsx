@@ -1,9 +1,8 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
-import { ArrowLeft } from 'lucide-react';
 import { TestOverview } from '@miguelfranken/ui/views/explorer/test-overview';
 import { RangeToggle } from '@/components/filters/url-filters';
+import { BackLink } from '@miguelfranken/ui/patterns/back-link';
 import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
 import { ChartSkeleton, MetricCardsSkeleton } from '@miguelfranken/ui/patterns/skeletons';
 import { Badge } from '@miguelfranken/ui/components/badge';
@@ -48,13 +47,7 @@ async function TestContent({ params, searchParams }: { params: Params; searchPar
 
   return (
     <div className="flex flex-col gap-4">
-      <Link
-        href={`${base}/tests${rangeQs}`}
-        className="inline-flex w-fit items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="size-3.5" />
-        Test Explorer
-      </Link>
+      <BackLink href={`${base}/tests${rangeQs}`}>Test Explorer</BackLink>
       <PageHeader
         title={
           <span className="flex min-w-0 flex-wrap items-center gap-2">
