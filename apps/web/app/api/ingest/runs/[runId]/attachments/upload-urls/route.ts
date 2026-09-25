@@ -1,4 +1,4 @@
-import { uploadUrlsRequestSchema } from '@miguelfranken/protocol';
+import { uploadUrlsRequestSchema, type UploadUrlsResponse } from '@miguelfranken/protocol';
 import { errorResponse, json, readJson, requireRunToken } from '@/lib/ingest/http';
 import { uploadInstructions } from '@/lib/ingest/service';
 
@@ -7,7 +7,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ run
     const { runId } = await params;
     const { run } = await requireRunToken(request, runId);
     const body = await readJson(request, uploadUrlsRequestSchema);
-    return json({ uploads: await uploadInstructions(run, body.attachmentIds) });
+    return json({ uploads: await uploadInstructions(run, body.attachmentIds) } satisfies UploadUrlsResponse);
   } catch (err) {
     return errorResponse(err);
   }

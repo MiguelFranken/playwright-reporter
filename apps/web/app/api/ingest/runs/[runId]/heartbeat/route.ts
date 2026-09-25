@@ -1,4 +1,4 @@
-import { runHeartbeatSchema } from '@miguelfranken/protocol';
+import { runHeartbeatSchema, type RunHeartbeatResponse } from '@miguelfranken/protocol';
 import { errorResponse, json, readJson, requireRunToken } from '@/lib/ingest/http';
 import { heartbeat } from '@/lib/ingest/service';
 import { afterIngest } from '@/lib/runs/watchdog';
@@ -12,7 +12,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ run
     const body = await readJson(request, runHeartbeatSchema);
     const { watchdog, ...res } = await heartbeat(project, run, body);
     afterIngest(watchdog);
-    return json(res);
+    return json(res satisfies RunHeartbeatResponse);
   } catch (err) {
     return errorResponse(err);
   }

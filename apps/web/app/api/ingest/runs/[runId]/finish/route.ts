@@ -1,4 +1,4 @@
-import { runFinishSchema } from '@miguelfranken/protocol';
+import { runFinishSchema, type RunFinishResponse } from '@miguelfranken/protocol';
 import { after } from 'next/server';
 import { errorResponse, json, readJson, requireRunToken } from '@/lib/ingest/http';
 import { finishRun } from '@/lib/ingest/service';
@@ -26,7 +26,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ run
         if (dataSweepEnabled()) await sweepDataAfterIngest().catch((err) => console.error('[data-retention] ingest sweep failed', err));
       });
     }
-    return json(res);
+    return json(res satisfies RunFinishResponse);
   } catch (err) {
     return errorResponse(err);
   }
