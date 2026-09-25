@@ -1,0 +1,57 @@
+---
+title: Add the reporter
+description: Send the runs of your own Playwright suite to your instance.
+---
+
+`@miguelfranken/reporter` is published to GitHub Packages. Point the scope at it with a token that has `read:packages`:
+
+```ini title=".npmrc"
+@miguelfranken:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_PACKAGES_TOKEN}
+```
+
+```bash
+pnpm add -D @miguelfranken/reporter
+```
+
+```ts title="playwright.config.ts"
+export default defineConfig({
+  reporter: [
+    ['list'],
+    ['@miguelfranken/reporter', { token: process.env.PW_REPORTER_TOKEN, serverUrl: process.env.PW_REPORTER_URL }],
+  ],
+});
+```
+
+Create the token under the project's **Settings → API tokens**. The next run appears in the app.
+
+## Options
+
+Every option can also be set through its environment variable.
+
+| Option | Env var | |
+| --- | --- | --- |
+| `token` | `PW_REPORTER_TOKEN` | The project API token. |
+| `serverUrl` | `PW_REPORTER_URL` | Base URL of the app. |
+| `ciRunId` | `PW_REPORTER_CI_RUN_ID` | Groups shards into one run; auto-detected on GitHub and GitLab. |
+| `tags` | `PW_REPORTER_TAGS` | Comma-separated run tags. |
+| `environment` | `PW_REPORTER_ENVIRONMENT` | A label such as `staging`. |
+| `artifacts` | `PW_REPORTER_ARTIFACTS` | `false` disables uploads. |
+| `debug` | `PW_REPORTER_DEBUG` | Verbose logging. |
+| `heartbeatIntervalMs` | `PW_REPORTER_HEARTBEAT_MS` | Sign of life while tests run, `30000`; `0` disables it. |
+| `git` | `PW_REPORTER_GIT_BRANCH`, `_SHA`, `_MESSAGE`, `_REPO_URL`, `_AUTHOR` | The commit under test, where no CI variables or checkout say it. |
+| `git.prNumber`, `.prUrl`, `.prTitle` | `PW_REPORTER_PR_NUMBER`, `_URL`, `_TITLE` | The pull or merge request; detected on GitHub and GitLab. |
+| `ci` | `PW_REPORTER_CI_PROVIDER`, `PW_REPORTER_BUILD_URL`, `_BUILD_NUMBER`, `PW_REPORTER_CI_JOB` | The build that ran the tests. |
+
+Git and CI metadata come from Playwright's `captureGitInfo`, CI environment variables and the local checkout. A test
+image run outside CI (a Kubernetes job, say) has none of those; set `git` and `ci` and they win over detection.
+
+<Callout type="warn" title="Turborepo in strict env mode">
+  List the `PW_REPORTER_*` variables in the task's `passThroughEnv`, or turbo removes them before Playwright starts.
+</Callout>
+
+## Abandoned runs
+
+A reporter that dies mid-run never finishes its run. Once a run hasn't heard from its reporter for 5 minutes
+(`RUN_STALE_TIMEOUT_MS`), it reads as **Abandoned** everywhere; if the reporter speaks up again, it goes back to
+running. The heartbeat keeps a long test from being mistaken for a dead reporter.

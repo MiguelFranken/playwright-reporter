@@ -1,0 +1,29 @@
+---
+title: Tests and flakiness
+description: Find the flaky, failing and slow tests, and follow one test over time.
+---
+
+## Test Explorer
+
+**Test Explorer** lists every test the project has recorded in the chosen window (7, 30 or 90 days) with its last
+status, reliability score and flaky rate. Filter by status, browser project, environment and tags, and sort by any
+column. Click a row to open its drawer: the summary appears at once, and the history, the errors and the
+per-environment breakdown load underneath.
+
+| Metric | Meaning |
+| --- | --- |
+| **Reliability** | 0–100: 100, minus the failure rate, minus half the flaky rate (skipped runs don't count). |
+| **Flaky rate** | Share of runs in which it failed and then passed on a retry. |
+| **Failure rate** | Share of runs in which it failed for good. |
+| **Streak** | How many of its latest runs in a row failed. A long streak marks the test as chronic. |
+
+## One test
+
+A test's page shows its whole history: outcomes over time, duration with its p95 and trend, the breakdown by
+environment and branch, the same test in other browser projects, and every distinct error with when it first and
+last appeared.
+
+## Dashboard
+
+The project **Dashboard** is the overview: pass rate and reliability over time, the most flaky tests, chronic
+failures, and the branches that ran recently.

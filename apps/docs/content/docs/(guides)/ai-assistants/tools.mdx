@@ -1,0 +1,18 @@
+---
+title: Tools
+description: The sixteen read-only tools the MCP server offers.
+---
+
+Two toolsets; a connection can ask for fewer with `?toolsets=core`. The full reference with every parameter is
+generated from the code: [`docs/mcp-tools.md`](https://github.com/MiguelFranken/playwright-reporter/blob/main/docs/mcp-tools.md).
+
+| Toolset | Tools |
+| --- | --- |
+| `core` | `whoami`, `list_filters`, `list_runs`, `get_run`, `list_run_results`, `get_result`, `find_tests`, `get_test_history`, `project_health` |
+| `debug` | `get_failure_context` (start here for a failing test), `check_flakiness`, `summarize_failures`, `compare_runs`, `verify_fix`, `get_artifact`, `get_rerun_command` |
+
+Verdicts — flaky, deterministic, fixed — are computed from the stored attempts, not guessed by a model, and say which
+fixes the evidence rules out. Clients with slash commands also get the prompts `triage_run`, `debug_test`,
+`investigate_flake` and `branch_check`.
+
+The [REST API](/docs/api) answers from the same code: every MCP tool but the prompts has a REST endpoint.

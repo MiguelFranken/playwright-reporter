@@ -1,0 +1,36 @@
+---
+title: Docker and Kubernetes
+description: Run the app as a regular Next.js server, with replicas and a bucket.
+---
+
+Run `apps/web` as a regular Next.js server (`next build`, then `next start`) and apply migrations with
+`nub run db:migrate` before each release.
+
+## Artifacts
+
+Keep artifacts in a bucket (`STORAGE_DRIVER=s3`), so every replica sees the same files and none of them needs a
+persistent volume. See [Artifact storage](/docs/deployment/storage).
+
+## The watchdog
+
+The watchdog that marks abandoned runs is a durable Workflow SDK timer. Outside Vercel it runs on the Postgres world:
+
+```ini
+RUN_WATCHDOG_DRIVER=workflow
+WORKFLOW_TARGET_WORLD=@workflow/world-postgres
+WORKFLOW_POSTGRES_URL=postgres://...   # direct, not pooled
+```
+
+Bootstrap it once per database with `npx --package=@workflow/world-postgres bootstrap`. Each instance starts the
+worker in `instrumentation.ts`. The worker polls the database twice a second, so a Neon compute behind it never
+scales to zero.
+
+## Retention sweeps
+
+A finished run starts an artifact and a data sweep when none ran for 12 hours, so nothing else is required. For a fixed
+schedule, set `CRON_SECRET` and call both endpoints from a CronJob:
+
+```bash
+curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://reporter.example.com/api/cron/artifact-retention
+curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://reporter.example.com/api/cron/data-retention
+```

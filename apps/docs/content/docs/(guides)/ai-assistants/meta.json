@@ -1,0 +1,10 @@
+{
+  "title": "AI assistants",
+  "icon": "Sparkles",
+  "defaultOpen": true,
+  "pages": [
+    "index",
+    "tools",
+    "docs-for-agents"
+  ]
+}

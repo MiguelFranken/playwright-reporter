@@ -18,6 +18,7 @@ binaries with `nub exec …`, and Turborepo tasks with `nub exec turbo run …`.
 | --- | --- | --- |
 | `apps/web` | `@miguelfranken/web` | The reporter app: Next.js, Drizzle, Better Auth, the ingest API and the MCP server route. |
 | `apps/website` | `@miguelfranken/website` | The marketing site: Next.js + Payload CMS. See its own `AGENTS.md`. |
+| `apps/docs` | `@miguelfranken/docs` | The documentation site: Next.js + Fumadocs, with the REST API reference. See its own `AGENTS.md`. |
 | `apps/storybook` | `@miguelfranken/storybook` | The design-system catalogue. Configuration only; no stories live here. |
 | `packages/ui` | `@miguelfranken/ui` | **The design system.** Every component either app renders. See [`packages/ui/AGENTS.md`](packages/ui/AGENTS.md). |
 | `packages/protocol` | `@miguelfranken/protocol` | The wire contract between the reporter and the app (zod schemas + types). |
@@ -52,6 +53,16 @@ So when you build or change UI:
 The design system must run without Next.js, a database or a session — a boundary
 test in `packages/ui` fails the build if it imports `next/*`, `drizzle-orm`,
 `better-auth`, `postgres` or the app's `@/` alias.
+
+## APIs in `apps/web`
+
+- **Data a client component loads after render** (a drawer, a live view catching up) is a procedure in
+  `apps/web/lib/rpc/router.ts`, called through TanStack Query with the typed `orpc` utils from `lib/rpc/client.ts`.
+  Don't add a JSON route handler for it. Pages still read the database on the server.
+- **The public REST API** is `apps/web/lib/api` (oRPC's OpenAPI handler under `/api/v1`). It is a contract: v1 only
+  grows. Endpoints wrap MCP tools with `fromTool`, so logic lives once. After changing it, regenerate the document with
+  `nub run api:docs` in `apps/web`; a unit test fails on drift, and CI fails a breaking change against `main`.
+- oRPC is pinned to an exact v2 beta. Upgrade it deliberately, in its own pull request, and read the changelog.
 
 ## Checking your work
 

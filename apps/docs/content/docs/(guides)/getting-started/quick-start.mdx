@@ -1,0 +1,63 @@
+---
+title: Quick start
+description: Run the app on your machine and record a first run.
+---
+
+You need Node.js 24, [nub](https://github.com/nubjs/nub) (both pinned in `mise.toml`) and a PostgreSQL database with two
+connection strings: a pooled one for the app and a direct one for migrations.
+
+<Steps>
+<Step>
+
+### Install and configure
+
+```bash
+nub install
+cp apps/web/.env.example apps/web/.env.local
+```
+
+```ini title="apps/web/.env.local"
+DATABASE_URL=postgres://...            # pooled
+DATABASE_URL_UNPOOLED=postgres://...   # direct, used by migrations
+BASE_URL=http://localhost:3000
+BETTER_AUTH_SECRET=...                 # openssl rand -hex 32
+SEED_SUPERADMIN_EMAIL=you@example.com
+SEED_SUPERADMIN_PASSWORD=...           # optional; generated and printed once if omitted
+STORAGE_DRIVER=local
+```
+
+</Step>
+<Step>
+
+### Create the schema and the first accounts
+
+The seed creates the first superadmin, the `default` team and project, and an API token. It prints the token (and a
+generated password) once.
+
+```bash
+nub run db:migrate
+nub run db:seed
+nub run dev          # http://localhost:3000
+```
+
+</Step>
+<Step>
+
+### Record a run
+
+Sign in as the superadmin, then run the example project:
+
+```bash
+nub exec --filter playwright-demo playwright install chromium firefox   # first time only
+nub run --filter playwright-demo test:e2e
+```
+
+The run shows up under **Test Runs → Active runs** and fills in as tests finish. To see two shards merged into one run:
+
+```bash
+PW_REPORTER_CI_RUN_ID=my-run-1 nub run --filter playwright-demo test:shard1 &
+PW_REPORTER_CI_RUN_ID=my-run-1 nub run --filter playwright-demo test:shard2
+```
+
+</Step>
+</Steps>

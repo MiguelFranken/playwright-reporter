@@ -30,6 +30,16 @@
         "dev"
       ],
       "port": 6006
+    },
+    {
+      "name": "docs",
+      "runtimeExecutable": "nub",
+      "runtimeArgs": [
+        "run", "--filter",
+        "@miguelfranken/docs",
+        "dev"
+      ],
+      "port": 3002
     }
   ]
 }
