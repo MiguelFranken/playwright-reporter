@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.23](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.22...v0.0.23) (2026-09-25)
+
+### Bug Fixes
+
+* **web:** show a skeleton on every page change and paginate the remaining lists ([#31](https://github.com/MiguelFranken/playwright-reporter/issues/31)) ([1ea442b](https://github.com/MiguelFranken/playwright-reporter/commit/1ea442b4b77e097637417d80dc3249f737db9789))
+
 ## [0.0.22](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.21...v0.0.22) (2026-09-25)
 
 ### Bug Fixes
