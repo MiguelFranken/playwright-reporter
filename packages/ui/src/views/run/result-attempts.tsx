@@ -1,6 +1,6 @@
 'use client';
 
-import { Camera, CircleAlert, Clock, Download, ExternalLink, FileText, Film, ListOrdered, Paperclip, Route, Terminal } from 'lucide-react';
+import { Camera, CircleAlert, Clock, Download, ExternalLink, FileText, Film, ListOrdered, Maximize2, Paperclip, Route, Terminal } from 'lucide-react';
 import { useState } from 'react';
 import { EmptyState } from '../../patterns/empty-state';
 import { StatusBadge } from '../../patterns/status-badge';
@@ -187,40 +187,7 @@ function AttemptCard({ attempt }: { attempt: AttemptView }) {
             )}
           </TabsContent>
           <TabsContent value="trace">
-            {traces.length === 0 ? (
-              <EmptyState icon={Route} title="No trace" description="Enable trace: 'retain-on-failure' in your Playwright config." className="py-8" />
-            ) : (
-              <div className="flex flex-col gap-3">
-                {traces.map((t) => (
-                  <div key={t.id} className="flex flex-wrap items-center gap-2 rounded-md border p-3">
-                    <Route className="size-4 text-muted-foreground" />
-                    <span className="text-sm">{t.name}</span>
-                    <span className="text-xs text-muted-foreground">{formatBytes(t.sizeBytes)}</span>
-                    <div className="ml-auto flex gap-2">
-                      {t.status === 'expired' ? (
-                        <Expired a={t} />
-                      ) : (
-                        <>
-                          {t.status === 'uploaded' && t.traceUrl ? (
-                            <Button size="sm" nativeButton={false} render={<a href={t.traceUrl} target="_blank" rel="noreferrer" />}>
-                              <ExternalLink className="size-3.5" /> Open in Trace Viewer
-                            </Button>
-                          ) : (
-                            <Pending />
-                          )}
-                          <Button size="sm" variant="outline" nativeButton={false} render={<a href={`${t.url}?download`} />}>
-                            <Download className="size-3.5" /> Download
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                <p className="text-xs text-muted-foreground">
-                  The Trace Viewer at trace.playwright.dev loads the trace directly from this server in your browser; nothing is uploaded to a third party.
-                </p>
-              </div>
-            )}
+            <TracePanel traces={traces} />
           </TabsContent>
           <TabsContent value="console">
             {!hasConsole ? (
@@ -277,6 +244,59 @@ function AttemptCard({ attempt }: { attempt: AttemptView }) {
         </div>
       </Tabs>
     </section>
+  );
+}
+
+/**
+ * Each trace in the Trace Viewer the app serves itself, embedded, with a way
+ * out to a full tab and to the zip. The viewer loads the trace from this server
+ * in the browser; nothing reaches a third party.
+ */
+function TracePanel({ traces }: { traces: AttachmentView[] }) {
+  if (traces.length === 0) {
+    return <EmptyState icon={Route} title="No trace" description="Enable trace: 'retain-on-failure' in your Playwright config." className="py-8" />;
+  }
+  return (
+    <div className="flex flex-col gap-4">
+      {traces.map((t) => (
+        <div key={t.id} className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Route className="size-4 text-muted-foreground" aria-hidden />
+            <span className="text-sm">{t.name}</span>
+            <span className="text-xs text-muted-foreground">{formatBytes(t.sizeBytes)}</span>
+            <div className="ml-auto flex gap-2">
+              {t.status === 'expired' ? (
+                <Expired a={t} />
+              ) : (
+                <>
+                  {t.status === 'uploaded' && t.traceUrl ? (
+                    <Button size="sm" variant="outline" nativeButton={false} render={<a href={t.traceUrl} target="_blank" rel="noreferrer" />}>
+                      <Maximize2 className="size-3.5" /> Open full screen
+                    </Button>
+                  ) : (
+                    <Pending />
+                  )}
+                  <Button size="sm" variant="outline" nativeButton={false} render={<a href={`${t.url}?download`} />}>
+                    <Download className="size-3.5" /> Download
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+          {t.status === 'uploaded' && t.traceUrl ? (
+            <iframe
+              src={t.traceUrl}
+              title={`Trace Viewer: ${t.name}`}
+              loading="lazy"
+              className="h-[75vh] min-h-120 w-full rounded-md border bg-background"
+            />
+          ) : null}
+        </div>
+      ))}
+      <p className="text-xs text-muted-foreground">
+        The Trace Viewer runs inside this app: your browser loads the trace from this server, and it never reaches a third party.
+      </p>
+    </div>
   );
 }
 

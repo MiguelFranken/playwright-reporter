@@ -68,7 +68,7 @@ export function compare(ctx: SeedContext): PageData {
             capability: 'Trace viewer',
             cells: [
               { state: 'yes', note: 'Bundled' },
-              { state: 'partial', note: 'Links into trace.playwright.dev' },
+              { state: 'yes', note: 'Embedded, served by your app' },
               { state: 'partial', note: 'Usually links out too' },
             ],
           },

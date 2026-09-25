@@ -29,8 +29,8 @@
 - 🔴 **Live runs**: results, steps and attachments appear within a second or two, over server-sent events, while the
   tests are still running
 - 🧩 **Sharding built in**: shards that share a CI run id are merged into one run, auto-detected on GitHub and GitLab
-- 🎞️ **Every artifact**: screenshots, videos, logs and visual diffs next to the test, and traces that open straight in
-  `trace.playwright.dev`
+- 🎞️ **Every artifact**: screenshots, videos, logs and visual diffs next to the test, and traces in Playwright's
+  Trace Viewer, embedded and served by the app itself (no third party, works behind a VPN)
 - 📈 **History and trends**: a dashboard per project, a page per test and per branch, with pass rates, durations and
   flaky tests over time
 - 🌿 **Git and CI aware**: branch, commit, author, PR and build link from Playwright's `captureGitInfo`, CI variables
@@ -231,8 +231,9 @@ A team always keeps at least one admin: the last one can't be demoted or removed
 - **Forgotten password.** No reset email yet: a superadmin opens `/admin/users`, clicks **Password**, and hands over
   the temporary password shown once. The user changes it at `/account`.
 - **Isolation.** A team's URLs 404 rather than 403 for anyone outside it, so they don't reveal that a project exists.
-  Trace files are the one exception to cookie auth: `trace.playwright.dev` fetches them cross-site, so trace links
-  carry a short-lived HMAC signature (`ARTIFACT_URL_TTL_SECONDS`, one hour) for that single artifact.
+  The Trace Viewer is served by the app under `/trace/` (copied from `playwright-core` at build time), so it loads
+  traces same-origin with the session cookie. Only links for callers without one (MCP clients,
+  `npx playwright show-trace`) carry a short-lived HMAC signature for that single artifact.
 - **Ingest** authenticates with a per-project token, never with a user session.
 
 </details>

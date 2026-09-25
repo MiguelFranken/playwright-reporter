@@ -74,7 +74,7 @@ export const comparisonRows: ComparisonRow[] = [
     capability: 'Trace viewer',
     cells: [
       { state: 'yes' },
-      { state: 'partial', note: 'Links into trace.playwright.dev' },
+      { state: 'yes', note: 'Embedded, served by your app' },
       { state: 'partial', note: 'Links out too' },
     ],
   },
@@ -87,7 +87,7 @@ export const comparisonRows: ComparisonRow[] = [
 export const faqItems = [
   {
     question: 'Does it replace the Playwright trace viewer?',
-    answer: 'No. It stores the trace and hands it to trace.playwright.dev with a signed URL.',
+    answer: 'No. It embeds the Playwright Trace Viewer itself, served from your own deployment, so traces never leave it.',
   },
   {
     question: 'What does it cost to run?',

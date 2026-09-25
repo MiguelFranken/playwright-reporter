@@ -39,7 +39,8 @@ const trace: AttachmentView = {
   status: 'uploaded',
   sizeBytes: 2_411_724,
   url: '#trace-download',
-  traceUrl: 'https://trace.playwright.dev/?trace=#example',
+  // Stands in for the app's /trace/index.html?trace=…, which Storybook cannot serve.
+  traceUrl: `data:text/html,${encodeURIComponent('<!doctype html><html lang="en"><title>Trace Viewer</title><body style="font:14px system-ui;display:grid;place-items:center;height:100vh;margin:0;color:#666">Playwright Trace Viewer</body></html>')}`,
 };
 
 const video: AttachmentView = {
