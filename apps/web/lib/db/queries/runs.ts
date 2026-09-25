@@ -112,15 +112,19 @@ export async function listRuns(projectId: string, filters: RunFilters = {}) {
       ? sql`(${runs.gitMessage} ilike ${'%' + filters.q + '%'} or ${runs.gitBranch} ilike ${'%' + filters.q + '%'} or ${runs.number}::text = ${filters.q.replace(/^#/, '')} or ${runs.gitShortSha} ilike ${filters.q + '%'})`
       : undefined,
   ]);
+  // The cursor must be read before the rows (see `projectCursorBefore`); the
+  // page and its total are independent of each other.
   const cursor = await projectCursorBefore(projectId);
-  const rows = await db
-    .select({ run: runColumns, counts: countsSql, cursor: runCursorSql(sql.raw('"runs"."id"')) })
-    .from(runs)
-    .where(where)
-    .orderBy(desc(runs.startedAt))
-    .limit(pageSize + 1)
-    .offset((page - 1) * pageSize);
-  const [{ total }] = await db.select({ total: sql<number>`count(*)::int` }).from(runs).where(where);
+  const [rows, [{ total }]] = await Promise.all([
+    db
+      .select({ run: runColumns, counts: countsSql, cursor: runCursorSql(sql.raw('"runs"."id"')) })
+      .from(runs)
+      .where(where)
+      .orderBy(desc(runs.startedAt))
+      .limit(pageSize + 1)
+      .offset((page - 1) * pageSize),
+    db.select({ total: sql<number>`count(*)::int` }).from(runs).where(where),
+  ]);
   return {
     cursor,
     rows: rows.slice(0, pageSize).map((r) => ({ ...r.run, counts: parseCounts(r.counts), cursor: r.cursor }) as RunWithCounts & { cursor: number }),
@@ -143,14 +147,21 @@ export async function listActiveRunsWithCursor(projectId: string) {
     .where(and(eq(runs.projectId, projectId), effectivelyRunningSql))
     .orderBy(desc(runs.startedAt))
     .limit(10);
-  const withShards = await Promise.all(
-    rows.map(async (r) => ({
-      ...r.run,
-      counts: parseCounts(r.counts),
-      cursor: r.cursor,
-      shards: await db.select().from(runShards).where(eq(runShards.runId, r.run.id)).orderBy(asc(runShards.shardIndex)),
-    })),
-  );
+  // One query for every run's shards instead of one per run.
+  const shards = rows.length
+    ? await db
+        .select()
+        .from(runShards)
+        .where(inArray(runShards.runId, rows.map((r) => r.run.id)))
+        .orderBy(asc(runShards.shardIndex))
+    : [];
+  const shardsByRun = Map.groupBy(shards, (s) => s.runId);
+  const withShards = rows.map((r) => ({
+    ...r.run,
+    counts: parseCounts(r.counts),
+    cursor: r.cursor,
+    shards: shardsByRun.get(r.run.id) ?? [],
+  }));
   return {
     runs: withShards as (RunWithCounts & { shards: RunShard[]; cursor: number })[],
     cursor,

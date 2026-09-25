@@ -5,6 +5,7 @@
  */
 import { asc, eq } from 'drizzle-orm';
 import { finishRun, getRunForProject, ingestEvents, startRun } from '@/lib/ingest/service';
+import { listActiveRuns } from '@/lib/db/queries/runs';
 import { runShards, runs } from '@/lib/db/schema';
 import { attemptEnd, eventBatch, runFinish, runStart, testBegin } from './factories';
 import { describe, expect, test } from './fixtures';
@@ -52,6 +53,18 @@ describe('two shards of one run', () => {
 
     const rows = await db.select({ number: runs.number }).from(runs).orderBy(asc(runs.number));
     expect(rows.map((r) => r.number)).toEqual([1, 2, 3, 4]);
+  });
+
+  test('the active runs list gives each run its own shards, in order', async ({ tenant }) => {
+    const a = await startRun(tenant.tokenProject, sharded(2, 2, { ciRunId: 'build-a' }));
+    await startRun(tenant.tokenProject, sharded(1, 2, { ciRunId: 'build-a' }));
+    const b = await startRun(tenant.tokenProject, sharded(1, 3, { ciRunId: 'build-b' }));
+    const plain = await startRun(tenant.tokenProject, runStart({ ciRunId: 'build-c' }));
+
+    const active = new Map((await listActiveRuns(tenant.project.id)).map((r) => [r.id, r.shards.map((s) => s.shardIndex)]));
+    expect(active.get(a.runId)).toEqual([1, 2]);
+    expect(active.get(b.runId)).toEqual([1]);
+    expect(active.has(plain.runId)).toBe(true);
   });
 });
 
