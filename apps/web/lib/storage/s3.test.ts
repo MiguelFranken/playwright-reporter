@@ -1,7 +1,7 @@
 /**
  * The S3 adapter without a bucket: presigning is pure computation, and every
  * other call goes through `client.send`, which is spied on here. The same
- * adapter runs against a real S3 API (LocalStack) in
+ * adapter runs against a real S3 API (RustFS) in
  * `test/integration/s3-storage.test.ts`.
  */
 import {

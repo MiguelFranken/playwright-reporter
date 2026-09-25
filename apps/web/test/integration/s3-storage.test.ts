@@ -1,5 +1,5 @@
 /**
- * The S3 adapter against a real S3 API: LocalStack, started by
+ * The S3 adapter against a real S3 API: RustFS, started by
  * `s3-global-setup.ts`. The shared storage contract first, then what only an
  * object store does — presigned uploads and reads, the way the reporter and
  * the browser use them, multipart streams, batch deletes and lifecycle rules.
@@ -27,7 +27,7 @@ async function reporterUpload(instruction: { url: string; method: string; header
   });
 }
 
-describeS3('S3 storage (LocalStack)', () => {
+describeS3('S3 storage (RustFS)', () => {
   beforeAll(async () => {
     await store.create();
   });

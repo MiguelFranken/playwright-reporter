@@ -580,7 +580,7 @@ Two Vitest projects, split by scope rather than by framework:
 | --- | --- | --- |
 | Where | next to the module (`lib/**/*.test.ts`) | `apps/web/test/integration/` |
 | Database | none; `DATABASE_URL` is a sentinel that can't resolve, so an accidental query fails loudly | a real PostgreSQL, one database per test file |
-| Storage | the local driver in a temp directory; the S3 adapter with its network calls stubbed | the local driver, and S3 on LocalStack for the S3 suites, one bucket per test file |
+| Storage | the local driver in a temp directory; the S3 adapter with its network calls stubbed | the local driver, and S3 on RustFS for the S3 suites, one bucket per test file |
 | Command | `nub run test` | `nub run test:integration` |
 
 The integration project starts a `postgres:17-alpine` container through Testcontainers, migrates a template database
@@ -598,21 +598,29 @@ TEST_DATABASE_URL=postgres://postgres:test@localhost:54329/postgres nub run test
 `TEST_DATABASE_URL` is refused if it names the same database as `DATABASE_URL`: the suite creates, truncates and
 drops databases on whatever it is given.
 
-The S3 driver is tested against [LocalStack](https://github.com/localstack/localstack) running only S3, so no test
-ever needs an AWS account or bucket. It's the approach Payload takes for its storage adapters. The integration run
-starts the container through Testcontainers (`test/integration/s3-global-setup.ts`), and each S3 test file creates
-its own bucket and empties it between tests. The checks look into the bucket itself: presigned uploads made with
-`fetch` exactly as the reporter makes them, reads and range requests through presigned URLs, multipart uploads,
-batch deletes past S3's 1000-key limit, object tags and lifecycle rules. The ingest API, the artifact route,
-retention and "force delete" also run end to end on `STORAGE_DRIVER=s3`. A shared contract suite
-(`test/helpers/storage-contract.ts`) runs against the local driver and S3 alike, so the two stay interchangeable.
-CI starts LocalStack as a service container. To use a stub that is already running:
+The S3 driver is tested against [RustFS](https://github.com/rustfs/rustfs), an Apache-2.0 S3-compatible server, so
+no test ever needs an AWS account or bucket. It's the approach Payload takes for its storage adapters, which used
+LocalStack; LocalStack's open-source edition has since been archived. RustFS passes the whole S3 suite, checks
+request signatures the way S3 does, and supports the object tags and lifecycle rules that `S3_RETENTION=lifecycle`
+relies on. The integration run starts the container through Testcontainers (`test/integration/s3-global-setup.ts`),
+and each S3 test file creates its own bucket and empties it between tests. The checks look into the bucket itself:
+- presigned uploads made with `fetch`, exactly as the reporter makes them
+- an upload with a tampered content type, which is refused
+- reads and range requests through presigned URLs
+- multipart uploads
+- batch deletes past S3's 1000-key limit
+- object tags and lifecycle rules
+
+The ingest API, the artifact route, retention and "force delete" also run end to end on `STORAGE_DRIVER=s3`. A
+shared contract suite (`test/helpers/storage-contract.ts`) runs against the local driver and S3 alike, so the two
+stay interchangeable. CI starts RustFS as a service container. To use a stub that is already running:
 
 ```bash
-docker run -d -p 4566:4566 -e SERVICES=s3 -e S3_SKIP_SIGNATURE_VALIDATION=0 localstack/localstack:4.14.0
-TEST_S3_ENDPOINT=http://localhost:4566 nub run test:integration
+docker run -d -p 9000:9000 -e RUSTFS_ACCESS_KEY=pwr-test-access-key -e RUSTFS_SECRET_KEY=pwr-test-secret-key rustfs/rustfs:1.0.0
+TEST_S3_ENDPOINT=http://localhost:9000 nub run test:integration
 ```
 
+`TEST_S3_ACCESS_KEY_ID` and `TEST_S3_SECRET_ACCESS_KEY` set other credentials, for a stub started with them.
 Locally, without Docker or `TEST_S3_ENDPOINT`, the S3 suites are skipped with a notice. On CI a missing stub fails
 the run. Both projects run together with
 `nub run --filter @miguelfranken/web test:all`.

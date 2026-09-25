@@ -2,7 +2,7 @@
  * What every storage adapter must do, whatever it stores into. The routes,
  * the ingest service and the retention sweep only see `StorageAdapter`, so
  * one suite run against each driver is what keeps them interchangeable:
- * the filesystem in the unit project, S3 (on LocalStack) in the integration
+ * the filesystem in the unit project, S3 (on RustFS) in the integration
  * project.
  *
  * `make` is called before each test and must hand back an adapter over an

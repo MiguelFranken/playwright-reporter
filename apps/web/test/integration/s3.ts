@@ -15,19 +15,21 @@ import {
 import { describe, inject } from 'vitest';
 import { createS3Client, type S3StorageConfig } from '@/lib/storage/s3';
 
-export const s3Endpoint = inject('testS3')?.endpoint ?? null;
+const stub = inject('testS3');
+
+export const s3Endpoint = stub?.endpoint ?? null;
 
 /** `describe` when the stub is up, `describe.skip` when it could not be started. */
 export const describeS3 = s3Endpoint ? describe : describe.skip;
 
-/** LocalStack accepts any credentials; path-style because the bucket is not a DNS name there. */
+/** The stub checks signatures, so these are the credentials it was started with; path-style because the bucket is not a DNS name there. */
 export function s3TestConfig(bucket: string, overrides: Partial<S3StorageConfig> = {}): S3StorageConfig {
   return {
     bucket,
     region: 'us-east-1',
     endpoint: s3Endpoint ?? 'http://s3-stub-not-running.invalid',
     forcePathStyle: true,
-    credentials: { accessKeyId: 'test', secretAccessKey: 'test' },
+    credentials: { accessKeyId: stub?.accessKeyId ?? 'unused', secretAccessKey: stub?.secretAccessKey ?? 'unused' },
     keyPrefix: '',
     retention: 'app',
     ...overrides,
