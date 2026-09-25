@@ -9,6 +9,10 @@
     ".": {
       "import": { "types": "./dist/index.d.mts", "default": "./dist/index.mjs" },
       "require": { "types": "./dist/index.d.cts", "default": "./dist/index.cjs" }
+    },
+    "./contract": {
+      "import": { "types": "./dist/contract.d.mts", "default": "./dist/contract.mjs" },
+      "require": { "types": "./dist/contract.d.cts", "default": "./dist/contract.cjs" }
     }
   },
   "main": "./dist/index.cjs",
@@ -20,7 +24,7 @@
     "test": "vitest run",
     "test:unit": "vitest run"
   },
-  "dependencies": { "zod": "^4.6.5" },
+  "dependencies": { "@orpc/contract": "2.0.0-beta.40", "@orpc/openapi": "2.0.0-beta.40", "zod": "^4.6.5" },
   "devDependencies": {
     "@miguelfranken/typescript-config": "workspace:*",
     "tsdown": "0.23.0",

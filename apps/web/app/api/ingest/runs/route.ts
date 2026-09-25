@@ -1,4 +1,4 @@
-import { runStartSchema } from '@miguelfranken/protocol';
+import { runStartSchema, type RunStartResponse } from '@miguelfranken/protocol';
 import { errorResponse, json, readJson, requireProjectToken } from '@/lib/ingest/http';
 import { startRun } from '@/lib/ingest/service';
 import { afterPush } from '@/lib/push';
@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     const { watchdog, push, ...res } = await startRun(project, body);
     afterIngest(watchdog);
     afterPush(push);
-    return json(res, 201);
+    return json(res satisfies RunStartResponse, 201);
   } catch (err) {
     return errorResponse(err);
   }

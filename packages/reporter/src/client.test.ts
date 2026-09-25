@@ -21,7 +21,8 @@ const options = (overrides: Partial<ResolvedOptions> = {}): ResolvedOptions => (
   ...overrides,
 });
 
-const ok = (body: unknown = { ok: true }) => new Response(JSON.stringify(body), { status: 200 });
+// The ingest routes answer with `Response.json`, so the content type says JSON.
+const ok = (body: unknown = { ok: true }) => Response.json(body);
 const fail = (status: number, body = 'nope') => new Response(body, { status });
 
 let fetchMock: ReturnType<typeof vi.fn>;
@@ -60,9 +61,34 @@ describe('request headers', () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe('https://reports.example.test/api/ingest/runs');
     expect(init.method).toBe('POST');
-    expect(init.headers.authorization).toBe('Bearer pwr_secret');
-    expect(init.headers[PROTOCOL_HEADER]).toBe(String(PROTOCOL_VERSION));
-    expect(init.headers['content-type']).toBe('application/json');
+    const headers = new Headers(init.headers);
+    expect(headers.get('authorization')).toBe('Bearer pwr_secret');
+    expect(headers.get(PROTOCOL_HEADER)).toBe(String(PROTOCOL_VERSION));
+    expect(headers.get('content-type')).toBe('application/json');
+  });
+
+  it('keeps a path prefix of the server URL', async () => {
+    fetchMock.mockResolvedValue(ok({ runId: 'r1' }));
+    await withTimers(client({ serverUrl: 'https://example.test/reporter' }).startRun({} as never));
+    expect(fetchMock.mock.calls[0][0]).toBe('https://example.test/reporter/api/ingest/runs');
+  });
+
+  it('follows redirects, like a plain fetch', async () => {
+    fetchMock.mockResolvedValue(ok({ runId: 'r1' }));
+    await withTimers(client().startRun({} as never));
+    expect(fetchMock.mock.calls[0][1].redirect).toBe('follow');
+  });
+
+  it('sends path parameters in the URL, not the body', async () => {
+    fetchMock.mockResolvedValue(ok());
+    await withTimers(client().completeUpload('r1', 'a1', 5));
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ size: 5 });
+  });
+
+  it("returns the server's answer", async () => {
+    const answer = { runId: 'r1', runNumber: 7, shardIndex: 1, url: 'https://reports.example.test/r/7' };
+    fetchMock.mockResolvedValue(ok(answer));
+    expect(await withTimers(client().startRun({} as never))).toEqual(answer);
   });
 
   it('addresses each endpoint by run id', async () => {
@@ -89,7 +115,7 @@ describe('gzip threshold', () => {
     await withTimers(client().sendEvents('r1', { shardIndex: 1, events: [] }));
 
     const [, init] = fetchMock.mock.calls[0];
-    expect(init.headers['content-encoding']).toBeUndefined();
+    expect(new Headers(init.headers).get('content-encoding')).toBeNull();
     expect(init.body).toBe(JSON.stringify({ shardIndex: 1, events: [] }));
   });
 
@@ -99,7 +125,7 @@ describe('gzip threshold', () => {
     await withTimers(client().sendEvents('r1', body as never));
 
     const [, init] = fetchMock.mock.calls[0];
-    expect(init.headers['content-encoding']).toBe('gzip');
+    expect(new Headers(init.headers).get('content-encoding')).toBe('gzip');
     expect(init.body).toBeInstanceOf(Blob);
     const raw = new Uint8Array(await (init.body as Blob).arrayBuffer());
     expect(JSON.parse(gunzipSync(raw).toString('utf8'))).toEqual(body);
@@ -147,6 +173,11 @@ describe('retries', () => {
 
     const delays = logs.map((line) => Number(/retrying in (\d+)ms/.exec(line)![1]));
     expect(delays).toEqual([500, 1000, 2000, 4000, 8000, 8000]);
+  });
+
+  it("includes the ingest route's { error } message in the error", async () => {
+    fetchMock.mockResolvedValue(Response.json({ error: 'invalid token' }, { status: 401 }));
+    await expect(withTimers(client().startRun({} as never))).rejects.toThrow('401: invalid token');
   });
 
   it('includes the server message, truncated, in the error', async () => {

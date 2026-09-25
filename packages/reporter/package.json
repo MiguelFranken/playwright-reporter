@@ -26,6 +26,16 @@
         "default": "./dist/index.cjs"
       }
     },
+    "./client": {
+      "import": {
+        "types": "./dist/client.d.mts",
+        "default": "./dist/client.mjs"
+      },
+      "require": {
+        "types": "./dist/client.d.cts",
+        "default": "./dist/client.cjs"
+      }
+    },
     "./types": {
       "import": {
         "types": "./dist/types.d.mts",
@@ -55,6 +65,9 @@
   "devDependencies": {
     "@miguelfranken/protocol": "workspace:*",
     "@miguelfranken/typescript-config": "workspace:*",
+    "@orpc/client": "2.0.0-beta.40",
+    "@orpc/contract": "2.0.0-beta.40",
+    "@orpc/openapi": "2.0.0-beta.40",
     "@playwright/test": "^1.63.0",
     "@types/node": "^24.13.5",
     "tsdown": "0.23.0",
