@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.28](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.27...v0.0.28) (2026-09-25)
+
+### Features
+
+* **web:** preview retention policies as they are edited, and stream shared test links ([#35](https://github.com/MiguelFranken/playwright-reporter/issues/35)) ([dfdcef6](https://github.com/MiguelFranken/playwright-reporter/commit/dfdcef63bd893e3d0b1ed765dfc10c2f82ead559))
+
 ## [0.0.27](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.26...v0.0.27) (2026-09-25)
 
 ### Features
