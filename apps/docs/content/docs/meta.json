@@ -1,0 +1,18 @@
+{
+  "title": "Playwright Reporter",
+  "pages": [
+    "index",
+    "---Getting started---",
+    "...getting-started",
+    "---Using the app---",
+    "...using",
+    "---Deployment---",
+    "...deployment",
+    "---Administration---",
+    "...administration",
+    "---AI assistants---",
+    "...ai-assistants",
+    "---REST API---",
+    "...api"
+  ]
+}

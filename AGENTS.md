@@ -18,6 +18,7 @@ binaries with `nub exec …`, and Turborepo tasks with `nub exec turbo run …`.
 | --- | --- | --- |
 | `apps/web` | `@miguelfranken/web` | The reporter app: Next.js, Drizzle, Better Auth, the ingest API and the MCP server route. |
 | `apps/website` | `@miguelfranken/website` | The marketing site: Next.js + Payload CMS. See its own `AGENTS.md`. |
+| `apps/docs` | `@miguelfranken/docs` | The documentation site: Next.js + Fumadocs, with the REST API reference. See its own `AGENTS.md`. |
 | `apps/storybook` | `@miguelfranken/storybook` | The design-system catalogue. Configuration only; no stories live here. |
 | `packages/ui` | `@miguelfranken/ui` | **The design system.** Every component either app renders. See [`packages/ui/AGENTS.md`](packages/ui/AGENTS.md). |
 | `packages/protocol` | `@miguelfranken/protocol` | The wire contract between the reporter and the app (zod schemas + types). |

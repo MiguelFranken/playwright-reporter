@@ -1,0 +1,59 @@
+---
+title: Configuration reference
+description: Every environment variable of the app.
+---
+
+## Core
+
+| Variable | |
+| --- | --- |
+| `DATABASE_URL` | Pooled PostgreSQL connection string. |
+| `DATABASE_URL_UNPOOLED` | Direct connection string, for migrations. |
+| `BASE_URL` | The public origin. On Vercel it defaults to the production domain, and previews use their own URL. |
+| `BETTER_AUTH_SECRET` | Signs sessions and artifact URLs. Required in production. |
+| `TRUSTED_ORIGINS` | Extra origins that may sign in, comma-separated. |
+| `INVITATION_TTL_HOURS` | Lifetime of invitation links, `168` (7 days). |
+| `ARTIFACT_URL_TTL_SECONDS` | Lifetime of signed artifact links, `3600`. |
+| `CRON_SECRET` | Accepts the retention cron calls. |
+
+## Runs
+
+| Variable | |
+| --- | --- |
+| `RUN_STALE_TIMEOUT_MS` | When a silent run reads as abandoned: 5 minutes, clamped to 1–60. |
+| `RUN_WATCHDOG_DRIVER` | `workflow` or `none`. |
+| `WORKFLOW_TARGET_WORLD`, `WORKFLOW_POSTGRES_URL` | The Workflow SDK's Postgres world, outside Vercel. |
+
+## Retention
+
+| Variable | |
+| --- | --- |
+| `ARTIFACT_RETENTION_DAYS` | Opts a deployment into artifact retention until a policy is saved in the UI. |
+| `ARTIFACT_RETENTION_INGEST_SWEEP` | `off` stops finished runs from starting artifact sweeps. |
+| `DATA_RETENTION_DAYS` | Opts a deployment into data retention until a policy is saved in the UI. |
+| `DATA_RETENTION_INGEST_SWEEP` | `off` stops finished runs from starting data sweeps. |
+
+## MCP server, REST API and tokens
+
+| Variable | |
+| --- | --- |
+| `MCP_ENABLED` | `false` switches the MCP server off. |
+| `MCP_DEFAULT_TOOLSETS` | `core,debug`. |
+| `MCP_RESPONSE_BUDGET_CHARS` | Characters per MCP answer before it is trimmed, `20000`. |
+| `MCP_RATE_LIMIT_PER_MINUTE` | Requests per token and minute, shared by MCP and the REST API, `120`. |
+| `MCP_ARTIFACT_URL_TTL_SECONDS` | Lifetime of artifact links handed out by MCP and the REST API, `900`. |
+| `MCP_INLINE_IMAGE_MAX_BYTES` | Largest screenshot MCP returns inline, `1048576`. |
+| `MCP_ALLOWED_HOSTS` | Extra `Host` values behind a reverse proxy. |
+| `PAT_DEFAULT_TTL_DAYS`, `PAT_MAX_TTL_DAYS` | Personal access token lifetime offered and allowed, `90` and `365` days. |
+
+## Storage
+
+See [Artifact storage](/docs/deployment/storage) for `STORAGE_DRIVER`, `STORAGE_LOCAL_DIR`, `BLOB_READ_WRITE_TOKEN` and
+the `S3_*` variables.
+
+## Demo
+
+| Variable | |
+| --- | --- |
+| `DEMO_USER_EMAIL` | The read-only account `/demo` signs visitors in as. Without it, `/demo` is a 404. |
+| `DEMO_LANDING_PATH` | Where `/demo` lands. |

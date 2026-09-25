@@ -1,0 +1,52 @@
+---
+title: Errors and limits
+description: Problem details, error codes, rate limits and caching.
+---
+
+## Errors
+
+Errors are [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem details, `application/problem+json`, with a
+stable `code` to branch on:
+
+```json
+{
+  "type": "about:blank",
+  "title": "Not Found",
+  "status": 404,
+  "code": "NOT_FOUND",
+  "detail": "Run 999 not found in acme/web.",
+  "hint": "The latest run in acme/web is #128. Call GET …/runs to browse."
+}
+```
+
+| Status | `code` | |
+| --- | --- | --- |
+| 400 | `BAD_REQUEST` | A parameter failed validation; `details` lists the issues. |
+| 400 | `INVALID_ARGUMENT` | A parameter was well-formed but makes no sense, e.g. `until` before `since`. |
+| 401 | `UNAUTHORIZED` | Missing, invalid, expired or revoked token. |
+| 403 | `INSUFFICIENT_SCOPE` | The token lacks the `read` scope. |
+| 404 | `NOT_FOUND` | Not found, or not visible to this token. |
+| 409 | `AMBIGUOUS` | A test reference matches several tests; `details.candidates` lists them. |
+| 409 | `ARTIFACT_UNAVAILABLE` | The attachment was never uploaded or failed to upload. |
+| 410 | `ARTIFACT_EXPIRED` | The retention policy deleted the attachment. |
+| 429 | `RATE_LIMITED` | Too many requests; wait `Retry-After` seconds. |
+| 500 | `INTERNAL_SERVER_ERROR` | Something went wrong on the server. |
+
+The codes are the MCP server's, so a client that handles one handles both.
+
+## Rate limit
+
+Each token may make `MCP_RATE_LIMIT_PER_MINUTE` requests per minute (120 by default), **shared with the MCP server**.
+Every answer says where the token stands:
+
+| Header | |
+| --- | --- |
+| `RateLimit-Limit` | Requests per minute. |
+| `RateLimit-Remaining` | Requests left in this minute. |
+| `RateLimit-Reset` | Seconds until the window resets. |
+| `Retry-After` | On a 429: seconds to wait. |
+
+## Caching
+
+Answers are private test data: they carry `Cache-Control: private, no-store`. Attachment links in answers are signed
+and short-lived (15 minutes by default); fetch them soon after you get them.

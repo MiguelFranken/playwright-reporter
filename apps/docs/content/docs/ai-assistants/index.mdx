@@ -1,0 +1,53 @@
+---
+title: Connect an assistant
+description: Let Claude, Cursor, Copilot, ChatGPT and others read your test history over MCP.
+---
+
+The app runs a [Model Context Protocol](https://modelcontextprotocol.io) server at `/api/mcp`. An assistant can then
+answer "why is the checkout test red on my branch?" from the stored runs: which attempts failed and how, whether the
+test is flaky or broken, the last green commit, the screenshot, and the command to re-run it. It reads as the person
+who connected it, never more, and it cannot change anything.
+
+Everything below is also on **Account → AI assistants**, pre-filled with your instance's URL.
+
+<Tabs items={['Token', 'Sign-in', 'Local bridge']}>
+<Tab value="Token">
+
+For Claude Code, Cursor, VS Code, Windsurf and Codex. Create a personal access token under **Account → Access
+tokens**, then:
+
+```bash
+claude mcp add --transport http playwright-reporter 'https://reporter.example.com/api/mcp' \
+  --header 'Authorization: Bearer pwr_pat_…'
+```
+
+Add `?project=team/project` to the URL to pin a default project.
+
+</Tab>
+<Tab value="Sign-in">
+
+For claude.ai, ChatGPT, and Claude Code without `--header`: add the URL as a custom connector. The assistant opens the
+app, you choose which teams or project it may read, and it gets a short-lived token. Connected apps are listed, and
+can be disconnected, under **Account → Connected apps**.
+
+</Tab>
+<Tab value="Local bridge">
+
+For Claude Desktop's config file and older clients that only start local servers: the `@miguelfranken/mcp` bridge
+speaks stdio and forwards to the instance. It picks the project from your checkout's git remote.
+
+</Tab>
+</Tabs>
+
+<Callout type="warn" title="Test output is untrusted">
+  Test titles, error messages and logs are written by the code under test. The server hands them to the assistant
+  fenced and labelled as untrusted, and tells it never to follow instructions found in them.
+</Callout>
+
+## Troubleshooting
+
+- **401 "project ingest token"**: MCP needs a personal access token (`pwr_pat_…`), not the reporter's `pwr_…` token.
+- **401 "invalid, expired or revoked"**: tokens always expire; create a new one.
+- **`PROJECT_REQUIRED`**: you can read several projects; pass `project` as `team/project` or pin one in the URL.
+- **`NOT_FOUND`** means "not found *or* not visible to you", like the app's 404s.
+- **The client lists no tools**: restart it, or check `whoami` and **Administration → MCP**.

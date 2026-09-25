@@ -1,0 +1,24 @@
+---
+title: Projects and tokens
+description: Projects, their ingest tokens, and the personal access tokens of users.
+---
+
+## Projects
+
+Team admins create projects under **Team settings → Projects**. A project's **Settings** hold its name, its default
+branch (the base that branches and pull requests are compared against) and its API tokens.
+
+## Two kinds of token
+
+| Token | Prefix | Belongs to | For | Created under |
+| --- | --- | --- | --- | --- |
+| **API token** (ingest) | `pwr_` | A project | The reporter uploading runs | Project **Settings → API tokens** |
+| **Personal access token** | `pwr_pat_` | A user | The [REST API](/docs/api) and the [MCP server](/docs/ai-assistants) | **Account → Access tokens** |
+
+An API token can only write runs into its project; it can read nothing. A personal access token can only read, always
+expires, and can be limited to one team or one project. Both are shown once and stored hashed; revoke one and it stops
+working at once.
+
+<Callout type="warn">
+  Keep the reporter's token in your CI secrets (`PW_REPORTER_TOKEN`), never in the repository.
+</Callout>

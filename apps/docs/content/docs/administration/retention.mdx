@@ -1,0 +1,30 @@
+---
+title: Retention
+description: How long artifacts and run history are kept.
+---
+
+Both policies are **off** until a superadmin turns them on, so an upgrade never deletes anything by itself.
+
+## Artifacts
+
+**Administration → Storage** sets how long screenshots, videos and traces are kept: a lifetime in days, counted from the
+upload, and optionally a shorter one per kind. A sweep deletes expired objects from the store and marks them expired;
+the run keeps every result, error and step, and the artifact's page says it expired.
+
+On S3, `S3_RETENTION=lifecycle` lets the bucket expire objects itself: uploads are tagged with their kind, and saving
+the policy writes one lifecycle rule per kind.
+
+## Run history
+
+**Administration → Database** sets how long finished runs are kept, separately from artifacts. The page shows how full
+the database is, how fast it grows and what the saved policy would delete next. A sweep deletes finished runs older
+than the lifetime — except the newest few of every project — with their artifacts, then tests no run refers to, the
+live event log of finished runs, and expired sessions and tokens. **Purge history** deletes every finished run at once.
+
+## When sweeps run
+
+| Trigger | |
+| --- | --- |
+| A daily cron | Vercel Cron in production, or any cron calling `/api/cron/artifact-retention` and `/api/cron/data-retention` with `CRON_SECRET`. |
+| A finished run | When no sweep started in the last 12 hours. |
+| **Run now** | The button on each admin page. |

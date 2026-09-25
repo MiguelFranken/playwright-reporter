@@ -1,0 +1,25 @@
+@import 'tailwindcss';
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';
+@import 'fumadocs-openapi/css/preset.css';
+
+/*
+ * The app's accent (the blue ramp of @miguelfranken/ui, hue 255) and its type,
+ * so the docs read as part of the product.
+ */
+:root {
+  --color-fd-primary: oklch(0.546 0.18 255);
+  --color-fd-primary-foreground: oklch(0.985 0.002 264);
+  --color-fd-ring: oklch(0.617 0.168 255);
+  --font-sans: var(--font-inter);
+}
+
+.dark {
+  --color-fd-primary: oklch(0.708 0.134 255);
+  --color-fd-primary-foreground: oklch(0.179 0.007 264);
+  --color-fd-ring: oklch(0.708 0.134 255);
+}
+
+html {
+  scrollbar-gutter: stable;
+}

@@ -1,0 +1,45 @@
+---
+title: Vercel
+description: Deploy the app to Vercel with a Postgres database and a private Blob store.
+---
+
+<Steps>
+<Step>
+
+### Import the repository
+
+Create a project with **Root Directory** `apps/web`. Its `vercel.json` installs with nub and builds through
+`scripts/vercel-build.sh`, which runs the Turborepo build and then applies pending migrations — on **production**
+deployments only, because previews share the production database.
+
+</Step>
+<Step>
+
+### Set the environment
+
+| Variable | |
+| --- | --- |
+| `DATABASE_URL`, `DATABASE_URL_UNPOOLED` | Pooled and direct connection strings. |
+| `BETTER_AUTH_SECRET` | `openssl rand -hex 32`. |
+| `STORAGE_DRIVER` | `vercel-blob`, with a **private** Blob store connected (`BLOB_READ_WRITE_TOKEN`). |
+| `CRON_SECRET` | `openssl rand -hex 32`, so the daily retention crons are accepted. |
+| `TRUSTED_ORIGINS` | Extra domains that should be able to sign in (optional). |
+
+`BASE_URL` defaults to the production domain, and previews use their deployment URL.
+
+</Step>
+<Step>
+
+### Create the first accounts
+
+Run the seed once against the production database, with `SEED_SUPERADMIN_EMAIL` set:
+
+```bash
+nub run db:seed
+```
+
+</Step>
+</Steps>
+
+The watchdog and the retention crons need nothing more on Vercel: the Workflow SDK runs on Vercel, and
+`apps/web/vercel.json` schedules the crons for production.

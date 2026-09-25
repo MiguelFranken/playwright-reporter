@@ -1,0 +1,14 @@
+---
+title: Branches and pull requests
+description: See how a branch or a pull request is doing, against the base branch.
+---
+
+The reporter records the branch, commit and pull request of every run: from Playwright's `captureGitInfo`, CI
+variables or the checkout. The app groups runs by them.
+
+- **Branches** lists every branch with runs, with its latest status and pass rate. A branch's page shows its runs and
+  how it compares to the project's base branch.
+- **Pull requests** lists every pull or merge request with runs. Its page shows the runs of the PR, newest first.
+
+The base branch is the project's default branch, set under the project's **Settings**; without one, the app picks
+the most active of `main` and `master`.
