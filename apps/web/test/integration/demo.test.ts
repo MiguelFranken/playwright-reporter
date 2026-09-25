@@ -8,7 +8,8 @@ import { removeMyAvatar } from '@/app/(app)/account/actions';
 import { GET as demoRoute } from '@/app/demo/route';
 import { getCurrentUser, resolveProject } from '@/lib/auth/access';
 import { auth } from '@/lib/auth/auth';
-import { DEMO_READ_ONLY, findDemoAccount } from '@/lib/auth/demo';
+import { DEMO_READ_ONLY, findDemoAccount, membersVisibleTo } from '@/lib/auth/demo';
+import { listTeamMembers } from '@/lib/db/queries/teams';
 import { sessions, teamMembers, users } from '@/lib/db/schema';
 import { proxy } from '@/proxy';
 import { afterEach, createMember, createTenant, createUserRow, describe, expect, test, vi } from './fixtures';
@@ -233,6 +234,19 @@ describe('the signed-in demo account', () => {
     actor.signIn(demo);
 
     expect(await removeMyAvatar()).toEqual({ ok: false, message: DEMO_READ_ONLY });
+  });
+
+  test("is not shown the instance's superadmins in a team's members", async ({ db, tenant }) => {
+    enableDemo();
+    const demo = await createMember(db, tenant.team.id, 'viewer', { email: DEMO_EMAIL });
+    const boss = await createMember(db, tenant.team.id, 'admin', { instanceRole: 'superadmin' });
+    const members = await listTeamMembers(tenant.team.id);
+
+    const seenByDemo = membersVisibleTo(demo, members).map((m) => m.userId);
+    expect(seenByDemo).toContain(demo.id);
+    expect(seenByDemo).not.toContain(boss.id);
+    // Everybody else still sees the whole team.
+    expect(membersVisibleTo({ email: 'someone@example.test' }, members).map((m) => m.userId)).toContain(boss.id);
   });
 
   test('other accounts are not affected by the restrictions', async ({ db, tenant, actor }) => {

@@ -32,6 +32,18 @@ export function isDemoUser(user: { email: string } | null | undefined): boolean 
   return !!email && !!user && user.email.toLowerCase() === email;
 }
 
+/**
+ * The members the demo account may see in a team's member list. Everybody
+ * with the link is signed in as it, so it is not shown the instance's
+ * superadmins: their names and email addresses would be public.
+ */
+export function membersVisibleTo<M extends { instanceRole: string | null }>(
+  viewer: { email: string },
+  members: M[],
+): M[] {
+  return isDemoUser(viewer) ? members.filter((m) => m.instanceRole !== 'superadmin') : members;
+}
+
 export type DemoAccount = { id: string; email: string };
 
 /**
