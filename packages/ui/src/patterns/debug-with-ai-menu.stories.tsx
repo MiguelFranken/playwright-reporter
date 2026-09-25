@@ -24,7 +24,7 @@ export const TriageARun: Story = {
 };
 
 /**
- * Opening the menu offers the four hand-offs. The deep links carry the same
+ * Opening the menu offers every hand-off. The deep links carry the same
  * prompt as the clipboard, and the setup item goes to the host's page — both
  * are anchors, so they open like links rather than running script.
  */
@@ -36,10 +36,15 @@ export const OffersEveryHandOff: Story = {
     // The popup animates in, so wait for it rather than asserting mid-transition.
     const copy = await body.findByRole('menuitem', { name: /copy prompt/i });
     await waitFor(() => expect(copy).toBeVisible());
+    const claudeCode = body.getByRole('menuitem', { name: /open in claude code/i });
+    const codex = body.getByRole('menuitem', { name: /open in codex/i });
     const cursor = body.getByRole('menuitem', { name: /open in cursor/i });
     const vscode = body.getByRole('menuitem', { name: /open in vs code/i });
     const setup = body.getByRole('menuitem', { name: /set up an assistant/i });
 
+    await expect(claudeCode.tagName).toBe('A');
+    await expect(new URL(claudeCode.getAttribute('href')!).searchParams.get('q')).toBe(args.prompt);
+    await expect(new URL(codex.getAttribute('href')!).searchParams.get('prompt')).toBe(args.prompt);
     await expect(cursor.tagName).toBe('A');
     await expect(new URL(cursor.getAttribute('href')!).searchParams.get('text')).toBe(args.prompt);
     await expect(vscode.getAttribute('href')).toMatch(/^vscode:\/\/GitHub\.Copilot-Chat\/chat\?prompt=/);

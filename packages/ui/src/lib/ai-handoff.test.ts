@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { cursorPromptLink, debugPrompt, triagePrompt, vscodePromptLink } from './ai-handoff';
+import {
+  claudeCodePromptLink,
+  codexPromptLink,
+  cursorPromptLink,
+  debugPrompt,
+  PROMPT_HANDOFF_TARGETS,
+  triagePrompt,
+  vscodePromptLink,
+} from './ai-handoff';
 
 const RESULT_URL = 'https://reporter.acme.test/teams/acme/projects/web/runs/128/tests/0b6f3c1e';
 const RUN_URL = 'https://reporter.acme.test/teams/acme/projects/web/runs/128';
@@ -34,6 +42,18 @@ describe('triagePrompt', () => {
 describe('deep links', () => {
   const prompt = debugPrompt({ resultUrl: RESULT_URL });
 
+  it('encodes the prompt into a Claude Code deep link', () => {
+    const link = claudeCodePromptLink(prompt);
+    expect(link.startsWith('claude-cli://open?q=')).toBe(true);
+    expect(new URL(link).searchParams.get('q')).toBe(prompt);
+  });
+
+  it('encodes the prompt into a Codex new-chat link', () => {
+    const link = codexPromptLink(prompt);
+    expect(link.startsWith('codex://new?prompt=')).toBe(true);
+    expect(new URL(link).searchParams.get('prompt')).toBe(prompt);
+  });
+
   it('encodes the prompt into a Cursor prompt deeplink', () => {
     const link = cursorPromptLink(prompt);
     expect(link.startsWith('cursor://anysphere.cursor-deeplink/prompt?text=')).toBe(true);
@@ -47,9 +67,16 @@ describe('deep links', () => {
   });
 
   it('leaves no raw space, newline or ampersand in the link', () => {
-    for (const link of [cursorPromptLink(`${prompt}&x=1`), vscodePromptLink(`${prompt}&x=1`)]) {
+    for (const link of PROMPT_HANDOFF_TARGETS.map((target) => target.link(`${prompt}&x=1`))) {
       expect(link).not.toMatch(/\s/);
       expect(link.split('?')[1]).not.toContain('&');
     }
+  });
+});
+
+describe('PROMPT_HANDOFF_TARGETS', () => {
+  it('offers Claude Code, Codex, Cursor and VS Code, with unique ids', () => {
+    expect(PROMPT_HANDOFF_TARGETS.map((target) => target.label)).toEqual(['Claude Code', 'Codex', 'Cursor', 'VS Code']);
+    expect(new Set(PROMPT_HANDOFF_TARGETS.map((target) => target.id)).size).toBe(PROMPT_HANDOFF_TARGETS.length);
   });
 });
