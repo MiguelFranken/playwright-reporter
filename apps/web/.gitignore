@@ -2,3 +2,6 @@
 .env*
 !.env.example
 /.swc
+
+# Copied from playwright-core by scripts/copy-trace-viewer.mjs.
+/public/trace/

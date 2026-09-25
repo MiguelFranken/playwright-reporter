@@ -4,6 +4,7 @@ import { attachmentsOfResult, getAttachmentInProject } from '@/lib/db/queries/mc
 import type { Attachment } from '@/lib/db/schema';
 import { getStorage } from '@/lib/storage';
 import { daysFor, getRetentionPolicy } from '@/lib/storage/retention';
+import { traceViewerUrl } from '@/lib/trace-viewer/url';
 import { inlineImageMaxBytes } from '../config';
 import { ToolError, invalid, notFound } from '../errors';
 import { commonParams, isUuid, resultParam } from '../params';
@@ -123,7 +124,7 @@ export const getArtifact = defineTool({
     let delivered: 'image' | 'text' | 'link' = 'link';
 
     if (a.kind === 'trace') {
-      base.traceViewerUrl = `https://trace.playwright.dev/?trace=${encodeURIComponent(url)}`;
+      base.traceViewerUrl = traceViewerUrl(url, new URL(url).origin);
       base.showTraceCommand = `npx playwright show-trace "${url}"`;
       base.note = 'Open the trace in the viewer, or run the command locally; the link expires in a few minutes.';
     } else if (a.contentType.startsWith('image/') && (a.sizeBytes ?? 0) <= inlineImageMaxBytes()) {

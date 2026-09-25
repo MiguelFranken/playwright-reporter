@@ -7,26 +7,11 @@ import { attachments, projects, runs, teams } from '@/lib/db/schema';
 import { getStorage } from '@/lib/storage';
 import { markMissingExpired } from '@/lib/storage/retention';
 
-// Only the trace viewer needs cross-origin access, and only with a signed URL.
-const TRACE_VIEWER_ORIGIN = 'https://trace.playwright.dev';
-
-const CORS = {
-  'access-control-allow-origin': TRACE_VIEWER_ORIGIN,
-  'access-control-allow-methods': 'GET, HEAD, OPTIONS',
-  'access-control-allow-headers': 'Range',
-  'access-control-expose-headers': 'Content-Length, Content-Range, Accept-Ranges',
-  vary: 'Origin',
-};
-
 const INLINE_MEDIA = new Set(['video', 'screenshot', 'image']);
-
-export async function OPTIONS() {
-  return new Response(null, { status: 204, headers: CORS });
-}
 
 export async function GET(request: Request, { params }: { params: Promise<{ attachmentId: string }> }) {
   const { attachmentId } = await params;
-  if (!isUuid(attachmentId)) return new Response('not found', { status: 404, headers: CORS });
+  if (!isUuid(attachmentId)) return new Response('not found', { status: 404 });
 
   const [row] = await db
     .select({
@@ -40,13 +25,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ atta
     .innerJoin(teams, eq(teams.id, projects.teamId))
     .where(eq(attachments.id, attachmentId))
     .limit(1);
-  if (!row) return new Response('not found', { status: 404, headers: CORS });
+  if (!row) return new Response('not found', { status: 404 });
 
   const url = new URL(request.url);
   const signed = verifyArtifactSignature(attachmentId, url.searchParams.get('exp'), url.searchParams.get('sig'));
   if (!signed && !(await hasSessionAccess(row.teamSlug))) {
     // 404, not 403: an artifact id must not confirm that a run exists.
-    return new Response('not found', { status: 404, headers: CORS });
+    return new Response('not found', { status: 404 });
   }
 
   const { attachment } = row;
@@ -58,11 +43,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ atta
 
   // Media the browser plays itself is read straight from the store: no function
   // copies the bytes, and a video seeks with real range requests. Downloads keep
-  // their file name and the trace viewer its CORS headers, so those stay here.
+  // their file name and traces their range requests, so those stay here.
   if (storage.readUrl && !download && INLINE_MEDIA.has(attachment.kind)) {
     return new Response(null, {
       status: 302,
-      headers: { ...CORS, location: await storage.readUrl(attachment.storageKey), 'cache-control': 'private, max-age=600' },
+      headers: { location: await storage.readUrl(attachment.storageKey), 'cache-control': 'private, max-age=600' },
     });
   }
 
@@ -75,12 +60,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ atta
   const obj = await storage.get(attachment.storageKey, range);
   if (!obj) {
     if (await markMissingExpired(attachment.id, storage)) return gone();
-    return new Response('artifact missing in storage', { status: 404, headers: CORS });
+    return new Response('artifact missing in storage', { status: 404 });
   }
 
   const disposition = download ? 'attachment' : 'inline';
   const headers: Record<string, string> = {
-    ...CORS,
     'content-type': attachment.contentType || obj.contentType,
     'accept-ranges': 'bytes',
     // No longer immutable-forever: access can be revoked.
@@ -98,7 +82,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ atta
 }
 
 function gone() {
-  return new Response('artifact expired', { status: 410, headers: { ...CORS, 'cache-control': 'private, max-age=3600' } });
+  return new Response('artifact expired', { status: 410, headers: { 'cache-control': 'private, max-age=3600' } });
 }
 
 async function hasSessionAccess(teamSlug: string) {

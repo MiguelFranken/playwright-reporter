@@ -18,10 +18,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { requireProject } from '@/lib/auth/access';
 import { getResultDetail, testHistory } from '@/lib/db/queries/runs';
 import { formatDateTime, formatDuration, formatRelative } from '@miguelfranken/ui/lib/format';
-import { signArtifactPath } from '@/lib/auth/artifact-url';
 import { projectHrefs } from '@/lib/view-models';
 import { baseUrl, getStorage } from '@/lib/storage';
 import { expiresAt, getRetentionPolicy } from '@/lib/storage/retention';
+import { traceViewerUrl } from '@/lib/trace-viewer/url';
 
 type Props = { params: Promise<{ team: string; project: string; number: string; resultId: string }> };
 
@@ -92,12 +92,9 @@ async function ResultContent({ params }: Props) {
             status: att.status,
             sizeBytes: att.sizeBytes,
             url,
-            // The trace viewer fetches cross-site without our cookies, so trace
-            // links carry a short-lived signature instead (lib/auth/artifact-url.ts).
-            traceUrl:
-              att.kind === 'trace'
-                ? `https://trace.playwright.dev/?trace=${encodeURIComponent(`${origin}${signArtifactPath(att.id)}`)}`
-                : undefined,
+            // The self-hosted viewer fetches the trace same-origin, with the
+            // session cookie: no signature needed (lib/trace-viewer).
+            traceUrl: att.kind === 'trace' ? traceViewerUrl(url) : undefined,
             text: att.kind === 'text' && att.status === 'uploaded' ? await readText(att.storageKey, att.sizeBytes) : undefined,
             expiredAt: att.expiredAt?.toISOString() ?? null,
             expiresAt: expiresAt(policy, att.kind, att.createdAt)?.toISOString() ?? null,

@@ -2,10 +2,11 @@ import { createHmac, hkdfSync, timingSafeEqual } from 'node:crypto';
 import { artifactUrlTtlSeconds, authSecret } from './config';
 
 /**
- * `trace.playwright.dev` fetches the trace from the user's browser cross-site,
- * without our cookies, so trace links carry a short-lived signature instead.
- * A signed URL leaks exactly one artifact for at most one hour, which is the
- * same exposure the trace viewer has with any URL pasted into it.
+ * Artifact links for callers without a session cookie — MCP clients, and
+ * `npx playwright show-trace <url>` — carry a short-lived signature instead.
+ * A signed URL leaks exactly one artifact until it expires. The app's own pages
+ * never need one: the browser, and the self-hosted trace viewer's service
+ * worker, fetch artifacts same-origin with the session.
  */
 let cachedKey: Buffer | undefined;
 

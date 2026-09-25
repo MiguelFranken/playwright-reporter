@@ -195,6 +195,9 @@ importers:
       drizzle-kit:
         specifier: ^0.31.10
         version: 0.31.10
+      playwright-core:
+        specifier: ^1.63.0
+        version: 1.63.0
       postcss:
         specifier: ^8.5.28
         version: 8.5.28
