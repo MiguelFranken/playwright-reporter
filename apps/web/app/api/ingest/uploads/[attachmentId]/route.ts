@@ -1,5 +1,5 @@
-import { errorResponse, json, requireProjectToken } from '@/lib/ingest/http';
-import { getAttachmentForProject, storeUpload } from '@/lib/ingest/service';
+import { errorResponse, json, requireAttachmentToken } from '@/lib/ingest/http';
+import { storeUpload } from '@/lib/ingest/service';
 
 export const maxDuration = 120;
 
@@ -7,8 +7,7 @@ export const maxDuration = 120;
 export async function PUT(request: Request, { params }: { params: Promise<{ attachmentId: string }> }) {
   try {
     const { attachmentId } = await params;
-    const project = await requireProjectToken(request);
-    const attachment = await getAttachmentForProject(project, attachmentId);
+    const { attachment } = await requireAttachmentToken(request, attachmentId);
     const size = await storeUpload(attachment, request.body, request.headers.get('content-type'));
     return json({ ok: true, size });
   } catch (err) {

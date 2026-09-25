@@ -192,6 +192,28 @@ describe('the whole reporter conversation', () => {
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual({ error: 'run not found' });
   });
+
+  test('a run id that is not a uuid is a 404 with a valid token and a 401 without one', async ({ tenant }) => {
+    const send = (token: string) =>
+      postEvents(
+        ingestRequest('http://test.local/api/ingest/runs/not-a-uuid/events', { shardIndex: 1, events: [] }, { token }),
+        params({ runId: 'not-a-uuid' }),
+      );
+    expect((await send(tenant.token)).status).toBe(404);
+    expect((await send('pwr_not-a-real-token')).status).toBe(401);
+  });
+
+  test('a revoked token cannot reach its own run', async ({ db, tenant }) => {
+    const { runId } = await (await postRun(ingestRequest('http://test.local/api/ingest/runs', runStart(), { token: tenant.token }))).json();
+    await db.update(apiTokens).set({ revokedAt: new Date() }).where(eq(apiTokens.projectId, tenant.project.id));
+
+    const response = await postEvents(
+      ingestRequest(`http://test.local/api/ingest/runs/${runId}/events`, { shardIndex: 1, events: [] }, { token: tenant.token }),
+      params({ runId }),
+    );
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ error: 'invalid token' });
+  });
 });
 
 describe('attachment upload', () => {
@@ -283,6 +305,26 @@ describe('attachment upload', () => {
     );
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual({ error: 'attachment not found' });
+
+    const [row] = await db.select().from(attachments).where(eq(attachments.id, ref.id));
+    expect(row.status).toBe('pending');
+  });
+
+  test("the complete endpoint answers 404 for another project's attachment and 401 for a bad token", async ({ db, tenant }) => {
+    const other = await createTenant(db);
+    const { started, ref } = await runWithAttachment(other.token);
+    const [pending] = await db.select().from(attachments).where(eq(attachments.id, ref.id));
+    await getStorage().put(pending.storageKey, new Uint8Array([1]), { contentType: 'image/png' });
+
+    const send = (token: string) =>
+      postComplete(
+        ingestRequest(`http://test.local/api/ingest/runs/${started.runId}/attachments/${ref.id}/complete`, {}, { token }),
+        params({ runId: started.runId, attachmentId: ref.id }),
+      );
+    const foreign = await send(tenant.token);
+    expect(foreign.status).toBe(404);
+    expect(await foreign.json()).toEqual({ error: 'attachment not found' });
+    expect((await send('pwr_not-a-real-token')).status).toBe(401);
 
     const [row] = await db.select().from(attachments).where(eq(attachments.id, ref.id));
     expect(row.status).toBe('pending');
