@@ -5,10 +5,9 @@ database and without an authenticated session — if a component cannot, it does
 not belong here.
 
 `apps/storybook` is the catalogue for this package. It holds configuration only;
-the stories live here, next to the components they describe.
-
-Design rationale: [`../../STORYBOOK_DESIGN_SYSTEM.md`](../../STORYBOOK_DESIGN_SYSTEM.md).
-Configuration and the places reality departed from that plan: [`../../STORYBOOK_DESIGN_SYSTEM_TECHNICAL.md`](../../STORYBOOK_DESIGN_SYSTEM_TECHNICAL.md).
+the stories live here, next to the components they describe. Those stories are
+the repo's only visual tests: UI that lives in `apps/web` instead is only ever
+seen by starting the app against a database in the right state.
 
 ## Layers
 
@@ -56,6 +55,60 @@ A component without a story is not finished.
 Stories run as tests in a real browser on every pull request, with an
 accessibility check on each one, so the catalogue cannot quietly rot. That is
 the whole reason the rule is absolute.
+
+## Building UI for the app
+
+New UI starts here, not in `apps/web/components`. The app keeps only the part
+that cannot run in Storybook.
+
+### Where does it go?
+
+| It… | Put it in |
+| --- | --- |
+| is a generic control with no product vocabulary (Switch, Checkbox, Dialog) | `src/components` — prefer `shadcn add`, else wrap the Base UI part in the same style |
+| knows the product's language but not its data (a status badge, an avatar with initials, an empty state) | `src/patterns` |
+| renders one domain object or list from a view model (a token table, a consent card, a retention form) | `src/views/<domain>/` |
+| is a constant, formatter, label map or option builder that server code also reads | `src/lib` (no `'use client'`) |
+| calls a server action, `next/navigation`, `useSearchParams`, the auth client, SSE, a service worker, `canvas`, `window.confirm` or `toast` | a connected wrapper in `apps/web/components` |
+
+Domains under `src/views/`: `run`, `runs`, `explorer`, `dashboard`, `branches`,
+`settings` (project settings), `account` (the signed-in user's own page),
+`admin` (superadmin screens), `connect` (the OAuth consent screen). Add a folder
+when a new area of the app appears; its story titles are `Views/<Domain>/…`.
+
+### Moving a component out of `apps/web`
+
+Split it into a *controlled view* here and a *connected wrapper* there. The
+wrapper should end up a screenful of hooks and one JSX element.
+
+1. **Props type first.** Move the row / view-model interface (`PersonalTokenRow`,
+   `ConnectedAppRow`) into the view file and re-export or import it from the app.
+   Never import an app type into the package; declare a UI union instead
+   (`ArtifactKind`, `StorageDriver`) and let the app's type check against it.
+2. **Side effects become callbacks.** A server action call turns into
+   `onRevoke(row)`, `onSubmit(values)`, `onCheckedChange(next)`. The wrapper
+   does the `startTransition`, the `toast`, the `window.confirm` and the
+   `router.refresh()`.
+3. **Pending state comes in as a prop.** `pending` for a single control,
+   `pendingId` for a list where one row is busy. The view only disables and
+   relabels (`Revoking…`); it never owns the transition.
+4. **Forms keep native actions.** A view that renders a `<form>` takes
+   `action: (formData: FormData) => void` plus `pending` and `error`, so the
+   wrapper can pass the `useActionState` dispatcher and progressive enhancement
+   keeps working. Field `name`s are part of the contract with the server action
+   — keep them.
+5. **Slots for app-only controls.** When one button in an otherwise
+   presentational view is connected (a "Test connection" that calls a server
+   action), take it as a `ReactNode` slot rather than a callback plus a result
+   shape. See `AiAssistants` → `testConnection`.
+6. **Browser-API state machines stay in the app, their screens move.** Push
+   notifications: the wrapper talks to the service worker and hands a `state`
+   (`unsupported`, `blocked`, `off`, `on`) to a view that renders each one.
+7. **Keep the text and accessible names identical.** Integration and e2e tests
+   in the app query by them.
+8. **Write the stories before deleting the old markup**: default, empty,
+   pending, error, long text, and a `play` that drives every callback and
+   asserts it with `fn()`.
 
 ## Two traps that type-check and then fail at runtime
 
@@ -178,16 +231,22 @@ range because a rate against a zero baseline is a flat line.
 
 ## Commands
 
+Run from the repo root. The package manager is nub (`mise.toml` pins it).
+
 ```bash
-pnpm turbo run dev  --filter=@miguelfranken/storybook   # catalogue at :6006
-pnpm turbo run test --filter=@miguelfranken/storybook   # every story, in Chromium
-pnpm --filter @miguelfranken/ui check-types             # covers stories and fixtures
-pnpm --filter @miguelfranken/ui test                    # node-side: helpers + boundary guard
-pnpm --filter @miguelfranken/ui exec shadcn add <name>  # components.json lives here
+nub exec turbo run dev --filter=@miguelfranken/storybook        # catalogue at :6006
+nub exec turbo run test:unit --filter=@miguelfranken/storybook  # every story, in Chromium
+nub run --filter @miguelfranken/ui check-types                  # covers stories and fixtures
+nub run --filter @miguelfranken/ui test                         # node-side: helpers + boundary guard
+nub exec --filter @miguelfranken/ui shadcn add <name>           # components.json lives here
 ```
 
 Browser tests need Playwright's Chromium once:
-`pnpm --filter @miguelfranken/storybook exec playwright install chromium`.
+`nub exec --filter @miguelfranken/storybook playwright install chromium`.
+
+The very first Storybook run after an install can fail a handful of files with
+"Failed to import test file … SyntaxError" while Vite optimises dependencies.
+That is a cold start, not your change: run it again.
 
 ## Package rules
 
