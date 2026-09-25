@@ -15,8 +15,8 @@ export const instanceSettings = pgTable('instance_settings', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
-/** What started a sweep: the scheduler, a finished run, or a superadmin. */
-export const sweepTriggerEnum = pgEnum('sweep_trigger', ['cron', 'ingest', 'manual']);
+/** What started a sweep: the scheduler, a finished run, a superadmin, or a superadmin evicting everything. */
+export const sweepTriggerEnum = pgEnum('sweep_trigger', ['cron', 'ingest', 'manual', 'force']);
 
 export const artifactSweeps = pgTable(
   'artifact_sweeps',

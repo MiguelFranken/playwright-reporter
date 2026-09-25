@@ -1,0 +1,1 @@
+ALTER TYPE "public"."sweep_trigger" ADD VALUE 'force';

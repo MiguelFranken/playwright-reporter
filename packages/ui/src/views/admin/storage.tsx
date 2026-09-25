@@ -126,7 +126,7 @@ export function StorageUsageTable({ rows }: { rows: StorageUsageRow[] }) {
 
 export interface RetentionSweepRow {
   id: number;
-  trigger: 'cron' | 'ingest' | 'manual';
+  trigger: 'cron' | 'ingest' | 'manual' | 'force';
   startedAt: Date | string;
   /** `null` while it is still running. */
   finishedAt: Date | string | null;
@@ -137,7 +137,12 @@ export interface RetentionSweepRow {
   error: string | null;
 }
 
-const TRIGGER_LABELS: Record<RetentionSweepRow['trigger'], string> = { cron: 'Scheduler', ingest: 'Run finished', manual: 'Run now' };
+const TRIGGER_LABELS: Record<RetentionSweepRow['trigger'], string> = {
+  cron: 'Scheduler',
+  ingest: 'Run finished',
+  manual: 'Run now',
+  force: 'Force delete',
+};
 
 /** The most recent retention sweeps and what each one freed. */
 export function RetentionSweepsTable({ sweeps, now }: { sweeps: RetentionSweepRow[]; now?: Date }) {

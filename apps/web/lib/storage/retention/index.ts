@@ -186,6 +186,77 @@ export async function sweepExpiredArtifacts(options: SweepOptions): Promise<Swee
   return { status: 'done', sweepId: sweep.id, expiredCount, expiredBytes, hasMore, error };
 }
 
+/**
+ * "Force delete": expires every live artifact of the active driver, whatever
+ * the policy says and whether or not it is on. The objects are deleted from
+ * the store even when the store expires objects itself, since nothing would
+ * otherwise take them before their lifecycle rule does. Logged as a `force`
+ * sweep, batched and budgeted like any other; rows from another driver are
+ * left alone for the same reason.
+ */
+export async function evictAllArtifacts(
+  options: Omit<SweepOptions, 'trigger' | 'now'> = {},
+): Promise<Extract<SweepResult, { status: 'done' }>> {
+  const storage = options.storage ?? getStorage();
+  const batchSize = options.batchSize ?? BATCH_SIZE;
+  const deadline = Date.now() + (options.budgetMs ?? 60_000);
+  const live = and(eq(attachments.storageDriver, storage.name), isNull(attachments.expiredAt))!;
+
+  const [sweep] = await db
+    .insert(artifactSweeps)
+    .values({ trigger: 'force', storageDriver: storage.name })
+    .returning({ id: artifactSweeps.id });
+
+  let expiredCount = 0;
+  let expiredBytes = 0;
+  let hasMore = false;
+  let error: string | null = null;
+
+  try {
+    for (;;) {
+      if (Date.now() >= deadline) {
+        const [row] = await db.select({ id: attachments.id }).from(attachments).where(live).limit(1);
+        hasMore = Boolean(row);
+        break;
+      }
+      const batch = await db.transaction(async (tx) => {
+        const rows = await tx
+          .select({ id: attachments.id, storageKey: attachments.storageKey, sizeBytes: attachments.sizeBytes })
+          .from(attachments)
+          .where(live)
+          .orderBy(asc(attachments.createdAt))
+          .limit(batchSize)
+          .for('update', { skipLocked: true });
+        if (rows.length === 0) return rows;
+        await storage.delete(rows.map((r) => r.storageKey));
+        await tx
+          .update(attachments)
+          .set({ status: 'expired', expiredAt: sql`now()` })
+          .where(
+            inArray(
+              attachments.id,
+              rows.map((r) => r.id),
+            ),
+          );
+        return rows;
+      });
+      expiredCount += batch.length;
+      expiredBytes += batch.reduce((sum, r) => sum + (r.sizeBytes ?? 0), 0);
+      if (batch.length < batchSize) break;
+    }
+  } catch (err) {
+    error = err instanceof Error ? err.message : String(err);
+    hasMore = true;
+    console.error('[retention] force eviction failed', err);
+  }
+
+  await db
+    .update(artifactSweeps)
+    .set({ finishedAt: sql`now()`, expiredCount, expiredBytes, hasMore, error })
+    .where(eq(artifactSweeps.id, sweep.id));
+  return { status: 'done', sweepId: sweep.id, expiredCount, expiredBytes, hasMore, error };
+}
+
 async function anyDue(policy: RetentionPolicy, storage: StorageAdapter, now: Date) {
   const [row] = await db
     .select({ id: attachments.id })

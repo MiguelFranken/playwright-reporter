@@ -28,5 +28,6 @@ export const RETENTION_SWEEPS: RetentionSweepRow[] = [
     hasMore: false,
     error: 'BlobServiceUnavailable: The Vercel Blob API responded with 503 while deleting a batch of 100 objects',
   },
-  { id: 54, trigger: 'cron', startedAt: ago(60 * 54), finishedAt: ago(60 * 54 - 1), expiredCount: 0, expiredBytes: 0, hasMore: false, error: null },
+  { id: 54, trigger: 'force', startedAt: ago(60 * 48), finishedAt: ago(60 * 48 - 3), expiredCount: 5_870, expiredBytes: 21_300 * MB, hasMore: false, error: null },
+  { id: 53, trigger: 'cron', startedAt: ago(60 * 54), finishedAt: ago(60 * 54 - 1), expiredCount: 0, expiredBytes: 0, hasMore: false, error: null },
 ];

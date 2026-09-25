@@ -15,3 +15,6 @@ export function ingestSweepEnabled(env: Record<string, string | undefined> = pro
   if (env.VERCEL && env.VERCEL_ENV !== 'production') return false;
   return true;
 }
+
+/** What a superadmin types to arm "Force delete", which evicts every artifact. */
+export const EVICT_CONFIRMATION = 'delete all artifacts';

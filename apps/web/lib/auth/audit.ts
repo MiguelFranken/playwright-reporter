@@ -32,6 +32,7 @@ export type AuditAction =
   | 'user.delete'
   | 'storage.retention.update'
   | 'storage.retention.sweep'
+  | 'storage.evict'
   | 'mcp.settings.update';
 
 /**
