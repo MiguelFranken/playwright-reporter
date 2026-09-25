@@ -1,6 +1,6 @@
 {
   "name": "@miguelfranken/mcp",
-  "version": "0.0.29",
+  "version": "0.0.30",
   "type": "module",
   "description": "stdio MCP bridge to a self-hosted Playwright Reporter instance, for MCP clients without remote HTTP support",
   "license": "MIT",
