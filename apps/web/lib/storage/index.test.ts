@@ -69,6 +69,8 @@ describe('storageDriver', () => {
     expect(storageDriver()).toBe('local');
     process.env.STORAGE_DRIVER = 'vercel-blob';
     expect(storageDriver()).toBe('vercel-blob');
+    process.env.STORAGE_DRIVER = 's3';
+    expect(storageDriver()).toBe('s3');
   });
 
   it('falls back to blob storage on Vercel and to the filesystem elsewhere', () => {
@@ -78,7 +80,7 @@ describe('storageDriver', () => {
   });
 
   it('ignores an unrecognised value rather than trusting it', () => {
-    process.env.STORAGE_DRIVER = 's3';
+    process.env.STORAGE_DRIVER = 'gcs';
     expect(storageDriver()).toBe('local');
     process.env.VERCEL = '1';
     expect(storageDriver()).toBe('vercel-blob');

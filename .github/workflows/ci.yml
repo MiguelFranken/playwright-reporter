@@ -79,8 +79,23 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      # The S3 stub for the S3 storage suites: RustFS, an Apache-2.0
+      # S3-compatible server that checks signatures the way S3 does.
+      rustfs:
+        image: rustfs/rustfs:1.0.0
+        env:
+          RUSTFS_ACCESS_KEY: pwr-test-access-key
+          RUSTFS_SECRET_KEY: pwr-test-secret-key
+        ports:
+          - 9000:9000
+        options: >-
+          --health-cmd "curl -fsS http://localhost:9000/health/ready"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 24
     env:
       TEST_DATABASE_URL: postgres://postgres:test@localhost:5432/postgres
+      TEST_S3_ENDPOINT: http://localhost:9000
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup

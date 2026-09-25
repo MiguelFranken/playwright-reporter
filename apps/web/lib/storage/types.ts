@@ -1,7 +1,7 @@
-import type { UploadInstruction } from '@miguelfranken/protocol';
+import type { AttachmentKind, UploadInstruction } from '@miguelfranken/protocol';
 import type { RetentionPolicy } from './retention/policy';
 
-export type StorageDriver = 'local' | 'vercel-blob';
+export type StorageDriver = 'local' | 'vercel-blob' | 's3';
 
 /**
  * Who deletes expired artifacts. `app`: the retention sweep deletes the
@@ -32,7 +32,7 @@ export interface StorageAdapter {
   /** Tells the reporter how to upload the object for `key`. */
   createUpload(
     key: string,
-    meta: { contentType: string; size?: number; attachmentId: string },
+    meta: { contentType: string; size?: number; attachmentId: string; kind?: AttachmentKind },
   ): Promise<Omit<UploadInstruction, 'attachmentId'>>;
   /** Server-side write (proxy strategy). */
   put(key: string, body: ReadableStream<Uint8Array> | Uint8Array, meta: { contentType: string }): Promise<{ size: number }>;

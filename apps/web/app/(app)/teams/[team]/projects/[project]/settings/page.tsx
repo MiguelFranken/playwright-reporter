@@ -10,6 +10,7 @@ import { TokensCard, type TokenRow } from '@/components/settings/tokens-card';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@miguelfranken/ui/components/card';
 import { Skeleton } from '@miguelfranken/ui/components/skeleton';
 import { requireProject } from '@/lib/auth/access';
+import { s3ConfigFromEnv } from '@/lib/storage/s3-config';
 import { listTokens } from '@/lib/db/queries/projects';
 import { defaultBranch } from '@/lib/db/queries/mcp';
 import { formatDateTime, formatRelative } from '@miguelfranken/ui/lib/format';
@@ -106,7 +107,7 @@ async function SettingsContent({ params }: { params: Params }) {
             <CardDescription>Where test attachments are kept.</CardDescription>
           </CardHeader>
           <CardContent>
-            <StorageCard driver={driver} localDir={localDir} blobConfigured={Boolean(process.env.BLOB_READ_WRITE_TOKEN)} />
+            <StorageCard driver={driver} localDir={localDir} blobConfigured={Boolean(process.env.BLOB_READ_WRITE_TOKEN)} {...s3Settings(driver)} />
           </CardContent>
         </Card>
       </div>
@@ -138,4 +139,15 @@ async function SettingsContent({ params }: { params: Params }) {
       {canDelete ? <ProjectDangerZone teamSlug={team} projectSlug={project.slug} name={project.name} /> : null}
     </div>
   );
+}
+
+/** The S3 settings the storage card shows (never the credentials), or why they are unusable. */
+function s3Settings(driver: string) {
+  if (driver !== 's3') return {};
+  try {
+    const c = s3ConfigFromEnv();
+    return { s3: { bucket: c.bucket, region: c.region, endpoint: c.endpoint ?? null, keyPrefix: c.keyPrefix, lifecycle: c.retention === 'provider' } };
+  } catch (error) {
+    return { s3: null, s3Error: (error as Error).message };
+  }
 }

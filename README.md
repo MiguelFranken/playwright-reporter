@@ -18,6 +18,7 @@
   <a href="#quick-start">Quick start</a> ·
   <a href="#using-the-reporter-in-your-project">Reporter</a> ·
   <a href="#configuration">Configuration</a> ·
+  <a href="#artifact-storage">Storage</a> ·
   <a href="#users-and-teams">Users &amp; teams</a> ·
   <a href="#ai-assistants-mcp">AI assistants</a> ·
   <a href="#deploying">Deploying</a> ·
@@ -43,8 +44,8 @@
 - 👥 **Teams, roles and invitations**: superadmins, team admins, members and viewers; teams can't see each other's
   projects
 - 🛡️ **Never fails your tests**: network errors are retried and then logged, the run goes on
-- ☁️ **Runs anywhere**: Postgres (Neon recommended) and local or Vercel Blob storage; deploys to Vercel, Docker or
-  Kubernetes
+- ☁️ **Runs anywhere**: Postgres (Neon recommended) and the local filesystem, Vercel Blob or any S3-compatible bucket
+  (AWS S3, Cloudflare R2, MinIO, …) for artifacts; deploys to Vercel, Docker or Kubernetes
 
 > [!TIP]
 > **[Open the live demo](https://playwright-reporter-nine.vercel.app/demo)**: no sign-up, you are signed in as a
@@ -69,7 +70,7 @@ BASE_URL=http://localhost:3000
 BETTER_AUTH_SECRET=...                 # openssl rand -hex 32
 SEED_SUPERADMIN_EMAIL=you@example.com
 SEED_SUPERADMIN_PASSWORD=...           # optional; generated and printed once if omitted
-STORAGE_DRIVER=local                   # or vercel-blob (+ BLOB_READ_WRITE_TOKEN)
+STORAGE_DRIVER=local                   # or vercel-blob, or s3, see Artifact storage
 ```
 
 Apply the schema and seed the first superadmin, the `default` team and project, and an API token. The seed prints
@@ -174,6 +175,83 @@ and sleeps again while the run stays active.
 
 On the Postgres world, the worker polls the database twice a second, so a Neon compute behind it never scales to zero.
 
+### Artifact storage
+
+Screenshots, videos, traces and avatars go to one of three stores, chosen with `STORAGE_DRIVER`:
+
+| Driver | For | Uploads | Setup |
+| --- | --- | --- | --- |
+| `local` | development, a single server with a persistent volume | through the app (`PUT /api/ingest/uploads/:id`) | `STORAGE_LOCAL_DIR`, default `.storage` |
+| `vercel-blob` | Vercel | presigned, straight to Blob | a **private** Blob store, `BLOB_READ_WRITE_TOKEN` |
+| `s3` | Docker, Kubernetes, anywhere with a bucket | presigned, straight to the bucket | `S3_BUCKET` and the settings below |
+
+Without `STORAGE_DRIVER` the app uses `vercel-blob` on Vercel and `local` everywhere else. With a presigned driver
+the reporter PUTs each artifact to the store itself, so no artifact passes through the app and there is no request
+size limit. Media the browser plays itself (videos, screenshots) is read from a short-lived presigned URL the same
+way, which gives video seeking real range requests. Downloads and traces stream through the app, which adds the
+file name and the CORS headers `trace.playwright.dev` needs. Switching drivers doesn't move existing artifacts: they
+stay in the old store, and old runs show them as missing.
+
+#### S3 and S3-compatible stores
+
+`STORAGE_DRIVER=s3` works with AWS S3 and with any store that speaks its API: Cloudflare R2, MinIO, Hetzner Object
+Storage, DigitalOcean Spaces, Neon Object Storage and others.
+
+| Env var | |
+| --- | --- |
+| `S3_BUCKET` | the bucket; required |
+| `S3_REGION` | e.g. `eu-central-1`, `auto` for R2; falls back to `AWS_REGION`, then `us-east-1` |
+| `S3_ENDPOINT` | the store's API endpoint; unset for AWS |
+| `S3_FORCE_PATH_STYLE` | `true` for `https://endpoint/bucket/key` URLs, which MinIO and most self-hosted stores need |
+| `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_SESSION_TOKEN` | static credentials; leave them unset to use the AWS default credential chain (an IAM role, IRSA / EKS Pod Identity, `AWS_PROFILE`, …) |
+| `S3_KEY_PREFIX` | stores every object under this prefix, e.g. `reporter/production`, so several deployments can share a bucket |
+| `S3_RETENTION` | who deletes expired artifacts: `app` (default) or `lifecycle`, see [Artifact retention](#artifact-retention) |
+
+```ini
+# AWS S3, credentials from the pod's IAM role
+STORAGE_DRIVER=s3
+S3_BUCKET=acme-playwright-artifacts
+S3_REGION=eu-central-1
+
+# Cloudflare R2
+STORAGE_DRIVER=s3
+S3_BUCKET=playwright-artifacts
+S3_REGION=auto
+S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
+S3_ACCESS_KEY_ID=...
+S3_SECRET_ACCESS_KEY=...
+
+# MinIO
+STORAGE_DRIVER=s3
+S3_BUCKET=playwright-artifacts
+S3_ENDPOINT=https://minio.internal.example.com
+S3_FORCE_PATH_STYLE=true
+S3_ACCESS_KEY_ID=...
+S3_SECRET_ACCESS_KEY=...
+```
+
+The bucket stays **private**; every read goes through a presigned URL or the app. The reporter uploads from wherever
+your tests run and browsers read media from wherever your users are, so `S3_ENDPOINT` must be reachable from both,
+not only from the app. No bucket CORS rule is needed: uploads come from Node, not a browser, and the browser only loads
+media through `<img>` and `<video>`. On AWS the app needs this policy on the bucket:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    { "Effect": "Allow", "Action": ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"], "Resource": "arn:aws:s3:::acme-playwright-artifacts/*" },
+    { "Effect": "Allow", "Action": ["s3:ListBucket"], "Resource": "arn:aws:s3:::acme-playwright-artifacts" }
+  ]
+}
+```
+
+`s3:ListBucket` lets S3 answer `404` for an object that is not there instead of `403`, which is how the app tells a
+missing upload from a denied one. With `S3_RETENTION=lifecycle`, add `s3:PutObjectTagging` on the objects and
+`s3:GetLifecycleConfiguration` and `s3:PutLifecycleConfiguration` on the bucket.
+
+The adapter lives in `apps/web/lib/storage/s3.ts`. It runs against a real S3 API in the integration tests, see
+[How the tests are set up](#contributing).
+
 ### Artifact retention
 
 Screenshots, videos and traces of failing tests fill the store quickly. Superadmins set how long they are kept
@@ -197,10 +275,20 @@ for the next sweep. These start a sweep:
 
 Each storage adapter says who deletes expired objects (`StorageAdapter.retention`). The filesystem and Vercel
 Blob have no lifecycle rules, so the app deletes objects itself (`app`). A store with its own lifecycle rules
-(e.g. an S3 bucket rule) would declare `provider`. The sweep then only marks rows by the same lifetimes and
-deletes nothing. An object found missing on first read is also marked expired. Such an adapter can implement
-`applyRetentionPolicy` to push the saved policy to the bucket. The save fails if that call fails, so the two
-never silently disagree.
+declares `provider`. The sweep then only marks rows by the same lifetimes and deletes nothing. An object found
+missing on first read is also marked expired. Such an adapter can implement `applyRetentionPolicy` to push the
+saved policy to the store. The save fails if that call fails, so the two never silently disagree.
+
+The S3 driver does either:
+
+- `S3_RETENTION=app` (default): the sweep deletes expired objects with `DeleteObjects`, like on the other drivers.
+  It works on every S3-compatible store.
+- `S3_RETENTION=lifecycle`: the bucket expires objects itself. Every upload is tagged with its kind
+  (`pwr-kind=video`), and saving the policy writes one lifecycle rule per kind (`pwr-retention-<kind>`) that
+  expires objects with that tag after the configured days. Rules the app didn't write are kept; turning retention
+  off removes only its own. The store must support lifecycle rules with tag filters, as AWS S3 and MinIO do; on
+  others keep `app`. Objects uploaded before the switch carry no tag, so no rule expires them. Avatars are never
+  tagged and never expire.
 
 ### Data retention
 
@@ -360,10 +448,12 @@ your assistant.
 ### Docker and Kubernetes
 
 Run `apps/web` as a regular Next.js server, apply migrations with `nub run db:migrate`, and set
-`RUN_WATCHDOG_DRIVER=workflow` with the Postgres world, see [Abandoned runs](#abandoned-runs). Artifact and data
-retention need nothing more: a finished run starts a sweep when none ran for 12 hours. For a fixed schedule, set
-`CRON_SECRET` and call `/api/cron/artifact-retention` and `/api/cron/data-retention` from a CronJob, see
-[Artifact retention](#artifact-retention) and [Data retention](#data-retention).
+`RUN_WATCHDOG_DRIVER=workflow` with the Postgres world, see [Abandoned runs](#abandoned-runs). Keep artifacts in a
+bucket (`STORAGE_DRIVER=s3`, see [Artifact storage](#artifact-storage)), so every replica sees the same files and
+none of them needs a persistent volume. Artifact and data retention need nothing more: a finished run starts a sweep
+when none ran for 12 hours. For a fixed schedule, set `CRON_SECRET` and call `/api/cron/artifact-retention` and
+`/api/cron/data-retention` from a CronJob, see [Artifact retention](#artifact-retention) and
+[Data retention](#data-retention).
 
 ## The marketing website
 
@@ -465,7 +555,7 @@ genuinely flaky and failures come with real screenshots, videos and traces.
 nub run build              # every package and both apps
 nub run check-types        # tsc everywhere
 nub run test               # unit tests: fast, no database, no Docker
-nub run test:integration   # against a real PostgreSQL (needs Docker)
+nub run test:integration   # against a real PostgreSQL and an S3 stub (needs Docker)
 nub run test:e2e           # the example Playwright project (needs the app running)
 nub run db:generate        # a migration from schema changes
 nub run db:studio          # drizzle studio
@@ -490,6 +580,7 @@ Two Vitest projects, split by scope rather than by framework:
 | --- | --- | --- |
 | Where | next to the module (`lib/**/*.test.ts`) | `apps/web/test/integration/` |
 | Database | none; `DATABASE_URL` is a sentinel that can't resolve, so an accidental query fails loudly | a real PostgreSQL, one database per test file |
+| Storage | the local driver in a temp directory; the S3 adapter with its network calls stubbed | the local driver, and S3 on RustFS for the S3 suites, one bucket per test file |
 | Command | `nub run test` | `nub run test:integration` |
 
 The integration project starts a `postgres:17-alpine` container through Testcontainers, migrates a template database
@@ -505,7 +596,33 @@ TEST_DATABASE_URL=postgres://postgres:test@localhost:54329/postgres nub run test
 ```
 
 `TEST_DATABASE_URL` is refused if it names the same database as `DATABASE_URL`: the suite creates, truncates and
-drops databases on whatever it is given. Both projects run together with
+drops databases on whatever it is given.
+
+The S3 driver is tested against [RustFS](https://github.com/rustfs/rustfs), an Apache-2.0 S3-compatible server, so
+no test ever needs an AWS account or bucket. It's the approach Payload takes for its storage adapters, which used
+LocalStack; LocalStack's open-source edition has since been archived. RustFS passes the whole S3 suite, checks
+request signatures the way S3 does, and supports the object tags and lifecycle rules that `S3_RETENTION=lifecycle`
+relies on. The integration run starts the container through Testcontainers (`test/integration/s3-global-setup.ts`),
+and each S3 test file creates its own bucket and empties it between tests. The checks look into the bucket itself:
+- presigned uploads made with `fetch`, exactly as the reporter makes them
+- an upload with a tampered content type, which is refused
+- reads and range requests through presigned URLs
+- multipart uploads
+- batch deletes past S3's 1000-key limit
+- object tags and lifecycle rules
+
+The ingest API, the artifact route, retention and "force delete" also run end to end on `STORAGE_DRIVER=s3`. A
+shared contract suite (`test/helpers/storage-contract.ts`) runs against the local driver and S3 alike, so the two
+stay interchangeable. CI starts RustFS as a service container. To use a stub that is already running:
+
+```bash
+docker run -d -p 9000:9000 -e RUSTFS_ACCESS_KEY=pwr-test-access-key -e RUSTFS_SECRET_KEY=pwr-test-secret-key rustfs/rustfs:1.0.0
+TEST_S3_ENDPOINT=http://localhost:9000 nub run test:integration
+```
+
+`TEST_S3_ACCESS_KEY_ID` and `TEST_S3_SECRET_ACCESS_KEY` set other credentials, for a stub started with them.
+Locally, without Docker or `TEST_S3_ENDPOINT`, the S3 suites are skipped with a notice. On CI a missing stub fails
+the run. Both projects run together with
 `nub run --filter @miguelfranken/web test:all`.
 
 </details>

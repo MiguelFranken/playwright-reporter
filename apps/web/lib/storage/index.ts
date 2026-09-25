@@ -1,6 +1,8 @@
 import path from 'node:path';
 import { baseUrl } from '../auth/config';
 import { LocalStorageAdapter } from './local';
+import { S3StorageAdapter } from './s3';
+import { s3ConfigFromEnv } from './s3-config';
 import type { StorageAdapter, StorageDriver } from './types';
 import { VercelBlobStorageAdapter } from './vercel-blob';
 
@@ -9,7 +11,7 @@ export { baseUrl };
 
 export function storageDriver(): StorageDriver {
   const d = process.env.STORAGE_DRIVER;
-  if (d === 'local' || d === 'vercel-blob') return d;
+  if (d === 'local' || d === 'vercel-blob' || d === 's3') return d;
   return process.env.VERCEL ? 'vercel-blob' : 'local';
 }
 
@@ -21,7 +23,9 @@ export function getStorage(): StorageAdapter {
   cached =
     driver === 'vercel-blob'
       ? new VercelBlobStorageAdapter(process.env.BLOB_READ_WRITE_TOKEN)
-      : new LocalStorageAdapter(path.resolve(/*turbopackIgnore: true*/ process.cwd(), process.env.STORAGE_LOCAL_DIR ?? '.storage'), baseUrl());
+      : driver === 's3'
+        ? new S3StorageAdapter(s3ConfigFromEnv())
+        : new LocalStorageAdapter(path.resolve(/*turbopackIgnore: true*/ process.cwd(), process.env.STORAGE_LOCAL_DIR ?? '.storage'), baseUrl());
   return cached;
 }
 

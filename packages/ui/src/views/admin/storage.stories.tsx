@@ -47,6 +47,14 @@ export const ProviderRetention: Story = {
   },
 };
 
+/** An S3 bucket in lifecycle mode: the app writes the rules when the policy is saved. */
+export const S3Lifecycle: Story = {
+  args: { driver: 's3', retention: 'provider', managesLifecycle: true },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByText(/writes it to the bucket as lifecycle rules/)).toBeVisible();
+  },
+};
+
 export const Usage: StoryObj<typeof StorageUsageTable> = {
   render: (args) => <StorageUsageTable {...args} />,
   args: { rows: STORAGE_USAGE },
