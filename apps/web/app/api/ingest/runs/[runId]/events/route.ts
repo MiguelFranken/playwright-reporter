@@ -1,4 +1,4 @@
-import { eventBatchSchema } from '@miguelfranken/protocol';
+import { eventBatchSchema, type EventBatchResponse } from '@miguelfranken/protocol';
 import { errorResponse, json, readJson, requireRunToken } from '@/lib/ingest/http';
 import { ingestEvents } from '@/lib/ingest/service';
 import { afterIngest } from '@/lib/runs/watchdog';
@@ -12,7 +12,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ run
     const body = await readJson(request, eventBatchSchema);
     const { watchdog, ...res } = await ingestEvents(project, run, body);
     afterIngest(watchdog);
-    return json(res);
+    return json(res satisfies EventBatchResponse);
   } catch (err) {
     return errorResponse(err);
   }

@@ -13,7 +13,8 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PROTOCOL_HEADER, PROTOCOL_VERSION, type RunStartResponse } from '@miguelfranken/protocol';
+import type { RunStartResponse } from '@miguelfranken/protocol';
+import { createIngestApi } from '@miguelfranken/reporter/client';
 import { chance, planSlot, slotJitterMs, slotStart, slotsBetween, type ScenarioName } from '../schedule';
 import { replay, type Recording } from './recording';
 
@@ -50,19 +51,7 @@ function pick(scenario: ScenarioName, slot: number, id: string): Recording {
   return options[Math.floor(chance('recording', slot, id) * options.length)];
 }
 
-async function post<T>(pathname: string, body: unknown): Promise<T> {
-  for (let attempt = 0; ; attempt++) {
-    const res = await fetch(`${serverUrl}${pathname}`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', [PROTOCOL_HEADER]: String(PROTOCOL_VERSION) },
-      body: JSON.stringify(body),
-    });
-    if (res.ok) return (await res.json()) as T;
-    const retryable = res.status === 429 || res.status >= 500;
-    if (!retryable || attempt >= 4) throw new Error(`${pathname}: ${res.status} ${await res.text()}`);
-    await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
-  }
-}
+const api = createIngestApi({ serverUrl: serverUrl ?? '', token: token ?? '', maxRetries: 4 }, console.warn);
 
 const now = new Date();
 // Oldest first across slots and branches, so run numbers follow the clock.
@@ -82,17 +71,17 @@ for (const [n, { slot, run, at }] of planned.entries()) {
   }
   // One after the other: the first start creates the run the second one joins.
   const started: RunStartResponse[] = [];
-  for (const shard of shards) started.push(await post<RunStartResponse>('/api/ingest/runs', shard.start));
+  for (const shard of shards) started.push(await api.runs.start(shard.start));
   for (const [i, shard] of shards.entries()) {
     const { runId, shardIndex } = started[i];
     for (let from = 0; from < shard.events.length; from += 500) {
-      await post(`/api/ingest/runs/${runId}/events`, { shardIndex, events: shard.events.slice(from, from + 500) });
+      await api.runs.events({ runId, shardIndex, events: shard.events.slice(from, from + 500) });
     }
   }
   let result = '';
   for (const [i, shard] of shards.entries()) {
     const { runId, shardIndex } = started[i];
-    result = (await post<{ runStatus: string }>(`/api/ingest/runs/${runId}/finish`, { shardIndex, ...shard.finish })).runStatus;
+    result = (await api.runs.finish({ runId, shardIndex, ...shard.finish })).runStatus;
   }
   replayed++;
   console.log(`${label} → run #${started[0].runNumber} ${result}`);

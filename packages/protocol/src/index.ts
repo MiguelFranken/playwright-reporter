@@ -252,6 +252,17 @@ export const uploadUrlsResponseSchema = z.object({
 });
 export type UploadUrlsResponse = z.infer<typeof uploadUrlsResponseSchema>;
 
+/** Confirms a presigned upload; proxy uploads are confirmed by the upload itself. */
+export const completeUploadRequestSchema = z.object({
+  size: z.number().int().nonnegative().optional(),
+});
+export type CompleteUploadRequest = z.infer<typeof completeUploadRequestSchema>;
+
+export const completeUploadResponseSchema = z.object({
+  ok: z.boolean(),
+});
+export type CompleteUploadResponse = z.infer<typeof completeUploadResponseSchema>;
+
 // ---------------------------------------------------------------------------
 // Run finish
 // ---------------------------------------------------------------------------

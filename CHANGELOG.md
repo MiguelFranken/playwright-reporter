@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.0.30](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.29...v0.0.30) (2026-09-25)
+
+### Features
+
+* **reporter:** call the ingest API through a typed oRPC client ([#37](https://github.com/MiguelFranken/playwright-reporter/issues/37)) ([ec5f91a](https://github.com/MiguelFranken/playwright-reporter/commit/ec5f91aab2f1659f39d1f83679580804c3a24ea5))
+
+## [0.0.29](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.28...v0.0.29) (2026-09-25)
+
+### Bug Fixes
+
+* **ui:** hydration-safe numbers and dates, and remount retention forms on a new saved policy ([#36](https://github.com/MiguelFranken/playwright-reporter/issues/36)) ([7da0b26](https://github.com/MiguelFranken/playwright-reporter/commit/7da0b269ea8af013ed3606f1b8b6c96e31056303))
+
 ## [0.0.28](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.27...v0.0.28) (2026-09-25)
 
 ### Features

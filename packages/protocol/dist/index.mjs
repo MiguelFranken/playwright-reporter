@@ -205,6 +205,9 @@ const uploadInstructionSchema = z.object({
 	headers: z.record(z.string(), z.string())
 });
 const uploadUrlsResponseSchema = z.object({ uploads: z.array(uploadInstructionSchema) });
+/** Confirms a presigned upload; proxy uploads are confirmed by the upload itself. */
+const completeUploadRequestSchema = z.object({ size: z.number().int().nonnegative().optional() });
+const completeUploadResponseSchema = z.object({ ok: z.boolean() });
 const runFinishSchema = z.object({
 	shardIndex: z.number().int(),
 	status: runStatusSchema,
@@ -248,6 +251,6 @@ function classifyAttachment(name, contentType) {
 	return "other";
 }
 //#endregion
-export { PROTOCOL_HEADER, PROTOCOL_VERSION, annotationSchema, attachmentKindSchema, attachmentRefSchema, attemptEndEventSchema, attemptStatusSchema, ciInfoSchema, classifyAttachment, eventBatchResponseSchema, eventBatchSchema, executorSchema, gitInfoSchema, ingestEventSchema, locationSchema, playwrightInfoSchema, playwrightProjectInfoSchema, runFinishResponseSchema, runFinishSchema, runHeartbeatResponseSchema, runHeartbeatSchema, runLogEventSchema, runStartResponseSchema, runStartSchema, runStatusSchema, shardSchema, stepSchema, systemInfoSchema, testBeginEventSchema, testErrorSchema, testOutcomeSchema, uploadInstructionSchema, uploadUrlsRequestSchema, uploadUrlsResponseSchema };
+export { PROTOCOL_HEADER, PROTOCOL_VERSION, annotationSchema, attachmentKindSchema, attachmentRefSchema, attemptEndEventSchema, attemptStatusSchema, ciInfoSchema, classifyAttachment, completeUploadRequestSchema, completeUploadResponseSchema, eventBatchResponseSchema, eventBatchSchema, executorSchema, gitInfoSchema, ingestEventSchema, locationSchema, playwrightInfoSchema, playwrightProjectInfoSchema, runFinishResponseSchema, runFinishSchema, runHeartbeatResponseSchema, runHeartbeatSchema, runLogEventSchema, runStartResponseSchema, runStartSchema, runStatusSchema, shardSchema, stepSchema, systemInfoSchema, testBeginEventSchema, testErrorSchema, testOutcomeSchema, uploadInstructionSchema, uploadUrlsRequestSchema, uploadUrlsResponseSchema };
 
 //# sourceMappingURL=index.mjs.map
