@@ -47,8 +47,28 @@ body {
 
 /* ---------------------------------------------------------------- header */
 
+/* Fumadocs places the header in the centre columns only, so on wide screens
+   its background and hairlines stop short of the edges. Paint both out to
+   the viewport (the layout clips horizontal overflow). It is opaque and above
+   the sticky sidebar: translucent and beneath it, content showed through and
+   over the tab row while scrolling and when the browser overscrolls. */
 #nd-subnav {
-  background-color: color-mix(in oklch, var(--surface) 85%, transparent);
+  z-index: 30;
+  background-color: var(--surface);
+  backdrop-filter: none;
+  box-shadow: 0 0 0 100vmax var(--surface);
+  clip-path: inset(0 -100vmax);
+}
+
+/* The same for the "on this page" bar below it on narrower screens. */
+[data-toc-popover] > header {
+  background-color: var(--surface);
+  backdrop-filter: none;
+}
+
+#nd-subnav > [data-header-body],
+#nd-subnav > [data-header-tabs] {
+  border-image: linear-gradient(var(--separator), var(--separator)) 0 0 1 0 / 0 0 1px 0 / 0 100vmax;
 }
 
 #nd-subnav [data-header-body] {
@@ -365,6 +385,10 @@ figure.shiki pre {
 }
 
 /* ------------------------------------------------------- previous / next */
+
+#nd-page > div:last-child:has(> a[href]) {
+  margin-top: --spacing(10);
+}
 
 #nd-page > div:last-child > a[href] {
   gap: --spacing(1);
