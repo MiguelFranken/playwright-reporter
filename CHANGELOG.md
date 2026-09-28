@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.32](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.31...v0.0.32) (2026-09-28)
+
+### Performance Improvements
+
+* **web:** stream every run tab with the page, prefetch App Shells, reuse recent pages ([#39](https://github.com/MiguelFranken/playwright-reporter/issues/39)) ([8ff96e5](https://github.com/MiguelFranken/playwright-reporter/commit/8ff96e5a39636f8f807970fbaa28e37919aa17e6))
+
 ## [0.0.31](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.30...v0.0.31) (2026-09-28)
 
 ### Performance Improvements
