@@ -23,7 +23,14 @@ import { policyFromForm as dataPolicyFromForm } from '@/lib/data-retention';
 import { duePreview } from '@/lib/data-retention/stats';
 import { db } from '@/lib/db/drizzle';
 import { getTestOverview } from '@/lib/db/queries/explorer';
-import { getRunSummary, listRunErrorGroupsWithCursor, listRunItems, listRunResults, listRunSpecsWithCursor } from '@/lib/db/queries/runs';
+import {
+  getRunSummary,
+  listRunErrorGroupsWithCursor,
+  listRunItems,
+  listRunResults,
+  listRunResultsWithCursor,
+  listRunSpecsWithCursor,
+} from '@/lib/db/queries/runs';
 import { isUuid, parseRange } from '@/lib/db/queries/shared';
 import { runs } from '@/lib/db/schema';
 import { policyFromForm as artifactPolicyFromForm, retentionStats } from '@/lib/storage/retention';
@@ -93,6 +100,29 @@ export const appRouter = {
     results: authed.input(run.extend({ ids: ids(MAX_RESULT_IDS) })).handler(async ({ input }) => {
       const { runId } = await readableRun(input);
       return { rows: input.ids.length ? await listRunResults(runId, { ids: input.ids }) : [] };
+    }),
+
+    /**
+     * Every result row of a run — or of one spec file — with the cursor the
+     * live store follows it from. The summary tab paints its failing files
+     * first and takes the whole run from here; the specs tab opens a file
+     * from here without a navigation. Filtering happens in the browser.
+     */
+    rows: authed.input(run.extend({ file: z.string().optional() })).handler(async ({ input }) => {
+      const { runId } = await readableRun(input);
+      return listRunResultsWithCursor(runId, { file: input.file });
+    }),
+
+    /** A run's per-file tallies, for the specs tab opened without a navigation. */
+    specs: authed.input(run).handler(async ({ input }) => {
+      const { runId } = await readableRun(input);
+      return listRunSpecsWithCursor(runId);
+    }),
+
+    /** A run's error groups, for the errors tab opened without a navigation. */
+    errors: authed.input(run).handler(async ({ input }) => {
+      const { runId } = await readableRun(input);
+      return listRunErrorGroupsWithCursor(runId);
     }),
 
     /**
