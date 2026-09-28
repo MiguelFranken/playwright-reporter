@@ -22,6 +22,8 @@ import { MetaChip } from '../../patterns/meta-chip';
 import { StatusIcon } from '../../patterns/status-badge';
 import { formatDuration } from '../../lib/format';
 import { cn } from '../../lib/cn';
+import { takeOverPlainClick } from '../../lib/plain-click';
+import { SpecDetailSkeleton } from './run-skeleton';
 import {
   DEFAULT_SPEC_SORT,
   SPEC_SORT_GROUPS,
@@ -42,7 +44,8 @@ import type { RunResultRow, RunResultsHrefs } from './run-result';
  * file worth opening before another, and backs it with a proportional bar and
  * the raw tallies. It is searched, sorted and narrowed in place: the whole
  * run's spec list is already here, so a filter is a re-render rather than a
- * round trip — only *opening* a file costs a fetch.
+ * round trip — only *opening* a file costs a fetch, and a host that caches
+ * files answers a plain click on one in place (`onSelectSpec`).
  *
  * The right column mirrors the *source*: `describe` blocks become sections and
  * the tests sit under the block that declared them, so the page reads the way
@@ -71,14 +74,20 @@ export function RunSpecs({
   specs,
   selected,
   rows,
+  rowsLoading,
   filters = {},
   onFilterChange,
+  onSelectSpec,
   isPending,
 }: {
   hrefs: RunSpecsHrefs;
   specs: SpecSummary[];
   selected?: string;
   rows: RunResultRow[] | null;
+  /** The selected file's tests are on their way: the right-hand pane is a placeholder. */
+  rowsLoading?: boolean;
+  /** Answers a plain click on a file in place instead of following its link. */
+  onSelectSpec?: (file: string) => void;
   /** The committed filter state. The host decides where it lives. */
   filters?: SpecFilters;
   /** `null` on a key clears it. Omitted, the toolbar is not rendered at all. */
@@ -114,14 +123,22 @@ export function RunSpecs({
             />
           ) : (
             shown.map((spec) => (
-              <SpecCard key={spec.file} href={hrefs.spec(spec.file)} spec={spec} active={spec.file === selected} />
+              <SpecCard
+                key={spec.file}
+                href={hrefs.spec(spec.file)}
+                onClick={takeOverPlainClick(onSelectSpec && (() => onSelectSpec(spec.file)))}
+                spec={spec}
+                active={spec.file === selected}
+              />
             ))
           )}
         </div>
       </div>
 
       <div className="min-w-0">
-        {rows === null || !current ? (
+        {current && rowsLoading ? (
+          <SpecDetailSkeleton />
+        ) : rows === null || !current ? (
           <EmptyState
             icon={MousePointerClick}
             title="Pick a spec file"
@@ -277,7 +294,17 @@ function SpecToolbar({
   );
 }
 
-function SpecCard({ href, spec, active }: { href: string; spec: SpecSummary; active: boolean }) {
+function SpecCard({
+  href,
+  onClick,
+  spec,
+  active,
+}: {
+  href: string;
+  onClick?: React.MouseEventHandler<HTMLAnchorElement>;
+  spec: SpecSummary;
+  active: boolean;
+}) {
   const name = spec.file.split('/').pop() ?? spec.file;
   const dir = spec.file.slice(0, spec.file.length - name.length);
   // Skipped tests never ran, so they are not part of the rate — counting them
@@ -299,6 +326,7 @@ function SpecCard({ href, spec, active }: { href: string; spec: SpecSummary; act
   return (
     <Link
       href={href}
+      onClick={onClick}
       aria-current={active ? 'true' : undefined}
       className={cn(
         'flex flex-col gap-2 rounded-xl border bg-card px-3 py-2.5 shadow-e1 transition-colors duration-150 outline-none',

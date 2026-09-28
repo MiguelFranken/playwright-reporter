@@ -22,18 +22,21 @@ const ICONS: Record<RunTab, LucideIcon> = {
 
 /**
  * Controlled tab strip for a run. The app binds `onValueChange` to the query
- * string; the content below is whatever the host renders as children, which in
- * the app is a server component for the active tab.
+ * string; the content below is whatever the host renders as children.
+ * `onTabIntent` reports a pointer or focus resting on a tab, so a host can
+ * start loading it before the click.
  */
 export function RunTabs({
   value,
   onValueChange,
   counts,
   isPending,
+  onTabIntent,
   children,
 }: {
   value: RunTab;
   onValueChange: (next: RunTab) => void;
+  onTabIntent?: (tab: RunTab) => void;
   /** Appended to a tab's label when known, e.g. "Errors (3)". */
   counts?: Partial<Record<RunTab, number>>;
   isPending?: boolean;
@@ -49,7 +52,12 @@ export function RunTabs({
         {RUN_TABS.map((tab) => {
           const Icon = ICONS[tab];
           return (
-            <TabsTrigger key={tab} value={tab}>
+            <TabsTrigger
+              key={tab}
+              value={tab}
+              onPointerEnter={onTabIntent && (() => onTabIntent(tab))}
+              onFocus={onTabIntent && (() => onTabIntent(tab))}
+            >
               <Icon aria-hidden />
               {label(tab)}
             </TabsTrigger>

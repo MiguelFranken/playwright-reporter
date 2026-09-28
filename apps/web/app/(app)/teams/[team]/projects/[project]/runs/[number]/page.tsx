@@ -1,20 +1,26 @@
 import { notFound } from 'next/navigation';
 import { cache, Suspense } from 'react';
-import { RunConfig } from '@miguelfranken/ui/views/run/run-config';
+import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
 import { RunHeaderSkeleton } from '@miguelfranken/ui/views/run/run-header';
 import { RunTabsSkeleton } from '@miguelfranken/ui/views/run/run-skeleton';
-import { parseSpecSort, parseSpecStatuses } from '@miguelfranken/ui/lib/spec-filter';
 import { triagePrompt } from '@miguelfranken/ui/lib/ai-handoff';
 import { parseRunTab } from '@/components/run/run-tab';
-import { UrlRunSpecs } from '@/components/run/url-run-specs';
-import { RunTabs } from '@/components/run/run-tabs';
-import { UrlRunSummary } from '@/components/run/url-run-summary';
-import { LiveRunErrors, LiveRunHeader } from '@/components/live/live-run';
+import { RunBody } from '@/components/run/run-body';
+import type { SummaryHead } from '@/components/run/url-run-summary';
+import { LiveRunHeader } from '@/components/live/live-run';
 import { LiveStoreProvider } from '@/components/live/live-store';
 import { requireProject } from '@/lib/auth/access';
 import { baseUrl } from '@/lib/auth/config';
 import { branchHref, projectHrefs, pullRequestHref, toRunHeaderData } from '@/lib/view-models';
-import { getRunByNumber, listRunErrorGroupsWithCursor, listRunResults, listRunSpecsWithCursor } from '@/lib/db/queries/runs';
+import {
+  getRunByNumber,
+  listRunErrorGroupsWithCursor,
+  listRunResults,
+  listRunResultsWithCursor,
+  listRunSpecsWithCursor,
+} from '@/lib/db/queries/runs';
+import { makeServerQueryClient } from '@/lib/rpc/prefetch';
+import { runErrorsQuery, runRowsQuery, runSpecsQuery } from '@/lib/rpc/queries';
 
 type Params = Promise<{ team: string; project: string; number: string }>;
 type SearchParams = Promise<{
@@ -30,8 +36,8 @@ type Props = { params: Params; searchParams: SearchParams };
 
 /**
  * Two boundaries: the run's identity and totals, then the body of the selected
- * tab. The tab strip itself resolves as soon as `searchParams` does, so the
- * navigation is usable while the (much heavier) results query is still running.
+ * tab. After the first render the body is the browser's: tabs, filters and
+ * spec files switch without a navigation, from TanStack Query (`RunBody`).
  *
  * While the run is going, both halves follow one event stream through the live
  * store: the server renders the state as of an event cursor, the browser
@@ -82,70 +88,68 @@ async function Header({ params }: { params: Params }) {
   );
 }
 
+/** The outcomes whose rows all sit in files holding a failure, so the summary's head answers them alone. */
+const HEAD_OUTCOMES = new Set(['failed', 'flaky']);
+
+/**
+ * Every tab's data, put into the browser's query cache (`lib/rpc/prefetch.ts`)
+ * under the keys the client tabs read — after that, every tab switch, filter
+ * and file happens in the browser (`RunBody`).
+ *
+ * The selected tab is awaited; every other tab's query is started beside it
+ * and streams into the cache without holding the page up, so a switch to
+ * Specs or Errors finds its answer already there instead of fetching on click.
+ *
+ * The summary is painted in two steps: the rows of the files holding a
+ * failure — the groups that start open — and every file's tally are awaited,
+ * the whole run's rows stream in behind them. A filter the head cannot answer
+ * (a passed outcome, a title search) waits for all rows.
+ */
 async function Body({ params, searchParams }: Props) {
   const sp = await searchParams;
   const tab = parseRunTab(sp.tab);
   const { run: found, base, runRef } = await run(params);
   const { counts, shards: _shards, cursor, ...runRow } = found;
+  const queries = makeServerQueryClient();
+  let summaryHead: SummaryHead | undefined;
 
-  let content: React.ReactNode;
+  const loadRows = () => listRunResultsWithCursor(found.id);
+  const loadSpecs = () => listRunSpecsWithCursor(found.id);
+  const loadErrors = () => listRunErrorGroupsWithCursor(found.id);
+  const summaryNeedsAll = tab === 'summary' && Boolean(sp.q || (sp.outcome && sp.outcome !== 'all' && !HEAD_OUTCOMES.has(sp.outcome)));
+
+  // The tabs this render does not wait for start first, beside the one it does.
+  if (!summaryNeedsAll) void queries.prefetchQuery({ ...runRowsQuery(runRef), queryFn: loadRows });
+  if (tab === 'errors' || tab === 'config') void queries.prefetchQuery({ ...runSpecsQuery(runRef), queryFn: loadSpecs });
+  if (tab !== 'errors') void queries.prefetchQuery({ ...runErrorsQuery(runRef), queryFn: loadErrors });
+
   switch (tab) {
     case 'specs': {
-      const [{ specs, cursor: specsCursor }, rows] = await Promise.all([
-        listRunSpecsWithCursor(found.id),
-        sp.file ? listRunResults(found.id, { file: sp.file }) : Promise.resolve(null),
-      ]);
-      // The whole run's spec list is sent either way — a run holds tens of
-      // files, not thousands — so the search, sort and status filter are
-      // applied in the browser and cost no round trip of their own.
-      const specFilters = {
-        q: sp.q || undefined,
-        sort: parseSpecSort(sp.sort),
-        status: parseSpecStatuses(sp.status),
-      };
-      content = (
-        <UrlRunSpecs
-          base={base}
-          runNumber={found.number}
-          specs={specs}
-          specsCursor={specsCursor}
-          selected={sp.file}
-          rows={rows}
-          cursor={cursor}
-          runRef={runRef}
-          filters={specFilters}
-        />
-      );
+      const [specs, rows] = await Promise.all([loadSpecs(), sp.file ? listRunResultsWithCursor(found.id, { file: sp.file }) : null]);
+      queries.setQueryData(runSpecsQuery(runRef).queryKey, specs);
+      if (sp.file && rows) queries.setQueryData(runRowsQuery(runRef, sp.file).queryKey, rows);
       break;
     }
-    case 'errors': {
-      const { groups, cursor: errorsCursor } = await listRunErrorGroupsWithCursor(found.id);
-      content = <LiveRunErrors base={base} runNumber={found.number} groups={groups} cursor={errorsCursor} />;
+    case 'errors':
+      queries.setQueryData(runErrorsQuery(runRef).queryKey, await loadErrors());
       break;
-    }
     case 'config':
-      content = <RunConfig run={runRow} />;
       break;
     default: {
-      const filters = { outcome: sp.outcome || undefined, q: sp.q || undefined, signature: sp.signature || undefined };
-      const rows = await listRunResults(found.id, filters);
-      content = (
-        <UrlRunSummary
-          base={base}
-          runNumber={found.number}
-          counts={counts}
-          rows={rows}
-          cursor={cursor}
-          runRef={runRef}
-          filters={filters}
-        />
-      );
+      if (summaryNeedsAll) {
+        queries.setQueryData(runRowsQuery(runRef).queryKey, await loadRows());
+        break;
+      }
+      // The head's tallies are the specs tab's data too: one query serves both.
+      const [rows, specs] = await Promise.all([listRunResults(found.id, { problemFiles: true }), loadSpecs()]);
+      queries.setQueryData(runSpecsQuery(runRef).queryKey, specs);
+      summaryHead = { rows, cursor, specs: specs.specs };
     }
   }
 
   return (
-    <RunTabs value={tab} counts={{ summary: counts.total }}>
-      {content}
-    </RunTabs>
+    <HydrationBoundary state={dehydrate(queries)}>
+      <RunBody base={base} runNumber={found.number} runRef={runRef} counts={counts} config={runRow} summaryHead={summaryHead} />
+    </HydrationBoundary>
   );
 }

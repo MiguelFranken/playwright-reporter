@@ -20,6 +20,7 @@ import {
   type RowMap,
 } from '@/lib/live/reducers';
 import { orpc, type RunRef } from '@/lib/rpc/client';
+import { runTabQueryKeys } from '@/lib/rpc/queries';
 import { runHrefs } from '@/lib/view-models';
 import type { LiveStore } from '@/lib/live/store';
 import { LiveConnection, useLivePart, useLivePeek, useLiveStore } from './live-store';
@@ -106,6 +107,9 @@ async function settleFinishedRun(store: LiveStore, queryClient: QueryClient, run
   try {
     const body = await queryClient.fetchQuery({ ...orpc.runs.summary.queryOptions({ input: { ...runRef, parts: [...parts] } }), staleTime: 0 });
     const never = () => false;
+    // Cached tab answers are snapshots of a run in progress; the next tab or
+    // file opened asks again instead of replaying from an older cursor.
+    for (const queryKey of runTabQueryKeys(runRef)) void queryClient.invalidateQueries({ queryKey, refetchType: 'none' });
     store.merge<Header>('header', () => body.header, never);
     if (body.specs) store.merge<SpecSummary[]>('specs', () => body.specs!, never);
     if (body.errors) store.merge<ErrorGroup[]>('errors', () => body.errors!, never);
@@ -162,19 +166,26 @@ export function useLiveRows(
   cursor: number,
   filters: RowFilters,
   runRef: RunRef,
-  { backfill = true }: { backfill?: boolean } = {},
+  {
+    backfill = true,
+    enabled = true,
+  }: {
+    backfill?: boolean;
+    /** False while `rows` is a placeholder for rows still loading. */
+    enabled?: boolean;
+  } = {},
 ): LiveRow[] {
   const store = useLiveStore();
   const queryClient = useQueryClient();
   const { team, project, runId } = runRef;
   const initial = useMemo(() => new Map(rows.map((r) => [r.id, r as LiveRow])) as RowMap, [rows]);
-  const map = useLivePart<RowMap>('rows', initial, cursor, reduceRows, rows);
+  const map = useLivePart<RowMap>('rows', initial, cursor, reduceRows, rows, enabled);
   const visible = useMemo(() => visibleRows(map, filters), [map, filters]);
 
   // Only requests in flight are remembered: a row that becomes partial again
   // (recreated from an event after a filter change) is fetched again.
   const inFlight = useRef(new Set<string>());
-  const partialIds = backfill ? visible.filter((r) => r.partial && !inFlight.current.has(r.id)).map((r) => r.id) : [];
+  const partialIds = backfill && enabled ? visible.filter((r) => r.partial && !inFlight.current.has(r.id)).map((r) => r.id) : [];
   const key = partialIds.join(',');
   useEffect(() => {
     if (!key) return;
@@ -205,7 +216,19 @@ export function useLiveRows(
 }
 
 /** The errors tab: groups move as results fail, turn flaky or change signature. */
-export function LiveRunErrors({ base, runNumber, groups, cursor }: { base: string; runNumber: number; groups: ErrorGroup[]; cursor: number }) {
+export function LiveRunErrors({
+  base,
+  runNumber,
+  groups,
+  cursor,
+  onSelectGroup,
+}: {
+  base: string;
+  runNumber: number;
+  groups: ErrorGroup[];
+  cursor: number;
+  onSelectGroup?: (signature: string) => void;
+}) {
   const live = useLivePart('errors', groups, cursor, reduceErrorGroups);
-  return <RunErrors hrefs={runHrefs(base, runNumber)} groups={live} />;
+  return <RunErrors hrefs={runHrefs(base, runNumber)} groups={live} onSelectGroup={onSelectGroup} />;
 }

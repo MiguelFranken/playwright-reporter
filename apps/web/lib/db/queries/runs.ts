@@ -224,6 +224,11 @@ export interface RunResultFilters {
   q?: string;
   file?: string;
   signature?: string;
+  /**
+   * Only the files holding a failed, interrupted or flaky result: the groups
+   * the summary opens by default, so the page can paint them before the rest.
+   */
+  problemFiles?: boolean;
 }
 
 export async function listRunResults(runId: string, filters: RunResultFilters = {}): Promise<RunResultRow[]> {
@@ -238,6 +243,11 @@ export async function listRunResults(runId: string, filters: RunResultFilters = 
     filters.q ? sql`(${tests.title} ilike ${'%' + filters.q + '%'} or ${tests.file} ilike ${'%' + filters.q + '%'})` : undefined,
     filters.file ? eq(tests.file, filters.file) : undefined,
     filters.signature ? eq(testResults.errorSignature, filters.signature) : undefined,
+    filters.problemFiles
+      ? sql`${tests.file} in (
+          select pt.file from ${testResults} pr join ${tests} pt on pt.id = pr.test_id
+          where pr.run_id = ${runId} and pr.outcome in ('failed','timedout','interrupted','flaky'))`
+      : undefined,
   ]);
   const rows = await db
     .select({
@@ -276,6 +286,19 @@ export async function listRunResults(runId: string, filters: RunResultFilters = 
   return rows as RunResultRow[];
 }
 
+
+/**
+ * A run's result rows with the newest event they reflect, for a view that
+ * follows the stream from there. The cursor is read first: an earlier one only
+ * replays events the rows already show, never skips one they miss.
+ */
+export async function listRunResultsWithCursor(
+  runId: string,
+  filters: RunResultFilters = {},
+): Promise<{ rows: RunResultRow[]; cursor: number }> {
+  const cursor = await runCursorBefore(runId);
+  return { rows: await listRunResults(runId, filters), cursor };
+}
 
 export async function listRunSpecs(runId: string): Promise<SpecSummary[]> {
   return (await listRunSpecsWithCursor(runId)).specs;

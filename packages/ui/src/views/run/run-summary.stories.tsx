@@ -67,6 +67,59 @@ export const SearchReportsChanges: Story = {
   play: async ({ canvasElement, args }) => {
     const input = within(canvasElement).getByRole('searchbox', { name: /search title or file/i });
     await userEvent.type(input, 'guest{Enter}');
-    await expect(args.onFilterChange).toHaveBeenCalledWith('q', 'guest');
+    await expect(args.onFilterChange).toHaveBeenCalledWith({ q: 'guest' });
+  },
+};
+
+/** A plain click on an outcome is answered in place: the host re-filters the rows it holds. */
+export const OutcomeClickReportsChange: Story = {
+  play: async ({ canvasElement, args }) => {
+    const group = within(canvasElement).getByRole('group', { name: /filter by outcome/i });
+    await userEvent.click(within(group).getByRole('link', { name: /failed/i }));
+    await expect(args.onFilterChange).toHaveBeenCalledWith({ outcome: 'failed' });
+  },
+};
+
+/** Picking the active outcome again clears it, as its link does. */
+export const ActiveOutcomeClickClears: Story = {
+  args: { filters: { outcome: 'failed' } },
+  play: async ({ canvasElement, args }) => {
+    const group = within(canvasElement).getByRole('group', { name: /filter by outcome/i });
+    await userEvent.click(within(group).getByRole('link', { name: /failed/i }));
+    await expect(args.onFilterChange).toHaveBeenCalledWith({ outcome: null });
+  },
+};
+
+/**
+ * The failing files painted first; the all-green ones still loading, drawn
+ * closed from their tallies.
+ */
+export const LoadingRemainingFiles: Story = {
+  args: {
+    rows: mixedResults.filter((r) => r.outcome !== 'passed' && r.outcome !== 'skipped'),
+    loadingGroups: [
+      { file: 'tests/zz-account/profile.spec.ts', total: 12 },
+      { file: 'tests/zz-search/search.spec.ts', total: 1 },
+    ],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('profile.spec.ts')).toBeVisible();
+    await expect(canvas.getByText('12 tests')).toBeVisible();
+  },
+};
+
+/** The rows on hand cannot answer this filter yet. */
+export const LoadingFilteredRows: Story = { args: { loading: true, filters: { outcome: 'passed' } } };
+
+/** Filtered to passed tests, the tiles still break down the whole run's failures. */
+export const FilteredWithWholeRunBreakdowns: Story = {
+  args: {
+    rows: mixedResults.filter((r) => r.outcome === 'passed'),
+    runRows: mixedResults,
+    filters: { outcome: 'passed' },
+  },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).queryByText(/no error messages recorded/i)).toBeNull();
   },
 };

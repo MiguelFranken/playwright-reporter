@@ -10,6 +10,7 @@ import {
   listEnvironments,
   listRunErrorGroups,
   listRunResults,
+  listRunResultsWithCursor,
   listRunSpecs,
   listRuns,
   listTestTags,
@@ -154,6 +155,26 @@ describe('listRunResults', () => {
     const [failed] = await listRunResults(runId, { outcome: 'failed' });
     const bySignature = await listRunResults(runId, { signature: failed.errorSignature! });
     expect(bySignature.map((r) => r.id)).toEqual([failed.id]);
+  });
+
+  test('problemFiles keeps every row of the files holding a failure or flake, and nothing else', async ({ tenant }) => {
+    const LOGIN = 'tests/login.spec.ts';
+    const { runId } = await playRun(tenant.tokenProject, {
+      tests: [
+        { outcome: 'passed', file: HOME, title: 'home loads' },
+        { outcome: 'flaky', file: HOME, title: 'home flakes' },
+        { outcome: 'passed', file: CART, title: 'cart adds' },
+        { outcome: 'timedout', file: CART, title: 'cart times out' },
+        { outcome: 'passed', file: LOGIN, title: 'login works' },
+        { outcome: 'skipped', file: LOGIN, title: 'login skipped' },
+      ],
+    });
+    const rows = await listRunResults(runId, { problemFiles: true });
+    expect(rows.map((r) => r.title).sort()).toEqual(['cart adds', 'cart times out', 'home flakes', 'home loads']);
+    // The page's cursor-carrying variant returns the same rows.
+    const withCursor = await listRunResultsWithCursor(runId, { problemFiles: true });
+    expect(withCursor.rows.map((r) => r.id)).toEqual(rows.map((r) => r.id));
+    expect(withCursor.cursor).toBeGreaterThan(0);
   });
 
   test('history carries the previous outcomes of the same test, newest first', async ({ tenant }) => {

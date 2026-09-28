@@ -1,6 +1,6 @@
 import { Link } from '../provider';
 import { cn } from '../lib/cn';
-import type { NavTabClick } from './nav-tabs';
+import type { LinkClick } from '../lib/plain-click';
 import { toneSolid, type Tone } from '../lib/tone';
 
 /**
@@ -11,8 +11,8 @@ import { toneSolid, type Tone } from '../lib/tone';
  *
  * Links, not buttons, because the selection lives in the URL. `aria-current`
  * marks the active one; `aria-pressed` would be wrong on a link. `onSelect`
- * only reports the click — the link still does the navigating — so a host can
- * move the strip before the filtered rows come back.
+ * reports the click; the link does the navigating unless the host prevents it
+ * and answers in place (`lib/plain-click`).
  *
  * An empty option is left at full contrast rather than dimmed — its own `0` is
  * the signal, and fading the label only costs legibility (the a11y run in
@@ -40,7 +40,7 @@ export function CountTabs({
   className?: string;
   label?: string;
   /** Reports the clicked value; the host decides whether to pre-mark it. */
-  onSelect?: (value: string, event: NavTabClick) => void;
+  onSelect?: (value: string, event: LinkClick) => void;
 }) {
   return (
     <div

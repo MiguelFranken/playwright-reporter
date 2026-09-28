@@ -4,6 +4,18 @@ import { traceViewerHeaders } from './lib/trace-viewer/headers';
 
 const nextConfig: NextConfig = {
   cacheComponents: true,
+  // A <Link> prefetches one App Shell per route, shared by every link to it,
+  // instead of one prefetch per link on screen: a run page lists hundreds of
+  // result links to the same route. What depends on the URL streams in after
+  // the click, behind the pages' Suspense boundaries, as it already did.
+  partialPrefetching: true,
+  experimental: {
+    // Going back to a page seen in the last 30 seconds reuses its render
+    // instead of asking the server again. Nothing is stale for long: a Server
+    // Action that revalidates clears this cache, and the live views (runs,
+    // run pages) follow their event stream from the cursor they rendered at.
+    staleTimes: { dynamic: 30 },
+  },
   async headers() {
     // Playwright's Trace Viewer, served from public/trace (lib/trace-viewer).
     return [{ source: '/trace/:path*', headers: traceViewerHeaders() }];

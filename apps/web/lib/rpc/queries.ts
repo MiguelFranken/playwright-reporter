@@ -8,7 +8,7 @@
  */
 import { keepPreviousData } from '@tanstack/react-query';
 import type { FormFields } from '@miguelfranken/ui/hooks/use-form-fields';
-import { orpc, type ProjectRef } from './client';
+import { orpc, type ProjectRef, type RunRef } from './client';
 
 /**
  * The explorer drawer's overview of one test.
@@ -52,4 +52,38 @@ export function artifactRetentionDueQuery(fields: FormFields) {
     placeholderData: keepPreviousData,
     retry: false,
   });
+}
+
+/**
+ * A run's tab data: every result row (or one spec file's), the per-file
+ * tallies, the error groups. Each answer carries the event cursor it reflects,
+ * and the live store replays the stream from there, so a cached answer is
+ * never wrong for long — a running run catches up from its events, a finished
+ * one does not change. Switching tabs, outcomes or files therefore answers
+ * from the cache and shows no placeholder; a later visit still refetches
+ * underneath once the answer is a few minutes old.
+ *
+ * The server seeds these (`lib/rpc/prefetch.ts`) with what it rendered, so the
+ * first tab the page opens on is never fetched twice.
+ */
+const RUN_TAB_CACHE = { staleTime: 5 * 60_000, gcTime: 30 * 60_000 } as const;
+
+export function runRowsQuery(ref: RunRef, file?: string) {
+  return orpc.runs.rows.queryOptions({ input: file ? { ...ref, file } : ref, ...RUN_TAB_CACHE });
+}
+
+export function runSpecsQuery(ref: RunRef) {
+  return orpc.runs.specs.queryOptions({ input: ref, ...RUN_TAB_CACHE });
+}
+
+export function runErrorsQuery(ref: RunRef) {
+  return orpc.runs.errors.queryOptions({ input: ref, ...RUN_TAB_CACHE });
+}
+
+/**
+ * Every tab query of one run — the rows of each file included, since query
+ * keys match partially — e.g. to mark them stale once the run has finished.
+ */
+export function runTabQueryKeys(ref: RunRef) {
+  return [orpc.runs.rows.key({ input: ref }), orpc.runs.specs.key({ input: ref }), orpc.runs.errors.key({ input: ref })];
 }
