@@ -30,6 +30,7 @@ export function OutcomeCard({
   tone,
   icon: Icon,
   href,
+  onClick,
   active,
   breakdown = [],
   emptyLabel,
@@ -40,6 +41,8 @@ export function OutcomeCard({
   tone: Tone;
   icon?: React.ComponentType<{ className?: string }>;
   href?: string;
+  /** For a host that answers the link in place (see `lib/plain-click`). */
+  onClick?: React.MouseEventHandler<HTMLAnchorElement>;
   active?: boolean;
   breakdown?: OutcomeBreakdownItem[];
   /** Shown instead of the breakdown when there is none, e.g. "No flaky tests". */
@@ -97,6 +100,7 @@ export function OutcomeCard({
   return (
     <Link
       href={href}
+      onClick={onClick}
       aria-current={active ? 'true' : undefined}
       className="group rounded-xl outline-none focus-visible:ring-[3px] focus-visible:ring-ring/25"
     >

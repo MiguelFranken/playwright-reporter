@@ -1,100 +1,89 @@
 'use client';
 
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useMemo, useOptimistic, useTransition } from 'react';
-import { RunSpecs, type SpecSummary } from '@miguelfranken/ui/views/run/run-specs';
+import { useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { RunSpecs } from '@miguelfranken/ui/views/run/run-specs';
 import type { RunResultRow } from '@miguelfranken/ui/views/run/run-result';
-import type { SpecFilterChange, SpecFilters } from '@miguelfranken/ui/lib/spec-filter';
+import { RunTabSkeleton } from '@miguelfranken/ui/views/run/run-skeleton';
+import { RunTabError } from '@miguelfranken/ui/views/run/run-tab-error';
+import { parseSpecSort, parseSpecStatuses, type SpecFilterChange, type SpecFilters } from '@miguelfranken/ui/lib/spec-filter';
+import { useShallowSearch } from '@/components/filters/url-filters';
 import { useLivePart } from '@/components/live/live-store';
 import { useLiveRows } from '@/components/live/live-run';
 import type { RunRef } from '@/lib/rpc/client';
+import { runRowsQuery, runSpecsQuery } from '@/lib/rpc/queries';
 import { reduceSpecs } from '@/lib/live/reducers';
 import { runHrefs } from '@/lib/view-models';
 
+const NO_ROWS: RunResultRow[] = [];
+
 /**
- * Binds the specs tab's search, sort and status filters to the query string,
- * so a narrowed list is as shareable as the run page itself.
+ * The specs tab: the run's per-file tallies, and the tests of the file opened.
+ *
+ * Both come from TanStack Query, and the search, sort, status filter and the
+ * opened file live in the URL without a navigation (`useShallowSearch`), so a
+ * narrowed list is as shareable as the run page itself and none of it costs a
+ * round trip once loaded. A file's tests are their own query — opening it
+ * again answers from the cache — and one the summary has already loaded the
+ * whole run for starts from those rows instead of fetching.
  *
  * The href builders are constructed *here* rather than handed down: a function
  * cannot cross the server/client boundary, so the server sends the plain `base`
  * string and this component turns it into callbacks. They carry the filters
- * along, which is what keeps the list narrowed when you open a file.
- *
- * It owns its navigation instead of reusing `useUrlParams` for two reasons,
- * both of which come from the menu staying open while you tick several boxes:
- *
- * - **The committed value lags a round trip.** React holds the old render until
- *   the new one is ready, so a ticked box would sit unticked until the server
- *   answered. `useOptimistic` moves it at once and folds back when `filters`
- *   catches up — including when the user goes back, which is why it is not a
- *   `useState` that would then have to be unwound by hand.
- * - **Two quick changes would race.** Each writes a copy of the *current* query
- *   string, and the second one reads the string from before the first landed.
- *   Writing all three keys from one merged state on every change makes the
- *   result the same whichever order they commit in.
+ * along, which is what keeps the list narrowed when you open a file in a new tab.
  */
-const NO_ROWS: RunResultRow[] = [];
+export function UrlRunSpecs({ base, runNumber, runRef }: { base: string; runNumber: number; runRef: RunRef }) {
+  const { params, set } = useShallowSearch();
+  const q = params.get('q') || undefined;
+  const sort = parseSpecSort(params.get('sort') ?? undefined);
+  const statusKey = params.getAll('status').join(',');
+  const filters = useMemo<SpecFilters>(() => ({ q, sort, status: parseSpecStatuses(statusKey || undefined) }), [q, sort, statusKey]);
+  const selected = params.get('file') || undefined;
 
-export function UrlRunSpecs({
-  base,
-  runNumber,
-  specs,
-  specsCursor,
-  selected,
-  rows,
-  cursor,
-  runRef,
-  filters,
-}: {
-  base: string;
-  runNumber: number;
-  specs: SpecSummary[];
-  /** The newest event the tallies reflect; see `runCursorSql`. */
-  specsCursor: number;
-  selected?: string;
-  rows: RunResultRow[] | null;
-  cursor: number;
-  /** The run as the RPC procedures address it, for fetching rows the stream only announced. */
-  runRef: RunRef;
-  filters: SpecFilters;
-}) {
-  const liveSpecs = useLivePart('specs', specs, specsCursor, reduceSpecs);
+  const queryClient = useQueryClient();
+  const specsQuery = useQuery(runSpecsQuery(runRef));
+  const wholeRun = runRowsQuery(runRef);
+  const rowsQuery = useQuery({
+    ...runRowsQuery(runRef, selected),
+    enabled: selected !== undefined,
+    // The summary's whole-run rows already hold this file's: start from them.
+    initialData: () => {
+      const all = queryClient.getQueryData(wholeRun.queryKey);
+      return all && selected ? { rows: all.rows.filter((r) => r.file === selected), cursor: all.cursor } : undefined;
+    },
+    initialDataUpdatedAt: () => queryClient.getQueryState(wholeRun.queryKey)?.dataUpdatedAt,
+  });
+
+  const specs = specsQuery.data;
+  const liveSpecs = useLivePart('specs', specs?.specs ?? [], specs?.cursor ?? 0, reduceSpecs, specs?.specs, specs !== undefined);
   const fileFilter = useMemo(() => ({ file: selected }), [selected]);
-  const liveRows = useLiveRows(rows ?? NO_ROWS, cursor, fileFilter, runRef, { backfill: rows !== null });
-  const router = useRouter();
-  const pathname = usePathname();
-  const params = useSearchParams();
-  const [isPending, startTransition] = useTransition();
-  const [shown, setShown] = useOptimistic(filters);
+  const rows = selected ? rowsQuery.data : undefined;
+  const liveRows = useLiveRows(rows?.rows ?? NO_ROWS, rows?.cursor ?? 0, fileFilter, runRef, { enabled: rows !== undefined });
+
+  if (!specs) {
+    if (specsQuery.isError) return <RunTabError onRetry={() => void specsQuery.refetch()} retrying={specsQuery.isFetching} />;
+    return <RunTabSkeleton tab="specs" />;
+  }
 
   const onFilterChange = (change: SpecFilterChange) => {
     // An absent key is untouched; an explicit `null` clears it.
-    const next: SpecFilters = {
-      q: change.q === undefined ? shown.q : (change.q ?? undefined),
-      sort: change.sort === undefined ? shown.sort : (change.sort ?? undefined),
-      status: change.status === undefined ? shown.status : (change.status ?? undefined),
-    };
-    startTransition(() => {
-      setShown(next);
-      const qs = new URLSearchParams(params.toString());
-      for (const key of ['q', 'sort', 'status', 'page']) qs.delete(key);
-      if (next.q) qs.set('q', next.q);
-      if (next.sort) qs.set('sort', next.sort);
-      for (const status of next.status ?? []) qs.append('status', status);
-      const search = qs.toString();
-      router.replace(search ? `${pathname}?${search}` : pathname, { scroll: false });
-    });
+    const updates: Record<string, string | string[] | null> = {};
+    if (change.q !== undefined) updates.q = change.q;
+    if (change.sort !== undefined) updates.sort = change.sort;
+    if (change.status !== undefined) updates.status = change.status;
+    set(updates);
   };
 
   return (
     <RunSpecs
-      hrefs={runHrefs(base, runNumber, shown)}
+      hrefs={runHrefs(base, runNumber, filters)}
       specs={liveSpecs}
       selected={selected}
       rows={rows ? liveRows : null}
-      filters={shown}
-      isPending={isPending}
+      rowsLoading={selected !== undefined && rows === undefined && !rowsQuery.isError}
+      filters={filters}
       onFilterChange={onFilterChange}
+      onSelectSpec={(file) => set({ file })}
     />
   );
 }

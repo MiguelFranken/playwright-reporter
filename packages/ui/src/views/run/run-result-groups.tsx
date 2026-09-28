@@ -13,6 +13,7 @@ import { StatusIcon } from '../../patterns/status-badge';
 import { cn } from '../../lib/cn';
 import { firstLine } from '../../lib/ansi';
 import { formatDuration } from '../../lib/format';
+import { TableRowsSkeleton } from '../../patterns/skeletons';
 import { ArtifactIcons, type RunResultRow, type RunResultsHrefs } from './run-result';
 
 /**
@@ -27,6 +28,10 @@ import { ArtifactIcons, type RunResultRow, type RunResultsHrefs } from './run-re
  *
  * Groups holding a failure start open; all-green ones start closed, because a
  * file with nothing to say should not cost a screenful.
+ *
+ * That is also what lets a host paint the open groups first: `loadingGroups`
+ * are the files whose rows are still on their way, drawn closed from their
+ * tally alone, and a placeholder inside if one is opened before they arrive.
  */
 
 const BAD = new Set(['failed', 'timedout', 'timedOut', 'interrupted', 'flaky']);
@@ -35,6 +40,12 @@ export interface ResultGroup {
   /** Group key — the spec file. */
   file: string;
   rows: RunResultRow[];
+}
+
+/** A file whose rows have not arrived yet: its name and how many tests it holds. */
+export interface LoadingResultGroup {
+  file: string;
+  total: number;
 }
 
 /** Buckets rows by file, preserving the order the server sorted them in. */
@@ -51,6 +62,7 @@ export function groupByFile(rows: RunResultRow[]): ResultGroup[] {
 export function RunResultGroups({
   hrefs,
   rows,
+  loadingGroups = [],
   /** Forces every group open or closed; `undefined` leaves each to its own default. */
   expandAll,
   emptyTitle = 'No tests match',
@@ -58,13 +70,15 @@ export function RunResultGroups({
 }: {
   hrefs: RunResultsHrefs;
   rows: RunResultRow[];
+  /** Files still loading, drawn after the groups built from `rows`. */
+  loadingGroups?: LoadingResultGroup[];
   expandAll?: boolean;
   emptyTitle?: string;
   emptyDescription?: React.ReactNode;
 }) {
   const groups = React.useMemo(() => groupByFile(rows), [rows]);
 
-  if (rows.length === 0) {
+  if (rows.length === 0 && loadingGroups.length === 0) {
     return (
       <div className="panel">
         <EmptyState icon={SearchX} title={emptyTitle} description={emptyDescription} className="py-12" />
@@ -77,6 +91,9 @@ export function RunResultGroups({
       {groups.map((group) => (
         <FileGroup key={group.file} hrefs={hrefs} group={group} expandAll={expandAll} />
       ))}
+      {loadingGroups.map((group) => (
+        <FileGroup key={group.file} hrefs={hrefs} group={{ file: group.file, rows: [] }} loadingTotal={group.total} expandAll={expandAll} />
+      ))}
     </div>
   );
 }
@@ -84,12 +101,17 @@ export function RunResultGroups({
 function FileGroup({
   hrefs,
   group,
+  loadingTotal,
   expandAll,
 }: {
   hrefs: RunResultsHrefs;
   group: ResultGroup;
+  /** Set while the group's rows are still loading: the file's test count from its tally. */
+  loadingTotal?: number;
   expandAll?: boolean;
 }) {
+  const loading = loadingTotal !== undefined;
+  const total = loadingTotal ?? group.rows.length;
   const failing = group.rows.filter((r) => BAD.has(r.outcome)).length;
   const defaultOpen = failing > 0;
   const [open, setOpen] = React.useState(defaultOpen);
@@ -118,7 +140,7 @@ function FileGroup({
           <span className="font-medium">{name}</span>
         </span>
         <span className="shrink-0 text-body-xs text-muted-foreground tabular-nums">
-          {group.rows.length} {group.rows.length === 1 ? 'test' : 'tests'}
+          {total} {total === 1 ? 'test' : 'tests'}
         </span>
         {failing > 0 ? (
           <Badge variant="outline" className="h-5 shrink-0 border-danger-border bg-danger-subtle px-1.5 text-label-xs text-danger-text tabular-nums">
@@ -134,11 +156,17 @@ function FileGroup({
       </CollapsibleTrigger>
 
       <CollapsibleContent>
-        <ul className="divide-y divide-separator border-t border-separator">
-          {group.rows.map((row) => (
-            <ResultRow key={row.id} hrefs={hrefs} row={row} />
-          ))}
-        </ul>
+        {loading ? (
+          <div className="border-t border-separator" aria-busy>
+            <TableRowsSkeleton rows={Math.min(Math.max(total, 1), 3)} columns={[4, 46, 22]} />
+          </div>
+        ) : (
+          <ul className="divide-y divide-separator border-t border-separator">
+            {group.rows.map((row) => (
+              <ResultRow key={row.id} hrefs={hrefs} row={row} />
+            ))}
+          </ul>
+        )}
       </CollapsibleContent>
     </Collapsible>
   );
