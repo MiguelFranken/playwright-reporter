@@ -33,6 +33,8 @@ export interface ErrorGroupItem {
   sampleHref: string;
   /** The run, filtered to this group. */
   groupHref: string;
+  /** Answers a plain click on `groupHref` in place (see `lib/plain-click`). */
+  onGroupClick?: React.MouseEventHandler<HTMLAnchorElement>;
 }
 
 export function ErrorGroupList({ groups }: { groups: ErrorGroupItem[] }) {
@@ -141,7 +143,7 @@ function ErrorGroupRow({ group, tone, expandAll }: { group: ErrorGroupItem; tone
             <Link href={group.sampleHref} className="text-muted-foreground hover:text-foreground hover:underline">
               Open a sample failure
             </Link>
-            <Link href={group.groupHref} className="inline-flex items-center gap-1 font-medium hover:underline">
+            <Link href={group.groupHref} onClick={group.onGroupClick} className="inline-flex items-center gap-1 font-medium hover:underline">
               Show the {group.count} affected {group.count === 1 ? 'test' : 'tests'}
               <ArrowRight className="size-3.5" />
             </Link>

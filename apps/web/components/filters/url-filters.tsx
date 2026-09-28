@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useCallback, useEffect, useOptimistic, useState, useTransition } from 'react';
+import { Suspense, useCallback, useEffect, useState, useTransition } from 'react';
 import {
   FilterSelect,
   FilterSelectSkeleton,
@@ -38,67 +38,36 @@ export function useUrlParams() {
 }
 
 /**
- * A tab strip whose selection lives in the URL, switched optimistically.
+ * Updates search params *without a navigation*, for views that already hold
+ * the data every value of those params selects (the run page's tabs, outcome
+ * filter and spec files, backed by TanStack Query).
  *
- * The plain `set` above keeps the old UI on screen for the whole round trip:
- * React holds the previous render until the new one is ready, so the strip goes
- * on pointing at the tab you just left. That reads as a dropped click.
+ * `history.replaceState` is integrated with the App Router: `useSearchParams`
+ * follows it, the server is not asked for anything and nothing suspends, so
+ * no placeholder flashes. A reload or a shared link still renders the same
+ * state on the server, because the server reads the same params.
  *
- * So the selection is moved at once with `useOptimistic` and the caller is told
- * it is `switching`, which is its cue to show a placeholder in the body. When
- * the server answers, `value` changes underneath and the optimistic state
- * folds back into it — including when the navigation fails or the user goes
- * back, which is the reason for using `useOptimistic` rather than holding the
- * pending tab in `useState` and having to unwind it by hand.
- *
- * The optimistic write has to happen *inside* the transition that navigates,
- * so this owns its own transition rather than reusing `useUrlParams`.
+ * Each change starts from the address bar as it is now rather than from the
+ * last render's params, so two quick changes cannot undo each other.
  */
-export function useUrlTab<T extends string>(
-  param: string,
-  value: T,
-  options: {
-    /** The value that is spelled by *omitting* the param, e.g. "summary". */
-    defaultValue?: T;
-    /** Params cleared on a switch — a filter from the old tab rarely fits the new one. */
-    resets?: string[];
-  } = {},
-) {
-  const { defaultValue, resets } = options;
-  const router = useRouter();
-  const pathname = usePathname();
+export function useShallowSearch() {
   const params = useSearchParams();
-  const [isPending, startTransition] = useTransition();
-  const [optimistic, setOptimistic] = useOptimistic(value);
-  // Joined so the callback is not rebuilt for an array that is spelled fresh on
-  // every render but never actually changes.
-  const resetKey = resets?.join(',') ?? '';
-
-  const select = useCallback(
-    (next: T) => {
-      if (next === value) return;
-      startTransition(() => {
-        setOptimistic(next);
-        const qs = new URLSearchParams(params.toString());
-        for (const key of resetKey ? resetKey.split(',') : []) qs.delete(key);
-        qs.delete('page');
-        if (next === defaultValue) qs.delete(param);
-        else qs.set(param, next);
-        const search = qs.toString();
-        router.replace(search ? `${pathname}?${search}` : pathname, { scroll: false });
-      });
+  const pathname = usePathname();
+  const set = useCallback(
+    (updates: Record<string, string | string[] | null | undefined>) => {
+      const next = new URLSearchParams(window.location.search);
+      for (const [k, v] of Object.entries(updates)) {
+        next.delete(k);
+        if (Array.isArray(v)) v.filter(Boolean).forEach((x) => next.append(k, x));
+        else if (v) next.set(k, v);
+      }
+      next.delete('page');
+      const qs = next.toString();
+      window.history.replaceState(null, '', qs ? `${pathname}?${qs}` : pathname);
     },
-    [defaultValue, param, params, pathname, resetKey, router, setOptimistic, value],
+    [pathname],
   );
-
-  return {
-    /** What the strip should show as active — the target, not the committed value. */
-    tab: optimistic,
-    select,
-    isPending,
-    /** True while the body on screen still belongs to the previous tab. */
-    switching: optimistic !== value,
-  };
+  return { params, set };
 }
 
 /**

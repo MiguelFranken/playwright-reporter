@@ -1,5 +1,6 @@
 import { CheckCircle2 } from 'lucide-react';
 import { EmptyState } from '../../patterns/empty-state';
+import { takeOverPlainClick } from '../../lib/plain-click';
 import { ErrorGroupList } from './error-group-list';
 
 /**
@@ -31,7 +32,16 @@ export interface RunErrorsHrefs {
   errorGroup: (signature: string) => string;
 }
 
-export function RunErrors({ hrefs, groups }: { hrefs: RunErrorsHrefs; groups: ErrorGroup[] }) {
+export function RunErrors({
+  hrefs,
+  groups,
+  onSelectGroup,
+}: {
+  hrefs: RunErrorsHrefs;
+  groups: ErrorGroup[];
+  /** Answers a plain click on "Show the affected tests" in place instead of following it. */
+  onSelectGroup?: (signature: string) => void;
+}) {
   if (groups.length === 0) {
     return <EmptyState icon={CheckCircle2} title="No errors" description="No test in this run reported an error." />;
   }
@@ -41,6 +51,7 @@ export function RunErrors({ hrefs, groups }: { hrefs: RunErrorsHrefs; groups: Er
         ...group,
         sampleHref: hrefs.result(sampleResultId),
         groupHref: hrefs.errorGroup(group.signature),
+        onGroupClick: takeOverPlainClick(onSelectGroup && (() => onSelectGroup(group.signature))),
       }))}
     />
   );

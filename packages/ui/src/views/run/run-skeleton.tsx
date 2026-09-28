@@ -127,17 +127,24 @@ function SpecsSkeleton() {
           </div>
         ))}
       </div>
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between gap-2">
-          <Skeleton className="h-3.5 w-48" />
-          <Skeleton className="h-3 w-40" />
+      <SpecDetailSkeleton />
+    </div>
+  );
+}
+
+/** The specs tab's right-hand pane on its own — what it shows while an opened file's tests load. */
+export function SpecDetailSkeleton() {
+  return (
+    <div className="flex flex-col gap-3" aria-hidden>
+      <div className="flex items-center justify-between gap-2">
+        <Skeleton className="h-3.5 w-48" />
+        <Skeleton className="h-3 w-40" />
+      </div>
+      <div className="panel overflow-hidden">
+        <div className="bg-surface-sunken px-3 py-2">
+          <Skeleton className="h-3.5 w-40" />
         </div>
-        <div className="panel overflow-hidden">
-          <div className="bg-surface-sunken px-3 py-2">
-            <Skeleton className="h-3.5 w-40" />
-          </div>
-          <TableRowsSkeleton rows={6} columns={[5, 52, 14]} />
-        </div>
+        <TableRowsSkeleton rows={6} columns={[5, 52, 14]} />
       </div>
     </div>
   );

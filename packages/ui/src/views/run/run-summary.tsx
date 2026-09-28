@@ -8,9 +8,10 @@ import { CountTabs } from '../../patterns/count-tabs';
 import { OutcomeCard } from '../../patterns/outcome-card';
 import { SearchField } from '../../patterns/filter-controls';
 import { tallyCategories } from '../../lib/error-category';
+import { takeOverPlainClick } from '../../lib/plain-click';
 import type { RunCounts } from '../../patterns/counts-bar';
 import { ResultGroupsSkeleton } from './run-skeleton';
-import { RunResultGroups, groupByFile } from './run-result-groups';
+import { RunResultGroups, groupByFile, type LoadingResultGroup } from './run-result-groups';
 import type { RunResultRow, RunResultsHrefs } from './run-result';
 
 /**
@@ -22,7 +23,9 @@ import type { RunResultRow, RunResultsHrefs } from './run-result';
  * fishing trip. Below, one toolbar and the results grouped by spec file.
  *
  * Every filter is a link, because the state lives in the URL and a run page
- * ought to be shareable exactly as you are reading it.
+ * ought to be shareable exactly as you are reading it. A plain click is
+ * reported through `onFilterChange` instead of followed, so a host holding the
+ * run's rows re-filters them in place; other clicks open the link.
  */
 
 export interface RunSummaryFilters {
@@ -30,6 +33,9 @@ export interface RunSummaryFilters {
   q?: string;
   signature?: string;
 }
+
+/** A filter change: an absent key is untouched, `null` clears it. */
+export type RunSummaryFilterChange = { [K in keyof RunSummaryFilters]?: string | null };
 
 export interface RunSummaryHrefs extends RunResultsHrefs {
   /** The run's own page, filtered to one outcome (or unfiltered when already active). */
@@ -42,6 +48,9 @@ export function RunSummary({
   hrefs,
   counts,
   rows,
+  runRows = rows,
+  loadingGroups = [],
+  loading,
   filters,
   onFilterChange,
   isPending,
@@ -49,33 +58,43 @@ export function RunSummary({
   hrefs: RunSummaryHrefs;
   counts: RunCounts;
   rows: RunResultRow[];
+  /**
+   * Every row of the run, unfiltered, when the host holds them: the tiles'
+   * breakdowns then describe the whole run under any filter. Defaults to `rows`.
+   */
+  runRows?: RunResultRow[];
+  /**
+   * Files whose rows are still loading, drawn closed after the loaded ones.
+   * A host paints the files holding a failure first — they start open — and
+   * the all-green rest as they arrive.
+   */
+  loadingGroups?: LoadingResultGroup[];
+  /** The rows on hand cannot answer the current filters yet: the list is a placeholder. */
+  loading?: boolean;
   filters: RunSummaryFilters;
-  /** `null` clears the filter. The host decides where that state lives. */
-  onFilterChange: (key: 'outcome' | 'q', next: string | null) => void;
+  /** The host decides where that state lives. */
+  onFilterChange: (change: RunSummaryFilterChange) => void;
   isPending?: boolean;
 }) {
   // `expandAll` stays undefined until the user asks, so each group keeps its
   // own default (open when it holds a failure) on first paint.
   const [expandAll, setExpandAll] = React.useState<boolean | undefined>(undefined);
 
-  // The outcome pills are links, so the rows they select arrive a round trip
-  // later. The strip moves at once and the list below becomes a placeholder,
-  // rather than both sitting on the previous outcome until the query returns.
   const outcome = filters.outcome ?? 'all';
-  const [pendingOutcome, setPendingOutcome] = React.useState<string | null>(null);
-  React.useEffect(() => setPendingOutcome(null), [outcome]);
-  const shownOutcome = pendingOutcome ?? outcome;
-  const switchingOutcome = pendingOutcome !== null && pendingOutcome !== outcome;
+  // Picking the active outcome again clears it, as its link does.
+  const selectOutcome = (next: string) => takeOverPlainClick(() => onFilterChange({ outcome: next === 'all' || next === filters.outcome ? null : next }));
+  const clearFilters = takeOverPlainClick(() => onFilterChange({ outcome: null, q: null, signature: null }));
   const failedCount = counts.failed + counts.interrupted;
-  const groupCount = React.useMemo(() => groupByFile(rows).length, [rows]);
+  const groupCount = React.useMemo(() => groupByFile(rows).length, [rows]) + loadingGroups.length;
+  const shownCount = rows.length + loadingGroups.reduce((sum, g) => sum + g.total, 0);
 
   // The headline counts come from the server's tally of the whole run; the
-  // breakdowns are derived from the rows on screen, which is all the client
-  // has. Under an active filter a breakdown therefore describes the visible
-  // slice — the counts above it stay whole-run either way.
-  const failureRows = rows.filter((r) => FAILED.has(r.outcome));
+  // breakdowns are derived from `runRows`. A host that only holds the rows on
+  // screen gets breakdowns of the visible slice under an active filter — the
+  // counts above them stay whole-run either way.
+  const failureRows = runRows.filter((r) => FAILED.has(r.outcome));
   const categories = tallyCategories(failureRows.map((r) => r.errorMessage));
-  const flakyRows = rows.filter((r) => r.outcome === 'flaky');
+  const flakyRows = runRows.filter((r) => r.outcome === 'flaky');
 
   return (
     <div className="flex flex-col gap-5">
@@ -86,6 +105,7 @@ export function RunSummary({
           tone="danger"
           icon={XCircle}
           href={hrefs.outcome('failed')}
+          onClick={selectOutcome('failed')}
           active={filters.outcome === 'failed'}
           emptyLabel={failedCount === 0 ? 'No failures' : 'No error messages recorded'}
           breakdown={categories.map((c) => ({ label: c.category.label, value: c.count, tone: c.category.tone }))}
@@ -96,6 +116,7 @@ export function RunSummary({
           tone="warning"
           icon={Repeat2}
           href={hrefs.outcome('flaky')}
+          onClick={selectOutcome('flaky')}
           active={filters.outcome === 'flaky'}
           emptyLabel="No flaky tests"
           breakdown={retryBreakdown(flakyRows)}
@@ -106,6 +127,7 @@ export function RunSummary({
           tone="neutral"
           icon={MinusCircle}
           href={hrefs.outcome('skipped')}
+          onClick={selectOutcome('skipped')}
           active={filters.outcome === 'skipped'}
           emptyLabel="Nothing skipped"
         />
@@ -115,6 +137,7 @@ export function RunSummary({
           tone="success"
           icon={CheckCircle2}
           href={hrefs.outcome('passed')}
+          onClick={selectOutcome('passed')}
           active={filters.outcome === 'passed'}
           emptyLabel={counts.total === 0 ? 'No results yet' : 'Nothing passed'}
           breakdown={
@@ -132,18 +155,14 @@ export function RunSummary({
             <p className="text-body-s text-muted-foreground">Every test in this run, grouped by the spec file it came from.</p>
           </div>
           <span className="text-body-xs text-muted-foreground tabular-nums">
-            {rows.length} of {counts.total} tests · {groupCount} {groupCount === 1 ? 'file' : 'files'}
+            {loading ? '…' : shownCount} of {counts.total} tests · {loading ? '…' : groupCount} {groupCount === 1 ? 'file' : 'files'}
           </span>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <CountTabs
-            value={shownOutcome}
-            onSelect={(next, event) => {
-              // A modified click opens elsewhere and never changes this page.
-              if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
-              setPendingOutcome(next);
-            }}
+            value={outcome}
+            onSelect={(next, event) => selectOutcome(next)?.(event)}
             items={[
               // Re-passing the active outcome is what clears it, so "All" keeps the search.
               { value: 'all', label: 'All', count: counts.total, href: hrefs.outcome(filters.outcome ?? '') },
@@ -157,12 +176,12 @@ export function RunSummary({
             placeholder="Search title or file…"
             value={filters.q ?? ''}
             isPending={isPending}
-            onValueChange={(next) => onFilterChange('q', next)}
+            onValueChange={(next) => onFilterChange({ q: next })}
           />
           {filters.signature ? (
             <span className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-surface-sunken px-3 text-body-xs text-muted-foreground">
               Filtered by error group
-              <Link href={hrefs.clearFilters} className="font-medium text-foreground hover:underline">
+              <Link href={hrefs.clearFilters} onClick={clearFilters} className="font-medium text-foreground hover:underline">
                 Clear
               </Link>
             </span>
@@ -180,19 +199,20 @@ export function RunSummary({
         </div>
 
         <div className={isPending ? 'opacity-60 transition-opacity' : 'transition-opacity'}>
-          {switchingOutcome ? (
+          {loading ? (
             <ResultGroupsSkeleton />
           ) : (
           <RunResultGroups
             hrefs={hrefs}
             rows={rows}
+            loadingGroups={loadingGroups}
             expandAll={expandAll}
             emptyTitle={filters.q || filters.outcome || filters.signature ? 'No tests match these filters' : 'No results yet'}
             emptyDescription={
               filters.q || filters.outcome || filters.signature ? (
                 <>
                   Try a different search, or{' '}
-                  <Link href={hrefs.clearFilters} className="font-medium text-foreground hover:underline">
+                  <Link href={hrefs.clearFilters} onClick={clearFilters} className="font-medium text-foreground hover:underline">
                     clear the filters
                   </Link>
                   .

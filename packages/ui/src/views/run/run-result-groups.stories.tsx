@@ -50,3 +50,29 @@ export const TogglesOneGroup: Story = {
     await expect(header).toHaveAttribute('aria-expanded', 'false');
   },
 };
+
+/**
+ * Files whose rows are still loading are drawn closed from their tallies; one
+ * opened early holds a placeholder until its rows arrive.
+ */
+export const LoadingGroups: Story = {
+  args: {
+    rows: mixedResults.filter((r) => r.outcome === 'failed'),
+    loadingGroups: [
+      { file: 'tests/zz-account/profile.spec.ts', total: 12 },
+      { file: 'tests/zz-search/search.spec.ts', total: 1 },
+    ],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const header = canvas.getByRole('button', { name: /profile\.spec\.ts/i });
+    await expect(header).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(header);
+    await expect(header).toHaveAttribute('aria-expanded', 'true');
+  },
+};
+
+/** Only loading files — a run without a failure paints nothing but tallies first. */
+export const OnlyLoadingGroups: Story = {
+  args: { rows: [], loadingGroups: [{ file: 'tests/checkout/cart.spec.ts', total: 8 }] },
+};

@@ -25,19 +25,27 @@ function useStoreVersion(store: LiveStore) {
 }
 
 /**
- * A view's data, kept current by the stream. The server-rendered `value` is
- * shown until the store has taken it over, and whenever the server sends a
- * newer one (a navigation, a filter change) it replaces the live copy.
+ * A view's data, kept current by the stream. The server-rendered (or queried)
+ * `value` is shown until the store has taken it over, and whenever a newer one
+ * arrives (a navigation, a query answer) it replaces the live copy.
  */
-export function useLivePart<T>(name: string, value: T, cursor: number, reduce: Reducer<T>, source: unknown = value): T {
+export function useLivePart<T>(
+  name: string,
+  value: T,
+  cursor: number,
+  reduce: Reducer<T>,
+  source: unknown = value,
+  /** False while the view's data is still loading: nothing is hydrated from the placeholder `value`. */
+  enabled = true,
+): T {
   const store = useLiveStore();
   useStoreVersion(store);
   useEffect(() => {
-    store.hydrate(name, source, cursor, value, reduce);
-    // `source` stands for `value` and `cursor`: both come from the same server render.
+    if (enabled) store.hydrate(name, source, cursor, value, reduce);
+    // `source` stands for `value` and `cursor`: both come from the same server render or query answer.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store, name, source]);
-  return store.read<T>(name, source) ?? value;
+  }, [store, name, source, enabled]);
+  return (enabled ? store.read<T>(name, source) : undefined) ?? value;
 }
 
 /** Another view's live data, e.g. the header's counts on the summary tab. */
