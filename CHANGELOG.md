@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.31](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.30...v0.0.31) (2026-09-28)
+
+### Performance Improvements
+
+* **web:** switch run tabs, outcomes and spec files without a navigation ([#38](https://github.com/MiguelFranken/playwright-reporter/issues/38)) ([38f72cb](https://github.com/MiguelFranken/playwright-reporter/commit/38f72cb49d030bc868a86ca174dbab797001989a))
+
 ## [0.0.30](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.29...v0.0.30) (2026-09-25)
 
 ### Features
