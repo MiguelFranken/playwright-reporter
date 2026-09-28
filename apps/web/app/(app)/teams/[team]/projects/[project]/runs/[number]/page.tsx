@@ -17,7 +17,6 @@ import {
   listRunErrorGroupsWithCursor,
   listRunResults,
   listRunResultsWithCursor,
-  listRunSpecs,
   listRunSpecsWithCursor,
 } from '@/lib/db/queries/runs';
 import { makeServerQueryClient } from '@/lib/rpc/prefetch';
@@ -93,14 +92,18 @@ async function Header({ params }: { params: Params }) {
 const HEAD_OUTCOMES = new Set(['failed', 'flaky']);
 
 /**
- * The selected tab's data, put into the browser's query cache
- * (`lib/rpc/prefetch.ts`) under the keys the client tabs read — after that,
- * every tab switch, filter and file happens in the browser (`RunBody`).
+ * Every tab's data, put into the browser's query cache (`lib/rpc/prefetch.ts`)
+ * under the keys the client tabs read — after that, every tab switch, filter
+ * and file happens in the browser (`RunBody`).
+ *
+ * The selected tab is awaited; every other tab's query is started beside it
+ * and streams into the cache without holding the page up, so a switch to
+ * Specs or Errors finds its answer already there instead of fetching on click.
  *
  * The summary is painted in two steps: the rows of the files holding a
  * failure — the groups that start open — and every file's tally are awaited,
- * the whole run's rows are started and stream in behind them. A filter the
- * head cannot answer (a passed outcome, a title search) waits for all rows.
+ * the whole run's rows stream in behind them. A filter the head cannot answer
+ * (a passed outcome, a title search) waits for all rows.
  */
 async function Body({ params, searchParams }: Props) {
   const sp = await searchParams;
@@ -110,30 +113,37 @@ async function Body({ params, searchParams }: Props) {
   const queries = makeServerQueryClient();
   let summaryHead: SummaryHead | undefined;
 
+  const loadRows = () => listRunResultsWithCursor(found.id);
+  const loadSpecs = () => listRunSpecsWithCursor(found.id);
+  const loadErrors = () => listRunErrorGroupsWithCursor(found.id);
+  const summaryNeedsAll = tab === 'summary' && Boolean(sp.q || (sp.outcome && sp.outcome !== 'all' && !HEAD_OUTCOMES.has(sp.outcome)));
+
+  // The tabs this render does not wait for start first, beside the one it does.
+  if (!summaryNeedsAll) void queries.prefetchQuery({ ...runRowsQuery(runRef), queryFn: loadRows });
+  if (tab === 'errors' || tab === 'config') void queries.prefetchQuery({ ...runSpecsQuery(runRef), queryFn: loadSpecs });
+  if (tab !== 'errors') void queries.prefetchQuery({ ...runErrorsQuery(runRef), queryFn: loadErrors });
+
   switch (tab) {
     case 'specs': {
-      const [specs, rows] = await Promise.all([
-        listRunSpecsWithCursor(found.id),
-        sp.file ? listRunResultsWithCursor(found.id, { file: sp.file }) : null,
-      ]);
+      const [specs, rows] = await Promise.all([loadSpecs(), sp.file ? listRunResultsWithCursor(found.id, { file: sp.file }) : null]);
       queries.setQueryData(runSpecsQuery(runRef).queryKey, specs);
       if (sp.file && rows) queries.setQueryData(runRowsQuery(runRef, sp.file).queryKey, rows);
       break;
     }
     case 'errors':
-      queries.setQueryData(runErrorsQuery(runRef).queryKey, await listRunErrorGroupsWithCursor(found.id));
+      queries.setQueryData(runErrorsQuery(runRef).queryKey, await loadErrors());
       break;
     case 'config':
       break;
     default: {
-      const loadAll = () => listRunResultsWithCursor(found.id);
-      if (sp.q || (sp.outcome && sp.outcome !== 'all' && !HEAD_OUTCOMES.has(sp.outcome))) {
-        queries.setQueryData(runRowsQuery(runRef).queryKey, await loadAll());
+      if (summaryNeedsAll) {
+        queries.setQueryData(runRowsQuery(runRef).queryKey, await loadRows());
         break;
       }
-      void queries.prefetchQuery({ ...runRowsQuery(runRef), queryFn: loadAll });
-      const [rows, specs] = await Promise.all([listRunResults(found.id, { problemFiles: true }), listRunSpecs(found.id)]);
-      summaryHead = { rows, cursor, specs };
+      // The head's tallies are the specs tab's data too: one query serves both.
+      const [rows, specs] = await Promise.all([listRunResults(found.id, { problemFiles: true }), loadSpecs()]);
+      queries.setQueryData(runSpecsQuery(runRef).queryKey, specs);
+      summaryHead = { rows, cursor, specs: specs.specs };
     }
   }
 
