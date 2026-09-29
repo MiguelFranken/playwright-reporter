@@ -1,13 +1,13 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, fn, userEvent, within } from 'storybook/test';
-import { libraryReferences, mainReference, redesignReference, releaseReference } from '../../fixtures/library';
+import { libraryReferences, mainReference, redesignReference, releaseReference, unkeptReference } from '../../fixtures/library';
 import { NOW } from '../../fixtures/now';
 import { LibraryReferenceBar } from './reference-bar';
 
 const meta = {
   title: 'Views/Library/ReferenceBar',
   component: LibraryReferenceBar,
-  args: { references: libraryReferences, current: mainReference, onReferenceChange: fn(), onSettings: fn(), runHref: (n: number) => `#run-${n}`, now: NOW },
+  args: { references: libraryReferences, current: mainReference, onReferenceChange: fn(), onSettings: fn(), onKeep: fn(), runHref: (n: number) => `#run-${n}`, now: NOW },
   parameters: { layout: 'padded' },
   tags: ['themed'],
 } satisfies Meta<typeof LibraryReferenceBar>;
@@ -46,3 +46,14 @@ export const PullRequestWithChanges: Story = {
 export const ReadOnly: Story = { args: { onSettings: undefined } };
 
 export const NothingCapturedYet: Story = { args: { current: { ...mainReference, latestRun: null, latestCounts: null } } };
+
+/** A pull request opened from its own page, not kept yet: one click keeps it. */
+export const NotKept: Story = {
+  args: { current: unkeptReference },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: /Keep in library/ }));
+    await expect(args.onKeep).toHaveBeenCalled();
+    await expect(canvas.queryByRole('button', { name: /Settings/ })).toBeNull();
+  },
+};

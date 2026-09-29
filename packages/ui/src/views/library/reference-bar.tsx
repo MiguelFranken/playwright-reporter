@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, ChevronDown, Diff, GitBranch, GitPullRequest, Pin, Settings2, Star } from 'lucide-react';
+import { Check, ChevronDown, Diff, GitBranch, GitPullRequest, Pin, Plus, Settings2, Star } from 'lucide-react';
 import { Badge } from '../../components/badge';
 import { Button } from '../../components/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '../../components/dropdown-menu';
@@ -34,6 +34,8 @@ export function LibraryReferenceBar({
   reviewHref,
   runHref,
   onSettings,
+  onKeep,
+  pending = false,
   now,
 }: {
   references: readonly LibraryReferenceView[];
@@ -44,9 +46,13 @@ export function LibraryReferenceBar({
   runHref: (number: number) => string;
   /** Opens the reference's settings; absent for readers who may not change the library. */
   onSettings?: () => void;
+  /** Keeps a reference the library does not list yet (one opened from its pull request). */
+  onKeep?: () => void;
+  pending?: boolean;
   now?: Date;
 }) {
   const run = shownRun(current);
+  const listed = current.kept || current.isDefault;
   const waiting = current.latestCounts ? current.latestCounts.changed + current.latestCounts.new : 0;
   const branches = references.filter((r) => r.key.kind === 'branch');
   const pulls = references.filter((r) => r.key.kind === 'pull_request');
@@ -95,13 +101,19 @@ export function LibraryReferenceBar({
         </div>
 
         <div className="ml-auto flex items-center gap-2">
+          {!listed ? <span className="text-body-s text-muted-foreground">Not kept in the library</span> : null}
+          {!listed && onKeep ? (
+            <Button variant="outline" size="sm" disabled={pending || !run} onClick={onKeep}>
+              <Plus /> {pending ? 'Keeping…' : 'Keep in library'}
+            </Button>
+          ) : null}
           {reviewHref && waiting ? (
             <Button variant="outline" size="sm" nativeButton={false} render={<Link href={reviewHref} />}>
               <Diff /> Review {waiting} {waiting === 1 ? 'change' : 'changes'}
             </Button>
           ) : null}
-          {onSettings ? (
-            <Button variant="ghost" size="sm" onClick={onSettings}>
+          {onSettings && listed ? (
+            <Button variant="ghost" size="sm" disabled={pending} onClick={onSettings}>
               <Settings2 /> Settings
             </Button>
           ) : null}

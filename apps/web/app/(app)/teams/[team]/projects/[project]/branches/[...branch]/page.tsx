@@ -20,7 +20,9 @@ import { requireProject } from '@/lib/auth/access';
 import { parsePage, parseRange } from '@/lib/db/queries/shared';
 import { reliabilityLabel } from '@/lib/metrics/score';
 import { projectHrefs, toRunListItem } from '@/lib/view-models';
-import { chronicFailures, dashboardStats, getBranchOverview, listRuns, mostFlakyTests, passFailTrend, renderedAt } from '@/lib/page-data';
+import { chronicFailures, dashboardStats, defaultBranch, getBranchOverview, getLibraryReference, listRuns, mostFlakyTests, passFailTrend, referenceRuns, renderedAt } from '@/lib/page-data';
+import { toRunView } from '@/lib/review/library';
+import { ConnectedLibraryCard } from '@/components/library/library-controls';
 
 type Params = Promise<{ team: string; project: string; branch: string[] }>;
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -51,6 +53,11 @@ export default function BranchPage({ params, searchParams }: Props) {
           <Stats params={params} searchParams={searchParams} />
         </Suspense>
       </section>
+
+      {/* Nothing until it streams: most projects without review checkpoints never show the card. */}
+      <Suspense fallback={null}>
+        <Screens params={params} searchParams={searchParams} />
+      </Suspense>
 
       <Card>
         <CardContent>
@@ -119,9 +126,10 @@ export default function BranchPage({ params, searchParams }: Props) {
  */
 async function scope({ params, searchParams }: Props) {
   const [{ team, project: projectSlug, branch: segments }, sp] = await Promise.all([params, searchParams]);
-  const { project } = await requireProject(team, projectSlug);
+  const access = await requireProject(team, projectSlug);
+  const { project } = access;
   const range = first(sp.range);
-  return { project, branch: segments.join('/'), sp, range, days: parseRange(range), base: `/teams/${team}/projects/${project.slug}` };
+  return { access, project, branch: segments.join('/'), sp, range, days: parseRange(range), base: `/teams/${team}/projects/${project.slug}` };
 }
 
 async function BranchesLink(props: Props) {
@@ -137,6 +145,25 @@ async function Header(props: Props) {
     <BranchHeader branch={overview} hrefs={projectHrefs(base)} now={await renderedAt()}>
       <RangeToggle />
     </BranchHeader>
+  );
+}
+
+/** Its review checkpoints: what waits for review, and whether the library keeps it. */
+async function Screens(props: Props) {
+  const { access, project, branch, base } = await scope(props);
+  const key = { kind: 'branch', branch } as const;
+  const fallback = await defaultBranch(project.id, project.settings);
+  const [reference, runs] = await Promise.all([getLibraryReference(project.id, key, fallback), referenceRuns(project.id, key)]);
+  if (!reference.latestRun && !reference.kept) return null;
+  return (
+    <ConnectedLibraryCard
+      team={access.team.slug}
+      project={project.slug}
+      base={base}
+      reference={reference}
+      runs={runs.map(toRunView)}
+      canManage={access.can({ review: ['decide'] })}
+    />
   );
 }
 

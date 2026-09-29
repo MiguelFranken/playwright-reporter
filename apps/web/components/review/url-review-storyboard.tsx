@@ -2,7 +2,7 @@
 
 import { useEffect, useOptimistic, useState, useTransition } from 'react';
 import { toast } from 'sonner';
-import { DEFAULT_FRAME, parseReviewFilter, REVIEW_GROUPINGS, type FrameSettings, type ReviewDecisionInput, type ReviewFilter, type ReviewFlowView, type ReviewGrouping } from '@miguelfranken/ui/lib/review';
+import { DEFAULT_FRAME, parseReviewFilter, REVIEW_GROUPINGS, type FrameSettings, type ReviewDecisionInput, type ReviewFilter, type ReviewFlowView, type ReviewGrouping, type StoryboardMode } from '@miguelfranken/ui/lib/review';
 import { ReviewStoryboard, STORYBOARD_SIZE, type ReviewSelection } from '@miguelfranken/ui/views/review/review-storyboard';
 import { useShallowSearch } from '@/components/filters/url-filters';
 import { decideReview } from '@/app/(app)/teams/[team]/projects/[project]/review/actions';
@@ -66,7 +66,9 @@ export function UrlReviewStoryboard({
   tree,
   syncUrl = true,
   emptyTitle,
+  emptyDescription,
   defaultFilter,
+  mode,
 }: {
   team: string;
   project: string;
@@ -78,8 +80,11 @@ export function UrlReviewStoryboard({
   /** Off where the storyboard is embedded in another page's URL. */
   syncUrl?: boolean;
   emptyTitle?: string;
+  emptyDescription?: React.ReactNode;
   /** Without a `status` in the URL: what needs review (the default) or everything. */
   defaultFilter?: ReviewFilter;
+  /** `library`: documentation, nothing to decide. */
+  mode?: StoryboardMode;
 }) {
   const { params, set } = useShallowSearch();
   const [local, setLocal] = useState<ReviewSelection | null>(null);
@@ -131,6 +136,8 @@ export function UrlReviewStoryboard({
       frame={view?.frame}
       onFrameChange={(frame) => setView({ frame })}
       emptyTitle={emptyTitle}
+      emptyDescription={emptyDescription}
+      mode={mode}
     />
   );
 }

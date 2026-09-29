@@ -3,12 +3,15 @@ import { Suspense } from 'react';
 import { BackLink } from '@miguelfranken/ui/patterns/back-link';
 import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
 import { ReviewStoryboardSkeleton } from '@miguelfranken/ui/views/review/review-skeleton';
+import { GitBranch, GitPullRequest } from 'lucide-react';
+import type { LibraryRefKey } from '@miguelfranken/ui/lib/library';
+import { ConnectedRunLibraryActions } from '@/components/library/library-controls';
+import { PrefetchLink } from '@/components/prefetch-link';
 import { UrlReviewStoryboard } from '@/components/review/url-review-storyboard';
 import { requireProject } from '@/lib/auth/access';
-import { casesOfTests, getRunByNumber, runReview } from '@/lib/page-data';
-import { toFlowViews } from '@/lib/review/view-model';
+import { casesOfTests, defaultBranch, getLibraryReference, getRunByNumber, runReview } from '@/lib/page-data';
+import { caseHref, toFlowViews } from '@/lib/review/view-model';
 import { projectHrefs } from '@/lib/view-models';
-import { caseHref } from '@/lib/review/view-model';
 
 type Props = { params: Promise<{ team: string; project: string; number: string }> };
 
@@ -37,6 +40,9 @@ async function Content({ params }: Props) {
   const byTest = await casesOfTests(access.project.id, records.map((r) => r.testId));
   const flows = toFlowViews(records, (resultId) => hrefs.result(run.number, resultId), { byTest, href: caseHref(hrefs) });
   const commit = [run.gitBranch, run.gitShortSha].filter(Boolean).join(' @ ');
+  // The run's line of work: its pull request, else its branch — what the library keeps and pins.
+  const key: LibraryRefKey | null = run.prNumber ? { kind: 'pull_request', prNumber: run.prNumber } : run.gitBranch ? { kind: 'branch', branch: run.gitBranch } : null;
+  const reference = key ? await getLibraryReference(access.project.id, key, await defaultBranch(access.project.id, access.project.settings)) : null;
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3">
@@ -49,7 +55,25 @@ async function Content({ params }: Props) {
               for the full image and the comparison with its approved baseline; <kbd>A</kbd> approves and moves on.
             </>
           }
-        />
+        >
+          {reference ? (
+            <ConnectedRunLibraryActions team={team} project={access.project.slug} base={base} reference={reference} runNumber={run.number} canManage={access.can({ review: ['decide'] })} />
+          ) : null}
+        </PageHeader>
+        {key ? (
+          <p className="-mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-body-s text-muted-foreground">
+            {run.prNumber ? (
+              <PrefetchLink href={hrefs.pullRequest(run.prNumber)} className="inline-flex items-center gap-1.5 hover:text-foreground hover:underline">
+                <GitPullRequest className="size-3.5" /> Pull request #{run.prNumber}
+              </PrefetchLink>
+            ) : null}
+            {run.gitBranch ? (
+              <PrefetchLink href={hrefs.branch(run.gitBranch)} className="inline-flex items-center gap-1.5 text-code-s hover:text-foreground hover:underline">
+                <GitBranch className="size-3.5" /> {run.gitBranch}
+              </PrefetchLink>
+            ) : null}
+          </p>
+        ) : null}
       </div>
       <UrlReviewStoryboard team={team} project={access.project.slug} flows={flows} canDecide={access.can({ review: ['decide'] })} />
     </div>

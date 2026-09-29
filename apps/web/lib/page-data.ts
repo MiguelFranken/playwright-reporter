@@ -275,12 +275,6 @@ export async function reviewQueue(...args: Parameters<typeof review.reviewQueue>
   return review.reviewQueue(...args);
 }
 
-export async function screenCatalogue(...args: Parameters<typeof review.screenCatalogue>) {
-  'use cache: private';
-  cacheLife(PAGE_DATA);
-  return review.screenCatalogue(...args);
-}
-
 export async function defaultBranch(...args: Parameters<typeof mcpQueries.defaultBranch>) {
   'use cache: private';
   cacheLife(PAGE_DATA);

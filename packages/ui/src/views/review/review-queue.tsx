@@ -25,6 +25,12 @@ export interface ReviewQueueRow {
   prTitle?: string | null;
   startedAt: string;
   counts: ReviewCounts;
+  /** The run's review page. */
+  reviewHref: string;
+  /** The pull request's (or branch's) page. */
+  changeHref?: string | null;
+  /** The library on that pull request or branch. */
+  libraryHref?: string | null;
 }
 
 /** A pull request or branch in the queue: its newest run, and how many runs it superseded. */
@@ -63,23 +69,14 @@ const needsOf = (c: ReviewCounts) => c.changed + c.new;
  */
 export function ReviewQueue({
   rows,
-  runHref,
-  changeHref,
   libraryRefs = [],
   defaultBranch,
-  libraryHref,
   now,
 }: {
   rows: readonly ReviewQueueRow[];
-  /** The run's review page. */
-  runHref: (number: number) => string;
-  /** The pull request's or branch's page. */
-  changeHref?: (key: LibraryRefKey) => string;
   /** References kept in the library, as `libraryRefParam` writes them. */
   libraryRefs?: readonly string[];
   defaultBranch?: string | null;
-  /** The library on a reference. */
-  libraryHref?: (key: LibraryRefKey) => string;
   now?: Date;
 }) {
   const changes = groupReviewQueue(rows);
@@ -140,8 +137,8 @@ export function ReviewQueue({
                     <TableCell className="max-w-96">
                       <div className="flex min-w-0 items-center gap-2">
                         {key?.kind === 'pull_request' ? <GitPullRequest aria-hidden className="size-4 shrink-0 text-muted-foreground" /> : <GitBranch aria-hidden className="size-4 shrink-0 text-muted-foreground" />}
-                        {key && changeHref ? (
-                          <Link href={changeHref(key)} className="truncate font-medium hover:underline" title={name}>
+                        {key && r.changeHref ? (
+                          <Link href={r.changeHref} className="truncate font-medium hover:underline" title={name}>
                             {name}
                           </Link>
                         ) : (
@@ -152,8 +149,8 @@ export function ReviewQueue({
                             <Star className="size-3" /> Default
                           </Badge>
                         ) : null}
-                        {inLibrary && key && libraryHref ? (
-                          <Link href={libraryHref(key)} className="inline-flex shrink-0 items-center gap-1 text-label-xs text-muted-foreground hover:text-foreground hover:underline" title="Kept in the library">
+                        {inLibrary && r.libraryHref ? (
+                          <Link href={r.libraryHref} className="inline-flex shrink-0 items-center gap-1 text-label-xs text-muted-foreground hover:text-foreground hover:underline" title="Kept in the library">
                             <BookImage className="size-3.5" /> Library
                           </Link>
                         ) : null}
@@ -162,7 +159,7 @@ export function ReviewQueue({
                     </TableCell>
                     <TableCell className="max-w-96">
                       <div className="flex items-center gap-2">
-                        <Link href={runHref(r.number)} className="font-medium tabular-nums hover:underline">
+                        <Link href={r.reviewHref} className="font-medium tabular-nums hover:underline">
                           #{r.number}
                         </Link>
                         <StatusBadge status={r.status} />
@@ -185,7 +182,7 @@ export function ReviewQueue({
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant={needs ? 'default' : 'outline'} size="sm" nativeButton={false} render={<Link href={runHref(r.number)} />}>
+                      <Button variant={needs ? 'default' : 'outline'} size="sm" nativeButton={false} render={<Link href={r.reviewHref} />}>
                         {needs ? 'Review' : 'View'}
                         <span className="sr-only"> run #{r.number}</span>
                       </Button>

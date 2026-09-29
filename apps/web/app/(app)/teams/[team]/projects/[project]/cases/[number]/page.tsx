@@ -5,15 +5,16 @@ import { CaseDetailPanel } from '@/components/test-cases/case-detail-panel';
 import { CaseHeader } from '@/components/test-cases/case-header';
 import { CaseSkeleton } from '@/components/test-cases/case-skeleton';
 import { requireProject } from '@/lib/auth/access';
-import { Images } from 'lucide-react';
+import { BookImage, Images } from 'lucide-react';
 import { Button } from '@miguelfranken/ui/components/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@miguelfranken/ui/components/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@miguelfranken/ui/components/card';
+import { libraryRefShort } from '@miguelfranken/ui/lib/library';
 import { caseKey } from '@miguelfranken/ui/lib/test-cases';
 import { ReviewStoryboardSkeleton } from '@miguelfranken/ui/views/review/review-skeleton';
 import { PrefetchLink } from '@/components/prefetch-link';
 import { UrlReviewStoryboard } from '@/components/review/url-review-storyboard';
-import { caseNeighbours, casesOfTests, defaultBranch, getCaseDetail, listFieldDefs, renderedAt, screenCatalogue } from '@/lib/page-data';
-import { caseHref, screensToFlows } from '@/lib/review/view-model';
+import { caseNeighbours, casesOfTests, defaultBranch, defaultLibraryRef, getCaseDetail, libraryFlows, listFieldDefs, renderedAt } from '@/lib/page-data';
+import { caseHref, flowViewsAcrossRuns } from '@/lib/review/view-model';
 import { projectHrefs } from '@/lib/view-models';
 import { caseNumberParam } from '@/lib/test-cases/editor';
 import { listQuery, parseCaseFilters } from '@/lib/test-cases/filters';
@@ -109,22 +110,28 @@ async function CaseScreens({
 }) {
   const base = `/teams/${team}/projects/${projectSlug}`;
   const hrefs = projectHrefs(base);
-  const branch = await defaultBranch(projectId, settings);
-  const [screens, byTest] = await Promise.all([screenCatalogue(projectId, branch, { testIds }), casesOfTests(projectId, testIds)]);
-  if (screens.length === 0) return null;
-  const flows = screensToFlows(screens, hrefs.test, { byTest, href: caseHref(hrefs) });
+  // The library's default reference: the product as the team agreed to document it.
+  const key = await defaultLibraryRef(projectId, await defaultBranch(projectId, settings));
+  const [records, byTest] = await Promise.all([libraryFlows(projectId, key, { testIds }), casesOfTests(projectId, testIds)]);
+  if (records.length === 0) return null;
+  const flows = flowViewsAcrossRuns(records, hrefs, { byTest, href: caseHref(hrefs) });
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-3">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Images className="size-4" /> Visual review
-        </CardTitle>
-        <Button variant="outline" size="sm" nativeButton={false} render={<PrefetchLink href={`${base}/review/screens?q=${encodeURIComponent(caseKey(caseNumber))}`} />}>
-          Open in Visual Review
+        <div className="flex flex-col gap-1">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Images className="size-4" /> Screens
+          </CardTitle>
+          <CardDescription>
+            As the library shows them, from <span className="text-code-s">{libraryRefShort(key)}</span>.
+          </CardDescription>
+        </div>
+        <Button variant="outline" size="sm" nativeButton={false} render={<PrefetchLink href={`${hrefs.library(key)}&q=${encodeURIComponent(caseKey(caseNumber))}`} />}>
+          <BookImage /> Open in library
         </Button>
       </CardHeader>
       <CardContent>
-        <UrlReviewStoryboard team={team} project={projectSlug} flows={flows} canDecide={false} toolbar={false} tree={false} syncUrl={false} />
+        <UrlReviewStoryboard team={team} project={projectSlug} flows={flows} canDecide={false} toolbar={false} tree={false} syncUrl={false} mode="library" />
       </CardContent>
     </Card>
   );

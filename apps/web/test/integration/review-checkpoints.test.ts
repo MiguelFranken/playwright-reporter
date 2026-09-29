@@ -11,7 +11,8 @@ import { eq, sql } from 'drizzle-orm';
 import type { Checkpoint } from '@miguelfranken/protocol';
 import { getRunForProject, ingestEvents, startRun } from '@/lib/ingest/service';
 import { attachments, reviewCaptures, reviewCheckpoints } from '@/lib/db/schema';
-import { captureHistory, decide, reviewQueue, runReview, runReviewCounts, screenCatalogue } from '@/lib/review/queries';
+import { captureHistory, decide, reviewQueue, runReview, runReviewCounts } from '@/lib/review/queries';
+import { libraryFlows } from '@/lib/review/library';
 import { dueWhere } from '@/lib/storage/retention';
 import { casesOfTests } from '@/lib/review/cases';
 import { createCase, ensureSuite, linkTests } from '@/lib/test-cases/service';
@@ -181,11 +182,6 @@ describe('statuses', () => {
     const history = await captureHistory(tenant.project.id, flow.testId, 'booking-ready', 'desktop');
     expect(history.map((h) => h.status)).toEqual(['changed', 'approved', 'approved']);
 
-    const screens = await screenCatalogue(tenant.project.id, 'main');
-    expect(screens.map((s) => [s.variant, s.approved])).toEqual([
-      ['desktop', true],
-      ['mobile', false],
-    ]);
     void db;
   });
 
@@ -232,8 +228,8 @@ describe('test cases', () => {
       { key: `TC-${linked.number}`, title: 'Book a workshop', suitePath: ['Checkout', 'Ordering'] },
       { key: `TC-${unfiled.number}`, title: 'Booking works on mobile', suitePath: [] },
     ]);
-    const screens = await screenCatalogue(tenant.project.id, 'main', { testIds: [capture.testId] });
-    expect(screens.length).toBe(2);
-    expect(await screenCatalogue(tenant.project.id, 'main', { testIds: [] })).toEqual([]);
+    const flows = await libraryFlows(tenant.project.id, { kind: 'branch', branch: 'main' }, { testIds: [capture.testId] });
+    expect(flows[0].checkpoints[0].captures.length).toBe(2);
+    expect(await libraryFlows(tenant.project.id, { kind: 'branch', branch: 'main' }, { testIds: [] })).toEqual([]);
   });
 });

@@ -10,6 +10,7 @@
 import type { RunHeaderData } from '@miguelfranken/ui/views/run/run-header';
 import type { RunListItem } from '@miguelfranken/ui/views/runs/runs-table';
 import { resultFacetParams, type ResultFacets } from '@miguelfranken/ui/lib/result-filter';
+import { libraryRefParam, type LibraryRefKey } from '@miguelfranken/ui/lib/library';
 
 /**
  * GitHub, GitLab and Bitbucket each shape a commit URL differently. That is
@@ -71,6 +72,11 @@ export function projectHrefs(base: string) {
     test: (testId: string) => `${base}/tests/${testId}`,
     result: (runNumber: number, resultId: string) => `${base}/runs/${runNumber}/tests/${resultId}`,
     testCase: (number: number) => `${base}/cases/${number}`,
+    runReview: (number: number) => `${base}/runs/${number}/review`,
+    /** The library, on a reference or (without one) on the default. */
+    library: (key?: LibraryRefKey) => (key ? `${base}/library?ref=${encodeURIComponent(libraryRefParam(key))}` : `${base}/library`),
+    /** A pull request's or branch's own page. */
+    change: (key: LibraryRefKey) => (key.kind === 'branch' ? branchHref(base, key.branch) : pullRequestHref(base, key.prNumber)),
   };
 }
 

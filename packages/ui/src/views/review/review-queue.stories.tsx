@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, userEvent, within } from 'storybook/test';
 import { NOW, reviewQueueRows } from '../../fixtures/review';
-import { libraryRefParam, type LibraryRefKey } from '../../lib/library';
 import { ReviewQueue } from './review-queue';
 
 const meta = {
@@ -9,9 +8,6 @@ const meta = {
   component: ReviewQueue,
   args: {
     rows: reviewQueueRows,
-    runHref: (n: number) => `#run-${n}/review`,
-    changeHref: (k: LibraryRefKey) => `#${libraryRefParam(k)}`,
-    libraryHref: (k: LibraryRefKey) => `#library-${libraryRefParam(k)}`,
     libraryRefs: ['pr:212'],
     defaultBranch: 'main',
     now: NOW,
