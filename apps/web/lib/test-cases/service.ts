@@ -22,7 +22,7 @@ import {
   type TestCase,
   type TestSuite,
 } from '@/lib/db/schema';
-import { audit } from '@/lib/auth/audit';
+import type { AuditAction } from '@/lib/auth/audit';
 import { caseKey, MAX_BULK_CASES, MAX_SUITE_DEPTH, type CaseStep, type CustomFieldValue } from '@miguelfranken/ui/lib/test-cases';
 import {
   CASE_DEFAULTS,
@@ -76,7 +76,10 @@ function uuids(ids: readonly string[]): string[] {
   return [...new Set(ids.filter((id) => typeof id === 'string' && UUID.test(id)))];
 }
 
-async function record(ctx: CaseContext, action: Parameters<typeof audit>[0], target: Record<string, unknown>) {
+async function record(ctx: CaseContext, action: AuditAction, target: Record<string, unknown>) {
+  // Loaded on write: the audit log reads request headers, and the MCP and
+  // OpenAPI document generators import this module outside of Next.js.
+  const { audit } = await import('@/lib/auth/audit');
   await audit(action, { actorId: ctx.actorId, teamId: ctx.teamId, projectId: ctx.projectId, target });
 }
 
@@ -793,4 +796,19 @@ export async function importCases(ctx: CaseContext, parsed: ParsedImport, duplic
   });
   await record(ctx, 'test-case.import', { created: summary.created, updated: summary.updated, skipped: summary.skipped, suites: summary.suites });
   return summary;
+}
+
+/** The suite at a path of names (`['Checkout', 'Coupons']`), created level by level where missing. */
+export async function ensureSuite(ctx: CaseContext, path: readonly string[]): Promise<string | null> {
+  const names = path.map((p) => p.trim()).filter(Boolean);
+  if (names.length === 0) return null;
+  if (names.length > MAX_SUITE_DEPTH) throw new CaseError(`Suites nest at most ${MAX_SUITE_DEPTH} levels deep.`);
+  const { id, created } = await db.transaction(async (tx) => {
+    const suites = await suitesOf(tx, ctx.projectId);
+    const before = suites.length;
+    const id = await ensureSuitePath(tx, ctx, suites, new Map(), names);
+    return { id, created: suites.length - before };
+  });
+  if (created) await record(ctx, 'test-suite.create', { path: names });
+  return id;
 }

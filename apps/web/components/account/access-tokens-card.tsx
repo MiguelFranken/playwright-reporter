@@ -34,12 +34,12 @@ export function AccessTokensCard({
   const [creating, startCreate] = useTransition();
   const { revokingId, revoke } = useRevokeToken();
 
-  const create = ({ name, expiresInDays, scope }: CreateTokenValues) =>
+  const create = ({ name, expiresInDays, scope, write }: CreateTokenValues) =>
     startCreate(async () => {
       const parsed = parseAccessScope(scope);
       const restriction: CreatePersonalTokenInput['restriction'] =
         parsed.kind === 'team' || parsed.kind === 'project' ? parsed : { kind: 'all' };
-      const res = await createPersonalToken({ name, expiresInDays, restriction, allTeams: parsed.kind === 'superadmin' });
+      const res = await createPersonalToken({ name, expiresInDays, restriction, allTeams: parsed.kind === 'superadmin', write });
       if (!res.ok) {
         toast.error(res.message);
         return;

@@ -331,6 +331,16 @@ export async function findCase(projectId: string, number: number): Promise<TestC
   return row ?? null;
 }
 
+/** The number (`TC-n`) of a case given by id, within the project. */
+export async function caseNumberOf(projectId: string, id: string): Promise<number | null> {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return null;
+  const [row] = await db
+    .select({ number: testCases.number })
+    .from(testCases)
+    .where(and(eq(testCases.projectId, projectId), eq(testCases.id, id)));
+  return row?.number ?? null;
+}
+
 export async function getCaseDetail(projectId: string, number: number, now = new Date()): Promise<CaseDetail | null> {
   const row = await findCase(projectId, number);
   if (!row) return null;

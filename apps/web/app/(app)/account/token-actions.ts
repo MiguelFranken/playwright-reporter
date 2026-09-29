@@ -23,6 +23,8 @@ const createInput = z.object({
     z.object({ kind: z.literal('project'), projectId: z.uuid() }),
   ]),
   allTeams: z.boolean().default(false),
+  /** Adds the `write` scope: the MCP write tools (test cases). Roles still decide what a call may change. */
+  write: z.boolean().default(false),
 });
 
 export type CreatePersonalTokenInput = z.input<typeof createInput>;
@@ -70,7 +72,7 @@ export async function createPersonalToken(raw: CreatePersonalTokenInput): Promis
     name: input.name,
     tokenHash: hashToken(token),
     tokenPrefix: prefix,
-    scopes: ['read'],
+    scopes: input.write ? ['read', 'write'] : ['read'],
     teamIds,
     projectId,
     allTeams: input.allTeams,
@@ -80,7 +82,7 @@ export async function createPersonalToken(raw: CreatePersonalTokenInput): Promis
     actorId: user.id,
     projectId,
     teamId: teamIds?.length === 1 ? teamIds[0] : null,
-    target: { tokenId: id, name: input.name, prefix, expiresAt: expiresAt.toISOString(), allTeams: input.allTeams },
+    target: { tokenId: id, name: input.name, prefix, expiresAt: expiresAt.toISOString(), allTeams: input.allTeams, write: input.write },
   });
   revalidatePath('/account');
   return { ok: true, token, name: input.name };

@@ -118,7 +118,7 @@ export const CreateFlow: Story = {
     await expect(generate).toBeDisabled();
     await userEvent.type(within(dialog).getByLabelText('Name'), 'Claude Code');
     await userEvent.click(generate);
-    await expect(args.onCreate).toHaveBeenCalledWith({ name: 'Claude Code', expiresInDays: 90, scope: 'all' });
+    await expect(args.onCreate).toHaveBeenCalledWith({ name: 'Claude Code', expiresInDays: 90, scope: 'all', write: false });
 
     // The first dialog animates out while this one animates in.
     const shown = await body.findByRole('dialog', { name: 'Token created' });

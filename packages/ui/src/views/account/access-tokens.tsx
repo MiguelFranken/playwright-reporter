@@ -39,11 +39,18 @@ export interface CreateTokenValues {
   expiresInDays: number;
   /** An `accessScopeItems` value; `parseAccessScope` splits it. */
   scope: string;
+  /** Lets the token edit test cases (the MCP write tools), not only read. */
+  write: boolean;
 }
 
 export type CreatedToken = RevealedToken;
 
 const EXPIRY_CHOICES = [7, 30, 60, 90, 180, 365];
+
+const PERMISSION_ITEMS = [
+  { value: 'read', label: 'Read only' },
+  { value: 'write', label: 'Read, and edit test cases' },
+];
 
 export interface AccessTokensProps {
   tokens: PersonalTokenRow[];
@@ -159,11 +166,13 @@ export function CreateTokenDialog({
   const [name, setName] = useState('');
   const [days, setDays] = useState(String(defaultDays));
   const [scope, setScope] = useState(DEFAULT_ACCESS_SCOPE);
+  const [permission, setPermission] = useState<'read' | 'write'>('read');
 
   useEffect(() => {
     if (open) return;
     setName('');
     setScope(DEFAULT_ACCESS_SCOPE);
+    setPermission('read');
     setDays(String(defaultDays));
   }, [open, defaultDays]);
 
@@ -174,7 +183,7 @@ export function CreateTokenDialog({
 
   const submit = () => {
     if (pending || !name.trim()) return;
-    onSubmit({ name, expiresInDays: Number(days), scope });
+    onSubmit({ name, expiresInDays: Number(days), scope, write: permission === 'write' });
   };
 
   return (
@@ -182,7 +191,7 @@ export function CreateTokenDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Generate access token</DialogTitle>
-          <DialogDescription>Name it after where it is used, e.g. "Claude Code on my laptop". Tokens are read-only.</DialogDescription>
+          <DialogDescription>Name it after where it is used, e.g. "Claude Code on my laptop". Tokens read, unless you let them edit test cases.</DialogDescription>
         </DialogHeader>
         <form
           className="flex flex-col gap-4"
@@ -209,6 +218,26 @@ export function CreateTokenDialog({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label>Permissions</Label>
+            <Select items={PERMISSION_ITEMS} value={permission} onValueChange={(v) => setPermission(v === 'write' ? 'write' : 'read')}>
+              <SelectTrigger aria-label="Permissions">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PERMISSION_ITEMS.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-body-s text-muted-foreground">
+              {permission === 'write'
+                ? 'Assistants can also create and edit test cases and link tests, where your role allows it.'
+                : 'Assistants can read runs, results, tests and test cases.'}
+            </p>
           </div>
           <div className="flex flex-col gap-2">
             <Label>Expires after</Label>

@@ -2,7 +2,8 @@
 
 <!-- Generated from apps/web/lib/mcp by `nub run mcp:docs` (in apps/web). Do not edit by hand. -->
 
-Every tool is read-only (`readOnlyHint: true`, `idempotentHint: true`, `openWorldHint: false`). Every project-scoped tool
+Tools read (`readOnlyHint: true`, `idempotentHint: true`, `openWorldHint: false`) except the `write` toolset, which edits
+test cases and is offered only to tokens with the `write` scope; those are marked **writes**. Every project-scoped tool
 also accepts `project`, `format` (`markdown` | `json`) and `maxChars`. See the README section "AI assistants (MCP)" for setup.
 
 | Tool | Toolset | Summary |
@@ -23,6 +24,14 @@ also accepts `project`, `format` (`markdown` | `json`) and `maxChars`. See the R
 | [`verify_fix`](#verify_fix) | debug | After a fix landed: did later runs fix the test? Give the test and the run it failed in. |
 | [`get_artifact`](#get_artifact) | debug | The contents of one test attachment: screenshots and visual diffs as images you can look at, text attachments inline, traces and videos as short-lived links (with a trace-viewer link and a local show-trace command). |
 | [`get_rerun_command`](#get_rerun_command) | debug | The exact "npx playwright test …" command that re-runs a run’s failed and/or flaky tests on the same browser projects, one command per project. |
+| [`list_test_suites`](#list_test_suites) | core | The project's test case suites as a tree, with how many cases each holds. |
+| [`list_test_cases`](#list_test_cases) | core | Search and filter the manual and automated test cases of a project: by suite, status, priority, automation, tag, or what their linked Playwright tests say (failing, flaky, stale). |
+| [`get_test_case`](#get_test_case) | core | One test case in full: description, conditions, steps, classification, custom fields, and the Playwright tests linked to it with their latest result and last 30 days. |
+| [`create_test_case`](#create_test_case) | write | Create a manual or automated test case with steps, in a suite (its path is created if missing). |
+| [`update_test_case`](#update_test_case) | write | Change fields of a test case: title, steps, status, priority, suite, tags and the rest. |
+| [`create_test_suite`](#create_test_suite) | write | Create a suite, optionally under a parent suite, to group test cases the way the product is built. |
+| [`link_test_case`](#link_test_case) | write | Link Playwright tests (by test id from find_tests) to a test case, or unlink them. |
+| [`adopt_tests`](#adopt_tests) | write | Turn Playwright tests into test cases that are already linked to them: title from the test, steps from its test.step() calls, suites from its file and describe blocks. |
 
 ## whoami
 
@@ -347,6 +356,172 @@ The exact "npx playwright test …" command that re-runs a run’s failed and/or
 | `repeat` | integer (2–100) |  | Add --repeat-each=N --retries=0, e.g. to reproduce a flake. |
 
 Structured output fields: `project`, `run`, `selected`, `commands`, `tests`, `notes`, `truncated`.
+
+## list_test_suites
+
+**List test suites** · toolset `core`
+
+The project's test case suites as a tree, with how many cases each holds. Use a suite's path or id wherever a tool takes a suite.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+
+Structured output fields: `project`, `total`, `unassigned`, `suites`, `truncated`.
+
+## list_test_cases
+
+**List test cases** · toolset `core`
+
+Search and filter the manual and automated test cases of a project: by suite, status, priority, automation, tag, or what their linked Playwright tests say (failing, flaky, stale). Each row has its key (TC-12) for get_test_case.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+| `search` | string |  | Matches the key (TC-12), title, description, conditions, steps and tags. |
+| `suite` | string |  | Only this suite and the suites below it; "unassigned" for cases without one. |
+| `status` | `"active"` \| `"draft"` \| `"deprecated"` |  |  |
+| `priority` | `"critical"` \| `"high"` \| `"medium"` \| `"low"` \| `"none"` |  |  |
+| `automation` | `"manual"` \| `"planned"` \| `"automated"` |  |  |
+| `verdict` | `"passing"` \| `"failing"` \| `"flaky"` \| `"stale"` \| `"not_run"` \| `"none"` |  | What the linked Playwright tests say: passing, failing, flaky, stale, not_run, or none (no linked tests). |
+| `tag` | string |  |  |
+| `limit` | integer (1–100) |  | Rows per page (1–100, default 20). |
+| `cursor` | string |  | Opaque cursor from a previous response, for the next page. Keep the other filters unchanged. |
+
+Structured output fields: `project`, `total`, `cases`, `nextCursor`, `truncated`.
+
+## get_test_case
+
+**Get a test case** · toolset `core`
+
+One test case in full: description, conditions, steps, classification, custom fields, and the Playwright tests linked to it with their latest result and last 30 days. Takes a key like TC-12.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+| `case` | string | yes | Test case key ("TC-12" or "12") or its id. |
+
+Structured output fields: `key`, `title`, `suite`, `status`, `priority`, `severity`, `type`, `behavior`, `automation`, `muted`, `tags`, `description`, `preconditions`, `postconditions`, `stepsFormat`, `steps`, `customFields`, `verdict`, `version`, `linkedTests`, `url`, `truncated`.
+
+## create_test_case
+
+**Create a test case** · toolset `write` · **writes**
+
+Create a manual or automated test case with steps, in a suite (its path is created if missing). Answers the new key (TC-12); tag a Playwright test with @TC-12 to link it on its next run.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+| `title` | string | yes | What the case verifies, e.g. "Log in with valid credentials". |
+| `suite` | string |  | Suite id or path ("Checkout / Coupons"); missing levels are created. Omit for unassigned. |
+| `description` | string |  | What the case checks, and why. |
+| `preconditions` | string |  |  |
+| `postconditions` | string |  |  |
+| `stepsFormat` | `"classic"` \| `"gherkin"` |  | classic (action / test data / expected result) or gherkin. |
+| `steps` | object[] |  | Replaces every step. |
+| `status` | `"active"` \| `"draft"` \| `"deprecated"` |  |  |
+| `priority` | `"critical"` \| `"high"` \| `"medium"` \| `"low"` \| `"none"` |  |  |
+| `severity` | `"blocker"` \| `"critical"` \| `"major"` \| `"normal"` \| `"minor"` \| `"trivial"` \| `"none"` |  |  |
+| `type` | `"functional"` \| `"smoke"` \| `"regression"` \| `"integration"` \| `"e2e"` \| `"api"` \| `"unit"` \| `"performance"` \| `"security"` \| `"accessibility"` \| `"usability"` \| `"compatibility"` \| `"acceptance"` \| `"exploratory"` \| `"other"` |  |  |
+| `behavior` | `"positive"` \| `"negative"` \| `"destructive"` \| `"none"` |  |  |
+| `automation` | `"manual"` \| `"planned"` \| `"automated"` |  | manual, planned (to be automated) or automated. Linking a test sets automated by itself; prefer link_test_case. |
+| `muted` | boolean |  |  |
+| `tags` | string[] |  | Replaces every tag. |
+| `customFields` | object |  | The project's custom fields, by key. |
+
+Structured output fields: `key`, `title`, `version`, `url`, `message`, `truncated`.
+
+## update_test_case
+
+**Update a test case** · toolset `write` · **writes**
+
+Change fields of a test case: title, steps, status, priority, suite, tags and the rest. Only the fields given change; every edit is a new version in its history.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+| `case` | string | yes | Test case key ("TC-12" or "12") or its id. |
+| `title` | string |  |  |
+| `suite` | string |  | Move to this suite (id or path; missing levels are created). "unassigned" removes it from its suite. |
+| `addTags` | string[] |  | Adds tags, keeping the others. |
+| `removeTags` | string[] |  |  |
+| `expectedVersion` | integer (-9007199254740991–9007199254740991) |  | Refuse the edit if the case changed since this version (from get_test_case). |
+| `description` | string |  | What the case checks, and why. |
+| `preconditions` | string |  |  |
+| `postconditions` | string |  |  |
+| `stepsFormat` | `"classic"` \| `"gherkin"` |  | classic (action / test data / expected result) or gherkin. |
+| `steps` | object[] |  | Replaces every step. |
+| `status` | `"active"` \| `"draft"` \| `"deprecated"` |  |  |
+| `priority` | `"critical"` \| `"high"` \| `"medium"` \| `"low"` \| `"none"` |  |  |
+| `severity` | `"blocker"` \| `"critical"` \| `"major"` \| `"normal"` \| `"minor"` \| `"trivial"` \| `"none"` |  |  |
+| `type` | `"functional"` \| `"smoke"` \| `"regression"` \| `"integration"` \| `"e2e"` \| `"api"` \| `"unit"` \| `"performance"` \| `"security"` \| `"accessibility"` \| `"usability"` \| `"compatibility"` \| `"acceptance"` \| `"exploratory"` \| `"other"` |  |  |
+| `behavior` | `"positive"` \| `"negative"` \| `"destructive"` \| `"none"` |  |  |
+| `automation` | `"manual"` \| `"planned"` \| `"automated"` |  | manual, planned (to be automated) or automated. Linking a test sets automated by itself; prefer link_test_case. |
+| `muted` | boolean |  |  |
+| `tags` | string[] |  | Replaces every tag. |
+| `customFields` | object |  | The project's custom fields, by key. |
+
+Structured output fields: `key`, `title`, `version`, `url`, `message`, `truncated`.
+
+## create_test_suite
+
+**Create a test suite** · toolset `write` · **writes**
+
+Create a suite, optionally under a parent suite, to group test cases the way the product is built.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+| `name` | string | yes |  |
+| `parent` | string |  | Nest it under this suite (id or path). Suites nest at most 6 levels deep. |
+| `description` | string |  |  |
+
+Structured output fields: `id`, `path`, `message`, `truncated`.
+
+## link_test_case
+
+**Link tests to a test case** · toolset `write` · **writes**
+
+Link Playwright tests (by test id from find_tests) to a test case, or unlink them. A linked case is marked automated and shows the tests' results. A lasting link comes from code instead: tag the test with @TC-12.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+| `case` | string | yes | Test case key ("TC-12" or "12") or its id. |
+| `link` | string[] |  | Test ids to link, from find_tests or list_test_cases. |
+| `unlink` | string[] |  | Test ids to unlink. |
+
+Structured output fields: `key`, `linked`, `unlinked`, `message`, `url`, `truncated`.
+
+## adopt_tests
+
+**Adopt Playwright tests as test cases** · toolset `write` · **writes**
+
+Turn Playwright tests into test cases that are already linked to them: title from the test, steps from its test.step() calls, suites from its file and describe blocks. A test that already backs a case is skipped; one test in several browsers becomes one case.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+| `tests` | string[] | yes | Test ids (from find_tests) to turn into test cases. |
+| `suite` | string |  | Put every new case in this suite (id or path; created if missing). Omit to mirror each test's file and describe blocks as suites. |
+
+Structured output fields: `created`, `skipped`, `message`, `truncated`.
 
 ## Prompts
 

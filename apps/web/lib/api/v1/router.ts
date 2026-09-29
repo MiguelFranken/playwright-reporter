@@ -25,6 +25,7 @@ import { projectHealth } from '@/lib/mcp/tools/project-health';
 import { summarizeFailures } from '@/lib/mcp/tools/summarize-failures';
 import { verifyFixTool } from '@/lib/mcp/tools/verify-fix';
 import { whoami } from '@/lib/mcp/tools/whoami';
+import { getTestCase, listTestCases, listTestSuites } from '@/lib/mcp/tools/test-cases';
 import type { ToolDef } from '@/lib/mcp/registry';
 import { authed } from '../base';
 import { fromTool } from '../from-tool';
@@ -37,6 +38,7 @@ const runRef = z.string().describe('Run number (`128`), run id, `latest` or `lat
 const testRef = z.string().describe('Test id, as returned by `/tests`, a run result or a failure context.');
 const resultRef = z.string().describe('Result id: one test in one run, as returned by `/runs/{run}/results`.');
 const attachmentRef = z.string().describe('Attachment id, as listed by a result.');
+const caseRef = z.string().describe('Test case key (`TC-12` or `12`) or id, as returned by `/test-cases`.');
 
 const projectSchema = z.object({
   ref: z.string().describe('"team/project", the form other endpoints and the MCP server accept.'),
@@ -198,6 +200,28 @@ export const router = {
       tags: ['Diagnostics'],
       params: { test: testRef },
       omit: ['file', 'browser'],
+    }),
+  },
+  testCases: {
+    list: fromTool(tool(listTestCases), {
+      path: `${P}/test-cases`,
+      summary: 'List test cases',
+      description:
+        'The manual and automated test cases of the project. Filter by suite (id or path), status, priority, automation, tag, or what the linked Playwright tests say (`verdict`: passing, failing, flaky, stale, not_run, none).',
+      tags: ['Test cases'],
+    }),
+    get: fromTool(tool(getTestCase), {
+      path: `${P}/test-cases/{case}`,
+      summary: 'Get a test case',
+      description: 'One test case in full: description, conditions, steps, classification, custom fields, and its linked Playwright tests with their latest result and last 30 days.',
+      tags: ['Test cases'],
+      params: { case: caseRef },
+    }),
+    suites: fromTool(tool(listTestSuites), {
+      path: `${P}/test-suites`,
+      summary: 'List test suites',
+      description: 'The suite tree of the test cases, with each suite’s path, id and case counts.',
+      tags: ['Test cases'],
     }),
   },
   attachments: {
