@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.48](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.47...v0.0.48) (2026-09-29)
+
+### Bug Fixes
+
+* **web:** keep the current team and project when opening administration ([#57](https://github.com/MiguelFranken/playwright-reporter/issues/57)) ([5708b56](https://github.com/MiguelFranken/playwright-reporter/commit/5708b561b3c4169804fdddd23963f97f29ecff7b))
+
 ## [0.0.47](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.46...v0.0.47) (2026-09-29)
 
 ### Bug Fixes
