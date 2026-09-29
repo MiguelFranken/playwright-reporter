@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.45](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.44...v0.0.45) (2026-09-29)
+
+### Features
+
+* **mcp:** organize uncovered Playwright tests into test cases ([#51](https://github.com/MiguelFranken/playwright-reporter/issues/51)) ([35274e4](https://github.com/MiguelFranken/playwright-reporter/commit/35274e43e5356c8460468cab84620d69a7c514a2))
+
 ## [0.0.44](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.43...v0.0.44) (2026-09-29)
 
 ### Features
