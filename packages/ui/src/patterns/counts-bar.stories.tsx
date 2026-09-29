@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, within } from 'storybook/test';
 import { CountsBar, type RunCounts } from './counts-bar';
@@ -102,5 +103,38 @@ export const SegmentsAreTitled: Story = {
   play: async ({ canvasElement }) => {
     await expect(canvasElement.querySelector('[title="passed: 228"]')).not.toBeNull();
     await expect(canvasElement.querySelector('[title="failed: 5"]')).not.toBeNull();
+  },
+};
+
+/**
+ * A live run filling in, one result at a time. Segments ease to their new
+ * widths — and a failed segment grows in from nothing rather than popping in —
+ * so the bar reads as progress, not as a redraw.
+ */
+export const LiveProgress: Story = {
+  render: () => <LiveProgressDemo />,
+};
+
+function LiveProgressDemo() {
+  const expected = 40;
+  const [done, setDone] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setDone((d) => (d >= expected ? 0 : d + 1)), 700);
+    return () => clearInterval(id);
+  }, []);
+  const failed = done >= 12 ? Math.min(3, Math.floor((done - 10) / 6)) : 0;
+  const flaky = done >= 25 ? 1 : 0;
+  const running = done < expected ? Math.min(4, expected - done) : 0;
+  const c = counts({ total: done + running, passed: done - failed - flaky, failed, flaky, running });
+  return <CountsBar counts={c} total={expected} showNumbers={false} />;
+}
+
+/** Empty segments stay mounted, so an outcome that appears mid-run can animate in. */
+export const EmptySegmentsStayMounted: Story = {
+  args: { counts: counts({ total: 240, passed: 240 }) },
+  play: async ({ canvasElement }) => {
+    const track = within(canvasElement).getByRole('img');
+    await expect(track.children).toHaveLength(6);
+    await expect(canvasElement.querySelector('[title^="failed"]')).toBeNull();
   },
 };

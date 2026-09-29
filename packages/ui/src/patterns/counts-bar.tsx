@@ -63,6 +63,7 @@ export function CountsBar({
   const denom = Math.max(total ?? counts.total, counts.total, 1);
   const segs = SEGMENTS.map((s) => ({ ...s, n: counts[s.key] })).filter((s) => s.n > 0);
   const shown = segs.length > 0 ? segs : [{ ...SEGMENTS[0], n: 0 }];
+  const firstKey = segs[0]?.key;
   const summary = segs.map((s) => `${s.n} ${s.label}`).join(', ');
   const label = `${formatNumber(denom)} ${denom === 1 ? 'test' : 'tests'}`;
 
@@ -70,20 +71,35 @@ export function CountsBar({
     <div className={cn('flex flex-col', density === 'compact' ? 'gap-2' : 'gap-1.5', className)}>
       {/* The 2px gaps are the separator between segments — no segment is
           stroked. The track shows through wherever a run has results still to
-          come: a running run's expected total is its denominator. */}
+          come: a running run's expected total is its denominator.
+
+          Every segment stays mounted, empty ones at zero width, so a live run's
+          bar eases from one tally to the next instead of jumping — including
+          the moment a first failure appears. That is also why the gap is a
+          margin rather than flex `gap`: an empty segment must not leave one. */}
       <div
-        className="flex h-1.5 w-full gap-0.5 overflow-hidden rounded-full bg-chart-track"
+        className="flex h-1.5 w-full overflow-hidden rounded-full bg-chart-track"
         role="img"
         aria-label={summary ? `${label}: ${summary}` : 'No results'}
       >
-        {segs.map((s) => (
-          <div
-            key={s.key}
-            className={cn('rounded-[1px]', s.fill)}
-            style={{ width: `${(s.n / denom) * 100}%` }}
-            title={`${s.label}: ${s.n}`}
-          />
-        ))}
+        {SEGMENTS.map((s) => {
+          const n = counts[s.key];
+          return (
+            <div
+              key={s.key}
+              className={cn(
+                'rounded-[1px] transition-[width,margin] duration-500 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none',
+                s.fill,
+              )}
+              style={{
+                width: `${(n / denom) * 100}%`,
+                marginLeft: n > 0 && s.key !== firstKey ? '2px' : 0,
+              }}
+              title={n > 0 ? `${s.label}: ${n}` : undefined}
+              aria-hidden={n > 0 ? undefined : true}
+            />
+          );
+        })}
       </div>
 
       {showNumbers ? (
