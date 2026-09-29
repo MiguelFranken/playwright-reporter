@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.36](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.35...v0.0.36) (2026-09-29)
+
+### Bug Fixes
+
+* **web:** answer 404 for test and result pages with a malformed id ([#40](https://github.com/MiguelFranken/playwright-reporter/issues/40)) ([91f8e36](https://github.com/MiguelFranken/playwright-reporter/commit/91f8e36ac07778785d168f77f748715e92f512c5))
+
 ## [0.0.35](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.34...v0.0.35) (2026-09-29)
 
 ### Bug Fixes
