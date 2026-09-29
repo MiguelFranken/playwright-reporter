@@ -4,7 +4,7 @@ import { expect, fn, userEvent, within } from 'storybook/test';
 import { Switch } from './switch';
 
 const meta = {
-  title: 'Primitives/Switch',
+  title: 'Primitives/Forms/Switch',
   component: Switch,
   args: { 'aria-label': 'Allow AI assistants to connect', onCheckedChange: fn() },
   argTypes: {

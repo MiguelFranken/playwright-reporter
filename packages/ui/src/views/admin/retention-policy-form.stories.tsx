@@ -10,7 +10,7 @@ import { StorageDue } from './storage';
 const KINDS = ['screenshot', 'video', 'trace', 'image', 'text', 'other'] as const;
 
 const meta = {
-  title: 'Views/Admin/Retention policy',
+  title: 'Views/Admin/Retention/Retention policy',
   component: RetentionPolicyForm,
   parameters: { layout: 'padded' },
   tags: ['themed'],

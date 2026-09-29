@@ -6,7 +6,7 @@ import { RunTabs } from './run-tabs';
 import type { RunTab } from '../../lib/run-tab';
 
 const meta = {
-  title: 'Views/Run/RunTabs',
+  title: 'Views/Run/Header/RunTabs',
   component: RunTabs,
   args: {
     value: 'summary',

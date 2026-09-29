@@ -16,7 +16,7 @@ import { Input } from './input';
 import { Textarea } from './textarea';
 
 const meta = {
-  title: 'Primitives/Field',
+  title: 'Primitives/Forms/Field',
   component: Field,
   argTypes: { orientation: { control: 'inline-radio', options: ['vertical', 'horizontal', 'responsive'] } },
   parameters: { layout: 'padded' },

@@ -4,7 +4,7 @@ import { CONNECTED_APPS } from '../../fixtures/account';
 import { ConnectedApps } from './connected-apps';
 
 const meta = {
-  title: 'Views/Account/Connected apps',
+  title: 'Views/Account/Access/Connected apps',
   component: ConnectedApps,
   parameters: { layout: 'padded' },
   tags: ['themed'],

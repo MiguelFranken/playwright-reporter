@@ -4,7 +4,7 @@ import { Label } from './label';
 import { Input } from './input';
 
 const meta = {
-  title: 'Primitives/Label',
+  title: 'Primitives/Forms/Label',
   component: Label,
   parameters: { layout: 'centered' },
 } satisfies Meta<typeof Label>;

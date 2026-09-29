@@ -11,7 +11,7 @@ const GB = 1024 ** 3;
  * on the first frame.
  */
 const meta = {
-  title: 'Views/Admin/Database charts',
+  title: 'Views/Admin/Database/Charts',
   component: DatabaseIngestChart,
   args: { data: ingestDays() },
   parameters: { layout: 'padded' },

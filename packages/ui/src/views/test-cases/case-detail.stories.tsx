@@ -6,7 +6,7 @@ import { caseDetail, emptyDetail, fieldDefs, gherkinDetail, longCaseRow } from '
 import { CaseDetailView } from './case-detail';
 
 const meta = {
-  title: 'Views/TestCases/CaseDetail',
+  title: 'Views/TestCases/Case/CaseDetail',
   component: CaseDetailView,
   tags: ['themed'],
   args: {

@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { SectionHeader } from './section-header';
 
 const meta = {
-  title: 'Marketing/SectionHeader',
+  title: 'Marketing/Sections/SectionHeader',
   component: SectionHeader,
   parameters: { layout: 'padded' },
   tags: ['themed'],

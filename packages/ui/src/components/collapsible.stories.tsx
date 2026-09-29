@@ -5,7 +5,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './collapsib
 import { Button } from './button';
 
 const meta = {
-  title: 'Primitives/Collapsible',
+  title: 'Primitives/Layout/Collapsible',
   component: Collapsible,
   args: { onOpenChange: fn() },
   parameters: { layout: 'padded' },

@@ -7,7 +7,7 @@ import { PolicyPreview } from './policy-preview';
 import { StorageDue } from './storage';
 
 const meta = {
-  title: 'Views/Admin/Policy preview',
+  title: 'Views/Admin/Retention/Policy preview',
   component: PolicyPreview,
   parameters: { layout: 'padded' },
   tags: ['themed'],

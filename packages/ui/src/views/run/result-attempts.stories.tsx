@@ -4,7 +4,7 @@ import { attempts, cleanAttempt, expiredAttempt, failedAttempt } from '../../fix
 import { ResultAttempts } from './result-attempts';
 
 const meta = {
-  title: 'Views/Run/ResultAttempts',
+  title: 'Views/Run/Tab content/ResultAttempts',
   component: ResultAttempts,
   args: { attempts },
   parameters: { layout: 'padded' },

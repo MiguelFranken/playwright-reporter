@@ -3,7 +3,7 @@ import { expect, userEvent, within } from 'storybook/test';
 import { Textarea } from './textarea';
 
 const meta = {
-  title: 'Primitives/Textarea',
+  title: 'Primitives/Forms/Textarea',
   component: Textarea,
   args: { placeholder: 'Why is this test being muted?', 'aria-label': 'Reason' },
   parameters: { layout: 'centered' },

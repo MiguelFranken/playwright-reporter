@@ -3,7 +3,7 @@ import { footerColumns, footerLegal, SITE_NAME, social } from '../fixtures/marke
 import { SiteFooter } from './site-footer';
 
 const meta = {
-  title: 'Marketing/SiteFooter',
+  title: 'Marketing/Site chrome/SiteFooter',
   component: SiteFooter,
   parameters: { layout: 'fullscreen' },
   tags: ['themed'],

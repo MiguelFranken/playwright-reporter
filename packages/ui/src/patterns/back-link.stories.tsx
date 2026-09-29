@@ -3,7 +3,7 @@ import { expect, within } from 'storybook/test';
 import { BackLink } from './back-link';
 
 const meta = {
-  title: 'Patterns/BackLink',
+  title: 'Patterns/Navigation/BackLink',
   component: BackLink,
   args: { href: '/teams/acme/projects/web/branches', children: 'Branches' },
   parameters: { layout: 'padded' },

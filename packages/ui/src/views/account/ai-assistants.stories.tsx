@@ -10,7 +10,7 @@ const PROJECTS = [
 ];
 
 const meta = {
-  title: 'Views/Account/AI assistants',
+  title: 'Views/Account/AI/AI assistants',
   component: AiAssistants,
   parameters: {
     layout: 'padded',

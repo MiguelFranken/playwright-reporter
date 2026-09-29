@@ -3,7 +3,7 @@ import { expect, fn, userEvent, within } from 'storybook/test';
 import { TypeToConfirmDialog } from './type-to-confirm-dialog';
 
 const meta = {
-  title: 'Patterns/TypeToConfirmDialog',
+  title: 'Patterns/Dialogs/TypeToConfirmDialog',
   component: TypeToConfirmDialog,
   tags: ['themed'],
   args: {

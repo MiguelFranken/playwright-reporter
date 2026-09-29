@@ -9,7 +9,7 @@ import { Button } from './button';
  * app's root layout does, so these stories only fire toasts.
  */
 const meta = {
-  title: 'Primitives/Toaster',
+  title: 'Primitives/Feedback/Toaster',
   component: Toaster,
   parameters: { layout: 'centered' },
 } satisfies Meta<typeof Toaster>;

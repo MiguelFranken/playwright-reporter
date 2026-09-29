@@ -31,7 +31,7 @@ generates imports that use the package's public name. Then write the story.
 Stories live next to the component, as `<name>.stories.tsx`. Classic CSF 3:
 
 ```tsx
-const meta = { title: 'Primitives/Button', component: Button } satisfies Meta<typeof Button>;
+const meta = { title: 'Primitives/Actions/Button', component: Button } satisfies Meta<typeof Button>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const Default: Story = {};
@@ -42,7 +42,11 @@ CSF factories (`preview.meta()`) are deliberately not used: they would make
 
 Rules worth knowing:
 
-- `title` follows the layer path — `Primitives/…`, `Patterns/…`, `Views/Run/…`, `Pages/…`.
+- `title` is `Layer/Group/Component` — `Primitives/Forms/Input`, `Patterns/Status/StatusBadge`,
+  `Marketing/Sections/Hero`. Views are `Views/<Domain>/…`, and a large domain adds an area:
+  `Views/Run/Header/RunHeader`. Foundations and Pages stay flat. Pick an existing group
+  (they are listed, in order, in `storySort` in `.storybook/preview.tsx`); a new group needs
+  at least two members. `packages/ui/src/lib/story-titles.test.ts` enforces this.
 - Callback props default to `fn()` in `meta.args` so `play` can assert on them.
 - Query by role and accessible name. Never by test id.
 - Base UI portals its overlays, so query Dialog/Select/Tooltip content with

@@ -3,7 +3,7 @@ import { expect, userEvent, waitFor, within } from 'storybook/test';
 import { CopyButton } from './copy-button';
 
 const meta = {
-  title: 'Patterns/CopyButton',
+  title: 'Patterns/Controls/CopyButton',
   component: CopyButton,
   args: { value: 'pwr_live_9f2c8a41', label: 'Copy token' },
   parameters: { layout: 'centered' },

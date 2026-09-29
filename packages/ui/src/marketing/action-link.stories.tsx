@@ -3,7 +3,7 @@ import { ActionLink, InlineLink } from './action-link';
 import { linkAppearances } from '../lib/marketing';
 
 const meta = {
-  title: 'Marketing/ActionLink',
+  title: 'Marketing/Content/ActionLink',
   component: ActionLink,
   parameters: { layout: 'padded' },
   tags: ['themed'],

@@ -3,7 +3,7 @@ import { expect, within } from 'storybook/test';
 import { Avatar, AvatarBadge, AvatarFallback, AvatarGroup, AvatarGroupCount, AvatarImage } from './avatar';
 
 const meta = {
-  title: 'Primitives/Avatar',
+  title: 'Primitives/Data display/Avatar',
   component: Avatar,
   argTypes: { size: { control: 'inline-radio', options: ['sm', 'default', 'lg'] } },
   parameters: { layout: 'centered' },

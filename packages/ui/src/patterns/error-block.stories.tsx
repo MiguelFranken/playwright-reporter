@@ -4,7 +4,7 @@ import { ANSI_ERROR } from '../fixtures/results';
 import { ErrorBlock, ErrorCategoryBadge } from './error-block';
 
 const meta = {
-  title: 'Patterns/ErrorBlock',
+  title: 'Patterns/States/ErrorBlock',
   component: ErrorBlock,
   args: { message: ANSI_ERROR },
   parameters: { layout: 'padded' },

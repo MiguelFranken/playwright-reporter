@@ -13,7 +13,7 @@ import {
 import { Button } from './button';
 
 const meta = {
-  title: 'Primitives/Dialog',
+  title: 'Primitives/Overlays/Dialog',
   component: Dialog,
   parameters: { layout: 'centered' },
   args: { onOpenChange: fn() },

@@ -5,7 +5,7 @@ import { Checkbox } from './checkbox';
 import { Label } from './label';
 
 const meta = {
-  title: 'Primitives/Checkbox',
+  title: 'Primitives/Forms/Checkbox',
   component: Checkbox,
   args: { 'aria-label': 'Starts', onCheckedChange: fn() },
   parameters: { layout: 'centered' },

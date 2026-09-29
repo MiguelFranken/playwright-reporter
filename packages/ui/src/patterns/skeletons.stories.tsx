@@ -9,7 +9,7 @@ import { ChartSkeleton, FilterSkeleton, ListRowsSkeleton, MetricCardsSkeleton, T
  * the rows, values and plots underneath are placeholders.
  */
 const meta = {
-  title: 'Patterns/Skeletons',
+  title: 'Patterns/States/Skeletons',
   parameters: { layout: 'padded' },
   tags: ['themed'],
 } satisfies Meta;

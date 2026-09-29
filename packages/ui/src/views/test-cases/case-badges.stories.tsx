@@ -40,7 +40,7 @@ function AllBadges() {
 }
 
 const meta = {
-  title: 'Views/TestCases/Badges',
+  title: 'Views/TestCases/Case/Badges',
   component: AllBadges,
   tags: ['themed'],
   parameters: { layout: 'padded' },

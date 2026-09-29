@@ -6,7 +6,7 @@ const HEALTHY = Array.from({ length: 12 }, () => 'passed');
 const MIXED = ['failed', 'passed', 'passed', 'flaky', 'passed', 'failed', 'passed', 'passed', 'skipped', 'passed'];
 
 const meta = {
-  title: 'Patterns/HistorySparkline',
+  title: 'Patterns/Metrics & charts/HistorySparkline',
   component: HistorySparkline,
   args: { history: MIXED },
   parameters: { layout: 'centered' },

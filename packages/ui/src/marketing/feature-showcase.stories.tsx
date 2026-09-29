@@ -12,7 +12,7 @@ const screenshot = (
 );
 
 const meta = {
-  title: 'Marketing/FeatureShowcase',
+  title: 'Marketing/Sections/FeatureShowcase',
   component: FeatureShowcase,
   parameters: { layout: 'fullscreen' },
   tags: ['themed'],

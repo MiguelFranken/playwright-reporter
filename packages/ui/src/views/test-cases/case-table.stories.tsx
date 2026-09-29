@@ -19,7 +19,7 @@ function Selectable(props: CaseTableProps) {
 }
 
 const meta = {
-  title: 'Views/TestCases/CaseTable',
+  title: 'Views/TestCases/Library/CaseTable',
   component: CaseTable,
   tags: ['themed'],
   args: {

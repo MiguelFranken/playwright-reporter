@@ -6,7 +6,7 @@ import { FeatureGrid } from './feature-grid';
 const icons = [Activity, Bug, Repeat2];
 
 const meta = {
-  title: 'Marketing/FeatureGrid',
+  title: 'Marketing/Sections/FeatureGrid',
   component: FeatureGrid,
   parameters: { layout: 'fullscreen' },
   tags: ['themed'],

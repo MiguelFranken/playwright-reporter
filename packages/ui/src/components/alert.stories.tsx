@@ -5,7 +5,7 @@ import { Alert, AlertAction, AlertDescription, AlertTitle } from './alert';
 import { Button } from './button';
 
 const meta = {
-  title: 'Primitives/Alert',
+  title: 'Primitives/Feedback/Alert',
   component: Alert,
   argTypes: { variant: { control: 'inline-radio', options: ['default', 'destructive'] } },
   parameters: { layout: 'padded' },

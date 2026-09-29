@@ -27,7 +27,7 @@ const NAV = [
 ];
 
 const meta = {
-  title: 'Primitives/Sidebar',
+  title: 'Primitives/Navigation/Sidebar',
   component: Sidebar,
   parameters: { layout: 'fullscreen' },
   argTypes: {

@@ -4,7 +4,7 @@ import { BrowserFrame } from './browser-frame';
 import { ThemedImage } from './themed-image';
 
 const meta = {
-  title: 'Marketing/BrowserFrame',
+  title: 'Marketing/Content/BrowserFrame',
   component: BrowserFrame,
   parameters: { layout: 'padded' },
   tags: ['themed'],

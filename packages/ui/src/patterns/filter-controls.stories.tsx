@@ -21,7 +21,7 @@ import {
 // stories get typed args and a docgen table for at least the representative
 // control; the others drive themselves from their own `render`.
 const meta = {
-  title: 'Patterns/FilterControls',
+  title: 'Patterns/Controls/FilterControls',
   component: RangeToggle,
   args: { value: '30', onValueChange: fn() },
   parameters: { layout: 'padded' },

@@ -3,7 +3,7 @@ import { expect, fn, userEvent, within } from 'storybook/test';
 import { ChangeNameForm, ChangePasswordForm, SessionsList } from './account-forms';
 
 const meta = {
-  title: 'Views/Account/Forms',
+  title: 'Views/Account/Profile/Forms',
   component: ChangeNameForm,
   parameters: { layout: 'padded' },
   tags: ['themed'],

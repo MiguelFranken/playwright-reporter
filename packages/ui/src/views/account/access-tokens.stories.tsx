@@ -21,7 +21,7 @@ const OPEN_SELECT_A11Y = {
 } as const;
 
 const meta = {
-  title: 'Views/Account/Access tokens',
+  title: 'Views/Account/Access/Access tokens',
   component: AccessTokens,
   parameters: { layout: 'padded' },
   tags: ['themed'],

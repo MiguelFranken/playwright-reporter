@@ -3,7 +3,7 @@ import { expect, fn, userEvent, within } from 'storybook/test';
 import { TokenRevealDialog } from './token-reveal-dialog';
 
 const meta = {
-  title: 'Patterns/TokenRevealDialog',
+  title: 'Patterns/Dialogs/TokenRevealDialog',
   component: TokenRevealDialog,
   tags: ['themed'],
   args: {

@@ -3,7 +3,7 @@ import { expect, within } from 'storybook/test';
 import { LiveIndicator } from './live-indicator';
 
 const meta = {
-  title: 'Patterns/LiveIndicator',
+  title: 'Patterns/Status/LiveIndicator',
   component: LiveIndicator,
   args: { state: 'live' },
   argTypes: { state: { control: 'inline-radio', options: ['connecting', 'live', 'polling', 'done', 'off'] } },

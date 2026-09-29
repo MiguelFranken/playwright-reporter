@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { ScrollArea } from './scroll-area';
 
 const meta = {
-  title: 'Primitives/ScrollArea',
+  title: 'Primitives/Layout/ScrollArea',
   component: ScrollArea,
   parameters: { layout: 'padded' },
 } satisfies Meta<typeof ScrollArea>;

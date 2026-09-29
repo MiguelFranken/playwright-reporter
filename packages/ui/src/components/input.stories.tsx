@@ -3,7 +3,7 @@ import { expect, fn, userEvent, within } from 'storybook/test';
 import { Input } from './input';
 
 const meta = {
-  title: 'Primitives/Input',
+  title: 'Primitives/Forms/Input',
   component: Input,
   args: { placeholder: 'Search tests…', 'aria-label': 'Search tests', onChange: fn() },
   parameters: { layout: 'centered' },

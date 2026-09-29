@@ -3,7 +3,7 @@ import { expect, within } from 'storybook/test';
 import { StatGrid } from './stat-grid';
 
 const meta = {
-  title: 'Patterns/StatGrid',
+  title: 'Patterns/Metrics & charts/StatGrid',
   component: StatGrid,
   args: {
     stats: [

@@ -6,7 +6,7 @@ import { DebugWithAiMenu } from './debug-with-ai-menu';
 const RESULT_URL = 'https://reporter.acme.test/teams/acme/projects/web/runs/128/tests/0b6f3c1e';
 
 const meta = {
-  title: 'Patterns/DebugWithAiMenu',
+  title: 'Patterns/Controls/DebugWithAiMenu',
   component: DebugWithAiMenu,
   args: { prompt: debugPrompt({ resultUrl: RESULT_URL }), setupHref: '/account/ai' },
   parameters: { layout: 'centered' },

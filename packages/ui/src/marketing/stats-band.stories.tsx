@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { StatsBand } from './stats-band';
 
 const meta = {
-  title: 'Marketing/StatsBand',
+  title: 'Marketing/Sections/StatsBand',
   component: StatsBand,
   parameters: { layout: 'fullscreen' },
   tags: ['themed'],

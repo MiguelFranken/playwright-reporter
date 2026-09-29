@@ -6,7 +6,7 @@ import { RunResultGroups } from './run-result-groups';
 const hrefs = { result: (id: string) => `#result-${id}` };
 
 const meta = {
-  title: 'Views/Run/RunResultGroups',
+  title: 'Views/Run/Tab content/RunResultGroups',
   component: RunResultGroups,
   args: { hrefs, rows: mixedResults },
   parameters: { layout: 'padded' },

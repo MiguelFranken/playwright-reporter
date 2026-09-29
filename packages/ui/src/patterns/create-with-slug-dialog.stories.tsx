@@ -3,7 +3,7 @@ import { expect, fn, userEvent, within } from 'storybook/test';
 import { CreateWithSlugDialog } from './create-with-slug-dialog';
 
 const meta = {
-  title: 'Patterns/CreateWithSlugDialog',
+  title: 'Patterns/Dialogs/CreateWithSlugDialog',
   component: CreateWithSlugDialog,
   tags: ['themed'],
   args: {

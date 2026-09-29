@@ -11,7 +11,7 @@ const items = [
 ];
 
 const meta = {
-  title: 'Patterns/CountTabs',
+  title: 'Patterns/Navigation/CountTabs',
   component: CountTabs,
   args: { items, value: 'all' },
   parameters: { layout: 'padded' },

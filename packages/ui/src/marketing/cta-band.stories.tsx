@@ -3,7 +3,7 @@ import { githubCta, primaryCta } from '../fixtures/marketing';
 import { CtaBand } from './cta-band';
 
 const meta = {
-  title: 'Marketing/CtaBand',
+  title: 'Marketing/Sections/CtaBand',
   component: CtaBand,
   parameters: { layout: 'fullscreen' },
   tags: ['themed'],

@@ -12,7 +12,7 @@ const hrefs = {
 };
 
 const meta = {
-  title: 'Views/Run/RunSummary',
+  title: 'Views/Run/Header/RunSummary',
   component: RunSummary,
   args: {
     hrefs,

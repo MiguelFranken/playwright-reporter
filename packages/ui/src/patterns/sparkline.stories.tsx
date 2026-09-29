@@ -5,7 +5,7 @@ const SERIES = [42, 48, 44, 61, 58, 72, 69, 74, 81, 78, 92, 88];
 
 /** Recharts measures its container, so every story gives it a real width. */
 const meta = {
-  title: 'Patterns/Sparkline',
+  title: 'Patterns/Metrics & charts/Sparkline',
   component: Sparkline,
   parameters: { layout: 'padded' },
   tags: ['themed'],

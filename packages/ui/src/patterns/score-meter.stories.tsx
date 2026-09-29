@@ -5,7 +5,7 @@ import { MetaChip } from './meta-chip';
 import { ScoreMeter } from './score-meter';
 
 const meta = {
-  title: 'Patterns/ScoreMeter',
+  title: 'Patterns/Metrics & charts/ScoreMeter',
   component: ScoreMeter,
   args: { score: 82 },
   parameters: { layout: 'padded' },

@@ -5,7 +5,7 @@ import { ButtonGroup, ButtonGroupSeparator, ButtonGroupText } from './button-gro
 import { Button } from './button';
 
 const meta = {
-  title: 'Primitives/ButtonGroup',
+  title: 'Primitives/Actions/ButtonGroup',
   component: ButtonGroup,
   argTypes: { orientation: { control: 'inline-radio', options: ['horizontal', 'vertical'] } },
   parameters: { layout: 'centered' },

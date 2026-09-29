@@ -4,7 +4,7 @@ import { FileInput } from './file-input';
 import { Label } from './label';
 
 const meta = {
-  title: 'Primitives/FileInput',
+  title: 'Primitives/Forms/FileInput',
   component: FileInput,
   tags: ['themed'],
   parameters: { layout: 'centered' },

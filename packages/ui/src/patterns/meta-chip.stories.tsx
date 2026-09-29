@@ -3,7 +3,7 @@ import { Timer } from 'lucide-react';
 import { MetaChip } from './meta-chip';
 
 const meta = {
-  title: 'Patterns/MetaChip',
+  title: 'Patterns/Status/MetaChip',
   component: MetaChip,
   args: { children: 'chromium' },
   parameters: { layout: 'padded' },

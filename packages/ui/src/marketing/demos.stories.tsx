@@ -19,7 +19,7 @@ import { RunsTableDemo } from './demos/runs-table';
  * shipping those for a demo further down than the reader ever scrolls.
  */
 const meta = {
-  title: 'Marketing/Demos',
+  title: 'Marketing/Demos/Demos',
   parameters: { layout: 'fullscreen' },
   tags: ['themed'],
 } satisfies Meta;

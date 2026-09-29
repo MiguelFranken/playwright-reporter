@@ -4,7 +4,7 @@ import { Sheet, SheetClose, SheetContent, SheetDescription, SheetFooter, SheetHe
 import { Button } from './button';
 
 const meta = {
-  title: 'Primitives/Sheet',
+  title: 'Primitives/Overlays/Sheet',
   component: Sheet,
   parameters: { layout: 'centered' },
   args: { onOpenChange: fn() },

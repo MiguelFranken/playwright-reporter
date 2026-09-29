@@ -4,7 +4,7 @@ import { CodeTabs } from './code-tabs';
 import { Steps } from './steps';
 
 const meta = {
-  title: 'Marketing/Steps',
+  title: 'Marketing/Sections/Steps',
   component: Steps,
   parameters: { layout: 'fullscreen' },
   tags: ['themed'],

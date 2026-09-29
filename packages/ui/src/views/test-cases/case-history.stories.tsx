@@ -5,7 +5,7 @@ import { caseVersions, fieldDefs } from '../../fixtures/test-cases';
 import { CaseHistory } from './case-history';
 
 const meta = {
-  title: 'Views/TestCases/CaseHistory',
+  title: 'Views/TestCases/Case/CaseHistory',
   component: CaseHistory,
   tags: ['themed'],
   args: { versions: caseVersions, fieldDefs, now: NOW, canEdit: true, onRestore: fn(), pendingVersion: null },

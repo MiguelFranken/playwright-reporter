@@ -4,7 +4,7 @@ import { Button } from './button';
 import { Badge } from './badge';
 
 const meta = {
-  title: 'Primitives/Card',
+  title: 'Primitives/Layout/Card',
   component: Card,
   argTypes: { size: { control: 'inline-radio', options: ['default', 'sm'] } },
   parameters: { layout: 'padded' },

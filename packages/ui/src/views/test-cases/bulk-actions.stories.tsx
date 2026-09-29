@@ -4,7 +4,7 @@ import { suiteOptions } from '../../fixtures/test-cases';
 import { BulkBar, BulkEditDialog } from './bulk-actions';
 
 const meta = {
-  title: 'Views/TestCases/BulkActions',
+  title: 'Views/TestCases/Library/BulkActions',
   component: BulkBar,
   tags: ['themed'],
   args: { count: 3, onClear: fn(), onEdit: fn(), onDeprecate: fn(), onDelete: fn() },

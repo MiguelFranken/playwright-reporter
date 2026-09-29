@@ -4,7 +4,7 @@ import { githubCta, nav, primaryCta, SITE_NAME } from '../fixtures/marketing';
 import { SiteHeader } from './site-header';
 
 const meta = {
-  title: 'Marketing/SiteHeader',
+  title: 'Marketing/Site chrome/SiteHeader',
   component: SiteHeader,
   parameters: { layout: 'fullscreen' },
   tags: ['themed'],
