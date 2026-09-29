@@ -215,6 +215,7 @@ export const appRouter = {
           captureIds: z.array(z.string()).min(1).max(MAX_DECISION_CAPTURES),
           decision: z.enum(REVIEW_DECISIONS),
           comment: z.string().max(4000).optional(),
+          resolveThreads: z.boolean().optional(),
         }),
       )
       .handler(async ({ input }) => {
@@ -222,10 +223,17 @@ export const appRouter = {
         if (!access?.can({ run: ['read'] })) throw new ORPCError('NOT_FOUND');
         if (!access.can({ review: ['decide'] })) throw new ORPCError('FORBIDDEN', { message: 'You do not have permission to do that.' });
         try {
-          const { decided } = await decide({ projectId: access.project.id, captureIds: input.captureIds, decision: input.decision, comment: input.comment, userId: access.user.id });
+          const { decided, resolvedThreads } = await decide({
+            projectId: access.project.id,
+            captureIds: input.captureIds,
+            decision: input.decision,
+            comment: input.comment,
+            userId: access.user.id,
+            resolveThreads: input.resolveThreads === true,
+          });
           // The pages that show a status elsewhere (the queue, a run's badge) read it again on their next visit.
           revalidatePath(`/teams/${input.team}/projects/${input.project}`, 'layout');
-          return { decided, by: access.user.name ?? null };
+          return { decided, resolvedThreads, by: access.user.name ?? null };
         } catch (error) {
           if (error instanceof ReviewError) throw new ORPCError('BAD_REQUEST', { message: error.message });
           throw error;

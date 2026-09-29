@@ -59,6 +59,7 @@ export function ScreenFrame({
   const src = full ? image.url : (image.thumbnailUrl ?? image.url);
   return (
     <div
+      data-slot="screen-frame"
       role={scroll ? 'region' : undefined}
       aria-label={scroll ? (label ?? alt) : undefined}
       tabIndex={scroll ? 0 : undefined}

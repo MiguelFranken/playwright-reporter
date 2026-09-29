@@ -7,6 +7,7 @@
  * content hash — and holds for every later capture of the same pixels. That is
  * what lets a run with nothing new ask for no review at all.
  */
+import type { ReviewThreadView } from './review-threads';
 import type { Tone } from './tone';
 
 /** What a reviewer records. */
@@ -254,10 +255,14 @@ export interface ReviewCaptureView {
   diff?: ReviewDiffView | null;
   /** Areas left out of the comparison (a clock, an ad), in this image's pixels. */
   ignoreRegions?: DiffRegion[];
+  /** Comment threads on the image: its own and the open ones placed on earlier captures of it. */
+  threads?: ReviewThreadView[];
 }
 
 export interface ReviewCheckpointView {
   id: string;
+  /** Ids of checkpoints merged into this one (the same test in another Playwright project): links to them open this one. */
+  aliases?: string[];
   name: string;
   title?: string | null;
   description?: string | null;
@@ -308,6 +313,8 @@ export interface ReviewDecisionInput {
   captureIds: string[];
   decision: ReviewDecision;
   comment?: string;
+  /** With an approval: also resolve the images' open comment threads. */
+  resolveThreads?: boolean;
 }
 
 /** Counts per status over a set of images. */

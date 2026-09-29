@@ -1,12 +1,11 @@
 'use client';
 
-import { Check, ChevronLeft, ChevronRight, ExternalLink, EyeOff, Film, Keyboard, MessageSquareWarning, Route, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, ExternalLink, Eye, EyeOff, Film, Keyboard, MessageSquareWarning, Route, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '../../components/badge';
 import { Button } from '../../components/button';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '../../components/dialog';
 import { Kbd } from '../../components/kbd';
-import { Textarea } from '../../components/textarea';
 import { ToggleGroup, ToggleGroupItem } from '../../components/toggle-group';
 import { ReviewStatusBadge, ReviewStatusDot } from '../../patterns/review-status-badge';
 import { StatusIcon } from '../../patterns/status-badge';
@@ -28,17 +27,35 @@ import {
   type ReviewImage,
   type StoryboardMode,
 } from '../../lib/review';
+import { openThreadCount, sortThreads, type ThreadActions, type ThreadFilter } from '../../lib/review-threads';
 import { DiffHighlight, diffImageSize } from './diff-highlight';
 import { DiffSummary } from './diff-summary';
 import { COMPARE_MODE_LABELS, COMPARE_MODES, ImageCompare, type CompareMode } from './image-compare';
 import { IgnoreRegionsEditor, type IgnoreRect } from './ignore-regions-editor';
 import { FrameToolbar } from './frame-toolbar';
+import { PinLayer, type PinFocusRequest, type ThreadDraft } from './pin-layer';
 import { ScreenFrame } from './screen-frame';
+import { ThreadList } from './thread-list';
 
 /** What the viewer shows: a checkpoint, and one of its variants or (`null`) all of them side by side. */
 export interface ReviewSelection {
   checkpointId: string;
   variant: string | null;
+}
+
+/** Comment threads in the viewer: who may do what, and what the host records. */
+export interface ReviewCommentsProps extends ThreadActions {
+  canComment?: boolean;
+  /** May delete anybody's comment. */
+  canModerate?: boolean;
+  /** The signed-in user, whose own comments can be edited and deleted. */
+  viewerId?: string | null;
+  /** The reference instant for relative times (stories pin it). */
+  now?: Date;
+  /** The thread to open when the viewer shows the checkpoint, by number: a link (`thread=3`). */
+  openThread?: number | null;
+  /** A thread was opened by a click, or closed: the host may put its number in the URL. */
+  onOpenThreadChange?: (number: number | null) => void;
 }
 
 /** `changes`: this run's image with the measured changes marked; `ignore`: drawing the areas left out. */
@@ -122,9 +139,9 @@ function usePreloadNeighbours(all: readonly Position[], at: number, library: boo
  * baseline, what was captured where and when, and the decision.
  *
  * Built for going through a run with the keyboard: ← → move between
- * checkpoints, ↑ ↓ between flows, V switches the variant, C the comparison,
- * A approves and moves on to the next image that needs review, R asks for
- * changes. Controlled: the host owns the selection (it may live in the URL)
+ * checkpoints, ↑ ↓ between flows, V switches the variant, M the comparison,
+ * N and P step through the measured changes, A approves and moves on to the
+ * next image that needs review, C pins comments on the screenshot. Controlled: the host owns the selection (it may live in the URL)
  * and records decisions.
  */
 export function CheckpointViewer({
@@ -139,6 +156,7 @@ export function CheckpointViewer({
   mode = 'review',
   onIgnoreRegionsChange,
   ignorePendingId,
+  comments = {},
 }: {
   flows: readonly ReviewFlowView[];
   selection: ReviewSelection | null;
@@ -156,16 +174,24 @@ export function CheckpointViewer({
   onIgnoreRegionsChange?: (input: { captureId: string; regions: IgnoreRect[] }) => void;
   /** The capture whose ignored areas are being saved. */
   ignorePendingId?: string | null;
+  comments?: ReviewCommentsProps;
 }) {
   const library = mode === 'library';
   const all = useMemo(() => positions(flows), [flows]);
-  const at = selection ? all.findIndex((p) => p.checkpoint.id === selection.checkpointId) : -1;
+  const at = selection ? all.findIndex((p) => p.checkpoint.id === selection.checkpointId || p.checkpoint.aliases?.includes(selection.checkpointId)) : -1;
   const pos = at >= 0 ? all[at] : null;
   usePreloadNeighbours(all, at, library);
   const [stage, setStage] = useState<StageMode>('changes');
   const [activeRegion, setActiveRegion] = useState<number | null>(null);
-  const [comment, setComment] = useState('');
-  const commentRef = useRef<HTMLTextAreaElement>(null);
+  const [commenting, setCommenting] = useState(false);
+  const [draft, setDraft] = useState<ThreadDraft | null>(null);
+  const [openThreadId, setOpenThreadId] = useState<string | null>(null);
+  const [threadFilter, setThreadFilter] = useState<ThreadFilter>('open');
+  const [composing, setComposing] = useState(false);
+  const [pinsHidden, setPinsHidden] = useState(false);
+  const [focus, setFocus] = useState<PinFocusRequest | null>(null);
+  const [confirmApprove, setConfirmApprove] = useState(false);
+  const approveRef = useRef<HTMLButtonElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   // The dialog mounts its content in a portal after opening; state follows the element itself.
   const [stageEl, setStageEl] = useState<HTMLDivElement | null>(null);
@@ -209,11 +235,57 @@ export function CheckpointViewer({
   const pending = new Set(pendingIds);
   const busy = shown.some((c) => pending.has(c.id));
 
-  // A new checkpoint starts without a half-written comment, at its first change.
+  const canComment = Boolean(comments.canComment && comments.onCreateThread);
+  const threadGroups = shown.map((c) => ({ captureId: c.id, variant: c.variant, threads: c.threads ?? [] }));
+  const shownThreads = threadGroups.flatMap((g) => g.threads);
+  const openCount = openThreadCount(shownThreads);
+  // Pins sit on images drawn at the capture's own geometry: the plain image, its changes, and this run's side of a side-by-side.
+  const pinsOn = effectiveStage === 'image' || effectiveStage === 'changes' || effectiveStage === 'side-by-side';
+  const listed = sortThreads(shownThreads.filter((t) => threadFilter === 'all' || t.status === threadFilter || t.id === openThreadId));
+
+  // A new checkpoint starts at its first change, without a half-placed pin or an open thread; comment mode stays on.
+  const selectionKey = `${selection?.checkpointId}\u0000${selection?.variant}`;
   useEffect(() => {
-    setComment('');
     setActiveRegion(null);
-  }, [selection?.checkpointId, selection?.variant]);
+    setDraft(null);
+    setComposing(false);
+    setConfirmApprove(false);
+    setOpenThreadId(null);
+  }, [selectionKey]);
+
+  // A link to a thread (`thread=3`) opens it and brings its pin into view, once its checkpoint is shown.
+  const linked = comments.openThread != null ? (shownThreads.find((t) => t.number === comments.openThread) ?? null) : null;
+  useEffect(() => {
+    if (!linked) return;
+    setOpenThreadId(linked.id);
+    if (linked.status === 'resolved') setThreadFilter((f) => (f === 'open' ? 'all' : f));
+    setFocus((f) => ({ threadId: linked.id, nonce: (f?.nonce ?? 0) + 1, ping: true }));
+    // Only when the link or the checkpoint changes, not on every revalidation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linked?.id, selectionKey]);
+
+  const openThread = (id: string | null, opts: { focus?: boolean } = {}) => {
+    setOpenThreadId(id);
+    if (id) setDraft(null);
+    if (opts.focus && id) setFocus((f) => ({ threadId: id, nonce: (f?.nonce ?? 0) + 1, ping: true }));
+    comments.onOpenThreadChange?.(id ? (shownThreads.find((t) => t.id === id)?.number ?? null) : null);
+  };
+  const stepThread = (delta: number) => {
+    if (!listed.length) return;
+    const i = listed.findIndex((t) => t.id === openThreadId);
+    const next = listed[(i + delta + listed.length) % listed.length] ?? listed[0];
+    if (next.anchor.kind !== 'image' && !pinsOn) setStage('image');
+    openThread(next.id, { focus: true });
+  };
+  const toggleCommenting = (next = !commenting) => {
+    setCommenting(next);
+    if (!next) setDraft(null);
+    else {
+      // Pins go on the image as it was captured: the changes view, the plain image, or this run's side.
+      if (!pinsOn) setStage('image');
+      setPinsHidden(false);
+    }
+  };
   const moveRegion = (delta: number) => {
     if (regions.length === 0) return;
     if (effectiveStage !== 'changes') setStage('changes');
@@ -257,11 +329,20 @@ export function CheckpointViewer({
     }
   };
 
-  const decide = (decision: ReviewDecisionInput['decision'], ids: string[]) => {
+  const decide = (decision: ReviewDecisionInput['decision'], ids: string[], resolveThreads?: boolean) => {
     if (!onDecide || ids.length === 0) return;
-    onDecide({ captureIds: ids, decision, comment: comment.trim() || undefined });
-    setComment('');
+    setConfirmApprove(false);
+    onDecide({ captureIds: ids, decision, ...(decision === 'approved' && resolveThreads ? { resolveThreads: true } : {}) });
     if (decision === 'approved') advance(ids);
+    // Asking for changes with nothing pinned yet: point at what should change.
+    else if (canComment && openCount === 0) toggleCommenting(true);
+  };
+  /** Approve, or first ask what happens to the open threads. */
+  const approve = () => {
+    if (openCount > 0 && canComment) {
+      setConfirmApprove(true);
+      requestAnimationFrame(() => approveRef.current?.focus());
+    } else decide('approved', shown.map((c) => c.id));
   };
 
   useEffect(() => {
@@ -270,22 +351,34 @@ export function CheckpointViewer({
       const target = e.target as HTMLElement | null;
       if (target && (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT' || target.isContentEditable)) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      // Arrow keys inside a toggle group move between its options.
-      if (e.key.startsWith('Arrow') && target?.closest('[data-slot="toggle-group"]')) return;
+      // Arrow keys inside a toggle group move between its options, and in the pin layer move its crosshair.
+      if (e.key.startsWith('Arrow') && target?.closest('[data-slot="toggle-group"], [data-slot="pin-layer"]')) return;
+      // A popover or menu open over the viewer handles its own keys.
+      if (target?.closest('[data-slot="popover-content"], [role="menu"]')) return;
       const key = e.key.toLowerCase();
-      if (e.key === 'ArrowRight') move(1);
+      if (e.key === 'Escape' && commenting) {
+        // Out of comment mode first; a second Escape closes the viewer.
+        e.stopPropagation();
+        toggleCommenting(false);
+      } else if (e.key === 'ArrowRight') move(1);
       else if (e.key === 'ArrowLeft') move(-1);
       else if (e.key === 'ArrowDown') moveFlow(1);
       else if (e.key === 'ArrowUp') moveFlow(-1);
       else if (key === 'v') cycleVariant();
-      else if (key === 'c') cycleStage();
+      else if (key === 'm') cycleStage();
       else if (key === 'n' && regions.length) moveRegion(1);
       else if (key === 'p' && regions.length) moveRegion(-1);
+      else if (key === 'c' && canComment) toggleCommenting();
+      else if (e.key === ']') stepThread(1);
+      else if (e.key === '[') stepThread(-1);
+      else if (key === 'h' && shownThreads.length) setPinsHidden((h) => !h);
+      else if (key === 'e' && canComment && openThreadId && comments.onSetThreadStatus) {
+        const t = shownThreads.find((x) => x.id === openThreadId);
+        if (t) comments.onSetThreadStatus({ threadId: t.id, status: t.status === 'open' ? 'resolved' : 'open', captureId: threadGroups.find((g) => g.threads.includes(t))?.captureId });
+      } else if (key === 'r' && canComment && current) setComposing(true);
       else if (library) return;
-      else if (key === 'a' && canDecide && !busy) decide('approved', shown.map((c) => c.id));
-      else if (key === 'r' && canDecide) {
-        commentRef.current?.focus();
-      } else return;
+      else if (key === 'a' && canDecide && onDecide && !busy) approve();
+      else return;
       e.preventDefault();
     };
     // Capture phase: the dialog's own handlers stop arrow keys before they bubble.
@@ -294,6 +387,37 @@ export function CheckpointViewer({
   });
 
   const label = pos ? checkpointLabel(pos.checkpoint.name, pos.checkpoint.title) : '';
+
+  /** The pins of one capture on its frame. */
+  const pinLayer = (capture: ReviewCaptureView, name: string) =>
+    pinsOn && (canComment || capture.threads?.length) ? (
+      <PinLayer
+        captureId={capture.id}
+        threads={capture.threads ?? []}
+        label={name}
+        commenting={commenting && canComment}
+        showResolved={threadFilter !== 'open'}
+        hidden={pinsHidden}
+        openThreadId={openThreadId}
+        onOpenThreadChange={(id, from) => {
+          // A popover closing late must not shut the one that just opened.
+          if (id === null && from && from !== openThreadId) return;
+          openThread(id);
+        }}
+        draft={draft}
+        onDraftChange={setDraft}
+        focus={focus}
+        now={comments.now}
+        viewerId={comments.viewerId}
+        canComment={canComment}
+        canModerate={comments.canModerate}
+        onCreateThread={comments.onCreateThread}
+        onReply={comments.onReply}
+        onSetThreadStatus={comments.onSetThreadStatus}
+        onEditComment={comments.onEditComment}
+        onDeleteComment={comments.onDeleteComment}
+      />
+    ) : null;
 
   return (
     <Dialog open={Boolean(pos)} onOpenChange={(open) => !open && onSelectionChange(null)}>
@@ -387,6 +511,11 @@ export function CheckpointViewer({
                         <EyeOff /> Leave out areas
                       </Button>
                     ) : null}
+                    {shownThreads.some((t) => t.anchor.kind !== 'image') && pinsOn ? (
+                      <Button variant="ghost" size="xs" aria-pressed={pinsHidden} onClick={() => setPinsHidden((h) => !h)}>
+                        {pinsHidden ? <EyeOff /> : <Eye />} {pinsHidden ? 'Pins hidden' : 'Pins'}
+                      </Button>
+                    ) : null}
                     <span className="text-label-s text-muted-foreground tabular-nums">{Math.round(zoom * 100)}%</span>
                   </div>
                 </div>
@@ -397,11 +526,16 @@ export function CheckpointViewer({
                   }}
                   tabIndex={0}
                   aria-label="Checkpoint screens"
-                  className="min-h-0 flex-1 overflow-auto p-6 outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/25"
+                  className={cn(
+                    'min-h-0 flex-1 overflow-auto p-6 outline-none transition-shadow duration-150 focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/25',
+                    commenting && 'shadow-[inset_0_0_0_2px_var(--accent-solid)]',
+                  )}
                 >
                   {current && effectiveStage === 'changes' && diff ? (
                     <div className="flex min-w-max justify-center">
-                      <DiffHighlight image={current.image} diff={diff} frame={frames[0]} zoom={zoom} alt={label} active={activeRegion} onActiveChange={setActiveRegion} />
+                      <DiffHighlight image={current.image} diff={diff} frame={frames[0]} zoom={zoom} alt={label} active={activeRegion} onActiveChange={setActiveRegion}>
+                        {pinLayer(current, label)}
+                      </DiffHighlight>
                     </div>
                   ) : current && effectiveStage === 'ignore' && onIgnoreRegionsChange ? (
                     <IgnoreRegionsEditor
@@ -427,7 +561,13 @@ export function CheckpointViewer({
                         ].map((side) => (
                           <figure key={side.key} className="flex flex-col gap-1.5">
                             <figcaption className="text-label-s text-muted-foreground">{side.title}</figcaption>
-                            <ScreenFrame image={side.image} frame={frames[0]} zoom={zoom} alt={`${label} — ${side.title}`} />
+                            <ScreenFrame
+                              image={side.image}
+                              frame={frames[0]}
+                              zoom={zoom}
+                              alt={`${label} — ${side.title}`}
+                              overlay={side.key === 'current' && pinLayer(current, `${label}, this run`) ? () => pinLayer(current, `${label}, this run`) : undefined}
+                            />
                           </figure>
                         ))}
                       </div>
@@ -447,7 +587,14 @@ export function CheckpointViewer({
                             </span>
                             {shown.length > 1 && !library ? <ReviewStatusBadge status={c.status} /> : null}
                           </figcaption>
-                          <ScreenFrame image={c.image} frame={frames[i]} zoom={zoom} alt={`${label} — ${c.variant}`} label={`${label}, ${c.variant} screen`} />
+                          <ScreenFrame
+                            image={c.image}
+                            frame={frames[i]}
+                            zoom={zoom}
+                            alt={`${label} — ${c.variant}`}
+                            label={`${label}, ${c.variant} screen`}
+                            overlay={pinLayer(c, `${label}, ${c.variant}`) ? () => pinLayer(c, `${label}, ${c.variant}`) : undefined}
+                          />
                         </figure>
                       ))}
                     </div>
@@ -482,27 +629,66 @@ export function CheckpointViewer({
 
                 {canDecide && onDecide && !library ? (
                   <section className="flex flex-col gap-2" aria-label="Decision">
-                    <label htmlFor="review-comment" className="text-label-s text-muted-foreground">
-                      Comment <span className="font-normal">(optional)</span>
-                    </label>
-                    <Textarea
-                      id="review-comment"
-                      ref={commentRef}
-                      value={comment}
-                      onChange={(e) => setComment(e.target.value)}
-                      placeholder="What should change?"
-                      rows={2}
-                      maxLength={4000}
-                    />
-                    <div className="flex flex-wrap gap-2">
-                      <Button size="sm" disabled={busy} onClick={() => decide('approved', shown.map((c) => c.id))}>
-                        <Check /> {busy ? 'Saving…' : shown.length > 1 ? `Approve ${shown.length} images` : 'Approve'}
-                      </Button>
-                      <Button size="sm" variant="outline" disabled={busy} onClick={() => decide('changes_requested', shown.map((c) => c.id))}>
-                        <MessageSquareWarning /> Request changes
-                      </Button>
-                    </div>
+                    {confirmApprove ? (
+                      <div className="flex animate-rise-in flex-col gap-2 rounded-lg border border-border bg-surface-sunken p-2.5" role="group" aria-label="Open comments">
+                        <p className="text-label-s">
+                          {openCount} open {openCount === 1 ? 'comment' : 'comments'} on {shown.length > 1 ? 'these images' : 'this image'}.
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <Button ref={approveRef} size="sm" disabled={busy} onClick={() => decide('approved', shown.map((c) => c.id), true)}>
+                            <Check /> Resolve and approve
+                          </Button>
+                          <Button size="sm" variant="outline" disabled={busy} onClick={() => decide('approved', shown.map((c) => c.id))}>
+                            Approve, keep open
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setConfirmApprove(false)}>
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        <Button size="sm" disabled={busy} onClick={approve}>
+                          <Check /> {busy ? 'Saving…' : shown.length > 1 ? `Approve ${shown.length} images` : 'Approve'}
+                        </Button>
+                        <Button size="sm" variant="outline" disabled={busy} onClick={() => decide('changes_requested', shown.map((c) => c.id))}>
+                          <MessageSquareWarning /> Request changes
+                        </Button>
+                      </div>
+                    )}
                   </section>
+                ) : null}
+
+                {canComment || shownThreads.length ? (
+                  <ThreadList
+                    groups={threadGroups}
+                    filter={threadFilter}
+                    onFilterChange={setThreadFilter}
+                    openThreadId={openThreadId}
+                    onOpenThreadChange={(id) => {
+                      const t = id ? shownThreads.find((x) => x.id === id) : null;
+                      // A thread with a pin opens at its pin; one about the whole image opens in the list.
+                      if (t && t.anchor.kind !== 'image') {
+                        setPinsHidden(false);
+                        if (!pinsOn) setStage('image');
+                      }
+                      openThread(id, { focus: Boolean(t && t.anchor.kind !== 'image') });
+                    }}
+                    onHighlight={(id) => (id ? setFocus((f) => ({ threadId: id, nonce: (f?.nonce ?? 0) + 1, ping: true, scroll: false })) : undefined)}
+                    commenting={commenting}
+                    onCommentingChange={canComment ? toggleCommenting : undefined}
+                    composing={composing}
+                    onComposingChange={setComposing}
+                    now={comments.now}
+                    viewerId={comments.viewerId}
+                    canComment={canComment}
+                    canModerate={comments.canModerate}
+                    onCreateThread={comments.onCreateThread}
+                    onReply={comments.onReply}
+                    onSetThreadStatus={comments.onSetThreadStatus}
+                    onEditComment={comments.onEditComment}
+                    onDeleteComment={comments.onDeleteComment}
+                  />
                 ) : null}
 
                 <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
@@ -585,7 +771,7 @@ export function CheckpointViewer({
                     <Keyboard className="size-3.5" /> Keyboard shortcuts
                   </summary>
                   <ul className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-                    {SHORTCUTS.filter(([keys]) => !library || !['A', 'R'].includes(keys[0])).map(([keys, what]) => (
+                    {SHORTCUTS.filter(([keys]) => (!library || !['A', 'N'].includes(keys[0])) && (canComment || !['C', 'R', 'E'].includes(keys[0]))).map(([keys, what]) => (
                       <li key={what} className="contents">
                         <span className="flex gap-1">
                           {keys.map((k) => (
@@ -633,11 +819,15 @@ const SHORTCUTS: [string[], string][] = [
   [['←', '→'], 'Previous / next checkpoint'],
   [['↑', '↓'], 'Previous / next test'],
   [['V'], 'Next variant'],
-  [['C'], 'Next comparison'],
+  [['M'], 'Next comparison'],
   [['N', 'P'], 'Next / previous change'],
   [['A'], 'Approve and go to the next image to review'],
-  [['R'], 'Write a change request'],
-  [['Esc'], 'Close'],
+  [['C'], 'Comment mode: click to pin, drag for an area'],
+  [['R'], 'Comment on the whole image'],
+  [['[', ']'], 'Previous / next comment'],
+  [['E'], 'Resolve or reopen the open comment'],
+  [['H'], 'Hide or show the pins'],
+  [['Esc'], 'Leave comment mode, then close'],
 ];
 
 
@@ -654,7 +844,8 @@ function DecisionNote({ capture }: { capture: ReviewCaptureView }) {
         {d.by ? ` by ${d.by}` : ''} · {formatDateTime(d.at)}
         {d.runNumber ? ` · run #${d.runNumber}` : ''}
       </p>
-      {d.comment ? <p className="mt-1 text-sm text-pretty whitespace-pre-wrap">{d.comment}</p> : null}
+      {/* A change request's comment lives on as a thread below. */}
+      {d.comment && d.decision === 'approved' ? <p className="mt-1 text-sm text-pretty whitespace-pre-wrap">{d.comment}</p> : null}
     </div>
   );
 }

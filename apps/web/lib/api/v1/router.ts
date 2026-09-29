@@ -39,6 +39,7 @@ import {
   updateTestCase,
 } from '@/lib/mcp/tools/test-cases';
 import { getReviewCheckpoint, listReviewCheckpoints, reviewCheckpoint } from '@/lib/mcp/tools/review';
+import { commentOnReview, listReviewThreads, resolveReviewThread } from '@/lib/mcp/tools/review-threads';
 import { getLibraryFlows, listLibrary, setLibraryReferenceTool } from '@/lib/mcp/tools/library';
 import type { ToolDef } from '@/lib/mcp/registry';
 import { authed } from '../base';
@@ -337,7 +338,7 @@ export const router = {
       description: 'One review checkpoint image: its status, viewport, whether it matches the approved baseline, and short-lived links to it and to the baseline.',
       tags: ['Visual review'],
       params: { capture: captureRef },
-      omit: ['compare'],
+      omit: ['compare', 'pins', 'pinCrops'],
     }),
     decide: fromTool(tool(reviewCheckpoint), {
       method: 'POST',
@@ -345,6 +346,30 @@ export const router = {
       summary: 'Approve or reject review checkpoint images',
       description:
         'Approve review checkpoint images, or ask for changes with a comment. An approval holds for the exact pixels: later runs with the same image need no review. Only approve what you looked at. Needs the `write` scope.',
+      tags: ['Visual review'],
+    }),
+  },
+  reviewThreads: {
+    list: fromTool(tool(listReviewThreads), {
+      path: `${P}/review-threads`,
+      summary: 'List review comment threads',
+      description:
+        'The comment threads pinned on a run’s review images (or one image’s, with `capture`), per image and by the number on the pin: where each points, in pixels, percent and CSS pixels, and the conversation. Open ones by default. `annotatedImageUrl` on `/review-captures/{capture}` shows the pins drawn on the image.',
+      tags: ['Visual review'],
+    }),
+    comment: fromTool(tool(commentOnReview), {
+      method: 'POST',
+      path: `${P}/review-threads`,
+      summary: 'Comment on a review image',
+      description:
+        'Pin a comment thread on a review image — at a spot or an area given in percent of the image with `at`, or about the whole image — or reply to a thread with its number in `thread`. Needs the `write` scope.',
+      tags: ['Visual review'],
+    }),
+    status: fromTool(tool(resolveReviewThread), {
+      method: 'POST',
+      path: `${P}/review-threads/status`,
+      summary: 'Resolve or reopen a review comment thread',
+      description: 'Resolve a thread by its image (`capture`) and number, or reopen it with `status: "open"`, with an optional closing `comment`. Needs the `write` scope.',
       tags: ['Visual review'],
     }),
   },

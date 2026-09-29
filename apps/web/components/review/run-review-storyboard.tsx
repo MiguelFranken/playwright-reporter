@@ -23,7 +23,23 @@ import { runReviewQuery } from '@/lib/rpc/queries';
  * page is not rendered again for it. When one fails the run is read again,
  * which puts back what the server holds.
  */
-export function RunReviewStoryboard({ team, project, runNumber, canDecide }: { team: string; project: string; runNumber: number; canDecide: boolean }) {
+export function RunReviewStoryboard({
+  team,
+  project,
+  runNumber,
+  canDecide,
+  canComment = false,
+  canModerate = false,
+  viewerId = null,
+}: {
+  team: string;
+  project: string;
+  runNumber: number;
+  canDecide: boolean;
+  canComment?: boolean;
+  canModerate?: boolean;
+  viewerId?: string | null;
+}) {
   const queryClient = useQueryClient();
   const options = useMemo(() => runReviewQuery({ team, project, runNumber }), [team, project, runNumber]);
   const query = useQuery(options);
@@ -38,6 +54,8 @@ export function RunReviewStoryboard({ team, project, runNumber, canDecide }: { t
       },
       onSuccess: (res, input) => {
         if (res.by) patch((data) => ({ ...data, flows: applyDecision(data.flows, input, res.by ?? undefined) }));
+        // A change request's comment opened a thread, or an approval resolved some: the threads are the server's to tell.
+        if (input.comment || res.resolvedThreads) void queryClient.invalidateQueries({ queryKey: options.queryKey });
       },
       onError: () => queryClient.invalidateQueries({ queryKey: options.queryKey }),
     }),
@@ -45,14 +63,28 @@ export function RunReviewStoryboard({ team, project, runNumber, canDecide }: { t
 
   const decide = async (input: ReviewDecisionInput) => {
     try {
-      const { decided } = await mutation.mutateAsync({ team, project, ...input });
-      return { ok: true as const, decided };
+      const { decided, resolvedThreads } = await mutation.mutateAsync({ team, project, ...input });
+      return { ok: true as const, decided, resolvedThreads };
     } catch (error) {
       return { ok: false as const, message: error instanceof Error && error.message ? error.message : 'The decision could not be saved.' };
     }
   };
 
-  if (query.data) return <UrlReviewStoryboard team={team} project={project} flows={query.data.flows} canDecide={canDecide} decide={decide} />;
+  if (query.data)
+    return (
+      <UrlReviewStoryboard
+        team={team}
+        project={project}
+        flows={query.data.flows}
+        canDecide={canDecide}
+        decide={decide}
+        canComment={canComment}
+        canModerate={canModerate}
+        viewerId={viewerId}
+        // Comments are saved by server actions; the run's query reads them back.
+        onCommentsChanged={() => void queryClient.invalidateQueries({ queryKey: options.queryKey })}
+      />
+    );
   if (query.isError)
     return (
       <EmptyState icon={ImageOff} title="The review could not be loaded" description="Something went wrong while reading this run's checkpoints.">

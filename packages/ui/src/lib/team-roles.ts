@@ -14,7 +14,7 @@ export const TEAM_ROLE_LABELS: Record<TeamRole, string> = {
 export const TEAM_ROLE_DESCRIPTIONS: Record<TeamRole, string> = {
   admin: 'Full access to the team: projects, tokens, members and invitations.',
   member: 'Can operate projects: rename, manage tokens, delete runs, edit test cases.',
-  viewer: 'Read-only. Cannot see or create ingest tokens.',
+  viewer: 'Read-only, but can comment on review images. Cannot see or create ingest tokens.',
 };
 
 export const TEAM_ROLE_ITEMS = (Object.keys(TEAM_ROLE_LABELS) as TeamRole[]).map((value) => ({ value, label: TEAM_ROLE_LABELS[value] }));

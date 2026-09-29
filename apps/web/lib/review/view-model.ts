@@ -8,9 +8,12 @@
  * devices side by side, as it does for resized variants of one test.
  */
 import type { ReviewCaseRef, ReviewCaptureView, ReviewCheckpointView, ReviewDiffView, ReviewFlowView, ReviewImage, ReviewStatus } from '@miguelfranken/ui/lib/review';
+import type { ReviewCommentView, ReviewThreadView } from '@miguelfranken/ui/lib/review-threads';
+import { displayableAvatar } from '@/lib/avatars';
 import type { DiffRecord } from './diff/lookup';
 import { traceViewerUrl } from '@/lib/trace-viewer/url';
 import type { AttachmentState, CaptureRecord, CheckpointRecord, ComparedCapture, ReviewFlowRecord } from './queries';
+import type { CaptureThread, CommentRecord } from './threads';
 
 export const artifactUrl = (id: string) => `/api/artifacts/${id}`;
 
@@ -23,6 +26,34 @@ export function toReviewImage(capture: Pick<CaptureRecord, 'attachment' | 'thumb
     height: capture.height,
     available,
     unavailableReason: available ? null : capture.attachment.status,
+  };
+}
+
+export function toCommentView(c: CommentRecord): ReviewCommentView {
+  return {
+    id: c.id,
+    kind: c.kind,
+    body: c.body,
+    author: c.authorName ? { name: c.authorName, image: displayableAvatar(c.authorImage) } : null,
+    authorId: c.userId,
+    source: c.source,
+    at: c.createdAt.toISOString(),
+    editedAt: c.editedAt?.toISOString() ?? null,
+  };
+}
+
+export function toThreadView(t: CaptureThread): ReviewThreadView {
+  return {
+    id: t.id,
+    number: t.number,
+    status: t.status,
+    anchor: t.position,
+    placement: t.placement,
+    originRunNumber: t.originRunNumber,
+    createdAt: t.createdAt.toISOString(),
+    resolvedAt: t.resolvedAt?.toISOString() ?? null,
+    resolvedBy: t.resolvedBy,
+    comments: t.comments.map(toCommentView),
   };
 }
 
@@ -82,6 +113,7 @@ export function toCaptureView(c: ComparedCapture): ReviewCaptureView {
       : null,
     diff: c.diff && c.diffAgainst ? toDiffView(c.diff, c.diffAgainst, c.withinTolerance) : null,
     ignoreRegions: c.ignoreRegions.length ? c.ignoreRegions.map((r) => ({ ...r, pixels: 0 })) : undefined,
+    threads: c.threads.map(toThreadView),
   };
 }
 
@@ -177,7 +209,10 @@ function mergeCheckpoints(a: readonly ReviewCheckpointView[], b: readonly Review
   const merged = a.map((c) => ({ ...c, captures: [...c.captures] }));
   for (const cp of b) {
     const same = merged.find((m) => m.name === cp.name);
-    if (same) same.captures.push(...cp.captures);
+    if (same) {
+      same.captures.push(...cp.captures);
+      same.aliases = [...(same.aliases ?? []), cp.id, ...(cp.aliases ?? [])];
+    }
     else merged.push({ ...cp, sequence: merged.length });
   }
   return merged;

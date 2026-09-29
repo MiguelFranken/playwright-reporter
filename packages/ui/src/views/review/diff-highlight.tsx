@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { cn } from '../../lib/cn';
 import type { FrameSize, ReviewDiffView, ReviewImage } from '../../lib/review';
 import { DiffMarks } from './diff-summary';
@@ -28,6 +28,7 @@ export function DiffHighlight({
   active,
   onActiveChange,
   overlay = true,
+  children,
   className,
 }: {
   image: ReviewImage;
@@ -39,6 +40,8 @@ export function DiffHighlight({
   onActiveChange: (index: number) => void;
   /** Paint the changed pixels; the boxes stay either way. */
   overlay?: boolean;
+  /** More over the image, scrolling with it: comment pins. */
+  children?: ReactNode;
   className?: string;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
@@ -62,6 +65,7 @@ export function DiffHighlight({
     <div className={cn('flex items-start gap-2', className)}>
       <div
         ref={scroller}
+        data-slot="diff-highlight"
         role="region"
         aria-label={`${alt}, changes marked`}
         tabIndex={0}
@@ -77,6 +81,7 @@ export function DiffHighlight({
               <img src={diff.overlayUrl} alt="" aria-hidden draggable={false} className="pointer-events-none absolute inset-0 block h-full w-full opacity-80" />
             ) : null}
             {size ? <DiffMarks regions={diff.regions} width={size.width} height={size.height} active={active} numbered onSelect={onActiveChange} /> : null}
+            {children}
           </div>
         ) : (
           <UnavailableImage image={image} />

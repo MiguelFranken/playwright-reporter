@@ -20,12 +20,95 @@ import {
   type ReviewStatus,
   type StoryboardMode,
 } from '@miguelfranken/ui/lib/review';
+import type { CommentEditInput, NewThreadInput, ReviewThreadView, ThreadReplyInput, ThreadStatusInput } from '@miguelfranken/ui/lib/review-threads';
 import type { IgnoreRect } from '@miguelfranken/ui/views/review/ignore-regions-editor';
 import { ReviewStoryboard, STORYBOARD_SIZE, type ReviewSelection } from '@miguelfranken/ui/views/review/review-storyboard';
 import { useShallowSearch } from '@/components/filters/url-filters';
-import { decideReview, saveIgnoreRegions } from '@/app/(app)/teams/[team]/projects/[project]/review/actions';
+import {
+  createReviewThread,
+  decideReview,
+  deleteReviewComment,
+  editReviewComment,
+  replyToReviewThread,
+  saveIgnoreRegions,
+  setReviewThreadStatus,
+} from '@/app/(app)/teams/[team]/projects/[project]/review/actions';
 import { applyDecision, patchCaptures } from '@/lib/review/patch-flows';
 import { captureDiffQuery } from '@/lib/rpc/queries';
+
+/** What changes at once, before the revalidated page confirms it. */
+type Change =
+  | { type: 'decide'; input: ReviewDecisionInput }
+  | { type: 'create'; input: NewThreadInput; tempId: string }
+  | { type: 'reply'; input: ThreadReplyInput; tempId: string }
+  | { type: 'status'; input: ThreadStatusInput }
+  | { type: 'edit'; input: CommentEditInput }
+  | { type: 'delete'; input: { commentId: string; threadId: string } };
+
+// Untouched flows stay the same objects, so the storyboard's memoised rows do not render again.
+const mapCaptures = (flows: ReviewFlowView[], fn: (cap: ReviewFlowView['checkpoints'][number]['captures'][number]) => ReviewFlowView['checkpoints'][number]['captures'][number]) => patchCaptures(flows, fn);
+
+const mapThreads = (flows: ReviewFlowView[], fn: (t: ReviewThreadView) => ReviewThreadView | null) =>
+  mapCaptures(flows, (cap) => {
+    if (!cap.threads?.length) return cap;
+    const threads = cap.threads.map(fn);
+    return threads.every((t, i) => t === cap.threads![i]) ? cap : { ...cap, threads: threads.filter((t): t is ReviewThreadView => t !== null) };
+  });
+
+function applyChange(flows: ReviewFlowView[], change: Change): ReviewFlowView[] {
+  const now = new Date().toISOString();
+  const you = { name: 'You', image: null };
+  switch (change.type) {
+    case 'decide': {
+      const { input } = change;
+      const decided = applyDecision(flows, input);
+      if (!input.resolveThreads) return decided;
+      const ids = new Set(input.captureIds);
+      return mapCaptures(decided, (cap) => (ids.has(cap.id) ? { ...cap, threads: cap.threads?.map((t) => (t.status === 'open' ? { ...t, status: 'resolved' as const, resolvedAt: now } : t)) } : cap));
+    }
+    case 'create': {
+      const { input, tempId } = change;
+      return mapCaptures(flows, (cap) => {
+        if (cap.id !== input.captureId) return cap;
+        const next = Math.max(0, ...(cap.threads ?? []).map((t) => t.number)) + 1;
+        const thread: ReviewThreadView = {
+          id: tempId,
+          number: next,
+          status: 'open',
+          anchor: input.anchor,
+          placement: 'exact',
+          createdAt: now,
+          pending: true,
+          comments: [{ id: `${tempId}-c`, kind: 'comment', body: input.body, author: you, source: 'app', at: now, pending: true }],
+        };
+        return { ...cap, threads: [...(cap.threads ?? []), thread] };
+      });
+    }
+    case 'reply':
+      return mapThreads(flows, (t) =>
+        t.id === change.input.threadId ? { ...t, comments: [...t.comments, { id: change.tempId, kind: 'comment', body: change.input.body, author: you, source: 'app', at: now, pending: true }] } : t,
+      );
+    case 'status':
+      return mapThreads(flows, (t) =>
+        t.id === change.input.threadId
+          ? {
+              ...t,
+              status: change.input.status,
+              resolvedAt: change.input.status === 'resolved' ? now : null,
+              comments: [...t.comments, { id: `${t.id}-${change.input.status}`, kind: change.input.status === 'resolved' ? 'resolved' : 'reopened', body: '', author: you, source: 'app', at: now, pending: true }],
+            }
+          : t,
+      );
+    case 'edit':
+      return mapThreads(flows, (t) => (t.comments.some((c) => c.id === change.input.commentId) ? { ...t, comments: t.comments.map((c) => (c.id === change.input.commentId ? { ...c, body: change.input.body, editedAt: now } : c)) } : t));
+    case 'delete':
+      return mapThreads(flows, (t) => {
+        if (t.id !== change.input.threadId) return t;
+        const opening = t.comments.find((c) => c.kind === 'comment');
+        return opening?.id === change.input.commentId ? null : { ...t, comments: t.comments.filter((c) => c.id !== change.input.commentId) };
+      });
+  }
+}
 
 /** A capture that differs from its reference and has no finished measurement: what the viewer waits for. */
 function awaitsDiff(c: ReviewCaptureView) {
@@ -129,7 +212,11 @@ export function UrlReviewStoryboard({
   emptyDescription,
   defaultFilter,
   mode,
+  canComment = false,
+  canModerate = false,
+  viewerId = null,
   decide,
+  onCommentsChanged,
 }: {
   team: string;
   project: string;
@@ -146,12 +233,20 @@ export function UrlReviewStoryboard({
   defaultFilter?: ReviewFilter;
   /** `library`: documentation, nothing to decide. */
   mode?: StoryboardMode;
+  /** May pin comments, reply and resolve. */
+  canComment?: boolean;
+  /** May delete anybody's comment. */
+  canModerate?: boolean;
+  /** The signed-in user, whose own comments can be edited. */
+  viewerId?: string | null;
   /**
    * Records a decision; the server action by default, which renders the page
    * again. A storyboard fed by a query passes its mutation, which changes the
    * cache instead.
    */
-  decide?: (input: ReviewDecisionInput) => Promise<{ ok: true; decided: number } | { ok: false; message: string }>;
+  decide?: (input: ReviewDecisionInput) => Promise<{ ok: true; decided: number; resolvedThreads?: number } | { ok: false; message: string }>;
+  /** After a comment action succeeds: a storyboard fed by a query reads it again (the page is not rendered again for it). */
+  onCommentsChanged?: () => void;
 }) {
   const { params, set } = useShallowSearch();
   const [local, setLocal] = useState<ReviewSelection | null>(null);
@@ -173,7 +268,8 @@ export function UrlReviewStoryboard({
   const sort = (REVIEW_SORTS as readonly string[]).includes(sortParam ?? '') ? (sortParam as ReviewSort) : undefined;
   const live = useLiveDiffs({ team, project }, flows, selection, mode === 'library');
   const withLiveFlows = useMemo(() => withLive(flows, live), [flows, live]);
-  const [optimistic, addDecision] = useOptimistic(withLiveFlows, (current: ReviewFlowView[], input: ReviewDecisionInput) => applyDecision(current, input));
+  const [optimistic, addChange] = useOptimistic(withLiveFlows, applyChange);
+  const [localThread, setLocalThread] = useState<number | null>(null);
 
   const onIgnoreRegionsChange = (input: { captureId: string; regions: IgnoreRect[] }) => {
     setIgnorePendingId(input.captureId);
@@ -190,15 +286,48 @@ export function UrlReviewStoryboard({
     });
   };
 
+  const ref = { team, project };
   const onDecide = (input: ReviewDecisionInput) => {
     setPendingIds((ids) => [...ids, ...input.captureIds]);
     startTransition(async () => {
-      addDecision(input);
-      const res = await (decide ? decide(input) : decideReview({ team, project }, input));
+      addChange({ type: 'decide', input });
+      const res = await (decide ? decide(input) : decideReview(ref, input));
       setPendingIds((ids) => ids.filter((id) => !input.captureIds.includes(id)));
       if (!res.ok) toast.error(res.message);
       else if (input.captureIds.length > 1) toast.success(`${res.decided} images ${input.decision === 'approved' ? 'approved' : 'marked for changes'}.`);
+      else if (res.resolvedThreads) toast.success(`Approved; ${res.resolvedThreads} ${res.resolvedThreads === 1 ? 'comment' : 'comments'} resolved.`);
     });
+  };
+
+  /** Runs a comment action with its optimistic change; a failure shows why, and the page stays as the server has it. */
+  const commentAction = (change: Change, run: () => Promise<{ ok: true } | { ok: false; message: string }>, done?: () => void) =>
+    startTransition(async () => {
+      addChange(change);
+      const res = await run();
+      if (!res.ok) toast.error(res.message);
+      else {
+        onCommentsChanged?.();
+        done?.();
+      }
+    });
+  const temp = () => `pending-${crypto.randomUUID()}`;
+  const comments = {
+    canComment,
+    canModerate,
+    viewerId,
+    openThread: syncUrl ? (Number(params.get('thread')) || null) : localThread,
+    onOpenThreadChange: (n: number | null) => (syncUrl ? set({ thread: n ? String(n) : null }) : setLocalThread(n)),
+    onCreateThread: (input: NewThreadInput) => commentAction({ type: 'create', input, tempId: temp() }, () => createReviewThread(ref, input)),
+    onReply: (input: ThreadReplyInput) => commentAction({ type: 'reply', input, tempId: temp() }, () => replyToReviewThread(ref, input)),
+    onSetThreadStatus: (input: ThreadStatusInput) =>
+      commentAction({ type: 'status', input }, () => setReviewThreadStatus(ref, input), () => {
+        if (input.status === 'resolved') toast.success('Comment resolved.', { action: { label: 'Undo', onClick: () => comments.onSetThreadStatus({ ...input, status: 'open' }) } });
+      }),
+    onEditComment: (input: CommentEditInput) => commentAction({ type: 'edit', input }, () => editReviewComment(ref, input)),
+    onDeleteComment: (input: { commentId: string; threadId: string }) => {
+      if (!window.confirm('Delete this comment? The first comment of a thread takes the whole thread with it.')) return;
+      commentAction({ type: 'delete', input }, () => deleteReviewComment(ref, { commentId: input.commentId }));
+    },
   };
 
   return (
@@ -213,7 +342,15 @@ export function UrlReviewStoryboard({
       query={syncUrl ? (params.get('q') ?? '') : undefined}
       onQueryChange={syncUrl ? (next) => set({ q: next || null }) : undefined}
       selection={selection}
-      onSelectionChange={(next) => (syncUrl ? set({ cp: next?.checkpointId ?? null, v: next?.variant ?? null }) : setLocal(next))}
+      onSelectionChange={(next) => {
+        // Another image: thread numbers count per image, so the open one was the last image's.
+        const elsewhere = next?.checkpointId !== selection?.checkpointId || next?.variant !== selection?.variant;
+        if (syncUrl) set({ cp: next?.checkpointId ?? null, v: next?.variant ?? null, ...(elsewhere ? { thread: null } : {}) });
+        else {
+          setLocal(next);
+          if (elsewhere) setLocalThread(null);
+        }
+      }}
       onDecide={canDecide ? onDecide : undefined}
       pendingIds={pendingIds}
       canDecide={canDecide}
@@ -232,6 +369,7 @@ export function UrlReviewStoryboard({
       onSortChange={syncUrl ? (next) => set({ sort: next === 'sequence' ? null : next }) : undefined}
       onIgnoreRegionsChange={canDecide && mode !== 'library' ? onIgnoreRegionsChange : undefined}
       ignorePendingId={ignorePendingId}
+      comments={comments}
     />
   );
 }

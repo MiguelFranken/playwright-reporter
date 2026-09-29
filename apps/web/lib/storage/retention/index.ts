@@ -14,7 +14,7 @@
  */
 import { and, asc, desc, eq, inArray, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import { db } from '@/lib/db/drizzle';
-import { artifactSweeps, attachments, instanceSettings, libraryReferences, reviewCaptures, reviewDecisions, runs, type ArtifactSweep } from '@/lib/db/schema';
+import { artifactSweeps, attachments, instanceSettings, libraryReferences, reviewCaptures, reviewDecisions, reviewThreads, runs, type ArtifactSweep } from '@/lib/db/schema';
 import { getStorage, type StorageAdapter } from '@/lib/storage';
 import { ingestSweepDue } from '@/lib/sweeps/continuation';
 import { INGEST_SWEEP_INTERVAL_MS, ingestSweepEnabled } from './config';
@@ -96,10 +96,21 @@ const isLibraryScreen = sql`exists (
     )
 )`;
 
-/** Live artifacts the policy says have expired, over Drizzle-qualified columns. Review baselines and library screens are kept. */
+/**
+ * The image an open comment thread was placed on. A change request points at
+ * a spot on it; losing the image before the thread is resolved loses what it
+ * points at.
+ */
+const isOpenThreadOrigin = sql`exists (
+  select 1 from ${reviewThreads} t
+  join ${reviewCaptures} c on c.id = t.origin_capture_id
+  where t.status = 'open' and (c.attachment_id = ${attachments.id} or c.thumbnail_attachment_id = ${attachments.id})
+)`;
+
+/** Live artifacts the policy says have expired, over Drizzle-qualified columns. Review baselines, library screens and images with open threads are kept. */
 export function dueWhere(policy: RetentionPolicy, now: Date = new Date()): SQL {
   const groups = cutoffs(policy, now).map((c) => and(inArray(attachments.kind, c.kinds), lt(attachments.createdAt, c.before))!);
-  return and(isNull(attachments.expiredAt), or(...groups), sql`not ${isReviewBaseline}`, sql`not ${isLibraryScreen}`)!;
+  return and(isNull(attachments.expiredAt), or(...groups), sql`not ${isReviewBaseline}`, sql`not ${isLibraryScreen}`, sql`not ${isOpenThreadOrigin}`)!;
 }
 
 // ---------------------------------------------------------------- stats

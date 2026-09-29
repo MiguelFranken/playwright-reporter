@@ -85,6 +85,9 @@ async function Content({ params }: Props) {
           run={{ id: run.id, number: run.number, startedAt: new Date(run.startedAt).toISOString() }}
           base={base}
           canDecide={access.can({ review: ['decide'] })}
+          canComment={access.can({ review: ['comment'] })}
+          canModerate={access.can({ project: ['delete'] })}
+          viewerId={access.user.id}
         />
       </Suspense>
     </div>
@@ -103,6 +106,9 @@ async function Storyboard({
   run,
   base,
   canDecide,
+  canComment,
+  canModerate,
+  viewerId,
 }: {
   team: string;
   project: string;
@@ -110,6 +116,9 @@ async function Storyboard({
   run: { id: string; number: number; startedAt: string };
   base: string;
   canDecide: boolean;
+  canComment: boolean;
+  canModerate: boolean;
+  viewerId: string;
 }) {
   const records = await runReview({ id: run.id, startedAt: run.startedAt });
   // Comparisons nobody measured yet (a baseline approved since, a run the watchdog closed) are measured after the page is sent.
@@ -119,7 +128,7 @@ async function Storyboard({
   queries.setQueryData(runReviewQuery({ team, project, runNumber: run.number }).queryKey, toRunReviewData(records, byTest, base, run.number));
   return (
     <HydrationBoundary state={dehydrate(queries)}>
-      <RunReviewStoryboard team={team} project={project} runNumber={run.number} canDecide={canDecide} />
+      <RunReviewStoryboard team={team} project={project} runNumber={run.number} canDecide={canDecide} canComment={canComment} canModerate={canModerate} viewerId={viewerId} />
     </HydrationBoundary>
   );
 }

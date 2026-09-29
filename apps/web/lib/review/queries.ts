@@ -12,6 +12,7 @@ import { randomUUID } from 'node:crypto';
 import { and, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { DecisionSource, ReviewDecision, ReviewStatus } from '@miguelfranken/ui/lib/review';
+import type { CommentSource } from '@miguelfranken/ui/lib/review-threads';
 import { db } from '@/lib/db/drizzle';
 import {
   attachments,
@@ -27,6 +28,7 @@ import {
 } from '@/lib/db/schema';
 import { diffSettingsFor, diffsFor, identityKey, ignoreRegionsFor, pairKey, pairOf, type DiffRecord, type Rect } from './diff/lookup';
 import { withinTolerance } from './diff/settings';
+import { createThread, resolveThreadsOf, threadsForCaptures, type CaptureThread } from './threads';
 
 const thumbs = alias(attachments, 'thumb_attachments');
 
@@ -83,6 +85,8 @@ export interface ComparedCapture extends CaptureRecord {
   /** Measured, against the baseline, and under the project's tolerance. */
   withinTolerance: boolean;
   ignoreRegions: Rect[];
+  /** The comment threads the image shows (see `threads.ts`). */
+  threads: CaptureThread[];
 }
 
 export interface CheckpointRecord {
@@ -248,9 +252,10 @@ export async function compareCaptures(
       if (approved.captureId) baselineIds.add(approved.captureId);
     }
   }
-  const [baselineCaptures, previous] = await Promise.all([
+  const [baselineCaptures, previous, threads] = await Promise.all([
     baselineIds.size ? selectCaptures(inArray(reviewCaptures.id, [...baselineIds])) : Promise.resolve([]),
     context ? previousCaptures(captures, context.runId, context.runStartedAt) : Promise.resolve(new Map<string, { capture: CaptureRecord; runNumber: number }>()),
+    threadsForCaptures(captures),
   ]);
   const baselineById = new Map(baselineCaptures.map((c) => [c.id, c]));
 
@@ -268,7 +273,7 @@ export async function compareCaptures(
     const ignoreRegions = ignores.get(key) ?? [];
     const pair = settings.has(c.projectId) ? pairOf(c, reference, settings.get(c.projectId)!, ignoreRegions) : null;
     return {
-      compared: { ...c, status, decision: exact, baseline, previous: prev, diff: null, diffAgainst: baseline?.capture ? 'baseline' : prev ? 'previous' : null, withinTolerance: false, ignoreRegions } as ComparedCapture,
+      compared: { ...c, status, decision: exact, baseline, previous: prev, diff: null, diffAgainst: baseline?.capture ? 'baseline' : prev ? 'previous' : null, withinTolerance: false, ignoreRegions, threads: threads.get(c.id) ?? [] } as ComparedCapture,
       pair,
     };
   });
@@ -531,6 +536,10 @@ export const MAX_DECISION_CAPTURES = 2000;
 /**
  * Records a decision about each capture's image. The captures must belong to
  * the project; ids that do not are ignored, so a forged id decides nothing.
+ *
+ * A change request's comment also opens a whole-image thread on each image,
+ * where the conversation about it continues. An approval with
+ * `resolveThreads` resolves the images' open threads.
  */
 export async function decide(input: {
   projectId: string;
@@ -538,7 +547,10 @@ export async function decide(input: {
   decision: ReviewDecision;
   comment?: string | null;
   userId: string | null;
-}): Promise<{ decided: number }> {
+  resolveThreads?: boolean;
+  /** Where the change request's comment was written, for its thread. */
+  commentSource?: CommentSource;
+}): Promise<{ decided: number; resolvedThreads: number }> {
   const ids = [...new Set(input.captureIds)].filter((id) => /^[0-9a-f-]{36}$/i.test(id));
   if (ids.length === 0) throw new ReviewError('Nothing to decide about.');
   if (ids.length > MAX_DECISION_CAPTURES) throw new ReviewError(`At most ${MAX_DECISION_CAPTURES} images per decision.`);
@@ -570,7 +582,19 @@ export async function decide(input: {
       userId: input.userId,
     })),
   );
-  return { decided: captures.length };
+  const author = { userId: input.userId, source: input.commentSource ?? 'app' };
+  if (input.decision === 'changes_requested' && comment) {
+    const seen = new Set<string>();
+    for (const c of captures) {
+      const key = `${c.testId}\u0000${c.checkpointName}\u0000${c.variant}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      await createThread({ projectId: input.projectId, captureId: c.id, anchor: { kind: 'image', x: 0, y: 0 }, body: comment, author });
+    }
+  }
+  const { resolved } =
+    input.decision === 'approved' && input.resolveThreads ? await resolveThreadsOf({ projectId: input.projectId, captureIds: captures.map((c) => c.id), author }) : { resolved: 0 };
+  return { decided: captures.length, resolvedThreads: resolved };
 }
 
 /** A capture of the project, with its run and test: what the MCP tools and the API address. */
