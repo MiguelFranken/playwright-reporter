@@ -14,7 +14,7 @@ const MAGNITUDE_TONE: Record<'none' | 'minor' | 'major', Tone> = { none: 'succes
 export function DiffBadge({ diff, decision, className }: { diff?: ReviewDiffView | null; decision?: ReviewDecisionView | null; className?: string }) {
   if (decision?.source === 'tolerance') {
     return (
-      <Badge variant="outline" className={cn('gap-1 border-transparent font-medium normal-case', toneBadge.success, className)} title={decision.comment ?? undefined}>
+      <Badge variant="outline" className={cn('gap-1 font-medium', toneBadge.success, 'border-transparent', className)} title={decision.comment ?? undefined}>
         <CheckCheck className="size-3" /> Auto-approved
       </Badge>
     );
@@ -22,7 +22,7 @@ export function DiffBadge({ diff, decision, className }: { diff?: ReviewDiffView
   if (!diff) return null;
   if (diff.state === 'pending') {
     return (
-      <Badge variant="outline" className={cn('gap-1 border-transparent font-medium normal-case', toneBadge.neutral, className)}>
+      <Badge variant="outline" className={cn('gap-1 font-medium', toneBadge.neutral, 'border-transparent', className)}>
         <Loader2 className="size-3 motion-safe:animate-spin" /> Measuring
       </Badge>
     );
@@ -34,7 +34,7 @@ export function DiffBadge({ diff, decision, className }: { diff?: ReviewDiffView
   return (
     <Badge
       variant="outline"
-      className={cn('gap-1 border-transparent font-medium normal-case tabular-nums', toneBadge[MAGNITUDE_TONE[magnitude]], className)}
+      className={cn('gap-1 font-medium tabular-nums', toneBadge[MAGNITUDE_TONE[magnitude]], 'border-transparent', className)}
       title={describeDiff(diff)}
       aria-label={magnitude === 'none' ? text : `${text} changed`}
     >

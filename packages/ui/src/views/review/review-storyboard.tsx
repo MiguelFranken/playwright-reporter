@@ -648,11 +648,11 @@ function CheckpointColumn({
                 overlay={library && !c.compare ? undefined : (shown) => <ChangeMarks capture={c} shown={shown} />}
               />
             </div>
-            <span className="flex flex-wrap items-center gap-1.5 text-label-xs capitalize text-muted-foreground">
+            <span className="flex flex-wrap items-center gap-1.5 text-label-xs text-muted-foreground">
               {library ? null : <ReviewStatusDot status={c.status} />}
-              {c.variant}
+              <span className="capitalize">{c.variant}</span>
               {library && !c.compare ? null : c.compare?.same ? (
-                <span className="normal-case">same as {c.compare.label}</span>
+                <span>same as {c.compare.label}</span>
               ) : (
                 <DiffBadge diff={c.diff} decision={library ? null : c.decision} className="h-4 px-1 text-label-xs" />
               )}
