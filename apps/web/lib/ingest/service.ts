@@ -25,6 +25,8 @@ import {
   type RunShard,
 } from '@/lib/db/schema';
 import { errorSignature, firstLine } from '@/lib/metrics/error-signature';
+import { caseRefsFromTest } from '@/lib/test-cases/model';
+import { syncCodeLinks } from '@/lib/test-cases/service';
 import { baseUrl, getStorage, storageKey } from '@/lib/storage';
 import type { AttemptEndPayload, TestBeginPayload } from '@/lib/live/events';
 import { projectStaleTimeoutMs } from '@/lib/runs/config';
@@ -181,6 +183,14 @@ export async function ingestEvents(project: TokenProject, run: Run, batch: Event
     const ends = fresh.filter((e): e is AttemptEndEvent => e.type === 'attempt.end');
 
     const testsByKey = await resolveTests(tx, project, begins, ends);
+    await syncCodeLinks(
+      tx,
+      project,
+      [...new Map(begins.map((ev) => [ev.testKey, ev])).values()].map((ev) => ({
+        testId: testsByKey.get(ev.testKey)!.id,
+        refs: caseRefsFromTest(ev.tags, ev.annotations),
+      })),
+    );
     const results = await resolveResults(tx, project, run, batch.shardIndex, begins, ends, testsByKey);
 
     // Attempts first: `onConflictDoNothing` tells us which ones are new, and

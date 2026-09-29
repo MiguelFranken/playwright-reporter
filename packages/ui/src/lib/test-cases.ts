@@ -160,6 +160,10 @@ export const CASE_VERDICT_LABELS: Record<CaseVerdict, string> = {
   none: 'No linked tests',
 };
 
+/** The orders a case list can take. `position` is the suite tree's own order. */
+export const CASE_SORTS = ['position', 'number', 'title', 'priority', 'updated'] as const;
+export type CaseSort = (typeof CASE_SORTS)[number];
+
 /** Suites nest at most this deep, the root level included. */
 export const MAX_SUITE_DEPTH = 6;
 /** Bulk actions take at most this many cases at once. */

@@ -18,6 +18,7 @@ import {
   STEP_FORMATS,
   type CaseFieldDef,
   type CaseStep,
+  type CaseVerdict,
   type CustomFieldValue,
 } from '@miguelfranken/ui/lib/test-cases';
 
@@ -279,4 +280,32 @@ export function firstIssue(error: z.ZodError): string {
   if (!issue) return 'The test case is not valid.';
   const path = issue.path.join('.');
   return issue.message && !issue.message.startsWith('Invalid') ? issue.message : `${path || 'Value'}: ${issue.message}`;
+}
+
+// ---------------------------------------------------------------- verdicts
+
+/** Linked tests are judged over this many days. */
+export const HEALTH_WINDOW_DAYS = 30;
+/** A case whose linked tests have not run for this long is stale. */
+export const STALE_AFTER_DAYS = 14;
+
+const FAILED = new Set(['failed', 'timedout', 'interrupted']);
+
+/**
+ * What a case's linked tests say, most urgent first: a failing latest result
+ * beats flakiness, which beats a pass. Tests that stopped running make the
+ * case stale, because a green result from last month proves nothing today.
+ */
+export function caseVerdict(
+  links: readonly { lastOutcome: string | null; lastRunAt: Date | null; flaky: number }[],
+  now: Date,
+): CaseVerdict {
+  if (links.length === 0) return 'none';
+  const ran = links.filter((l) => l.lastRunAt);
+  if (ran.length === 0) return 'not_run';
+  const latest = Math.max(...ran.map((l) => l.lastRunAt!.getTime()));
+  if (now.getTime() - latest > STALE_AFTER_DAYS * 86_400_000) return 'stale';
+  if (ran.some((l) => l.lastOutcome && FAILED.has(l.lastOutcome))) return 'failing';
+  if (ran.some((l) => l.flaky > 0 || l.lastOutcome === 'flaky')) return 'flaky';
+  return 'passing';
 }

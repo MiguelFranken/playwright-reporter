@@ -3,6 +3,7 @@ import type { CaseFieldDef } from '@miguelfranken/ui/lib/test-cases';
 import {
   CASE_DEFAULTS,
   caseRefsFromTest,
+  caseVerdict,
   changedFields,
   coerceCustomFields,
   createCaseSchema,
@@ -139,5 +140,37 @@ describe('changedFields', () => {
 
   it('ignores key order inside objects', () => {
     expect(changedFields({ ...base, customFields: { a: 1, b: 2 } }, { ...base, customFields: { b: 2, a: 1 } })).toEqual([]);
+  });
+});
+
+describe('caseVerdict', () => {
+  const now = new Date('2026-09-29T12:00:00Z');
+  const daysAgo = (d: number) => new Date(now.getTime() - d * 86_400_000);
+  const link = (lastOutcome: string | null, ranDaysAgo: number | null, flaky = 0) => ({
+    lastOutcome,
+    lastRunAt: ranDaysAgo === null ? null : daysAgo(ranDaysAgo),
+    flaky,
+  });
+
+  it('has no verdict without links, and "not run" before any result', () => {
+    expect(caseVerdict([], now)).toBe('none');
+    expect(caseVerdict([link(null, null)], now)).toBe('not_run');
+  });
+
+  it('is stale when no linked test ran recently', () => {
+    expect(caseVerdict([link('passed', 20), link('failed', 30)], now)).toBe('stale');
+  });
+
+  it('puts a failing latest result above flakiness', () => {
+    expect(caseVerdict([link('passed', 1, 2), link('timedout', 2)], now)).toBe('failing');
+  });
+
+  it('is flaky when a linked test flaked in the window', () => {
+    expect(caseVerdict([link('passed', 1, 1), link('passed', 1)], now)).toBe('flaky');
+    expect(caseVerdict([link('flaky', 1)], now)).toBe('flaky');
+  });
+
+  it('passes when every recent result passed or was skipped', () => {
+    expect(caseVerdict([link('passed', 1), link('skipped', 3), link(null, null)], now)).toBe('passing');
   });
 });
