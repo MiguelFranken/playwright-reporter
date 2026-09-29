@@ -165,5 +165,7 @@ An agent that changed the UI can check its own work before you do.
 
 `list_library` names the references in the library and the run each shows; `get_library_flows` lists a reference's
 flows and checkpoints, with capture ids to look at, and the link to hand a person. With a write-scoped token,
-`set_library_reference` keeps a pull request in the library, pins its run or makes it the default. The REST API has
-the same reads under `/runs/{run}/review-checkpoints`, `/review-captures/{capture}`, `/library` and `/library/flows`.
+`set_library_reference` keeps a pull request in the library, pins its run or makes it the default. The [REST API](/docs/api)
+has the same reads under `/runs/{run}/review-checkpoints`, `/review-captures/{capture}`, `/library` and
+`/library/flows`, and — with a write-scoped token — the same changes: `POST /review-captures/decisions` approves or
+asks for changes, `POST /library/references` keeps, pins or names a reference.

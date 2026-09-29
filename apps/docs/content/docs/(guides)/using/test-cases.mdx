@@ -38,7 +38,7 @@ test('logs out', { annotation: { type: 'test-case', description: 'TC-13, TC-14' 
 
 The next run links the test to the case. Because the key lives in the code, a renamed or moved test is linked again by
 its next run; removing the tag removes the link with the next run. Links can also be made by hand from a case's page (**Link tests**), or by an
-[AI assistant](/docs/ai-assistants/tools).
+[AI assistant](/docs/ai-assistants/tools) or the [REST API](/docs/api#changing-data) (`POST …/test-cases/{case}/links`).
 
 <Callout>
 A link sets the case to **Automated**. When its last link goes, the case goes back to **To be automated**. A case
@@ -91,4 +91,6 @@ copy, as you choose. Imported cases are never marked automated until a test is l
 ## Who can do what
 
 Admins and members create, edit and delete test cases and suites; viewers read them. The same holds for AI assistants
-and the REST API, which act with the role of the token's owner.
+and the REST API, which act with the role of the token's owner — and change anything only with a token created with
+**Read, and edit test cases**. The [REST API](/docs/api#changing-data) creates, edits, links and adopts cases and
+manages suites the way the app does, so every change is versioned the same way.

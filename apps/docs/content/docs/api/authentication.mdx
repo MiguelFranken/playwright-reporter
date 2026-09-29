@@ -5,7 +5,8 @@ description: Personal access tokens, their restrictions, and what a token can se
 
 The API takes **personal access tokens**. Create one under **Account → Access tokens**:
 
-- It is **read-only** and **always expires** (90 days by default, at most 365).
+- It **reads**, unless you create it with **Read, and edit test cases** (the `write` scope), and it **always
+  expires** (90 days by default, at most 365).
 - It can be limited to **one team** or **one project**.
 - It is shown once and stored hashed. Revoke it there, and it stops working at once.
 
@@ -23,6 +24,16 @@ the teams and projects it can read.
 Exactly what its owner sees in the app, **right now**, narrowed to the token's restrictions. Removing somebody from a
 team takes effect on their tokens immediately. A project the token cannot read is a `404`, like a project that does
 not exist, so a token never learns what other teams have.
+
+## Scopes
+
+| Scope | Lets the token |
+| --- | --- |
+| `read` | Call every `GET` endpoint. Every token has it. |
+| `write` | Also call the endpoints that change data: create, edit, link and adopt [test cases](/docs/using/test-cases) and suites, decide on [review checkpoints](/docs/using/visual-review), and keep references in the [library](/docs/using/visual-review#the-library). |
+
+A token without `write` gets `403 INSUFFICIENT_SCOPE` from those endpoints. With it, your role still decides:
+admins and members may change test cases, review images and the library; a viewer's token cannot, whatever its scope.
 
 ## Tokens the API refuses
 

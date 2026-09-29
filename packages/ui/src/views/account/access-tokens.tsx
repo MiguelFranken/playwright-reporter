@@ -235,7 +235,7 @@ export function CreateTokenDialog({
             </Select>
             <p className="text-body-s text-muted-foreground">
               {permission === 'write'
-                ? 'Assistants can also create and edit test cases and link tests, where your role allows it.'
+                ? 'Assistants and scripts can also create and edit test cases and link tests, approve review images and keep library references, where your role allows it.'
                 : 'Assistants can read runs, results, tests and test cases.'}
             </p>
           </div>

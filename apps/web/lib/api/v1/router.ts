@@ -1,6 +1,7 @@
 /**
- * The public REST API, version 1: read-only, under `/api/v1`, authenticated
- * with personal access tokens. Every endpoint but `/projects` is an MCP tool
+ * The public REST API, version 1, under `/api/v1`, authenticated with personal
+ * access tokens: reads are `GET`s, and the test case library, review decisions
+ * and the library's references can be changed with a `write`-scoped token. Every endpoint but `/projects` is an MCP tool
  * exposed through `fromTool`, so the two interfaces answer from the same code.
  *
  * Changes inside v1 are additive only. `docs/openapi.json` is generated from
@@ -25,9 +26,20 @@ import { projectHealth } from '@/lib/mcp/tools/project-health';
 import { summarizeFailures } from '@/lib/mcp/tools/summarize-failures';
 import { verifyFixTool } from '@/lib/mcp/tools/verify-fix';
 import { whoami } from '@/lib/mcp/tools/whoami';
-import { getTestCase, listTestCases, listTestSuites, listUncoveredTests } from '@/lib/mcp/tools/test-cases';
-import { getReviewCheckpoint, listReviewCheckpoints } from '@/lib/mcp/tools/review';
-import { getLibraryFlows, listLibrary } from '@/lib/mcp/tools/library';
+import {
+  adoptTestsTool,
+  createTestCase,
+  createTestSuite,
+  deleteTestSuite,
+  getTestCase,
+  linkTestCase,
+  listTestCases,
+  listTestSuites,
+  listUncoveredTests,
+  updateTestCase,
+} from '@/lib/mcp/tools/test-cases';
+import { getReviewCheckpoint, listReviewCheckpoints, reviewCheckpoint } from '@/lib/mcp/tools/review';
+import { getLibraryFlows, listLibrary, setLibraryReferenceTool } from '@/lib/mcp/tools/library';
 import type { ToolDef } from '@/lib/mcp/registry';
 import { authed } from '../base';
 import { fromTool } from '../from-tool';
@@ -123,7 +135,7 @@ export const router = {
     results: fromTool(tool(listRunResults), {
       path: `${P}/runs/{run}/results`,
       summary: 'List the results of a run',
-      description: 'The tests of one run, failures first. Filter by outcome, file, error signature or category, browser, retries, artifacts and duration.',
+      description: 'The tests of one run, failures first. Filter by outcome, file, error signature or category, browser, tag, retries, attachment kind and duration.',
       tags: ['Runs'],
       params: { run: runRef },
     }),
@@ -241,8 +253,68 @@ export const router = {
         'The Playwright tests no test case links to yet, one row per test with the ids of every browser it runs in, its file, describe blocks and the suite path adopting it would mirror.',
       tags: ['Test cases'],
     }),
+    create: fromTool(tool(createTestCase), {
+      method: 'POST',
+      successStatus: 201,
+      path: `${P}/test-cases`,
+      summary: 'Create a test case',
+      description:
+        'Create a manual or automated test case with steps, in a suite (a path of names is created if missing). Answers the new key (`TC-12`); tag a Playwright test with `@TC-12` to link it on its next run. Needs the `write` scope.',
+      tags: ['Test cases'],
+    }),
+    update: fromTool(tool(updateTestCase), {
+      method: 'PATCH',
+      path: `${P}/test-cases/{case}`,
+      summary: 'Update a test case',
+      description:
+        'Change fields of a test case: title, steps, status, priority, suite, tags and the rest. Only the fields given change; every edit is a new version in its history. Pass `expectedVersion` to refuse the edit if the case changed since you read it. Needs the `write` scope.',
+      tags: ['Test cases'],
+      params: { case: caseRef },
+    }),
+    link: fromTool(tool(linkTestCase), {
+      method: 'POST',
+      path: `${P}/test-cases/{case}/links`,
+      summary: 'Link tests to a test case',
+      description:
+        'Link Playwright tests (by test id, from `/tests`) to a test case, or unlink them. A linked case is marked automated and shows the tests’ results. A lasting link comes from code instead: tag the test with `@TC-12`. Needs the `write` scope.',
+      tags: ['Test cases'],
+      params: { case: caseRef },
+    }),
+    adopt: fromTool(tool(adoptTestsTool), {
+      method: 'POST',
+      successStatus: 201,
+      path: `${P}/test-cases/adopt`,
+      summary: 'Adopt tests as test cases',
+      description:
+        'Turn Playwright tests (from `/uncovered-tests`) into test cases already linked to them, with steps from their `test.step()` calls, one case per test across browsers. Give `tests` (into one `suite`, or suites mirroring files and describe blocks), or `placements` to choose a suite and a title per group of tests. A test that already backs a case is skipped. Needs the `write` scope.',
+      tags: ['Test cases'],
+    }),
+    createSuite: fromTool(tool(createTestSuite), {
+      method: 'POST',
+      successStatus: 201,
+      path: `${P}/test-suites`,
+      summary: 'Create a test suite',
+      description: 'Create a suite, optionally under a `parent` suite (id or path), to group test cases the way the product is built. Suites nest at most 6 levels deep. Needs the `write` scope.',
+      tags: ['Test cases'],
+    }),
+    deleteSuites: fromTool(tool(deleteTestSuite), {
+      method: 'POST',
+      path: `${P}/test-suites/delete-empty`,
+      summary: 'Delete empty test suites',
+      description:
+        'Delete suites that hold no test cases: the named `suites` (with the suites below them), or every empty suite with `allEmpty`. Never deletes a case; a suite that still holds cases is refused. Needs the `write` scope.',
+      tags: ['Test cases'],
+    }),
   },
   library: {
+    set: fromTool(tool(setLibraryReferenceTool), {
+      method: 'POST',
+      path: `${P}/library/references`,
+      summary: 'Keep or pin a library reference',
+      description:
+        'Keep a branch or pull request in the library, pin the run that documents it (or follow the newest with `"latest"`), make it the default, name and describe it — or take it out with `keep: false`. Needs `branch` or `pullRequest`, and the `write` scope.',
+      tags: ['Visual review'],
+    }),
     list: fromTool(tool(listLibrary), {
       path: `${P}/library`,
       summary: 'List the library',
@@ -266,6 +338,14 @@ export const router = {
       tags: ['Visual review'],
       params: { capture: captureRef },
       omit: ['compare'],
+    }),
+    decide: fromTool(tool(reviewCheckpoint), {
+      method: 'POST',
+      path: `${P}/review-captures/decisions`,
+      summary: 'Approve or reject review checkpoint images',
+      description:
+        'Approve review checkpoint images, or ask for changes with a comment. An approval holds for the exact pixels: later runs with the same image need no review. Only approve what you looked at. Needs the `write` scope.',
+      tags: ['Visual review'],
     }),
   },
   attachments: {

@@ -15,6 +15,7 @@ import { attachments, runs, testAttempts, testResults, tests, type Run } from '@
 import { effectiveRunColumns, effectiveStatusSql } from '@/lib/runs/staleness';
 import { CHRONIC_FAILURE_RATE, CHRONIC_MIN_RUNS, CHRONIC_STREAK } from '@/lib/metrics/score';
 import { andAll, num, reliabilitySql } from './shared';
+import type { ArtifactFilter, ArtifactKind } from '@miguelfranken/ui/lib/result-filter';
 
 export type RunStatus = Run['status'];
 export type Outcome = (typeof testResults.$inferSelect)['outcome'];
@@ -251,8 +252,21 @@ export interface ResultSearch {
   browser?: string;
   retried?: boolean;
   hasArtifacts?: boolean;
+  /** Every entry must hold: `screenshot` keeps tests with one (an `image` counts), `no-video` tests without. */
+  artifacts?: ArtifactFilter[];
+  /** A result carrying any of these tags matches. */
+  tags?: string[];
   minDurationMs?: number;
   sort?: 'file' | 'duration' | 'outcome';
+}
+
+/** One attachment-kind condition of `ResultSearch.artifacts`, on the current result. */
+function artifactCondition(filter: ArtifactFilter): SQL {
+  const without = filter.startsWith('no-');
+  const kind = (without ? filter.slice(3) : filter) as ArtifactKind;
+  const kinds = kind === 'screenshot' ? ['screenshot', 'image'] : [kind];
+  return sql`${without ? sql`not ` : sql``}exists (select 1 from ${attachments} a join ${testAttempts} ta on ta.id = a.attempt_id
+             where ta.test_result_id = ${testResults.id} and a.status = 'uploaded' and a.kind::text in (${sql.join(kinds.map((k) => sql`${k}`), sql`, `)}))`;
 }
 
 const outcomeOrder = sql`case ${testResults.outcome} when 'failed' then 0 when 'timedout' then 0 when 'interrupted' then 1 when 'flaky' then 2 when 'running' then 3 when 'passed' then 4 else 5 end`;
@@ -270,6 +284,7 @@ export interface McpResultRow {
   file: string;
   line: number;
   pwProject: string;
+  tags: string[];
   history: string[];
   attachmentKinds: string[];
 }
@@ -289,6 +304,8 @@ export async function searchRunResults(runId: string, f: ResultSearch): Promise<
       ? undefined
       : sql`${f.hasArtifacts ? sql`` : sql`not `}exists (select 1 from ${attachments} a join ${testAttempts} ta on ta.id = a.attempt_id
              where ta.test_result_id = ${testResults.id} and a.status = 'uploaded')`,
+    ...(f.artifacts ?? []).map(artifactCondition),
+    f.tags?.length ? sql`${testResults.tags} && array[${sql.join(f.tags.map((t) => sql`${t}`), sql`, `)}]::text[]` : undefined,
   ]);
   const order =
     f.sort === 'duration'
@@ -310,6 +327,7 @@ export async function searchRunResults(runId: string, f: ResultSearch): Promise<
       file: tests.file,
       line: testResults.line,
       pwProject: tests.pwProject,
+      tags: testResults.tags,
       history: sql<string[]>`(
         select coalesce(array_agg(h.outcome::text order by h.started_at desc), '{}')
         from (select outcome, started_at from ${testResults} h
