@@ -60,7 +60,7 @@ export function ScreenFrame({
       aria-label={scroll ? (label ?? alt) : undefined}
       tabIndex={scroll ? 0 : undefined}
       className={cn(
-        'relative shrink-0 overscroll-contain rounded-md bg-surface shadow-e1 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40',
+        'relative shrink-0 overscroll-y-contain rounded-md bg-surface shadow-e1 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40',
         tone ? TONE_RING[tone] : 'ring-1 ring-border',
         scroll ? 'overflow-x-hidden overflow-y-auto' : 'overflow-hidden',
         className,
