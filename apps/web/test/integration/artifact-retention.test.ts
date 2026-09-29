@@ -294,7 +294,7 @@ describe('triggers', () => {
     expect((await db.select().from(artifactSweeps))[0].trigger).toBe('cron');
   });
 
-  test('a finished run sweeps at most every twelve hours, and only where allowed', async ({ db, tenant }) => {
+  test('a finished run sweeps every twelve hours or to continue one, and only where allowed', async ({ db, tenant }) => {
     await saveRetentionPolicy(policy({ days: 1 }), tenant.adminUser.id);
     await uploadedArtifacts(db, tenant, [{ kind: 'video', ageDays: 3 }]);
 
@@ -306,10 +306,21 @@ describe('triggers', () => {
     await uploadedArtifacts(db, tenant, [{ kind: 'video', ageDays: 3 }]);
     expect(await sweepAfterIngest()).toEqual({ status: 'skipped' });
 
+    // A sweep that ran out of time is continued by the next finished run, not twelve hours later…
+    await db.update(artifactSweeps).set({ hasMore: true });
+    expect(await sweepAfterIngest()).toMatchObject({ status: 'done', expiredCount: 1, hasMore: false });
+    await uploadedArtifacts(db, tenant, [{ kind: 'video', ageDays: 3 }]);
+    expect(await sweepAfterIngest()).toEqual({ status: 'skipped' });
+    // …unless it is still running, or failed.
+    await db.update(artifactSweeps).set({ hasMore: true, finishedAt: null });
+    expect(await sweepAfterIngest()).toEqual({ status: 'skipped' });
+    await db.update(artifactSweeps).set({ hasMore: true, finishedAt: new Date(), error: 'store down' });
+    expect(await sweepAfterIngest()).toEqual({ status: 'skipped' });
+
     // Once the last sweep is old enough, the next finished run takes over.
     await db.update(artifactSweeps).set({ startedAt: new Date(Date.now() - 13 * 3_600_000) });
     expect(await sweepAfterIngest()).toMatchObject({ status: 'done', expiredCount: 1 });
-    expect((await db.select().from(artifactSweeps)).map((s) => s.trigger)).toEqual(['ingest', 'ingest']);
+    expect((await db.select().from(artifactSweeps)).map((s) => s.trigger)).toEqual(['ingest', 'ingest', 'ingest']);
   });
 
   test('"Run now" is for superadmins, refuses while off, and is audited', async ({ db, tenant, actor }) => {
@@ -322,7 +333,7 @@ describe('triggers', () => {
 
     await saveRetentionPolicy(policy({ days: 1 }), admin.id);
     await uploadedArtifacts(db, tenant, [{ kind: 'trace', ageDays: 2, bytes: 42 }]);
-    expect(await runRetentionSweep()).toEqual({ ok: true, expiredCount: 1, expiredBytes: 42, hasMore: false });
+    expect(await runRetentionSweep()).toEqual({ ok: true, expiredCount: 1, expiredBytes: 42, hasMore: false, continuing: false });
     const [log] = await db.select().from(auditLogs).where(eq(auditLogs.action, 'storage.retention.sweep'));
     expect(log).toMatchObject({ actorId: admin.id, target: { expired: 1, bytes: 42 } });
   });

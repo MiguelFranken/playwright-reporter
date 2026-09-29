@@ -69,9 +69,8 @@ export function RunSweepButton() {
             toast.error(res.message);
           } else {
             const freed = res.expiredCount ? ` and freed ${formatBytes(res.expiredBytes)}` : '';
-            toast.success(
-              `Expired ${res.expiredCount} artifact${res.expiredCount === 1 ? '' : 's'}${freed}.${res.hasMore ? ' More are due: run it again.' : ''}`,
-            );
+            const more = res.continuing ? ' More are due: they expire in the background.' : res.hasMore ? ' More are due: run it again.' : '';
+            toast.success(`Expired ${res.expiredCount} artifact${res.expiredCount === 1 ? '' : 's'}${freed}.${more}`);
           }
         })
       }

@@ -14,7 +14,7 @@ description: Every environment variable of the app.
 | `TRUSTED_ORIGINS` | Extra origins that may sign in, comma-separated. |
 | `INVITATION_TTL_HOURS` | Lifetime of invitation links, `168` (7 days). |
 | `ARTIFACT_URL_TTL_SECONDS` | Lifetime of signed artifact links, `3600`. |
-| `CRON_SECRET` | Accepts the retention cron calls. |
+| `CRON_SECRET` | Accepts the retention cron calls, and lets a sweep that ran out of time continue in a fresh request. |
 
 ## Runs
 

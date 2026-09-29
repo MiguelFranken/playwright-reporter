@@ -26,5 +26,10 @@ live event log of finished runs, and expired sessions and tokens. **Purge histor
 | Trigger | |
 | --- | --- |
 | A daily cron | Vercel Cron in production, or any cron calling `/api/cron/artifact-retention` and `/api/cron/data-retention` with `CRON_SECRET`. |
-| A finished run | When no sweep started in the last 12 hours. |
+| A finished run | When no sweep started in the last 12 hours, or the last one ran out of time with work left. |
 | **Run now** | The button on each admin page. |
+
+Every sweep has a time budget, so it fits in one request (on Vercel, a function's maximum duration). A sweep that runs
+out of time with work left calls its cron endpoint again, and that call carries on in a fresh request with a budget of
+its own, until nothing is due. This needs `CRON_SECRET`, and `BASE_URL` when the app is not on Vercel, so the app can
+reach itself. Without them, what is left waits for the next finished run or the next daily cron.
