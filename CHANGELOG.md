@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.34](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.33...v0.0.34) (2026-09-29)
+
+### Features
+
+* **web:** filter a run's detailed analysis by attachments, project, tags and retries ([630c9bd](https://github.com/MiguelFranken/playwright-reporter/commit/630c9bdf9c6b8aa79dc6d93a07e00a6228b141eb))
+
 ## [0.0.33](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.32...v0.0.33) (2026-09-29)
 
 ### Features
