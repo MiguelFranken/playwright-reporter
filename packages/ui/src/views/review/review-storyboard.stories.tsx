@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, fn, userEvent, within } from 'storybook/test';
-import { approvedFlows, failedFlow, legacyFlow, longTextFlow, placeOrderFlow, reviewFlows, unavailableFlow } from '../../fixtures/review';
+import { approvedFlows, diffStatesFlow, failedFlow, legacyFlow, longTextFlow, placeOrderFlow, reviewFlows, unavailableFlow } from '../../fixtures/review';
 import { ReviewStoryboard } from './review-storyboard';
 
 const meta = {
@@ -112,5 +112,18 @@ export const Library: Story = {
     await expect(canvas.queryByText('Changed')).toBeNull();
     // Everything shows, approved or not: documentation has no to-do filter.
     await expect(canvas.getByRole('button', { name: /Open 1\. Cart with two products/ })).toBeInTheDocument();
+  },
+};
+
+/** Measured changes on the screens; ranked, the page that grew comes first across every folder. */
+export const MostChangedFirst: Story = {
+  args: { flows: [...reviewFlows, diffStatesFlow], filter: 'all', onSortChange: fn() },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getAllByLabelText('0.51% changed').length).toBeGreaterThan(0);
+    await userEvent.click(canvas.getByRole('button', { name: 'Most changed first' }));
+    await expect(args.onSortChange).toHaveBeenCalledWith('most-changed');
+    const headings = canvas.getAllByRole('heading', { level: 3 });
+    await expect(headings[0]).toHaveTextContent('Catalogue › browses the catalogue');
   },
 };

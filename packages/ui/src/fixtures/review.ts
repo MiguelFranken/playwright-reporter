@@ -1,4 +1,4 @@
-import type { ReviewCaptureView, ReviewCheckpointView, ReviewFlowView, ReviewImage } from '../lib/review';
+import type { DiffRegion, ReviewCaptureView, ReviewCheckpointView, ReviewDiffView, ReviewFlowView, ReviewImage } from '../lib/review';
 import type { ReviewQueueRow } from '../views/review/review-queue';
 import { ago, NOW } from './now';
 
@@ -25,6 +25,43 @@ function image(label: string, opts: { mobile?: boolean; accent?: string; tall?: 
   const url = page(label, opts);
   return { url, thumbnailUrl: url, width: opts.mobile ? 780 : 2560, height: opts.tall ? (opts.mobile ? 3800 : 3000) : opts.mobile ? 1688 : 1440, available: true };
 }
+
+/**
+ * A measured comparison of a fixture page: the changed regions boxed in an
+ * overlay SVG of the image's size (red where it changed, clear elsewhere),
+ * as the diff engine would store it.
+ */
+export function measuredDiff(regions: DiffRegion[], size: { width: number; height: number }, extra: Partial<ReviewDiffView> = {}): ReviewDiffView {
+  const rects = regions.map((r) => `<rect x="${r.x}" y="${r.y}" width="${r.width}" height="${r.height}" fill="#e51400"/>`).join('');
+  const overlay = `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size.width} ${size.height}" width="${size.width}" height="${size.height}">${rects}</svg>`)}`;
+  const changedPixels = regions.reduce((n, r) => n + r.pixels, 0);
+  return {
+    id: `diff-${regions.length}-${size.width}x${size.height}`,
+    state: 'done',
+    against: 'baseline',
+    changedPixels,
+    totalPixels: size.width * size.height,
+    ratio: changedPixels / (size.width * size.height),
+    sizeChanged: false,
+    base: size,
+    head: size,
+    regions,
+    overlayUrl: overlay,
+    shift: null,
+    ...extra,
+  };
+}
+
+/** The checkout page's recoloured pill and button, in the 2× desktop image's pixels. */
+export const checkoutDesktopDiff = measuredDiff(
+  [
+    { x: 2272, y: 52, width: 160, height: 40, pixels: 5800 },
+    { x: 1296, y: 940, width: 400, height: 88, pixels: 33_000 },
+  ],
+  { width: 2560, height: 3000 },
+);
+/** On mobile only the pill in the header changed. */
+export const checkoutMobileDiff = measuredDiff([{ x: 580, y: 52, width: 160, height: 40, pixels: 5800 }], { width: 780, height: 3800 });
 
 let ids = 0;
 const id = (prefix: string) => `${prefix}-${++ids}`;
@@ -102,10 +139,16 @@ export const placeOrderFlow: ReviewFlowView = {
       'checkout-ready',
       'Checkout filled in',
       1,
-      [capture('Checkout', 'desktop', 'changed', {}, { accent: '#e5484d', tall: true }), capture('Checkout', 'mobile', 'changed', {}, { accent: '#e5484d', tall: true })],
+      [
+        capture('Checkout', 'desktop', 'changed', { diff: checkoutDesktopDiff }, { accent: '#e5484d', tall: true }),
+        capture('Checkout', 'mobile', 'changed', { diff: checkoutMobileDiff, ignoreRegions: [{ x: 40, y: 280, width: 700, height: 120, pixels: 0 }] }, { accent: '#e5484d', tall: true }),
+      ],
       { description: 'Every field complete, just before the order is placed.', stepPath: ['Checkout', 'fill in the checkout form'] },
     ),
-    checkpoint('order-confirmation', 'Order confirmation', 2, [capture('Thank you!', 'desktop', 'new'), capture('Thank you!', 'mobile', 'new')]),
+    checkpoint('order-confirmation', 'Order confirmation', 2, [
+      capture('Thank you!', 'desktop', 'new', { diff: measuredDiff([], { width: 2560, height: 1440 }, { against: 'previous', changedPixels: 0, ratio: 0 }) }),
+      capture('Thank you!', 'mobile', 'new', { diff: { ...measuredDiff([], { width: 780, height: 1688 }), state: 'pending', against: 'previous', overlayUrl: null } }),
+    ]),
   ],
 };
 
@@ -224,3 +267,48 @@ export const reviewQueueRows: ReviewQueueRow[] = [
 ];
 
 export { NOW };
+
+/**
+ * The states a measured comparison can be in, one checkpoint each: noise the
+ * tolerance approved, a page that grew because content was inserted, one too
+ * large to measure, and one still being measured.
+ */
+export const diffStatesFlow: ReviewFlowView = {
+  resultId: 'res-diffs',
+  testId: 'test-diffs',
+  title: 'browses the catalogue',
+  titlePath: ['Catalogue', 'browses the catalogue'],
+  file: 'tests/catalogue.spec.ts',
+  line: 12,
+  project: 'chromium',
+  outcome: 'passed',
+  resultHref: '#result-diffs',
+  checkpoints: [
+    checkpoint('catalogue-home', 'Catalogue home', 0, [
+      capture('Catalogue', 'desktop', 'approved', {
+        decision: { decision: 'approved', source: 'tolerance', by: null, at: ago(3).toISOString(), runNumber: 483, comment: "Within the project's diff tolerance: no visible change against the approved image of run #470." },
+        diff: measuredDiff([], { width: 2560, height: 1440 }, { withinTolerance: true }),
+        baseline: { captureId: 'base-cat', image: image('Catalogue'), runNumber: 470, same: false, approvedAt: ago(60 * 26).toISOString(), approvedBy: 'Ada Lovelace' },
+      }),
+    ]),
+    checkpoint('catalogue-promo', 'Promotion banner inserted', 1, [
+      capture(
+        'Summer sale',
+        'desktop',
+        'changed',
+        {
+          diff: measuredDiff([{ x: 0, y: 440, width: 2560, height: 240, pixels: 614_400 }], { width: 2560, height: 3000 }, {
+            sizeChanged: true,
+            base: { width: 2560, height: 2760 },
+            shift: { inserted: [{ y: 440, height: 240 }], removed: [], matchedRows: 2760 },
+          }),
+        },
+        { accent: '#30a46c', tall: true },
+      ),
+    ]),
+    checkpoint('catalogue-grid', 'Every product', 2, [
+      capture('All products', 'desktop', 'changed', { diff: { ...measuredDiff([], { width: 2560, height: 40_000 }), state: 'too_large', error: 'The images are too large to compare (2560×40000; at most 40,000,000 pixels each).', overlayUrl: null } }, { accent: '#e5484d', tall: true }),
+    ]),
+    checkpoint('catalogue-filters', 'Filters open', 3, [capture('Filters', 'desktop', 'changed', { diff: { ...measuredDiff([], { width: 2560, height: 1440 }), state: 'pending', overlayUrl: null } }, { accent: '#e5484d' })]),
+  ],
+};
