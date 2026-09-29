@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.42](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.41...v0.0.42) (2026-09-29)
+
+### Features
+
+* visual review of review checkpoints — storyboard, baselines and approvals ([#48](https://github.com/MiguelFranken/playwright-reporter/issues/48)) ([cd36eb0](https://github.com/MiguelFranken/playwright-reporter/commit/cd36eb0bbc2d63a50fb554437db1dd9c72715bf5))
+
 ## [0.0.41](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.40...v0.0.41) (2026-09-29)
 
 ### Features
