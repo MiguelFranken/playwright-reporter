@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.41](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.40...v0.0.41) (2026-09-29)
+
+### Features
+
+* **mcp:** delete empty test suites with delete_test_suite ([#47](https://github.com/MiguelFranken/playwright-reporter/issues/47)) ([83f64a0](https://github.com/MiguelFranken/playwright-reporter/commit/83f64a081c5532873126cb69d280a9a0c7ca81e3))
+
 ## [0.0.40](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.39...v0.0.40) (2026-09-29)
 
 ### Features
