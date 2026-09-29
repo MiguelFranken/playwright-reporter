@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.35](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.34...v0.0.35) (2026-09-29)
+
+### Bug Fixes
+
+* **ui:** make the filter menus' count badge a circle ([8fac225](https://github.com/MiguelFranken/playwright-reporter/commit/8fac225cc8900e75761d0999435233c3d8b78ce4))
+
 ## [0.0.34](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.33...v0.0.34) (2026-09-29)
 
 ### Features
