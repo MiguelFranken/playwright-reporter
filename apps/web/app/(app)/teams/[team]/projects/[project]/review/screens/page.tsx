@@ -22,7 +22,10 @@ export default function ScreensPage({ params }: Props) {
         title="Visual review"
         description="Every flow's screens as last approved; a screen nobody approved yet shows the default branch's newest capture and is marked New."
       />
-      <ReviewTabs />
+      {/* The tabs read the URL; outside a boundary that would hold up the prerender. */}
+      <Suspense fallback={<div className="h-10 border-b border-separator" />}>
+        <ReviewTabs />
+      </Suspense>
       <Suspense fallback={<ReviewStoryboardSkeleton />}>
         <Screens params={params} />
       </Suspense>

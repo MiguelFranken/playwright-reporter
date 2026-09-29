@@ -15,7 +15,10 @@ export default function ReviewQueuePage({ params }: Props) {
         title="Visual review"
         description="Runs with review checkpoints, newest first. An image that matches an approved one needs nobody; changed and new ones wait here."
       />
-      <ReviewTabs />
+      {/* The tabs read the URL; outside a boundary that would hold up the prerender. */}
+      <Suspense fallback={<div className="h-10 border-b border-separator" />}>
+        <ReviewTabs />
+      </Suspense>
       <Suspense fallback={<TableRowsSkeleton rows={8} columns={[12, 36, 12, 24, 8, 8]} className="panel" />}>
         <Queue params={params} />
       </Suspense>

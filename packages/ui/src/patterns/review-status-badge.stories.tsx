@@ -3,7 +3,7 @@ import { REVIEW_STATUSES } from '../lib/review';
 import { ReviewStatusBadge, ReviewStatusDot } from './review-status-badge';
 
 const meta = {
-  title: 'Patterns/ReviewStatusBadge',
+  title: 'Patterns/Status/ReviewStatusBadge',
   component: ReviewStatusBadge,
   args: { status: 'changed' },
   tags: ['themed'],
