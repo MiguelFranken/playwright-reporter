@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { TOOLS } from '@/lib/mcp/tools';
 import { openApiDocument } from './openapi';
 
 describe('docs/openapi.json', () => {
@@ -9,14 +10,14 @@ describe('docs/openapi.json', () => {
     expect(committed).toBe(`${JSON.stringify(await openApiDocument(), null, 2)}\n`);
   });
 
-  it('documents every endpoint as a bearer-authenticated GET with problem-details errors', async () => {
+  it('documents every endpoint as bearer-authenticated, with problem-details errors', async () => {
     const doc = await openApiDocument();
     expect(doc.openapi).toBe('3.1.1');
     expect(doc.security).toEqual([{ bearerAuth: [] }]);
     const operations = Object.values(doc.paths ?? {}).flatMap((item) => Object.entries(item ?? {}));
     expect(operations.length).toBeGreaterThan(10);
     for (const [method, operation] of operations) {
-      expect(method).toBe('get');
+      expect(['get', 'post', 'patch']).toContain(method);
       const op = operation as { operationId?: string; summary?: string; responses: Record<string, { content?: Record<string, unknown> }> };
       expect(op.operationId).toBeTruthy();
       expect(op.summary).toBeTruthy();
@@ -32,6 +33,24 @@ describe('docs/openapi.json', () => {
       const target = ref.replace(/^#\//, '').split('/').reduce<unknown>((node, key) => (node as Record<string, unknown> | undefined)?.[key], doc);
       expect(target, ref).toBeDefined();
     }
+  });
+
+  it('takes the write tools’ arguments as a JSON body, never the query string', async () => {
+    const doc = await openApiDocument();
+    const writes = Object.values(doc.paths ?? {}).flatMap((item) => Object.entries(item ?? {}).filter(([method]) => method !== 'get'));
+    expect(writes.length).toBe(TOOLS.filter((t) => t.toolset === 'write').length);
+    for (const [, operation] of writes) {
+      const op = operation as { parameters?: { in: string }[]; requestBody?: { content?: Record<string, unknown> } };
+      expect((op.parameters ?? []).filter((p) => p.in === 'query')).toEqual([]);
+      expect(op.requestBody?.content).toHaveProperty('application/json');
+    }
+  });
+
+  it('offers every MCP tool as an endpoint, so the two interfaces never drift apart', async () => {
+    const doc = await openApiDocument();
+    const operationIds = new Set(Object.values(doc.paths ?? {}).flatMap((item) => Object.values(item ?? {}).map((op) => (op as { operationId?: string }).operationId)));
+    const missing = TOOLS.map((t) => t.name.replace(/_(\w)/g, (_, c: string) => c.toUpperCase())).filter((id) => !operationIds.has(id));
+    expect(missing).toEqual([]);
   });
 
   it('exposes no MCP-only arguments', async () => {

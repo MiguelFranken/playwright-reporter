@@ -116,7 +116,7 @@ Structured output fields: `project`, `run`, `failureGroups`, `specs`, `shards`, 
 
 **List run results** · toolset `core`
 
-The tests of one run, failures first. Filter by outcome (default: failed, timed out, interrupted, flaky), file, title, error signature or category, browser, retries, artifacts or duration. Each row has the test’s last 10 outcomes.
+The tests of one run, failures first. Filter by outcome (default: failed, timed out, interrupted, flaky), file, title, error signature or category, browser, tag, retries, attachment kind or duration. Each row has the test’s last 10 outcomes.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -134,6 +134,8 @@ The tests of one run, failures first. Filter by outcome (default: failed, timed 
 | `browser` | string |  | Playwright project name, e.g. "chromium" (see list_filters). |
 | `retried` | boolean |  | Only tests that needed a retry (true) or passed/failed on the first attempt (false). |
 | `hasArtifacts` | boolean |  | Only tests with (true) or without (false) screenshots, traces or videos. |
+| `artifact` | `"screenshot"` \| `"no-screenshot"` \| `"video"` \| `"no-video"` \| `"trace"` \| `"no-trace"` \| `"screenshot"` \| `"no-screenshot"` \| `"video"` \| `"no-video"` \| `"trace"` \| `"no-trace"`[] |  | Attachment kinds that must hold, all of them: "screenshot", "video", "trace" keep tests with one; "no-screenshot", "no-video", "no-trace" tests without. |
+| `tag` | string \| string[] |  | Only tests carrying any of these tags, e.g. "@smoke" (see list_filters). |
 | `minDurationMs` | integer (0–9007199254740991) |  | Only tests that took at least this long. |
 | `sort` | `"outcome"` \| `"file"` \| `"duration"` |  | Order: outcome (failures first, default), file, or duration (slowest first). |
 | `limit` | integer (1–100) |  | Rows per page (1–100, default 20). |

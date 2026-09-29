@@ -1,10 +1,11 @@
 ---
 title: REST API
-description: Read runs, results, tests and verdicts from scripts, CI and your own tools.
+description: Read runs, results, tests and verdicts, and manage test cases and visual review, from scripts, CI and your own tools.
 ---
 
-Every instance serves a read-only REST API under `/api/v1`. It answers from the same code as the
-[MCP server](/docs/ai-assistants): the same projects, the same verdicts, the same errors.
+Every instance serves a REST API under `/api/v1`. It answers from the same code as the
+[MCP server](/docs/ai-assistants): the same projects, the same verdicts, the same errors. Every MCP tool has an
+endpoint — reads are `GET`s, and the tools that change data are `POST` or `PATCH` requests.
 
 ```bash
 curl -H "Authorization: Bearer $PW_REPORTER_PAT" \
@@ -40,6 +41,36 @@ Every object carries a `url` into the app, for the full picture.
 | `…/results/{result}`, `…/attachments/{attachment}` | One result in full, one attachment. |
 | `…/tests`, `…/tests/{test}` | Tests across runs, and one test's history. |
 | `…/runs/{run}/failure-groups`, `…/runs/{run}/compare`, `…/runs/{run}/rerun-command`, `…/results/{result}/failure-context`, `…/tests/{test}/flakiness`, `…/tests/{test}/verify-fix` | Diagnostics. |
+| `…/test-cases`, `…/test-cases/{case}`, `…/test-suites`, `…/uncovered-tests` | [Test cases](/docs/using/test-cases), one case with its linked tests, the suite tree, and the Playwright tests no case covers yet. |
+| `…/runs/{run}/review-checkpoints`, `…/review-captures/{capture}` | A run's [review checkpoints](/docs/using/visual-review), and one image with its baseline. |
+| `…/library`, `…/library/flows` | The [library](/docs/using/visual-review#the-library)'s references, and one reference's flows. |
+
+`…/runs/{run}/results` takes the run page's filters too: `outcome`, `file`, `search`, `browser`, `tag`, `retried`,
+and `artifact` — `screenshot`, `video` or `trace` for tests with one, `no-screenshot`, `no-video` or `no-trace` for
+tests without. Repeat a parameter for several values (`tag=@smoke&tag=@checkout`).
+
+## Changing data
+
+The endpoints that change data take a JSON body and need a token with the `write` scope (see
+[Authentication](/docs/api/authentication)). Your role in the team still decides: a viewer's token cannot change
+anything, and a change the role may not make answers `404`, like a project the token cannot see.
+
+| | |
+| --- | --- |
+| `POST …/test-cases`, `PATCH …/test-cases/{case}` | Create a test case (`201`, with its new key), or change some of its fields. Each edit is a new version; pass `expectedVersion` to refuse an edit if the case changed since you read it. |
+| `POST …/test-cases/{case}/links` | Link Playwright tests (by test id) to a case, or unlink them. |
+| `POST …/test-cases/adopt` | Turn Playwright tests into linked test cases (`201`): `tests` into one suite or suites mirroring their files, or `placements` with a suite and title per group. |
+| `POST …/test-suites`, `POST …/test-suites/delete-empty` | Create a suite (`201`), or delete suites that hold no cases. |
+| `POST …/review-captures/decisions` | Approve review checkpoint images, or ask for changes with a comment. |
+| `POST …/library/references` | Keep a branch or pull request in the library, pin its run, make it the default — or take it out. |
+
+```bash
+curl -X POST -H "Authorization: Bearer $PW_REPORTER_PAT" -H "Content-Type: application/json" \
+  -d '{"title": "Pay by card", "suite": "Checkout / Payment", "priority": "high"}' \
+  "https://reporter.example.com/api/v1/projects/acme/web/test-cases"
+```
+
+A suite is given by its id or by its path of names from the top (`Checkout / Payment`); a missing level is created.
 
 The **Reference** section documents every parameter and field, generated from the code.
 

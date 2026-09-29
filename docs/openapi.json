@@ -2,7 +2,7 @@
   "info": {
     "title": "Playwright Reporter API",
     "version": "1.0.0",
-    "description": "Read the test history your Playwright suites report: runs, results, retries, errors, attachments, flakiness and trends.\n\nAuthenticate with a personal access token from **Account → Access tokens**, sent as `Authorization: Bearer pwr_pat_…`. A token sees exactly what its owner sees in the app, narrowed to the teams or project it was restricted to.\n\nErrors are [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem details with a stable `code`. Lists page with `limit` and the opaque `nextCursor`. Each token may make a limited number of requests per minute (shared with the MCP server); the `RateLimit-*` headers say how many remain.",
+    "description": "Read the test history your Playwright suites report: runs, results, retries, errors, attachments, flakiness and trends. Manage test cases and suites, decide on review checkpoints and keep references in the library.\n\nAuthenticate with a personal access token from **Account → Access tokens**, sent as `Authorization: Bearer pwr_pat_…`. A token sees exactly what its owner sees in the app, narrowed to the teams or project it was restricted to. Reads are `GET` requests and need the `read` scope; the other methods change data, take a JSON body and also need the `write` scope, and a role in the team that may make the change.\n\nErrors are [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem details with a stable `code`. Lists page with `limit` and the opaque `nextCursor`. Each token may make a limited number of requests per minute (shared with the MCP server); the `RateLimit-*` headers say how many remain.",
     "license": {
       "name": "MIT",
       "identifier": "MIT"
@@ -43,11 +43,11 @@
     },
     {
       "name": "Test cases",
-      "description": "Manual and automated test cases, their suites, and what their linked Playwright tests say."
+      "description": "Manual and automated test cases, their suites, and what their linked Playwright tests say. Create, edit, link and adopt them with a write-scoped token."
     },
     {
       "name": "Visual review",
-      "description": "Review checkpoints: the screenshots tests capture at their milestones, and whether each matches its approved baseline."
+      "description": "Review checkpoints: the screenshots tests capture at their milestones, whether each matches its approved baseline, and the library of branches and pull requests kept as visual documentation. Approve images and keep references with a write-scoped token."
     },
     {
       "name": "Diagnostics",
@@ -267,7 +267,7 @@
             }
           },
           "404": {
-            "description": "Not found, or not visible to this token (`NOT_FOUND`). The two are never told apart.",
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -414,7 +414,7 @@
             }
           },
           "404": {
-            "description": "Not found, or not visible to this token (`NOT_FOUND`). The two are never told apart.",
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -667,7 +667,7 @@
             }
           },
           "404": {
-            "description": "Not found, or not visible to this token (`NOT_FOUND`). The two are never told apart.",
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1104,7 +1104,7 @@
             }
           },
           "404": {
-            "description": "Not found, or not visible to this token (`NOT_FOUND`). The two are never told apart.",
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1564,7 +1564,7 @@
             }
           },
           "404": {
-            "description": "Not found, or not visible to this token (`NOT_FOUND`). The two are never told apart.",
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2071,7 +2071,7 @@
             }
           },
           "404": {
-            "description": "Not found, or not visible to this token (`NOT_FOUND`). The two are never told apart.",
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2107,7 +2107,7 @@
       "get": {
         "operationId": "listRunResults",
         "summary": "List the results of a run",
-        "description": "The tests of one run, failures first. Filter by outcome, file, error signature or category, browser, retries, artifacts and duration.",
+        "description": "The tests of one run, failures first. Filter by outcome, file, error signature or category, browser, tag, retries, attachment kind and duration.",
         "tags": [
           "Runs"
         ],
@@ -2297,6 +2297,62 @@
           },
           {
             "in": "query",
+            "name": "artifact",
+            "schema": {
+              "description": "Attachment kinds that must hold, all of them: \"screenshot\", \"video\", \"trace\" keep tests with one; \"no-screenshot\", \"no-video\", \"no-trace\" tests without.",
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "screenshot",
+                    "no-screenshot",
+                    "video",
+                    "no-video",
+                    "trace",
+                    "no-trace"
+                  ]
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "screenshot",
+                      "no-screenshot",
+                      "video",
+                      "no-video",
+                      "trace",
+                      "no-trace"
+                    ]
+                  }
+                }
+              ]
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "tag",
+            "schema": {
+              "description": "Only tests carrying any of these tags, e.g. \"@smoke\" (see list_filters).",
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
             "name": "minDurationMs",
             "schema": {
               "description": "Only tests that took at least this long.",
@@ -2418,6 +2474,12 @@
                           "browser": {
                             "type": "string"
                           },
+                          "tags": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "outcome": {
                             "type": "string"
                           },
@@ -2465,6 +2527,7 @@
                           "file",
                           "line",
                           "browser",
+                          "tags",
                           "outcome",
                           "attempts",
                           "durationMs",
@@ -2529,7 +2592,7 @@
             }
           },
           "404": {
-            "description": "Not found, or not visible to this token (`NOT_FOUND`). The two are never told apart.",
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2874,7 +2937,7 @@
             }
           },
           "404": {
-            "description": "Not found, or not visible to this token (`NOT_FOUND`). The two are never told apart.",
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -3978,7 +4041,7 @@
             }
           },
           "404": {
-            "description": "Not found, or not visible to this token (`NOT_FOUND`). The two are never told apart.",
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -4297,7 +4360,7 @@
             }
           },
           "404": {
-            "description": "Not found, or not visible to this token (`NOT_FOUND`). The two are never told apart.",
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -4589,7 +4652,7 @@
             }
           },
           "404": {
-            "description": "Not found, or not visible to this token (`NOT_FOUND`). The two are never told apart.",
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -5151,7 +5214,7 @@
             }
           },
           "404": {
-            "description": "Not found, or not visible to this token (`NOT_FOUND`). The two are never told apart.",
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -5884,7 +5947,7 @@
             }
           },
           "404": {
-            "description": "Not found, or not visible to this token (`NOT_FOUND`). The two are never told apart.",
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -6263,7 +6326,7 @@
             }
           },
           "404": {
-            "description": "Not found, or not visible to this token (`NOT_FOUND`). The two are never told apart.",
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -6736,7 +6799,7 @@
             }
           },
           "404": {
-            "description": "Not found, or not visible to this token (`NOT_FOUND`). The two are never told apart.",
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -7096,7 +7159,7 @@
             }
           },
           "404": {
-            "description": "Not found, or not visible to this token (`NOT_FOUND`). The two are never told apart.",
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -7400,7 +7463,7 @@
             }
           },
           "404": {
-            "description": "Not found, or not visible to this token (`NOT_FOUND`). The two are never told apart.",
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -7693,7 +7756,302 @@
             }
           },
           "404": {
-            "description": "Not found, or not visible to this token (`NOT_FOUND`). The two are never told apart.",
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A test reference matches several tests (`AMBIGUOUS`; candidates in `details`), or an attachment is not available (`ARTIFACT_UNAVAILABLE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (`RATE_LIMITED`); see `Retry-After`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createTestCase",
+        "summary": "Create a test case",
+        "description": "Create a manual or automated test case with steps, in a suite (a path of names is created if missing). Answers the new key (`TC-12`); tag a Playwright test with `@TC-12` to link it on its next run. Needs the `write` scope.",
+        "tags": [
+          "Test cases"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "team",
+            "schema": {
+              "type": "string",
+              "description": "Team slug, as in the app URL (`/teams/<team>/…`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "project",
+            "schema": {
+              "type": "string",
+              "description": "Project slug, as in the app URL (`…/projects/<project>`)."
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "description": "What the case verifies, e.g. \"Log in with valid credentials\"."
+                  },
+                  "suite": {
+                    "description": "Suite id or path (\"Checkout / Coupons\"); missing levels are created. Omit for unassigned.",
+                    "type": "string"
+                  },
+                  "description": {
+                    "description": "What the case checks, and why.",
+                    "type": "string"
+                  },
+                  "preconditions": {
+                    "type": "string"
+                  },
+                  "postconditions": {
+                    "type": "string"
+                  },
+                  "stepsFormat": {
+                    "description": "classic (action / test data / expected result) or gherkin.",
+                    "type": "string",
+                    "enum": [
+                      "classic",
+                      "gherkin"
+                    ]
+                  },
+                  "steps": {
+                    "description": "Replaces every step.",
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "type": "string",
+                          "description": "What to do (classic), or the sentence after the keyword (Gherkin)."
+                        },
+                        "data": {
+                          "description": "Test data (classic only).",
+                          "type": "string"
+                        },
+                        "expected": {
+                          "description": "Expected result (classic only).",
+                          "type": "string"
+                        },
+                        "keyword": {
+                          "description": "Gherkin only: given, when, then, and or but.",
+                          "type": "string",
+                          "enum": [
+                            "given",
+                            "when",
+                            "then",
+                            "and",
+                            "but"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "action"
+                      ]
+                    }
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "draft",
+                      "deprecated"
+                    ]
+                  },
+                  "priority": {
+                    "type": "string",
+                    "enum": [
+                      "critical",
+                      "high",
+                      "medium",
+                      "low",
+                      "none"
+                    ]
+                  },
+                  "severity": {
+                    "type": "string",
+                    "enum": [
+                      "blocker",
+                      "critical",
+                      "major",
+                      "normal",
+                      "minor",
+                      "trivial",
+                      "none"
+                    ]
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "functional",
+                      "smoke",
+                      "regression",
+                      "integration",
+                      "e2e",
+                      "api",
+                      "unit",
+                      "performance",
+                      "security",
+                      "accessibility",
+                      "usability",
+                      "compatibility",
+                      "acceptance",
+                      "exploratory",
+                      "other"
+                    ]
+                  },
+                  "behavior": {
+                    "type": "string",
+                    "enum": [
+                      "positive",
+                      "negative",
+                      "destructive",
+                      "none"
+                    ]
+                  },
+                  "automation": {
+                    "description": "manual, planned (to be automated) or automated. Linking a test sets automated by itself; prefer link_test_case.",
+                    "type": "string",
+                    "enum": [
+                      "manual",
+                      "planned",
+                      "automated"
+                    ]
+                  },
+                  "muted": {
+                    "type": "boolean"
+                  },
+                  "tags": {
+                    "description": "Replaces every tag.",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "customFields": {
+                    "description": "The project's custom fields, by key.",
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "type": [
+                        "string",
+                        "number",
+                        "boolean",
+                        "null"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "title"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "number"
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "title",
+                    "version",
+                    "url",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters (`BAD_REQUEST`, `INVALID_ARGUMENT`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked token (`UNAUTHORIZED`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the required scope (`INSUFFICIENT_SCOPE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -7985,7 +8343,325 @@
             }
           },
           "404": {
-            "description": "Not found, or not visible to this token (`NOT_FOUND`). The two are never told apart.",
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A test reference matches several tests (`AMBIGUOUS`; candidates in `details`), or an attachment is not available (`ARTIFACT_UNAVAILABLE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (`RATE_LIMITED`); see `Retry-After`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateTestCase",
+        "summary": "Update a test case",
+        "description": "Change fields of a test case: title, steps, status, priority, suite, tags and the rest. Only the fields given change; every edit is a new version in its history. Pass `expectedVersion` to refuse the edit if the case changed since you read it. Needs the `write` scope.",
+        "tags": [
+          "Test cases"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "team",
+            "schema": {
+              "type": "string",
+              "description": "Team slug, as in the app URL (`/teams/<team>/…`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "project",
+            "schema": {
+              "type": "string",
+              "description": "Project slug, as in the app URL (`…/projects/<project>`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "case",
+            "schema": {
+              "type": "string",
+              "description": "Test case key (`TC-12` or `12`) or id, as returned by `/test-cases`."
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "suite": {
+                    "description": "Move to this suite (id or path; missing levels are created). \"unassigned\" removes it from its suite.",
+                    "type": "string"
+                  },
+                  "addTags": {
+                    "description": "Adds tags, keeping the others.",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "removeTags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "expectedVersion": {
+                    "description": "Refuse the edit if the case changed since this version (from get_test_case).",
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "description": {
+                    "description": "What the case checks, and why.",
+                    "type": "string"
+                  },
+                  "preconditions": {
+                    "type": "string"
+                  },
+                  "postconditions": {
+                    "type": "string"
+                  },
+                  "stepsFormat": {
+                    "description": "classic (action / test data / expected result) or gherkin.",
+                    "type": "string",
+                    "enum": [
+                      "classic",
+                      "gherkin"
+                    ]
+                  },
+                  "steps": {
+                    "description": "Replaces every step.",
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "type": "string",
+                          "description": "What to do (classic), or the sentence after the keyword (Gherkin)."
+                        },
+                        "data": {
+                          "description": "Test data (classic only).",
+                          "type": "string"
+                        },
+                        "expected": {
+                          "description": "Expected result (classic only).",
+                          "type": "string"
+                        },
+                        "keyword": {
+                          "description": "Gherkin only: given, when, then, and or but.",
+                          "type": "string",
+                          "enum": [
+                            "given",
+                            "when",
+                            "then",
+                            "and",
+                            "but"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "action"
+                      ]
+                    }
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "draft",
+                      "deprecated"
+                    ]
+                  },
+                  "priority": {
+                    "type": "string",
+                    "enum": [
+                      "critical",
+                      "high",
+                      "medium",
+                      "low",
+                      "none"
+                    ]
+                  },
+                  "severity": {
+                    "type": "string",
+                    "enum": [
+                      "blocker",
+                      "critical",
+                      "major",
+                      "normal",
+                      "minor",
+                      "trivial",
+                      "none"
+                    ]
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "functional",
+                      "smoke",
+                      "regression",
+                      "integration",
+                      "e2e",
+                      "api",
+                      "unit",
+                      "performance",
+                      "security",
+                      "accessibility",
+                      "usability",
+                      "compatibility",
+                      "acceptance",
+                      "exploratory",
+                      "other"
+                    ]
+                  },
+                  "behavior": {
+                    "type": "string",
+                    "enum": [
+                      "positive",
+                      "negative",
+                      "destructive",
+                      "none"
+                    ]
+                  },
+                  "automation": {
+                    "description": "manual, planned (to be automated) or automated. Linking a test sets automated by itself; prefer link_test_case.",
+                    "type": "string",
+                    "enum": [
+                      "manual",
+                      "planned",
+                      "automated"
+                    ]
+                  },
+                  "muted": {
+                    "type": "boolean"
+                  },
+                  "tags": {
+                    "description": "Replaces every tag.",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "customFields": {
+                    "description": "The project's custom fields, by key.",
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "type": [
+                        "string",
+                        "number",
+                        "boolean",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "number"
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "title",
+                    "version",
+                    "url",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters (`BAD_REQUEST`, `INVALID_ARGUMENT`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked token (`UNAUTHORIZED`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the required scope (`INSUFFICIENT_SCOPE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -8136,7 +8812,149 @@
             }
           },
           "404": {
-            "description": "Not found, or not visible to this token (`NOT_FOUND`). The two are never told apart.",
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A test reference matches several tests (`AMBIGUOUS`; candidates in `details`), or an attachment is not available (`ARTIFACT_UNAVAILABLE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (`RATE_LIMITED`); see `Retry-After`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createTestSuite",
+        "summary": "Create a test suite",
+        "description": "Create a suite, optionally under a `parent` suite (id or path), to group test cases the way the product is built. Suites nest at most 6 levels deep. Needs the `write` scope.",
+        "tags": [
+          "Test cases"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "team",
+            "schema": {
+              "type": "string",
+              "description": "Team slug, as in the app URL (`/teams/<team>/…`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "project",
+            "schema": {
+              "type": "string",
+              "description": "Project slug, as in the app URL (`…/projects/<project>`)."
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "parent": {
+                    "description": "Nest it under this suite (id or path). Suites nest at most 6 levels deep.",
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "path",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters (`BAD_REQUEST`, `INVALID_ARGUMENT`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked token (`UNAUTHORIZED`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the required scope (`INSUFFICIENT_SCOPE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -8342,7 +9160,688 @@
             }
           },
           "404": {
-            "description": "Not found, or not visible to this token (`NOT_FOUND`). The two are never told apart.",
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A test reference matches several tests (`AMBIGUOUS`; candidates in `details`), or an attachment is not available (`ARTIFACT_UNAVAILABLE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (`RATE_LIMITED`); see `Retry-After`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{team}/{project}/test-cases/{case}/links": {
+      "post": {
+        "operationId": "linkTestCase",
+        "summary": "Link tests to a test case",
+        "description": "Link Playwright tests (by test id, from `/tests`) to a test case, or unlink them. A linked case is marked automated and shows the tests’ results. A lasting link comes from code instead: tag the test with `@TC-12`. Needs the `write` scope.",
+        "tags": [
+          "Test cases"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "team",
+            "schema": {
+              "type": "string",
+              "description": "Team slug, as in the app URL (`/teams/<team>/…`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "project",
+            "schema": {
+              "type": "string",
+              "description": "Project slug, as in the app URL (`…/projects/<project>`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "case",
+            "schema": {
+              "type": "string",
+              "description": "Test case key (`TC-12` or `12`) or id, as returned by `/test-cases`."
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "link": {
+                    "description": "Test ids to link, from find_tests or list_test_cases.",
+                    "maxItems": 50,
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "unlink": {
+                    "description": "Test ids to unlink.",
+                    "maxItems": 50,
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "linked": {
+                      "type": "number"
+                    },
+                    "unlinked": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "linked",
+                    "unlinked",
+                    "message",
+                    "url"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters (`BAD_REQUEST`, `INVALID_ARGUMENT`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked token (`UNAUTHORIZED`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the required scope (`INSUFFICIENT_SCOPE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A test reference matches several tests (`AMBIGUOUS`; candidates in `details`), or an attachment is not available (`ARTIFACT_UNAVAILABLE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (`RATE_LIMITED`); see `Retry-After`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{team}/{project}/test-cases/adopt": {
+      "post": {
+        "operationId": "adoptTests",
+        "summary": "Adopt tests as test cases",
+        "description": "Turn Playwright tests (from `/uncovered-tests`) into test cases already linked to them, with steps from their `test.step()` calls, one case per test across browsers. Give `tests` (into one `suite`, or suites mirroring files and describe blocks), or `placements` to choose a suite and a title per group of tests. A test that already backs a case is skipped. Needs the `write` scope.",
+        "tags": [
+          "Test cases"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "team",
+            "schema": {
+              "type": "string",
+              "description": "Team slug, as in the app URL (`/teams/<team>/…`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "project",
+            "schema": {
+              "type": "string",
+              "description": "Project slug, as in the app URL (`…/projects/<project>`)."
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "tests": {
+                    "description": "Test ids (from list_uncovered_tests or find_tests) to turn into test cases.",
+                    "minItems": 1,
+                    "maxItems": 200,
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "suite": {
+                    "description": "With \"tests\": put every new case in this suite (id or path; created if missing). Omit to mirror each test's file and describe blocks as suites.",
+                    "type": "string"
+                  },
+                  "placements": {
+                    "description": "Instead of \"tests\": each group of tests with its own suite and title, to sort many tests into existing or new suites in one call.",
+                    "minItems": 1,
+                    "maxItems": 200,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "tests": {
+                          "minItems": 1,
+                          "maxItems": 200,
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Test ids, e.g. the testIds of one row of list_uncovered_tests."
+                        },
+                        "suite": {
+                          "description": "Suite for these cases (id or path; missing levels are created). Omit to mirror file and describe blocks.",
+                          "type": "string"
+                        },
+                        "title": {
+                          "description": "Title for the case, instead of the test's own. Set it only when the tests are one test (in its browsers).",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "tests"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "created": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "suite": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "url": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "suite",
+                          "url"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "skipped": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "created",
+                    "skipped",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters (`BAD_REQUEST`, `INVALID_ARGUMENT`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked token (`UNAUTHORIZED`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the required scope (`INSUFFICIENT_SCOPE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A test reference matches several tests (`AMBIGUOUS`; candidates in `details`), or an attachment is not available (`ARTIFACT_UNAVAILABLE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (`RATE_LIMITED`); see `Retry-After`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{team}/{project}/test-suites/delete-empty": {
+      "post": {
+        "operationId": "deleteTestSuite",
+        "summary": "Delete empty test suites",
+        "description": "Delete suites that hold no test cases: the named `suites` (with the suites below them), or every empty suite with `allEmpty`. Never deletes a case; a suite that still holds cases is refused. Needs the `write` scope.",
+        "tags": [
+          "Test cases"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "team",
+            "schema": {
+              "type": "string",
+              "description": "Team slug, as in the app URL (`/teams/<team>/…`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "project",
+            "schema": {
+              "type": "string",
+              "description": "Project slug, as in the app URL (`…/projects/<project>`)."
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "suites": {
+                    "description": "Suites to delete (id or path), with the suites below them. Refused if any of them still holds cases.",
+                    "minItems": 1,
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "description": "Suite id, or its path of names from the top (\"Checkout / Coupons\"), as list_test_suites shows it."
+                    }
+                  },
+                  "allEmpty": {
+                    "description": "Instead: delete every suite that holds no cases, itself or below it.",
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deleted": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "deleted",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters (`BAD_REQUEST`, `INVALID_ARGUMENT`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked token (`UNAUTHORIZED`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the required scope (`INSUFFICIENT_SCOPE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A test reference matches several tests (`AMBIGUOUS`; candidates in `details`), or an attachment is not available (`ARTIFACT_UNAVAILABLE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (`RATE_LIMITED`); see `Retry-After`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{team}/{project}/library/references": {
+      "post": {
+        "operationId": "setLibraryReference",
+        "summary": "Keep or pin a library reference",
+        "description": "Keep a branch or pull request in the library, pin the run that documents it (or follow the newest with `\"latest\"`), make it the default, name and describe it — or take it out with `keep: false`. Needs `branch` or `pullRequest`, and the `write` scope.",
+        "tags": [
+          "Visual review"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "team",
+            "schema": {
+              "type": "string",
+              "description": "Team slug, as in the app URL (`/teams/<team>/…`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "project",
+            "schema": {
+              "type": "string",
+              "description": "Project slug, as in the app URL (`…/projects/<project>`)."
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "description": "A branch, e.g. \"main\". Leave both out for the library’s default reference.",
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512
+                  },
+                  "pullRequest": {
+                    "description": "A pull (merge) request number, e.g. 212.",
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "keep": {
+                    "description": "false takes it out of the library. Default: keep it.",
+                    "type": "boolean"
+                  },
+                  "pin": {
+                    "description": "A run number to pin as the version shown, or \"latest\" to follow the newest run.",
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "string",
+                        "const": "latest"
+                      }
+                    ]
+                  },
+                  "default": {
+                    "description": "true makes it the reference the library opens on.",
+                    "type": "boolean"
+                  },
+                  "title": {
+                    "description": "What readers call it, e.g. \"Checkout redesign\". Empty clears it.",
+                    "type": "string",
+                    "maxLength": 120
+                  },
+                  "description": {
+                    "description": "A sentence on what it shows. Empty clears it.",
+                    "type": "string",
+                    "maxLength": 1000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "project": {
+                      "type": "string"
+                    },
+                    "reference": {
+                      "type": "string"
+                    },
+                    "kept": {
+                      "type": "boolean"
+                    },
+                    "url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "project",
+                    "reference",
+                    "kept",
+                    "url"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters (`BAD_REQUEST`, `INVALID_ARGUMENT`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked token (`UNAUTHORIZED`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the required scope (`INSUFFICIENT_SCOPE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -8527,7 +10026,7 @@
             }
           },
           "404": {
-            "description": "Not found, or not visible to this token (`NOT_FOUND`). The two are never told apart.",
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -8821,7 +10320,7 @@
             }
           },
           "404": {
-            "description": "Not found, or not visible to this token (`NOT_FOUND`). The two are never told apart.",
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -9004,7 +10503,164 @@
             }
           },
           "404": {
-            "description": "Not found, or not visible to this token (`NOT_FOUND`). The two are never told apart.",
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A test reference matches several tests (`AMBIGUOUS`; candidates in `details`), or an attachment is not available (`ARTIFACT_UNAVAILABLE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (`RATE_LIMITED`); see `Retry-After`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{team}/{project}/review-captures/decisions": {
+      "post": {
+        "operationId": "reviewCheckpoint",
+        "summary": "Approve or reject review checkpoint images",
+        "description": "Approve review checkpoint images, or ask for changes with a comment. An approval holds for the exact pixels: later runs with the same image need no review. Only approve what you looked at. Needs the `write` scope.",
+        "tags": [
+          "Visual review"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "team",
+            "schema": {
+              "type": "string",
+              "description": "Team slug, as in the app URL (`/teams/<team>/…`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "project",
+            "schema": {
+              "type": "string",
+              "description": "Project slug, as in the app URL (`…/projects/<project>`)."
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "captures": {
+                    "minItems": 1,
+                    "maxItems": 2000,
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Capture ids, from list_review_checkpoints."
+                  },
+                  "decision": {
+                    "type": "string",
+                    "enum": [
+                      "approved",
+                      "changes_requested"
+                    ],
+                    "description": "approved, or changes_requested."
+                  },
+                  "comment": {
+                    "description": "Why — what should change. Shown to the reviewer beside the image.",
+                    "type": "string",
+                    "maxLength": 4000
+                  }
+                },
+                "required": [
+                  "captures",
+                  "decision"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "project": {
+                      "type": "string"
+                    },
+                    "decided": {
+                      "type": "number"
+                    },
+                    "decision": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "project",
+                    "decided",
+                    "decision"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters (`BAD_REQUEST`, `INVALID_ARGUMENT`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked token (`UNAUTHORIZED`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the required scope (`INSUFFICIENT_SCOPE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -9205,7 +10861,7 @@
             }
           },
           "404": {
-            "description": "Not found, or not visible to this token (`NOT_FOUND`). The two are never told apart.",
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -9291,7 +10947,7 @@
       "bearerAuth": {
         "type": "http",
         "scheme": "bearer",
-        "description": "A personal access token (`pwr_pat_…`) from Account → Access tokens, with the `read` scope."
+        "description": "A personal access token (`pwr_pat_…`) from Account → Access tokens, with the `read` scope (and `write` for the endpoints that change data)."
       }
     }
   },

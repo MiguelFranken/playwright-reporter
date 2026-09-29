@@ -22,10 +22,10 @@ stable `code` to branch on:
 | Status | `code` | |
 | --- | --- | --- |
 | 400 | `BAD_REQUEST` | A parameter failed validation; `details` lists the issues. |
-| 400 | `INVALID_ARGUMENT` | A parameter was well-formed but makes no sense, e.g. `until` before `since`. |
+| 400 | `INVALID_ARGUMENT` | A parameter was well-formed but makes no sense, e.g. `until` before `since`, or a change was refused: a suite that still holds cases, a test case edited since `expectedVersion`. |
 | 401 | `UNAUTHORIZED` | Missing, invalid, expired or revoked token. |
-| 403 | `INSUFFICIENT_SCOPE` | The token lacks the `read` scope. |
-| 404 | `NOT_FOUND` | Not found, or not visible to this token. |
+| 403 | `INSUFFICIENT_SCOPE` | The token lacks the `read` scope, or the `write` scope an endpoint that changes data needs. |
+| 404 | `NOT_FOUND` | Not found, or not visible to this token — also when your role may not make the change. |
 | 409 | `AMBIGUOUS` | A test reference matches several tests; `details.candidates` lists them. |
 | 409 | `ARTIFACT_UNAVAILABLE` | The attachment was never uploaded or failed to upload. |
 | 410 | `ARTIFACT_EXPIRED` | The retention policy deleted the attachment. |

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ARTIFACT_KINDS, type ArtifactFilter } from '@miguelfranken/ui/lib/result-filter';
 import { outcomeCounts, searchRunResults, type Outcome } from '@/lib/db/queries/mcp';
 import {
   asList,
@@ -20,6 +21,8 @@ import { firstLine } from '../render/sanitize';
 import { resolveRun } from '../resolve';
 import { CATEGORY_KEYS, OUTCOMES, PROBLEM_OUTCOMES, categoryOf, runHeadline, toRunSummary } from './shared';
 
+const ARTIFACT_FILTERS = ARTIFACT_KINDS.flatMap((k) => [k, `no-${k}`] as const) as [ArtifactFilter, ...ArtifactFilter[]];
+
 const input = z.object({
   ...commonParams,
   run: runParam.optional(),
@@ -35,6 +38,10 @@ const input = z.object({
   browser: browserParam,
   retried: z.boolean().optional().describe('Only tests that needed a retry (true) or passed/failed on the first attempt (false).'),
   hasArtifacts: z.boolean().optional().describe('Only tests with (true) or without (false) screenshots, traces or videos.'),
+  artifact: oneOrMany(z.enum(ARTIFACT_FILTERS))
+    .optional()
+    .describe('Attachment kinds that must hold, all of them: "screenshot", "video", "trace" keep tests with one; "no-screenshot", "no-video", "no-trace" tests without.'),
+  tag: oneOrMany(z.string()).optional().describe('Only tests carrying any of these tags, e.g. "@smoke" (see list_filters).'),
   minDurationMs: z.number().int().min(0).optional().describe('Only tests that took at least this long.'),
   sort: z.enum(['outcome', 'file', 'duration']).optional().describe('Order: outcome (failures first, default), file, or duration (slowest first).'),
   limit: limitParam,
@@ -54,6 +61,7 @@ const outputSchema = output({
       file: z.string(),
       line: z.number(),
       browser: z.string(),
+      tags: z.array(z.string()),
       outcome: z.string(),
       attempts: z.number(),
       durationMs: z.number(),
@@ -73,7 +81,7 @@ export const listRunResults = defineTool({
   title: 'List run results',
   toolset: 'core',
   description:
-    'The tests of one run, failures first. Filter by outcome (default: failed, timed out, interrupted, flaky), file, title, error signature or category, browser, retries, artifacts or duration. Each row has the test’s last 10 outcomes.',
+    'The tests of one run, failures first. Filter by outcome (default: failed, timed out, interrupted, flaky), file, title, error signature or category, browser, tag, retries, attachment kind or duration. Each row has the test’s last 10 outcomes.',
   input,
   output: outputSchema,
   async handler(args, ctx) {
@@ -89,6 +97,8 @@ export const listRunResults = defineTool({
       browser: args.browser,
       retried: args.retried,
       hasArtifacts: args.hasArtifacts,
+      artifacts: asList(args.artifact),
+      tags: asList(args.tag),
       minDurationMs: args.minDurationMs,
       sort: args.sort,
     };
@@ -111,6 +121,7 @@ export const listRunResults = defineTool({
           file: r.file,
           line: r.line,
           browser: r.pwProject,
+          tags: r.tags,
           outcome: r.outcome,
           attempts: r.attemptCount,
           durationMs: r.durationMs,

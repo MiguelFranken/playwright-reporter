@@ -15,8 +15,8 @@ branch (the base that branches and pull requests are compared against) and its A
 | **API token** (ingest) | `pwr_` | A project | The reporter uploading runs | Project **Settings → API tokens** |
 | **Personal access token** | `pwr_pat_` | A user | The [REST API](/docs/api) and the [MCP server](/docs/ai-assistants) | **Account → Access tokens** |
 
-An API token can only write runs into its project; it can read nothing. A personal access token can only read, always
-expires, and can be limited to one team or one project. Both are shown once and stored hashed; revoke one and it stops
+An API token can only write runs into its project; it can read nothing. A personal access token reads — and, created with
+**Read, and edit test cases**, also changes test cases, review decisions and the library — always expires, and can be limited to one team or one project. Both are shown once and stored hashed; revoke one and it stops
 working at once.
 
 <Callout type="warn">
