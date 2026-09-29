@@ -1,3 +1,4 @@
+import type * as React from 'react';
 import { cn } from '../../lib/cn';
 import type { FrameSize, ReviewImage } from '../../lib/review';
 import { UnavailableImage } from './review-frame';
@@ -35,6 +36,7 @@ export function ScreenFrame({
   label,
   tone,
   live = false,
+  overlay,
 }: {
   image: ReviewImage;
   frame: FrameSize;
@@ -49,6 +51,8 @@ export function ScreenFrame({
   tone?: keyof typeof TONE_RING;
   /** Sizes the frame from `SCREEN_ZOOM_VAR` when an ancestor sets it, `zoom` otherwise (which still picks the image). */
   live?: boolean;
+  /** Laid over the image and scrolling with it, in the image's own box: comment pins. */
+  overlay?: React.ReactNode;
 }) {
   const width = Math.max(24, Math.round(frame.width * zoom));
   const height = Math.max(24, Math.round(frame.height * zoom));
@@ -56,6 +60,7 @@ export function ScreenFrame({
   const src = full ? image.url : (image.thumbnailUrl ?? image.url);
   return (
     <div
+      data-slot="screen-frame"
       role={scroll ? 'region' : undefined}
       aria-label={scroll ? (label ?? alt) : undefined}
       tabIndex={scroll ? 0 : undefined}
@@ -68,8 +73,16 @@ export function ScreenFrame({
       style={live ? { width: liveLength(frame.width, zoom), height: liveLength(frame.height, zoom) } : { width, height }}
     >
       {image.available ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt={alt} loading="lazy" decoding="async" draggable={false} className="block h-auto w-full" />
+        overlay ? (
+          <div className="relative">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={src} alt={alt} loading="lazy" decoding="async" draggable={false} className="block h-auto w-full" />
+            {overlay}
+          </div>
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={src} alt={alt} loading="lazy" decoding="async" draggable={false} className="block h-auto w-full" />
+        )
       ) : (
         <UnavailableImage image={image} />
       )}

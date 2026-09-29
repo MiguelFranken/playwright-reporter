@@ -400,6 +400,51 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* Comment pins on review images: a pin drops in from its tip, a draft pin
+   breathes until it is posted, and a pin a list row points at pings once. */
+@theme {
+  --animate-pin-drop: pin-drop 180ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  --animate-pin-breathe: pin-breathe 1.2s ease-in-out infinite;
+  --animate-pin-ping: pin-ping 600ms cubic-bezier(0.2, 0, 0, 1) 1;
+  --animate-rise-in: rise-in 150ms cubic-bezier(0.2, 0, 0, 1) both;
+
+  @keyframes pin-drop {
+    from {
+      transform: scale(0.6);
+    }
+    to {
+      transform: scale(1);
+    }
+  }
+  @keyframes pin-breathe {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 color-mix(in oklch, var(--accent-solid) 45%, transparent);
+    }
+    50% {
+      box-shadow: 0 0 0 6px color-mix(in oklch, var(--accent-solid) 0%, transparent);
+    }
+  }
+  @keyframes pin-ping {
+    from {
+      box-shadow: 0 0 0 0 color-mix(in oklch, var(--accent-solid) 60%, transparent);
+    }
+    to {
+      box-shadow: 0 0 0 12px color-mix(in oklch, var(--accent-solid) 0%, transparent);
+    }
+  }
+  @keyframes rise-in {
+    from {
+      opacity: 0.4;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+
 /* ---------------------------------------------------------------------------
  * Typography.
  *

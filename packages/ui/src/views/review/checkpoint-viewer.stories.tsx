@@ -40,9 +40,8 @@ export const Changed: Story = {
     await body.findByRole('dialog');
     await userEvent.click(body.getByRole('button', { name: 'Difference' }));
     await expect(body.getByText(/Identical pixels are black/)).toBeInTheDocument();
-    await userEvent.type(body.getByLabelText(/Comment/), 'Total moved');
     await userEvent.click(body.getByRole('button', { name: 'Request changes' }));
-    await expect(args.onDecide).toHaveBeenCalledWith({ captureIds: [changed.captures[0].id], decision: 'changes_requested', comment: 'Total moved' });
+    await expect(args.onDecide).toHaveBeenCalledWith({ captureIds: [changed.captures[0].id], decision: 'changes_requested' });
   },
 };
 
@@ -52,7 +51,7 @@ export const ApproveWithKeyboard: Story = {
     const body = within(document.body);
     await body.findByRole('dialog');
     await userEvent.keyboard('a');
-    await expect(args.onDecide).toHaveBeenCalledWith({ captureIds: [changed.captures[0].id], decision: 'approved', comment: undefined });
+    await expect(args.onDecide).toHaveBeenCalledWith({ captureIds: [changed.captures[0].id], decision: 'approved' });
     await waitFor(() => expect(args.onSelectionChange).toHaveBeenLastCalledWith({ checkpointId: placeOrderFlow.checkpoints[2].id, variant: 'desktop' }));
     await expect(document.activeElement).toHaveAccessibleName('Checkpoint screens');
     await userEvent.keyboard('{ArrowLeft}');

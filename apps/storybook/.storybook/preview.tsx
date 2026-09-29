@@ -45,7 +45,7 @@ const preview: Preview = {
             ['Dialogs', '*'],
             'Pull requests',
             'Review',
-            ['Storyboard', 'Viewer', 'Screens', '*'],
+            ['Storyboard', 'Viewer', 'Comments', 'Screens', '*'],
             'Run',
             ['Header', 'Tab content', '*'],
             'Runs',

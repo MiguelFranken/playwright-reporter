@@ -7,6 +7,7 @@ import { Button } from '../../components/button';
 import { Input } from '../../components/input';
 import { Slider } from '../../components/slider';
 import { ToggleGroup, ToggleGroupItem } from '../../components/toggle-group';
+import { CommentCountBadge } from '../../patterns/comment-count-badge';
 import { EmptyState } from '../../patterns/empty-state';
 import { ReviewStatusBadge, ReviewStatusDot } from '../../patterns/review-status-badge';
 import { StatusIcon } from '../../patterns/status-badge';
@@ -36,8 +37,9 @@ import {
   type ReviewGrouping,
   type StoryboardMode,
 } from '../../lib/review';
+import { openThreadCount } from '../../lib/review-threads';
 import { toneSolid } from '../../lib/tone';
-import { CheckpointViewer, type ReviewSelection } from './checkpoint-viewer';
+import { CheckpointViewer, type ReviewCommentsProps, type ReviewSelection } from './checkpoint-viewer';
 import { ReviewTree } from './review-tree';
 import { SCREEN_ZOOM_VAR, ScreenFrame } from './screen-frame';
 
@@ -111,6 +113,7 @@ export function ReviewStoryboard({
   emptyTitle = 'No review checkpoints in this run',
   emptyDescription,
   mode = 'review',
+  comments,
 }: {
   flows: readonly ReviewFlowView[];
   filter?: ReviewFilter;
@@ -144,6 +147,8 @@ export function ReviewStoryboard({
   emptyDescription?: React.ReactNode;
   /** `library` shows the screens as documentation: no statuses, filters or approvals. */
   mode?: StoryboardMode;
+  /** Comment threads on the images, in the viewer. */
+  comments?: ReviewCommentsProps;
 }) {
   const library = mode === 'library';
   const hasNeedsReview = useMemo(() => flows.some((f) => f.checkpoints.some((c) => c.captures.some((cap) => NEEDS_REVIEW.includes(cap.status)))), [flows]);
@@ -339,7 +344,7 @@ export function ReviewStoryboard({
         rows
       )}
 
-      <CheckpointViewer flows={viewerFlows} selection={selection} onSelectionChange={setSelection} onDecide={onDecide} pendingIds={pendingIds} canDecide={canDecide} frame={frame ?? DEFAULT_FRAME} onFrameChange={onFrameChange} mode={mode} />
+      <CheckpointViewer flows={viewerFlows} selection={selection} onSelectionChange={setSelection} onDecide={onDecide} pendingIds={pendingIds} canDecide={canDecide} frame={frame ?? DEFAULT_FRAME} onFrameChange={onFrameChange} mode={mode} comments={comments} />
     </div>
   );
 }
@@ -524,7 +529,8 @@ function CheckpointColumn({
         {captures.map((c) => (
           <div key={c.id} className="flex flex-col gap-1.5">
             {/* A click opens the viewer; the wheel scrolls the screen. The label above is the keyboard way in. */}
-            <div onClick={() => open(c.variant)} className="cursor-zoom-in">
+            <div onClick={() => open(c.variant)} className="relative cursor-zoom-in">
+              <CommentCountBadge count={openThreadCount(c.threads)} />
               <ScreenFrame
                 image={c.image}
                 frame={captureViewport(c)}
