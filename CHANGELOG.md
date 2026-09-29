@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.33](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.32...v0.0.33) (2026-09-29)
+
+### Features
+
+* **ui:** show an empty state with a call to action when a team has no projects ([becee85](https://github.com/MiguelFranken/playwright-reporter/commit/becee852e3d13410767ed986c3480eca016c6891))
+
 ## [0.0.32](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.31...v0.0.32) (2026-09-28)
 
 ### Performance Improvements
