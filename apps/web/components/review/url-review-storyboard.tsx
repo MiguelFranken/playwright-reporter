@@ -1,7 +1,7 @@
 'use client';
 
 import { useQueries, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useOptimistic, useState, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useOptimistic, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import {
   DEFAULT_FRAME,
@@ -33,6 +33,7 @@ import {
   saveIgnoreRegions,
   setReviewThreadStatus,
 } from '@/app/(app)/teams/[team]/projects/[project]/review/actions';
+import { applyDecision, patchCaptures } from '@/lib/review/patch-flows';
 import { captureDiffQuery } from '@/lib/rpc/queries';
 
 /** What changes at once, before the revalidated page confirms it. */
@@ -44,11 +45,15 @@ type Change =
   | { type: 'edit'; input: CommentEditInput }
   | { type: 'delete'; input: { commentId: string; threadId: string } };
 
-const mapCaptures = (flows: ReviewFlowView[], fn: (cap: ReviewFlowView['checkpoints'][number]['captures'][number]) => ReviewFlowView['checkpoints'][number]['captures'][number]) =>
-  flows.map((f) => ({ ...f, checkpoints: f.checkpoints.map((c) => ({ ...c, captures: c.captures.map(fn) })) }));
+// Untouched flows stay the same objects, so the storyboard's memoised rows do not render again.
+const mapCaptures = (flows: ReviewFlowView[], fn: (cap: ReviewFlowView['checkpoints'][number]['captures'][number]) => ReviewFlowView['checkpoints'][number]['captures'][number]) => patchCaptures(flows, fn);
 
 const mapThreads = (flows: ReviewFlowView[], fn: (t: ReviewThreadView) => ReviewThreadView | null) =>
-  mapCaptures(flows, (cap) => (cap.threads?.length ? { ...cap, threads: cap.threads.map(fn).filter((t): t is ReviewThreadView => t !== null) } : cap));
+  mapCaptures(flows, (cap) => {
+    if (!cap.threads?.length) return cap;
+    const threads = cap.threads.map(fn);
+    return threads.every((t, i) => t === cap.threads![i]) ? cap : { ...cap, threads: threads.filter((t): t is ReviewThreadView => t !== null) };
+  });
 
 function applyChange(flows: ReviewFlowView[], change: Change): ReviewFlowView[] {
   const now = new Date().toISOString();
@@ -56,17 +61,10 @@ function applyChange(flows: ReviewFlowView[], change: Change): ReviewFlowView[] 
   switch (change.type) {
     case 'decide': {
       const { input } = change;
+      const decided = applyDecision(flows, input);
+      if (!input.resolveThreads) return decided;
       const ids = new Set(input.captureIds);
-      return mapCaptures(flows, (cap) =>
-        ids.has(cap.id)
-          ? {
-              ...cap,
-              status: input.decision,
-              decision: { decision: input.decision, at: now, comment: input.comment ?? null, by: 'You' },
-              threads: input.resolveThreads ? cap.threads?.map((t) => (t.status === 'open' ? { ...t, status: 'resolved' as const, resolvedAt: now } : t)) : cap.threads,
-            }
-          : cap,
-      );
+      return mapCaptures(decided, (cap) => (ids.has(cap.id) ? { ...cap, threads: cap.threads?.map((t) => (t.status === 'open' ? { ...t, status: 'resolved' as const, resolvedAt: now } : t)) } : cap));
     }
     case 'create': {
       const { input, tempId } = change;
@@ -102,7 +100,7 @@ function applyChange(flows: ReviewFlowView[], change: Change): ReviewFlowView[] 
           : t,
       );
     case 'edit':
-      return mapThreads(flows, (t) => ({ ...t, comments: t.comments.map((c) => (c.id === change.input.commentId ? { ...c, body: change.input.body, editedAt: now } : c)) }));
+      return mapThreads(flows, (t) => (t.comments.some((c) => c.id === change.input.commentId) ? { ...t, comments: t.comments.map((c) => (c.id === change.input.commentId ? { ...c, body: change.input.body, editedAt: now } : c)) } : t));
     case 'delete':
       return mapThreads(flows, (t) => {
         if (t.id !== change.input.threadId) return t;
@@ -140,28 +138,28 @@ function useLiveDiffs(ref: { team: string; project: string }, flows: readonly Re
       .map((c) => ({ id: c.id, compareId: c.compare?.captureId }))
       .slice(0, 4);
   }, [flows, selection, library]);
-  const results = useQueries({ queries: targets.map((t) => captureDiffQuery(ref, t.id, t.compareId)) });
-  const live = new Map<string, LiveCapture>();
-  results.forEach((r, i) => {
-    if (r.data) live.set(targets[i].id, r.data);
-  });
-  return live;
+  // One map per answer, not per render: the storyboard patches its flows only when a measurement arrives.
+  const combine = useCallback(
+    (results: { data?: LiveCapture }[]) => {
+      const live = new Map<string, LiveCapture>();
+      results.forEach((r, i) => {
+        if (r.data) live.set(targets[i].id, r.data);
+      });
+      return live;
+    },
+    [targets],
+  );
+  return useQueries({ queries: targets.map((t) => captureDiffQuery(ref, t.id, t.compareId)), combine });
 }
 
 function withLive(flows: ReviewFlowView[], live: ReadonlyMap<string, LiveCapture>): ReviewFlowView[] {
   if (live.size === 0) return flows;
-  return flows.map((f) => ({
-    ...f,
-    checkpoints: f.checkpoints.map((c) => ({
-      ...c,
-      captures: c.captures.map((cap) => {
-        const l = live.get(cap.id);
-        if (!l) return cap;
-        // A library comparison carries no review status of its own.
-        return cap.compare ? { ...cap, diff: l.diff ?? cap.diff } : { ...cap, diff: l.diff ?? cap.diff, status: l.status, decision: l.decision ?? cap.decision };
-      }),
-    })),
-  }));
+  return patchCaptures(flows, (cap) => {
+    const l = live.get(cap.id);
+    if (!l) return undefined;
+    // A library comparison carries no review status of its own.
+    return cap.compare ? { ...cap, diff: l.diff ?? cap.diff } : { ...cap, diff: l.diff ?? cap.diff, status: l.status, decision: l.decision ?? cap.decision };
+  });
 }
 
 const SETTINGS_KEY = 'pwr.review.view';
@@ -217,6 +215,8 @@ export function UrlReviewStoryboard({
   canComment = false,
   canModerate = false,
   viewerId = null,
+  decide,
+  onCommentsChanged,
 }: {
   team: string;
   project: string;
@@ -239,6 +239,14 @@ export function UrlReviewStoryboard({
   canModerate?: boolean;
   /** The signed-in user, whose own comments can be edited. */
   viewerId?: string | null;
+  /**
+   * Records a decision; the server action by default, which renders the page
+   * again. A storyboard fed by a query passes its mutation, which changes the
+   * cache instead.
+   */
+  decide?: (input: ReviewDecisionInput) => Promise<{ ok: true; decided: number; resolvedThreads?: number } | { ok: false; message: string }>;
+  /** After a comment action succeeds: a storyboard fed by a query reads it again (the page is not rendered again for it). */
+  onCommentsChanged?: () => void;
 }) {
   const { params, set } = useShallowSearch();
   const [local, setLocal] = useState<ReviewSelection | null>(null);
@@ -253,11 +261,14 @@ export function UrlReviewStoryboard({
 
   const filter: ReviewFilter | undefined = syncUrl && params.get('status') ? parseReviewFilter(params.get('status')) : defaultFilter;
   const cp = params.get('cp');
-  const selection = syncUrl ? (cp ? { checkpointId: cp, variant: params.get('v') } : null) : local;
+  const v = params.get('v');
+  const urlSelection = useMemo(() => (cp ? { checkpointId: cp, variant: v } : null), [cp, v]);
+  const selection = syncUrl ? urlSelection : local;
   const sortParam = params.get('sort');
   const sort = (REVIEW_SORTS as readonly string[]).includes(sortParam ?? '') ? (sortParam as ReviewSort) : undefined;
   const live = useLiveDiffs({ team, project }, flows, selection, mode === 'library');
-  const [optimistic, addChange] = useOptimistic(withLive(flows, live), applyChange);
+  const withLiveFlows = useMemo(() => withLive(flows, live), [flows, live]);
+  const [optimistic, addChange] = useOptimistic(withLiveFlows, applyChange);
   const [localThread, setLocalThread] = useState<number | null>(null);
 
   const onIgnoreRegionsChange = (input: { captureId: string; regions: IgnoreRect[] }) => {
@@ -280,7 +291,7 @@ export function UrlReviewStoryboard({
     setPendingIds((ids) => [...ids, ...input.captureIds]);
     startTransition(async () => {
       addChange({ type: 'decide', input });
-      const res = await decideReview(ref, input);
+      const res = await (decide ? decide(input) : decideReview(ref, input));
       setPendingIds((ids) => ids.filter((id) => !input.captureIds.includes(id)));
       if (!res.ok) toast.error(res.message);
       else if (input.captureIds.length > 1) toast.success(`${res.decided} images ${input.decision === 'approved' ? 'approved' : 'marked for changes'}.`);
@@ -294,7 +305,10 @@ export function UrlReviewStoryboard({
       addChange(change);
       const res = await run();
       if (!res.ok) toast.error(res.message);
-      else done?.();
+      else {
+        onCommentsChanged?.();
+        done?.();
+      }
     });
   const temp = () => `pending-${crypto.randomUUID()}`;
   const comments = {
