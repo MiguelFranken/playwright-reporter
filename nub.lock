@@ -228,6 +228,9 @@ importers:
       next-themes:
         specifier: ^0.4.6
         version: 0.4.6(react@19.3.0)(react-dom@19.3.0(react@19.3.0))
+      pixelmatch:
+        specifier: ^7.2.0
+        version: 7.2.0
       postgres:
         specifier: ^3.4.9
         version: 3.4.9
@@ -237,6 +240,9 @@ importers:
       react-dom:
         specifier: 19.3.0
         version: 19.3.0(react@19.3.0)
+      sharp:
+        specifier: ^0.35.4
+        version: 0.35.4(@types/node@24.13.5)
       sonner:
         specifier: ^2.0.8
         version: 2.0.8(@types/react@19.3.0)(react@19.3.0)(react-dom@19.3.0(react@19.3.0))
@@ -8073,6 +8079,10 @@ packages:
 
   piscina@4.9.4:
     resolution: {integrity: sha512-RyBDr2VheQ8ZfH3N8SzQZHztqVyOtadTwLnUYof6gdj5161/eu2wNhCbGl5GHnNKDpnkicJYpKtL2J+y/gk6XA==}
+
+  pixelmatch@7.2.0:
+    resolution: {integrity: sha512-xhcb4yHu9sM/G7foGzoLtXYcC0zHEaOXXjRKhGup0fw78Nf2Tkiapv4EQyMzrbcmQPsllAI7DbFY2UT7PlI9Pg==}
+    hasBin: true
 
   pkce-challenge@5.0.1:
     resolution: {integrity: sha512-wQ0b/W4Fr01qtpHlqSqspcj3EhBvimsdh0KlHhH8HRZnMsEa0ea2fTULOXOS9ccQr3om+GcGRk4e+isrZWV8qQ==}
@@ -17821,6 +17831,10 @@ snapshots:
   piscina@4.9.4:
     optionalDependencies:
       '@napi-rs/nice': 1.1.1
+
+  pixelmatch@7.2.0:
+    dependencies:
+      pngjs: 7.0.0
 
   pkce-challenge@5.0.1: {}
 
