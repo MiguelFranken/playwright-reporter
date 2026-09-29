@@ -25,7 +25,7 @@ export function CoverageSummary({ coverage, hrefs, className }: { coverage: Cove
   const share = live ? automated / live : null;
   const attention = coverage.flaky + coverage.stale + coverage.unverified;
   return (
-    <div className={cn('grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6', className)}>
+    <div className={cn('grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-6', className)}>
       <MetricCard
         icon={Layers}
         label="Test cases"

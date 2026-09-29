@@ -1,9 +1,9 @@
 import { BackLink } from '@miguelfranken/ui/patterns/back-link';
 import { CopyButton } from '@miguelfranken/ui/patterns/copy-button';
-import { NavTabs } from '@miguelfranken/ui/patterns/nav-tabs';
 import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
 import type { CaseDetail } from '@miguelfranken/ui/lib/test-case-models';
 import { caseKey } from '@miguelfranken/ui/lib/test-cases';
+import { CaseTabs } from './case-tabs';
 import { AutomationBadge, CaseStatusBadge, VerdictBadge } from '@miguelfranken/ui/views/test-cases/case-badges';
 
 /** The top of every page of one case: back to the list, key and title, and the Overview / History tabs. */
@@ -46,14 +46,7 @@ export function CaseHeader({
         {actions}
       </PageHeader>
       {active ? (
-        <NavTabs
-          label="Test case sections"
-          activeHref={active === 'overview' ? page : `${page}/history`}
-          items={[
-            { href: page, label: 'Overview' },
-            { href: `${page}/history`, label: `History (${detail.version})` },
-          ]}
-        />
+        <CaseTabs page={page} active={active} version={detail.version} />
       ) : null}
     </div>
   );

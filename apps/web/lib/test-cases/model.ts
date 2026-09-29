@@ -112,6 +112,8 @@ export const CASE_DEFAULTS: Omit<CaseFields, 'title' | 'suiteId'> = {
 export const createCaseSchema = caseFieldsSchema.partial().required({ title: true });
 /** An edit: any subset of the fields. */
 export const updateCaseSchema = caseFieldsSchema.partial();
+export type CreateCaseInput = z.input<typeof createCaseSchema>;
+export type UpdateCaseInput = z.input<typeof updateCaseSchema>;
 
 export const suiteFieldsSchema = z.object({
   name: trimmed(LIMITS.suiteName).min(1, 'A suite needs a name.'),

@@ -24,7 +24,7 @@ import {
   type BulkPatch,
   type CaseContext,
 } from '@/lib/test-cases/service';
-import type { CaseFieldsInput } from '@/lib/test-cases/model';
+import type { CreateCaseInput, UpdateCaseInput } from '@/lib/test-cases/model';
 
 /**
  * The test case library's server actions. Each one re-checks access, calls
@@ -43,7 +43,8 @@ async function run<T extends object>(ref: ProjectRef, permission: Permission, fn
   if (denied(access)) return access;
   try {
     const result = await fn({ projectId: access.project.id, teamId: access.team.id, actorId: access.user.id });
-    revalidatePath(`/teams/${ref.team}/projects/${ref.project}/cases`, 'layout');
+    // The project layout is the nearest one above every case page (the list, a case, its history).
+    revalidatePath(`/teams/${ref.team}/projects/${ref.project}`, 'layout');
     return { ok: true, ...result };
   } catch (error) {
     if (error instanceof CaseError) return actionError(error.message);
@@ -57,14 +58,14 @@ const DELETE: Permission = { testCase: ['delete'] };
 
 // ---------------------------------------------------------------- cases
 
-export async function createCase(ref: ProjectRef, values: CaseFieldsInput) {
+export async function createCase(ref: ProjectRef, values: CreateCaseInput) {
   return run(ref, CREATE, async (ctx) => {
     const row = await createCaseService(ctx, values);
     return { number: row.number, message: `${caseKey(row.number)} created.` };
   });
 }
 
-export async function updateCase(ref: ProjectRef, caseId: string, values: Partial<CaseFieldsInput>, expectedVersion?: number) {
+export async function updateCase(ref: ProjectRef, caseId: string, values: UpdateCaseInput, expectedVersion?: number) {
   return run(ref, UPDATE, async (ctx) => {
     const row = await updateCaseService(ctx, caseId, values, { expectedVersion });
     return { number: row.number, message: `${caseKey(row.number)} saved.` };
