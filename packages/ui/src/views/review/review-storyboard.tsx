@@ -1,7 +1,7 @@
 'use client';
 
 import { Check, ChevronRight, CircleAlert, ClipboardList, Film, Folder, Images, Route, Search, ZoomIn, ZoomOut } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '../../components/badge';
 import { Button } from '../../components/button';
 import { Input } from '../../components/input';
@@ -39,12 +39,12 @@ import {
 import { toneSolid } from '../../lib/tone';
 import { CheckpointViewer, type ReviewSelection } from './checkpoint-viewer';
 import { ReviewTree } from './review-tree';
-import { ScreenFrame } from './screen-frame';
+import { SCREEN_ZOOM_VAR, ScreenFrame } from './screen-frame';
 
 export type { ReviewSelection };
 
 /** The overview's scale of a capture's real size: 10% (a strip of stamps) to 50% (readable, scrolling screens). */
-export const STORYBOARD_SIZE = { min: 0.1, max: 0.5, step: 0.02, default: 0.18 } as const;
+export const STORYBOARD_SIZE = { min: 0.1, max: 0.5, step: 0.01, jump: 0.05, default: 0.18 } as const;
 /** From this scale the frames load the full image and scroll, so a flow can be read without opening it. */
 const SCROLL_FROM = 0.28;
 
@@ -155,6 +155,10 @@ export function ReviewStoryboard({
   const [grouping, setGrouping] = useControlled<ReviewGrouping>(groupingProp, onGroupingChange, hasCases ? 'suite' : 'file');
   const [folder, setFolder] = useControlled<string | null>(folderProp, onFolderChange, null);
   const [size, setSize] = useControlled<number>(sizeProp, onSizeChange, STORYBOARD_SIZE.default);
+  // Dragging the size slider scales the screens through a CSS variable, set at most once a frame, instead of
+  // re-rendering every row; the rows render again once, when the slider lets go.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const setLiveSize = (v: number) => rootRef.current?.style.setProperty(SCREEN_ZOOM_VAR, String(v));
   // While the viewer is open it keeps the checkpoints it opened with, so a
   // decision that moves one out of the filter does not pull it from under the reviewer.
   const [pinned, setPinned] = useState<ReadonlySet<string> | null>(null);
@@ -260,7 +264,7 @@ export function ReviewStoryboard({
     );
 
   return (
-    <div className="flex flex-col gap-5">
+    <div ref={rootRef} className="flex flex-col gap-5" style={{ [SCREEN_ZOOM_VAR]: size } as React.CSSProperties}>
       {toolbar ? (
         <div className={cn('flex flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between', library && 'items-end 2xl:justify-end')}>
           {library ? null : (
@@ -298,25 +302,7 @@ export function ReviewStoryboard({
                 ))}
               </ToggleGroup>
             ) : null}
-            <div className="flex items-center gap-2 rounded-lg border border-border bg-surface px-2 py-1" title="Screen size">
-              <button type="button" aria-label="Smaller screens" onClick={() => setSize(Math.max(STORYBOARD_SIZE.min, +(size - STORYBOARD_SIZE.step * 2).toFixed(2)))} className="rounded text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/25">
-                <ZoomOut className="size-4" />
-              </button>
-              <Slider
-                className="w-28"
-                min={STORYBOARD_SIZE.min}
-                max={STORYBOARD_SIZE.max}
-                step={STORYBOARD_SIZE.step}
-                value={size}
-                onValueChange={(v) => setSize(Array.isArray(v) ? v[0] : v)}
-                thumbLabel="Screen size"
-                valueText={(v) => `${Math.round(v * 100)}% of the real size`}
-              />
-              <button type="button" aria-label="Larger screens" onClick={() => setSize(Math.min(STORYBOARD_SIZE.max, +(size + STORYBOARD_SIZE.step * 2).toFixed(2)))} className="rounded text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/25">
-                <ZoomIn className="size-4" />
-              </button>
-              <span className="w-9 text-right text-label-s text-muted-foreground tabular-nums">{Math.round(size * 100)}%</span>
-            </div>
+            <SizeControl size={size} onLive={setLiveSize} onCommit={setSize} />
             <div className="relative">
               <Search aria-hidden className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find a test, case or checkpoint" aria-label="Find a test, case or checkpoint" className="h-8 w-60 pl-8" />
@@ -382,7 +368,8 @@ function FlowRow({
   const failed = flow.outcome === 'failed' || flow.outcome === 'timedout' || flow.outcome === 'interrupted';
   const heading = flow.titlePath.length ? flow.titlePath.join(' › ') : flow.title;
   return (
-    <li className="py-5">
+    // Rows out of view skip layout, which keeps resizing the screens cheap on a long review.
+    <li className="py-5 [contain-intrinsic-size:auto_20rem] [content-visibility:auto]">
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div className="grid min-w-0 grid-cols-[1.25rem_minmax(0,1fr)] items-center gap-x-2 gap-y-1">
           {library ? <Route aria-hidden className="size-4 text-muted-foreground" /> : <StatusIcon status={flow.outcome} />}
@@ -436,11 +423,60 @@ function FlowRow({
             <a href={flow.resultHref} className="inline-flex h-6 items-center gap-1.5 text-label-m text-danger-text hover:underline">
               <CircleAlert className="size-4" /> Failed here
             </a>
-            <ScreenFrame image={flow.failureImage} frame={{ width: 1280, height: 720 }} zoom={size} alt="Screenshot at the failure" scroll={false} tone="danger" />
+            <ScreenFrame image={flow.failureImage} frame={{ width: 1280, height: 720 }} zoom={size} live alt="Screenshot at the failure" scroll={false} tone="danger" />
           </li>
         ) : null}
       </ol>
     </li>
+  );
+}
+
+/**
+ * The screen-size slider. While it is dragged it holds the value itself and
+ * hands it to `onLive` once per animation frame, so only the thumb and the
+ * screens' CSS variable move; `onCommit` gets it when the slider lets go (and
+ * on every key press), which renders the rows once at the new size.
+ */
+function SizeControl({ size, onLive, onCommit }: { size: number; onLive: (v: number) => void; onCommit: (v: number) => void }) {
+  const [live, setLive] = useState<number | null>(null);
+  const frame = useRef(0);
+  useEffect(() => () => cancelAnimationFrame(frame.current), []);
+  const shown = live ?? size;
+  const change = (v: number) => {
+    setLive(v);
+    cancelAnimationFrame(frame.current);
+    frame.current = requestAnimationFrame(() => onLive(v));
+  };
+  const commit = (v: number) => {
+    cancelAnimationFrame(frame.current);
+    onLive(v);
+    onCommit(v);
+    setLive(null);
+  };
+  const jump = (by: number) => commit(Math.min(STORYBOARD_SIZE.max, Math.max(STORYBOARD_SIZE.min, +(size + by).toFixed(2))));
+  const icon = 'rounded text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/25 disabled:pointer-events-none disabled:opacity-40';
+  return (
+    <div className="flex items-center gap-2.5 rounded-lg border border-border bg-surface px-2 py-1" title="Screen size">
+      <button type="button" aria-label="Smaller screens" disabled={size <= STORYBOARD_SIZE.min} onClick={() => jump(-STORYBOARD_SIZE.jump)} className={icon}>
+        <ZoomOut className="size-4" />
+      </button>
+      <Slider
+        className="w-28"
+        min={STORYBOARD_SIZE.min}
+        max={STORYBOARD_SIZE.max}
+        step={STORYBOARD_SIZE.step}
+        largeStep={STORYBOARD_SIZE.jump}
+        value={shown}
+        onValueChange={(v) => change(Array.isArray(v) ? v[0] : v)}
+        onValueCommitted={(v) => commit(Array.isArray(v) ? v[0] : v)}
+        thumbLabel="Screen size"
+        valueText={(v) => `${Math.round(v * 100)}% of the real size`}
+      />
+      <button type="button" aria-label="Larger screens" disabled={size >= STORYBOARD_SIZE.max} onClick={() => jump(STORYBOARD_SIZE.jump)} className={icon}>
+        <ZoomIn className="size-4" />
+      </button>
+      <span className="w-9 text-right text-label-s text-muted-foreground tabular-nums">{Math.round(shown * 100)}%</span>
+    </div>
   );
 }
 
@@ -464,10 +500,10 @@ function CheckpointColumn({
   const status = worstStatus(captures.map((c) => c.status));
   const label = checkpointLabel(checkpoint.name, checkpoint.title);
   const scroll = size >= SCROLL_FROM;
-  const width = captures.reduce((sum, c) => sum + Math.max(24, Math.round(captureViewport(c).width * size)), 0) + VARIANT_GAP * (captures.length - 1);
+  const realWidth = captures.reduce((sum, c) => sum + captureViewport(c).width, 0);
   const open = (variant: string | null) => onOpen(checkpoint.id, variantSelected ?? variant);
   return (
-    <li className="flex shrink-0 flex-col gap-2" style={{ width: Math.max(width, 150) }}>
+    <li className="flex shrink-0 flex-col gap-2" style={{ width: `max(150px, calc(${realWidth}px * var(${SCREEN_ZOOM_VAR}, ${size}) + ${VARIANT_GAP * (captures.length - 1)}px))` }}>
       <div className="flex h-6 items-center gap-2">
         <span aria-hidden className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-label-xs text-muted-foreground tabular-nums">
           {checkpoint.sequence + 1}
@@ -493,6 +529,7 @@ function CheckpointColumn({
                 image={c.image}
                 frame={captureViewport(c)}
                 zoom={size}
+                live
                 alt={`${label} — ${c.variant}`}
                 scroll={scroll}
                 label={`${label}, ${c.variant} screen`}

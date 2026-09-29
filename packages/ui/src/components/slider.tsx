@@ -6,8 +6,10 @@ import { cn } from "../lib/cn"
 /**
  * A single-value slider in the house style: a hairline-thin track, the filled
  * part in ink like the primary action, and a white thumb that lifts on hover
- * and takes the focus ring. Built on Base UI's Slider, so arrows, Page Up/Down,
- * Home and End work and the value is announced.
+ * and takes the focus ring. At either end the thumb sits inside the track
+ * rather than hanging half over it, so the ends of the control stay where the
+ * track ends. Built on Base UI's Slider, so arrows, Page Up/Down, Home and End
+ * work and the value is announced.
  */
 function Slider({
   className,
@@ -21,7 +23,7 @@ function Slider({
   valueText?: (value: number) => string
 }) {
   return (
-    <SliderPrimitive.Root data-slot="slider" className={cn("relative flex w-full touch-none items-center select-none data-disabled:opacity-50", className)} {...props}>
+    <SliderPrimitive.Root data-slot="slider" thumbAlignment="edge" className={cn("relative flex w-full touch-none items-center select-none data-disabled:opacity-50", className)} {...props}>
       <SliderPrimitive.Control className="relative flex h-5 w-full cursor-pointer items-center">
         <SliderPrimitive.Track className="relative h-1 w-full overflow-hidden rounded-full bg-muted shadow-[inset_0_0_0_1px_var(--border)]">
           <SliderPrimitive.Indicator className="rounded-full bg-primary" />
