@@ -217,8 +217,9 @@ export const approvedFlows: ReviewFlowView[] = [
 ];
 
 export const reviewQueueRows: ReviewQueueRow[] = [
-  { number: 483, status: 'passed', branch: 'feat/checkout-redesign', commit: '9f2c1ab', commitMessage: 'Redesign the checkout summary', prNumber: 212, startedAt: ago(12).toISOString(), counts: { changed: 4, new: 3, changes_requested: 0, approved: 38 } },
-  { number: 482, status: 'failed', branch: 'fix/coupon-rounding', commit: '51de0c3', commitMessage: 'Round fixed-value coupons to cents', prNumber: 209, startedAt: ago(95).toISOString(), counts: { changed: 0, new: 2, changes_requested: 1, approved: 40 } },
+  { number: 483, status: 'passed', branch: 'feat/checkout-redesign', commit: '9f2c1ab', commitMessage: 'Redesign the checkout summary', prNumber: 212, prTitle: 'Checkout redesign', startedAt: ago(12).toISOString(), counts: { changed: 4, new: 3, changes_requested: 0, approved: 38 } },
+  { number: 482, status: 'failed', branch: 'fix/coupon-rounding', commit: '51de0c3', commitMessage: 'Round fixed-value coupons to cents', prNumber: 209, prTitle: 'Round coupons to cents', startedAt: ago(95).toISOString(), counts: { changed: 0, new: 2, changes_requested: 1, approved: 40 } },
+  { number: 480, status: 'passed', branch: 'feat/checkout-redesign', commit: '77aa010', commitMessage: 'Move the summary into a sidebar', prNumber: 212, prTitle: 'Checkout redesign', startedAt: ago(200).toISOString(), counts: { changed: 6, new: 3, changes_requested: 0, approved: 36 } },
   { number: 481, status: 'passed', branch: 'main', commit: 'a0b1c2d', commitMessage: 'Merge pull request #207', prNumber: null, startedAt: ago(60 * 5).toISOString(), counts: { changed: 0, new: 0, changes_requested: 0, approved: 45 } },
 ];
 

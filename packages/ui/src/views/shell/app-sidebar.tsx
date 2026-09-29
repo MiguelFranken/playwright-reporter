@@ -1,30 +1,6 @@
 'use client';
 
-import {
-  Bot,
-  Building2,
-  Check,
-  ChevronRight,
-  ChevronsUpDown,
-  ClipboardList,
-  Database,
-  FlaskConical,
-  Folder,
-  GitBranch,
-  GitPullRequest,
-  HardDrive,
-  LayoutDashboard,
-  ListChecks,
-  LogOut,
-  Play,
-  ScrollText,
-  Settings,
-  Shield,
-  UserCog,
-  UserRound,
-  Users,
-  Images,
-} from 'lucide-react';
+import { BookImage, Bot, Building2, Check, ChevronRight, ChevronsUpDown, ClipboardList, Database, FlaskConical, Folder, GitBranch, GitPullRequest, HardDrive, Images, LayoutDashboard, ListChecks, LogOut, Play, ScrollText, Settings, Shield, UserCog, UserRound, Users } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../components/collapsible';
@@ -105,6 +81,7 @@ const PROJECT_NAV = [
   { segment: 'dashboard', title: 'Dashboard', icon: LayoutDashboard },
   { segment: 'runs', title: 'Test Runs', icon: Play },
   { segment: 'review', title: 'Visual Review', icon: Images },
+  { segment: 'library', title: 'Library', icon: BookImage },
   { segment: 'tests', title: 'Test Explorer', icon: ListChecks },
   { segment: 'cases', title: 'Test Cases', icon: ClipboardList },
   { segment: 'branches', title: 'Branches', icon: GitBranch },
