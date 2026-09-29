@@ -1,9 +1,9 @@
 'use client';
 
-import { useOptimistic, useState, useTransition } from 'react';
+import { useEffect, useOptimistic, useState, useTransition } from 'react';
 import { toast } from 'sonner';
-import { parseReviewFilter, type ReviewDecisionInput, type ReviewFilter, type ReviewFlowView } from '@miguelfranken/ui/lib/review';
-import { ReviewStoryboard, type ReviewSelection } from '@miguelfranken/ui/views/review/review-storyboard';
+import { DEFAULT_FRAME, parseReviewFilter, REVIEW_GROUPINGS, type FrameSettings, type ReviewDecisionInput, type ReviewFilter, type ReviewFlowView, type ReviewGrouping } from '@miguelfranken/ui/lib/review';
+import { ReviewStoryboard, STORYBOARD_SIZE, type ReviewSelection } from '@miguelfranken/ui/views/review/review-storyboard';
 import { useShallowSearch } from '@/components/filters/url-filters';
 import { decideReview } from '@/app/(app)/teams/[team]/projects/[project]/review/actions';
 
@@ -19,6 +19,38 @@ function applyDecision(flows: ReviewFlowView[], input: ReviewDecisionInput): Rev
   }));
 }
 
+const SETTINGS_KEY = 'pwr.review.view';
+
+interface ViewSettings {
+  size: number;
+  frame: FrameSettings;
+}
+
+/** The reviewer's screen size and viewer frame, kept in this browser; nothing breaks without storage. */
+function useViewSettings(): [ViewSettings | null, (next: Partial<ViewSettings>) => void] {
+  const [settings, setSettings] = useState<ViewSettings | null>(null);
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(SETTINGS_KEY) ?? 'null') as Partial<ViewSettings> | null;
+      const size = typeof saved?.size === 'number' ? Math.min(STORYBOARD_SIZE.max, Math.max(STORYBOARD_SIZE.min, saved.size)) : STORYBOARD_SIZE.default;
+      setSettings({ size, frame: { ...DEFAULT_FRAME, ...(saved?.frame ?? {}) } });
+    } catch {
+      setSettings({ size: STORYBOARD_SIZE.default, frame: DEFAULT_FRAME });
+    }
+  }, []);
+  const update = (patch: Partial<ViewSettings>) =>
+    setSettings((current) => {
+      const next = { size: STORYBOARD_SIZE.default, frame: DEFAULT_FRAME, ...current, ...patch };
+      try {
+        window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
+      } catch {
+        // Private windows and blocked storage: the setting lasts for the page.
+      }
+      return next;
+    });
+  return [settings, update];
+}
+
 /**
  * The storyboard bound to the URL (`status`, `variant`, `q`, and the open
  * checkpoint as `cp` and `v`, so a checkpoint can be linked to) and to the
@@ -31,6 +63,7 @@ export function UrlReviewStoryboard({
   flows,
   canDecide,
   toolbar = true,
+  tree,
   syncUrl = true,
   emptyTitle,
   defaultFilter,
@@ -40,6 +73,8 @@ export function UrlReviewStoryboard({
   flows: ReviewFlowView[];
   canDecide: boolean;
   toolbar?: boolean;
+  /** The folder tree; with the toolbar by default. */
+  tree?: boolean;
   /** Off where the storyboard is embedded in another page's URL. */
   syncUrl?: boolean;
   emptyTitle?: string;
@@ -51,6 +86,10 @@ export function UrlReviewStoryboard({
   const [pendingIds, setPendingIds] = useState<string[]>([]);
   const [optimistic, addDecision] = useOptimistic(flows, applyDecision);
   const [, startTransition] = useTransition();
+  const [view, setView] = useViewSettings();
+  const [localFolder, setLocalFolder] = useState<string | null>(null);
+  const groupParam = params.get('group');
+  const grouping = (REVIEW_GROUPINGS as readonly string[]).includes(groupParam ?? '') ? (groupParam as ReviewGrouping) : undefined;
 
   const filter: ReviewFilter | undefined = syncUrl && params.get('status') ? parseReviewFilter(params.get('status')) : defaultFilter;
   const cp = params.get('cp');
@@ -71,6 +110,7 @@ export function UrlReviewStoryboard({
     <ReviewStoryboard
       flows={optimistic}
       toolbar={toolbar}
+      tree={tree}
       filter={filter}
       onFilterChange={syncUrl ? (next) => set({ status: next }) : undefined}
       variant={syncUrl ? params.get('variant') : undefined}
@@ -82,6 +122,14 @@ export function UrlReviewStoryboard({
       onDecide={canDecide ? onDecide : undefined}
       pendingIds={pendingIds}
       canDecide={canDecide}
+      grouping={syncUrl ? grouping : undefined}
+      onGroupingChange={syncUrl ? (next) => set({ group: next, folder: null }) : undefined}
+      folder={syncUrl ? params.get('folder') : localFolder}
+      onFolderChange={(next) => (syncUrl ? set({ folder: next }) : setLocalFolder(next))}
+      size={view?.size}
+      onSizeChange={(size) => setView({ size })}
+      frame={view?.frame}
+      onFrameChange={(frame) => setView({ frame })}
       emptyTitle={emptyTitle}
     />
   );

@@ -5,9 +5,10 @@ import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
 import { ReviewStoryboardSkeleton } from '@miguelfranken/ui/views/review/review-skeleton';
 import { UrlReviewStoryboard } from '@/components/review/url-review-storyboard';
 import { requireProject } from '@/lib/auth/access';
-import { getRunByNumber, runReview } from '@/lib/page-data';
+import { casesOfTests, getRunByNumber, runReview } from '@/lib/page-data';
 import { toFlowViews } from '@/lib/review/view-model';
 import { projectHrefs } from '@/lib/view-models';
+import { caseHref } from '@/lib/review/view-model';
 
 type Props = { params: Promise<{ team: string; project: string; number: string }> };
 
@@ -32,7 +33,9 @@ async function Content({ params }: Props) {
   if (!run) notFound();
   const base = `/teams/${team}/projects/${access.project.slug}`;
   const hrefs = projectHrefs(base);
-  const flows = toFlowViews(await runReview({ id: run.id, startedAt: new Date(run.startedAt).toISOString() }), (resultId) => hrefs.result(run.number, resultId));
+  const records = await runReview({ id: run.id, startedAt: new Date(run.startedAt).toISOString() });
+  const byTest = await casesOfTests(access.project.id, records.map((r) => r.testId));
+  const flows = toFlowViews(records, (resultId) => hrefs.result(run.number, resultId), { byTest, href: caseHref(hrefs) });
   const commit = [run.gitBranch, run.gitShortSha].filter(Boolean).join(' @ ');
   return (
     <div className="flex flex-col gap-6">

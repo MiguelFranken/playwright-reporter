@@ -478,7 +478,10 @@ export interface ScreenRecord {
  * newest approved image — or, for a checkpoint nobody approved yet, its newest
  * capture on the default branch.
  */
-export async function screenCatalogue(projectId: string, defaultBranch: string): Promise<ScreenRecord[]> {
+export async function screenCatalogue(projectId: string, defaultBranch: string, filter: { testIds?: readonly string[] } = {}): Promise<ScreenRecord[]> {
+  if (filter.testIds && filter.testIds.length === 0) return [];
+  const forTests = filter.testIds ? inArray(reviewDecisions.testId, [...filter.testIds]) : undefined;
+  const capturesForTests = filter.testIds ? inArray(reviewCaptures.testId, [...filter.testIds]) : undefined;
   const approved = await db
     .selectDistinctOn([reviewDecisions.testId, reviewDecisions.checkpointName, reviewDecisions.variant], {
       captureId: reviewDecisions.captureId,
@@ -487,13 +490,13 @@ export async function screenCatalogue(projectId: string, defaultBranch: string):
     })
     .from(reviewDecisions)
     .leftJoin(users, eq(users.id, reviewDecisions.userId))
-    .where(and(eq(reviewDecisions.projectId, projectId), eq(reviewDecisions.decision, 'approved'), sql`${reviewDecisions.captureId} is not null`))
+    .where(and(eq(reviewDecisions.projectId, projectId), eq(reviewDecisions.decision, 'approved'), sql`${reviewDecisions.captureId} is not null`, forTests))
     .orderBy(reviewDecisions.testId, reviewDecisions.checkpointName, reviewDecisions.variant, desc(reviewDecisions.createdAt));
   const latestOnDefault = await db
     .selectDistinctOn([reviewCaptures.testId, reviewCaptures.checkpointName, reviewCaptures.variant], { id: reviewCaptures.id })
     .from(reviewCaptures)
     .innerJoin(runs, eq(runs.id, reviewCaptures.runId))
-    .where(and(eq(reviewCaptures.projectId, projectId), eq(runs.gitBranch, defaultBranch)))
+    .where(and(eq(reviewCaptures.projectId, projectId), eq(runs.gitBranch, defaultBranch), capturesForTests))
     .orderBy(reviewCaptures.testId, reviewCaptures.checkpointName, reviewCaptures.variant, desc(runs.startedAt));
 
   const approvedIds = new Map(approved.map((a) => [a.captureId!, a]));
