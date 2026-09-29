@@ -16,6 +16,7 @@ import type { ErrorGroup } from '@miguelfranken/ui/views/run/run-errors';
 import type { RunResultRow } from '@miguelfranken/ui/views/run/run-result';
 import type { SpecSummary } from '@miguelfranken/ui/views/run/run-specs';
 import type { AttemptEndPayload, LiveEvent, TestBeginPayload } from './events';
+import { matchesResultFacets, type ResultFacets } from '@miguelfranken/ui/lib/result-filter';
 
 type ResultEvent = Extract<LiveEvent, { type: 'test.begin' | 'attempt.end' }>;
 
@@ -208,7 +209,7 @@ export function reduceRows(rows: RowMap, ev: LiveEvent): RowMap {
   return next;
 }
 
-export interface RowFilters {
+export interface RowFilters extends ResultFacets {
   outcome?: string;
   q?: string;
   file?: string;
@@ -228,7 +229,7 @@ export function matchesRowFilters(row: RunResultRow, f: RowFilters): boolean {
   }
   if (f.file && row.file !== f.file) return false;
   if (f.signature && row.errorSignature !== f.signature) return false;
-  return true;
+  return matchesResultFacets(row, f);
 }
 
 const OUTCOME_RANK: Record<string, number> = { failed: 0, timedout: 0, interrupted: 1, flaky: 2, running: 3, passed: 4 };

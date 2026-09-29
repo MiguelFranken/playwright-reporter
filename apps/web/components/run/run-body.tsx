@@ -14,7 +14,18 @@ import { UrlRunSpecs } from './url-run-specs';
 import { UrlRunSummary, type SummaryHead } from './url-run-summary';
 
 /** Params cleared on a tab switch — a filter from the old tab rarely fits the new one. */
-const TAB_RESETS = { outcome: null, q: null, file: null, signature: null, sort: null, status: null };
+const TAB_RESETS = {
+  outcome: null,
+  q: null,
+  file: null,
+  signature: null,
+  sort: null,
+  status: null,
+  artifact: null,
+  pwProject: null,
+  tag: null,
+  retried: null,
+};
 
 /**
  * The run's tab strip and the active tab's body, switched in the browser.

@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { counts } from '../../fixtures/runs';
 import { mixedResults, passedResults } from '../../fixtures/results';
 import { PENDING_STATE_A11Y } from '../../fixtures/a11y';
@@ -121,5 +121,36 @@ export const FilteredWithWholeRunBreakdowns: Story = {
   },
   play: async ({ canvasElement }) => {
     await expect(within(canvasElement).queryByText(/no error messages recorded/i)).toBeNull();
+  },
+};
+
+/** The facet menu: attachments, retries, Playwright projects and tags, each with its count. */
+export const FilterMenuReportsChanges: Story = {
+  play: async ({ canvasElement, args }) => {
+    await userEvent.click(within(canvasElement).getByRole('button', { name: /^filter/i }));
+    const menu = within(await within(document.body).findByRole('menu'));
+    await expect(menu.getByText('Playwright project')).toBeInTheDocument();
+    await expect(menu.getByText('Tags')).toBeInTheDocument();
+    await userEvent.click(menu.getByRole('menuitemcheckbox', { name: /^with screenshot/i }));
+    await expect(args.onFilterChange).toHaveBeenCalledWith({ artifact: ['screenshot'] });
+    await userEvent.click(menu.getByRole('menuitemcheckbox', { name: /^retried/i }));
+    await expect(args.onFilterChange).toHaveBeenCalledWith({ retried: true });
+  },
+};
+
+/** "With" and "without" the same kind exclude each other: ticking one drops the other. */
+export const FilteredWithoutScreenshots: Story = {
+  args: { filters: { artifact: ['screenshot'], pwProject: ['firefox'] } },
+  play: async ({ canvasElement, args }) => {
+    const trigger = within(canvasElement).getByRole('button', { name: /^filter/i });
+    await expect(trigger).toHaveTextContent('2');
+    await userEvent.click(trigger);
+    const menu = within(await within(document.body).findByRole('menu'));
+    await userEvent.click(menu.getByRole('menuitemcheckbox', { name: /^without screenshot/i }));
+    await expect(args.onFilterChange).toHaveBeenCalledWith({ artifact: ['no-screenshot'] });
+    await userEvent.click(menu.getByRole('menuitem', { name: /clear filters/i }));
+    await expect(args.onFilterChange).toHaveBeenCalledWith({ artifact: null, pwProject: null, tag: null, retried: null });
+    // Clearing closes the menu; the accessibility check runs once it has gone.
+    await waitFor(() => expect(within(document.body).queryByRole('menu')).toBeNull());
   },
 };

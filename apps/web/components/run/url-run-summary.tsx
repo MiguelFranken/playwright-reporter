@@ -6,6 +6,7 @@ import { RunSummary, type RunSummaryFilterChange, type RunSummaryFilters } from 
 import type { LoadingResultGroup } from '@miguelfranken/ui/views/run/run-result-groups';
 import type { RunResultRow } from '@miguelfranken/ui/views/run/run-result';
 import type { SpecSummary } from '@miguelfranken/ui/views/run/run-specs';
+import { RESULT_FACET_PARAMS, hasResultFacets, parseResultFacets } from '@miguelfranken/ui/lib/result-filter';
 import { RunTabSkeleton } from '@miguelfranken/ui/views/run/run-skeleton';
 import { RunTabError } from '@miguelfranken/ui/views/run/run-tab-error';
 import type { RunCounts } from '@miguelfranken/ui/patterns/counts-bar';
@@ -73,7 +74,14 @@ export function UrlRunSummary({
   const outcome = params.get('outcome') || undefined;
   const q = params.get('q') || undefined;
   const signature = params.get('signature') || undefined;
-  const filters = useMemo<RunSummaryFilters & { signature?: string }>(() => ({ outcome, q, signature }), [outcome, q, signature]);
+  const facetKey = resultFacetKey(params);
+  const filters = useMemo<RunSummaryFilters>(
+    () => ({ outcome, q, signature, ...parseResultFacets((key) => params.getAll(key)) }),
+    // The facets are read again only when their params change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [outcome, q, signature, facetKey],
+  );
+  const faceted = hasResultFacets(filters);
 
   const query = useQuery(runRowsQuery(runRef));
   // The whole run's rows stream in behind the head, and may well have landed
@@ -90,11 +98,13 @@ export function UrlRunSummary({
   const runRows = useMemo(() => (rowMap ? [...rowMap.values()] : liveRows), [rowMap, liveRows]);
 
   // The head holds every failing and flaky row, and nothing else is needed
-  // until the filter asks for a passed or skipped test or searches titles.
-  const needsAll = !complete && (Boolean(q) || (outcome !== undefined && !HEAD_OUTCOMES.has(outcome)));
+  // until the filter asks for a passed or skipped test, searches titles, or
+  // narrows by a facet across every outcome.
+  const needsAll =
+    !complete && (Boolean(q) || (outcome !== undefined ? !HEAD_OUTCOMES.has(outcome) : faceted));
   const loadingGroups = useMemo(
-    () => (complete || !head || outcome || signature ? [] : pendingFiles(head.specs, liveRows)),
-    [complete, head, outcome, signature, liveRows],
+    () => (complete || !head || outcome || signature || faceted ? [] : pendingFiles(head.specs, liveRows)),
+    [complete, head, outcome, signature, faceted, liveRows],
   );
 
   if (!data) {
@@ -112,9 +122,16 @@ export function UrlRunSummary({
       loadingGroups={loadingGroups}
       loading={needsAll}
       filters={filters}
-      onFilterChange={(change: RunSummaryFilterChange) => set(change)}
+      onFilterChange={({ retried, ...change }: RunSummaryFilterChange) =>
+        set(retried === undefined ? change : { ...change, retried: retried ? '1' : null })
+      }
     />
   );
+}
+
+/** The facets' params as one string, so the memo above follows them and nothing else. */
+function resultFacetKey(params: URLSearchParams): string {
+  return RESULT_FACET_PARAMS.map((k) => params.getAll(k).join(',')).join('|');
 }
 
 /**

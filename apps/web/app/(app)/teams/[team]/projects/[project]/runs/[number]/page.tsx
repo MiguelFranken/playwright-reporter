@@ -4,6 +4,7 @@ import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
 import { RunHeaderSkeleton } from '@miguelfranken/ui/views/run/run-header';
 import { RunTabsSkeleton } from '@miguelfranken/ui/views/run/run-skeleton';
 import { triagePrompt } from '@miguelfranken/ui/lib/ai-handoff';
+import { hasResultFacets, parseResultFacets } from '@miguelfranken/ui/lib/result-filter';
 import { parseRunTab } from '@/components/run/run-tab';
 import { RunBody } from '@/components/run/run-body';
 import type { SummaryHead } from '@/components/run/url-run-summary';
@@ -31,6 +32,10 @@ type SearchParams = Promise<{
   signature?: string;
   sort?: string;
   status?: string | string[];
+  artifact?: string | string[];
+  pwProject?: string | string[];
+  tag?: string | string[];
+  retried?: string;
 }>;
 type Props = { params: Params; searchParams: SearchParams };
 
@@ -116,7 +121,10 @@ async function Body({ params, searchParams }: Props) {
   const loadRows = () => listRunResultsWithCursor(found.id);
   const loadSpecs = () => listRunSpecsWithCursor(found.id);
   const loadErrors = () => listRunErrorGroupsWithCursor(found.id);
-  const summaryNeedsAll = tab === 'summary' && Boolean(sp.q || (sp.outcome && sp.outcome !== 'all' && !HEAD_OUTCOMES.has(sp.outcome)));
+  const faceted = hasResultFacets(parseResultFacets((key) => [sp[key as keyof typeof sp] ?? []].flat()));
+  const narrowsOutcome = Boolean(sp.outcome && sp.outcome !== 'all');
+  const summaryNeedsAll =
+    tab === 'summary' && Boolean(sp.q || (narrowsOutcome ? !HEAD_OUTCOMES.has(sp.outcome!) : faceted));
 
   // The tabs this render does not wait for start first, beside the one it does.
   if (!summaryNeedsAll) void queries.prefetchQuery({ ...runRowsQuery(runRef), queryFn: loadRows });

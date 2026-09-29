@@ -9,6 +9,7 @@
  */
 import type { RunHeaderData } from '@miguelfranken/ui/views/run/run-header';
 import type { RunListItem } from '@miguelfranken/ui/views/runs/runs-table';
+import { resultFacetParams, type ResultFacets } from '@miguelfranken/ui/lib/result-filter';
 
 /**
  * GitHub, GitLab and Bitbucket each shape a commit URL differently. That is
@@ -76,7 +77,7 @@ export function projectHrefs(base: string) {
 export function runHrefs(
   base: string,
   runNumber: number,
-  filters: { q?: string; outcome?: string; sort?: string; status?: string[] } = {},
+  filters: { q?: string; outcome?: string; sort?: string; status?: string[] } & ResultFacets = {},
 ) {
   const runBase = `${base}/runs/${runNumber}`;
   const withParams = (params: Record<string, string | string[] | undefined>) => {
@@ -92,7 +93,7 @@ export function runHrefs(
     result: (resultId: string) => `${runBase}/tests/${resultId}`,
     // Clicking the tile you are already filtered by clears the filter.
     outcome: (outcome: string) =>
-      withParams({ q: filters.q, outcome: filters.outcome === outcome ? undefined : outcome }),
+      withParams({ q: filters.q, outcome: filters.outcome === outcome ? undefined : outcome, ...resultFacetParams(filters) }),
     clearFilters: runBase,
     errorGroup: (signature: string) => withParams({ signature }),
     // Opening a spec file keeps the list you picked it out of — the search,

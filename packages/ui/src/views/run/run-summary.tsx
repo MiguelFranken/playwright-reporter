@@ -1,14 +1,33 @@
 'use client';
 
 import * as React from 'react';
-import { CheckCircle2, ChevronsDownUp, ChevronsUpDown, MinusCircle, Repeat2, XCircle } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronsDownUp, ChevronsUpDown, ListFilter, MinusCircle, Repeat2, XCircle } from 'lucide-react';
 import { Link } from '../../provider';
 import { Button } from '../../components/button';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '../../components/dropdown-menu';
 import { CountTabs } from '../../patterns/count-tabs';
 import { OutcomeCard } from '../../patterns/outcome-card';
 import { SearchField } from '../../patterns/filter-controls';
 import { tallyCategories } from '../../lib/error-category';
 import { takeOverPlainClick } from '../../lib/plain-click';
+import {
+  ARTIFACT_KINDS,
+  ARTIFACT_LABELS,
+  countResultFacets,
+  hasArtifact,
+  hasResultFacets,
+  type ArtifactFilter,
+  type ResultFacets,
+} from '../../lib/result-filter';
 import type { RunCounts } from '../../patterns/counts-bar';
 import { ResultGroupsSkeleton } from './run-skeleton';
 import { RunResultGroups, groupByFile, type LoadingResultGroup } from './run-result-groups';
@@ -26,16 +45,21 @@ import type { RunResultRow, RunResultsHrefs } from './run-result';
  * ought to be shareable exactly as you are reading it. A plain click is
  * reported through `onFilterChange` instead of followed, so a host holding the
  * run's rows re-filters them in place; other clicks open the link.
+ *
+ * The facets — attachments, Playwright project, tags, retries — sit in one
+ * menu beside the search, the way the specs tab keeps its sort and status.
  */
 
-export interface RunSummaryFilters {
+export interface RunSummaryFilters extends ResultFacets {
   outcome?: string;
   q?: string;
   signature?: string;
 }
 
 /** A filter change: an absent key is untouched, `null` clears it. */
-export type RunSummaryFilterChange = { [K in keyof RunSummaryFilters]?: string | null };
+export type RunSummaryFilterChange = { [K in keyof RunSummaryFilters]?: RunSummaryFilters[K] | null };
+
+const CLEAR_FACETS = { artifact: null, pwProject: null, tag: null, retried: null } satisfies RunSummaryFilterChange;
 
 export interface RunSummaryHrefs extends RunResultsHrefs {
   /** The run's own page, filtered to one outcome (or unfiltered when already active). */
@@ -83,7 +107,8 @@ export function RunSummary({
   const outcome = filters.outcome ?? 'all';
   // Picking the active outcome again clears it, as its link does.
   const selectOutcome = (next: string) => takeOverPlainClick(() => onFilterChange({ outcome: next === 'all' || next === filters.outcome ? null : next }));
-  const clearFilters = takeOverPlainClick(() => onFilterChange({ outcome: null, q: null, signature: null }));
+  const clearFilters = takeOverPlainClick(() => onFilterChange({ outcome: null, q: null, signature: null, ...CLEAR_FACETS }));
+  const filtered = Boolean(filters.q || filters.outcome || filters.signature) || hasResultFacets(filters);
   const failedCount = counts.failed + counts.interrupted;
   const groupCount = React.useMemo(() => groupByFile(rows).length, [rows]) + loadingGroups.length;
   const shownCount = rows.length + loadingGroups.reduce((sum, g) => sum + g.total, 0);
@@ -178,6 +203,7 @@ export function RunSummary({
             isPending={isPending}
             onValueChange={(next) => onFilterChange({ q: next })}
           />
+          <ResultFilterMenu filters={filters} runRows={runRows} onFilterChange={onFilterChange} />
           {filters.signature ? (
             <span className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-surface-sunken px-3 text-body-xs text-muted-foreground">
               Filtered by error group
@@ -207,9 +233,9 @@ export function RunSummary({
             rows={rows}
             loadingGroups={loadingGroups}
             expandAll={expandAll}
-            emptyTitle={filters.q || filters.outcome || filters.signature ? 'No tests match these filters' : 'No results yet'}
+            emptyTitle={filtered ? 'No tests match these filters' : 'No results yet'}
             emptyDescription={
-              filters.q || filters.outcome || filters.signature ? (
+              filtered ? (
                 <>
                   Try a different search, or{' '}
                   <Link href={hrefs.clearFilters} onClick={clearFilters} className="font-medium text-foreground hover:underline">
@@ -227,6 +253,164 @@ export function RunSummary({
       </section>
     </div>
   );
+}
+
+/**
+ * Attachments, Playwright project, tags and retries in one popup. Each option
+ * carries how many tests of the whole run have it, and the groups a run has no
+ * use for (one project, no tags) are left out. The checkbox items keep the
+ * popup open, so several can be ticked in a row.
+ */
+function ResultFilterMenu({
+  filters,
+  runRows,
+  onFilterChange,
+}: {
+  filters: RunSummaryFilters;
+  runRows: RunResultRow[];
+  onFilterChange: (change: RunSummaryFilterChange) => void;
+}) {
+  const artifacts = filters.artifact ?? [];
+  const projects = filters.pwProject ?? [];
+  const tags = filters.tag ?? [];
+  const activeCount = countResultFacets(filters);
+
+  const options = React.useMemo(() => {
+    const withKind = Object.fromEntries(ARTIFACT_KINDS.map((k) => [k, runRows.filter((r) => hasArtifact(r.attachmentKinds, k)).length]));
+    return {
+      withKind,
+      retried: runRows.filter((r) => r.attemptCount > 1).length,
+      projects: tally(runRows.map((r) => r.pwProject).filter(Boolean)),
+      tags: tally(runRows.flatMap((r) => r.tags)),
+    };
+  }, [runRows]);
+
+  // "With" and "without" the same kind cannot both hold: ticking one drops the other.
+  const toggleArtifact = (value: ArtifactFilter, checked: boolean) => {
+    const opposite = value.startsWith('no-') ? value.slice(3) : `no-${value}`;
+    const next = checked ? [...artifacts.filter((a) => a !== opposite), value] : artifacts.filter((a) => a !== value);
+    onFilterChange({ artifact: next.length ? next : null });
+  };
+  const toggle = (key: 'pwProject' | 'tag', current: string[], value: string, checked: boolean) => {
+    const next = checked ? [...current, value] : current.filter((v) => v !== value);
+    onFilterChange({ [key]: next.length ? next : null });
+  };
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger render={<Button variant="outline" />}>
+        <ListFilter data-icon="inline-start" />
+        Filter
+        {activeCount > 0 ? (
+          <span className="inline-flex min-w-4 items-center justify-center rounded-full bg-accent-solid px-1 text-body-xs text-accent-on-solid tabular-nums">
+            {activeCount}
+          </span>
+        ) : null}
+        <ChevronDown data-icon="inline-end" className="text-muted-foreground" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-64">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Attachments</DropdownMenuLabel>
+          {ARTIFACT_KINDS.map((kind) => (
+            <React.Fragment key={kind}>
+              <FacetItem
+                checked={artifacts.includes(kind)}
+                onCheckedChange={(checked) => toggleArtifact(kind, checked)}
+                label={`With ${ARTIFACT_LABELS[kind]}`}
+                count={options.withKind[kind]}
+              />
+              <FacetItem
+                checked={artifacts.includes(`no-${kind}`)}
+                onCheckedChange={(checked) => toggleArtifact(`no-${kind}`, checked)}
+                label={`Without ${ARTIFACT_LABELS[kind]}`}
+                count={runRows.length - options.withKind[kind]}
+              />
+            </React.Fragment>
+          ))}
+        </DropdownMenuGroup>
+
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Attempts</DropdownMenuLabel>
+          <FacetItem
+            checked={filters.retried === true}
+            onCheckedChange={(checked) => onFilterChange({ retried: checked ? true : null })}
+            label="Retried"
+            count={options.retried}
+          />
+        </DropdownMenuGroup>
+
+        {options.projects.length > 1 || projects.length > 0 ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Playwright project</DropdownMenuLabel>
+              {options.projects.map(([name, count]) => (
+                <FacetItem
+                  key={name}
+                  checked={projects.includes(name)}
+                  onCheckedChange={(checked) => toggle('pwProject', projects, name, checked)}
+                  label={name}
+                  count={count}
+                />
+              ))}
+            </DropdownMenuGroup>
+          </>
+        ) : null}
+
+        {options.tags.length > 0 || tags.length > 0 ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Tags</DropdownMenuLabel>
+              {options.tags.map(([name, count]) => (
+                <FacetItem
+                  key={name}
+                  checked={tags.includes(name)}
+                  onCheckedChange={(checked) => toggle('tag', tags, name, checked)}
+                  label={name}
+                  count={count}
+                />
+              ))}
+            </DropdownMenuGroup>
+          </>
+        ) : null}
+
+        {activeCount > 0 ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => onFilterChange(CLEAR_FACETS)}>Clear filters</DropdownMenuItem>
+          </>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function FacetItem({
+  label,
+  count,
+  checked,
+  onCheckedChange,
+}: {
+  label: string;
+  count: number;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+}) {
+  return (
+    <DropdownMenuCheckboxItem checked={checked} onCheckedChange={onCheckedChange}>
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      <span className="text-body-xs text-muted-foreground tabular-nums">{count}</span>
+    </DropdownMenuCheckboxItem>
+  );
+}
+
+/** Each distinct value with how often it occurs, most common first. */
+function tally(values: string[]): [string, number][] {
+  const counts = new Map<string, number>();
+  for (const v of values) counts.set(v, (counts.get(v) ?? 0) + 1);
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
 }
 
 const FAILED = new Set(['failed', 'timedout', 'timedOut', 'interrupted']);
