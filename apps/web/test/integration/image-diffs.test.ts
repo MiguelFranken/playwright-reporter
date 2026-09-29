@@ -61,7 +61,7 @@ async function runWith(tenant: Tenant, images: { desktop: Buffer; mobile: Buffer
 
 async function upload(db: Db, attachmentId: string, bytes: Buffer) {
   const [row] = await db.select().from(attachments).where(eq(attachments.id, attachmentId));
-  await storeUpload(row, new Response(bytes).body, 'image/png');
+  await storeUpload(row, new Response(new Uint8Array(bytes)).body, 'image/png');
 }
 
 async function uploadAll(db: Db, r: Awaited<ReturnType<typeof runWith>>, images: { desktop: Buffer; mobile: Buffer }) {

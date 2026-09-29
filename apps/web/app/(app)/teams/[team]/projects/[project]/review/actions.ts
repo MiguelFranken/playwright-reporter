@@ -4,7 +4,9 @@ import { revalidatePath } from 'next/cache';
 import { actionError, denied, projectForAction, type Denied } from '@/lib/auth/access';
 import type { ReviewDecisionInput } from '@miguelfranken/ui/lib/review';
 import { REVIEW_DECISIONS } from '@miguelfranken/ui/lib/review';
-import { decide, ReviewError } from '@/lib/review/queries';
+import { requestCaptureDiff } from '@/lib/review/diff/dispatch';
+import { IgnoreRegionsError, parseIgnoreRegions, setIgnoreRegions } from '@/lib/review/diff/ignore';
+import { captureInProject, decide, ReviewError } from '@/lib/review/queries';
 
 /**
  * Records a decision about review images. Re-checks access: the team and
@@ -24,4 +26,29 @@ export async function decideReview(ref: { team: string; project: string }, input
     if (error instanceof ReviewError) return actionError(error.message);
     throw error;
   }
+}
+
+/**
+ * Saves the areas a checkpoint's variant leaves out of its comparisons, then
+ * has the capture measured again without them. Deciding about images and
+ * leaving parts of them out take the same permission: both change what a
+ * reviewer is asked to look at.
+ */
+export async function saveIgnoreRegions(ref: { team: string; project: string }, input: { captureId: string; regions: unknown }): Promise<{ ok: true } | Denied> {
+  const access = await projectForAction(ref.team, ref.project, { review: ['decide'] });
+  if (denied(access)) return access;
+  let regions;
+  try {
+    regions = parseIgnoreRegions(input.regions);
+  } catch (error) {
+    if (error instanceof IgnoreRegionsError) return actionError(error.message);
+    throw error;
+  }
+  if (!/^[0-9a-f-]{36}$/i.test(input.captureId)) return actionError('Image not found.');
+  const saved = await setIgnoreRegions(access.project.id, input.captureId.toLowerCase(), regions, access.user.id);
+  if (!saved) return actionError('Image not found.');
+  const found = await captureInProject(access.project.id, input.captureId.toLowerCase());
+  if (found) await requestCaptureDiff(found.capture);
+  revalidatePath(`/teams/${ref.team}/projects/${ref.project}`, 'layout');
+  return { ok: true };
 }

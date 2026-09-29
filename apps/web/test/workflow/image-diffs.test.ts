@@ -34,7 +34,7 @@ async function runWith(db: Db, tenant: Tenant, image: Buffer, startedAt: Date) {
   const checkpoints: Checkpoint[] = [{ name: 'cart', sequence: 0, stepPath: [], variants: [{ variant: 'desktop', attachmentId: ref.id, sha256: createHash('sha256').update(image).digest('hex') }] }];
   await ingestEvents(tenant.tokenProject, run, eventBatch([testBegin({ seq: 0, testKey: KEY }), attemptEnd({ seq: 1, testKey: KEY, startedAt: startedAt.toISOString(), attachments: [ref], checkpoints })]));
   const [row] = await db.select().from(attachments).where(eq(attachments.id, ref.id));
-  await storeUpload(row, new Response(image).body, 'image/png');
+  await storeUpload(row, new Response(new Uint8Array(image)).body, 'image/png');
   return run;
 }
 

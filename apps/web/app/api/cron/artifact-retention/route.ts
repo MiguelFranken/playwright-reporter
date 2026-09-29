@@ -1,4 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
+import { sweepDiffs } from '@/lib/review/diff/store';
 import { sweepExpiredArtifacts } from '@/lib/storage/retention';
 
 /**
@@ -17,10 +18,18 @@ export async function GET(request: Request) {
   if (!secret) return Response.json({ error: 'CRON_SECRET is not configured' }, { status: 503 });
   if (!authorized(request.headers.get('authorization'), secret)) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
+  const started = Date.now();
   const result = await sweepExpiredArtifacts({ trigger: 'cron', budgetMs: BUDGET_MS });
+  // Then the image comparisons whose images the sweep (or a deleted run) took, with their overlays.
+  let diffsSwept = 0;
+  try {
+    for (let n = -1; n !== 0 && Date.now() - started < BUDGET_MS; ) diffsSwept += n = await sweepDiffs();
+  } catch (err) {
+    console.error('[retention] diff sweep failed', err);
+  }
   // A failed sweep fails the call, so the scheduler's own logs show it.
   const status = result.status === 'done' && result.error ? 500 : 200;
-  return Response.json(result, { status, headers: { 'cache-control': 'no-store' } });
+  return Response.json({ ...result, diffsSwept }, { status, headers: { 'cache-control': 'no-store' } });
 }
 
 export const POST = GET;

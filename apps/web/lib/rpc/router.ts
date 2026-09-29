@@ -36,6 +36,7 @@ import { isUuid, parseRange } from '@/lib/db/queries/shared';
 import { runs } from '@/lib/db/schema';
 import { policyFromForm as artifactPolicyFromForm, retentionStats } from '@/lib/storage/retention';
 import { toRunHeaderData, toRunListItem } from '@/lib/view-models';
+import { requestComparison } from '@/lib/review/diff/compare';
 import { diffsEnabled, requestCaptureDiff } from '@/lib/review/diff/dispatch';
 import { needsPlanning } from '@/lib/review/diff/store';
 import { captureInProject } from '@/lib/review/queries';
@@ -183,12 +184,18 @@ export const appRouter = {
      * viewer while it waits: a capture nobody measured yet is planned and
      * queued on the first call, and the viewer asks again until it is done.
      */
-    diff: authed.input(project.extend({ captureId: z.string() })).handler(async ({ input }) => {
-      if (!isUuid(input.captureId)) throw new ORPCError('NOT_FOUND');
+    diff: authed.input(project.extend({ captureId: z.string(), compareCaptureId: z.string().optional() })).handler(async ({ input }) => {
+      if (!isUuid(input.captureId) || (input.compareCaptureId && !isUuid(input.compareCaptureId))) throw new ORPCError('NOT_FOUND');
       const projectId = await readableProjectId(input.team, input.project);
       const found = await captureInProject(projectId, input.captureId.toLowerCase());
       if (!found) throw new ORPCError('NOT_FOUND');
       const { capture } = found;
+      if (input.compareCaptureId) {
+        // The library compares two lines of work: measured against the other one's capture, not a baseline.
+        const other = await captureInProject(projectId, input.compareCaptureId.toLowerCase());
+        if (!other) throw new ORPCError('NOT_FOUND');
+        return { diff: await requestComparison(capture, other.capture), status: capture.status, decision: null };
+      }
       if (!capture.diffAgainst) return { diff: null, status: capture.status, decision: null };
       const queued = await requestCaptureDiff(capture);
       const diff = capture.diff

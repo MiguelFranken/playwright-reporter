@@ -645,13 +645,17 @@ function CheckpointColumn({
                 scroll={scroll}
                 label={`${label}, ${c.variant} screen`}
                 tone={library ? undefined : c.status === 'changed' ? 'warning' : c.status === 'new' ? 'info' : c.status === 'changes_requested' ? 'danger' : undefined}
-                overlay={library ? undefined : (shown) => <ChangeMarks capture={c} shown={shown} />}
+                overlay={library && !c.compare ? undefined : (shown) => <ChangeMarks capture={c} shown={shown} />}
               />
             </div>
             <span className="flex flex-wrap items-center gap-1.5 text-label-xs capitalize text-muted-foreground">
               {library ? null : <ReviewStatusDot status={c.status} />}
               {c.variant}
-              {library ? null : <DiffBadge diff={c.diff} decision={c.decision} className="h-4 px-1 text-label-xs" />}
+              {library && !c.compare ? null : c.compare?.same ? (
+                <span className="normal-case">same as {c.compare.label}</span>
+              ) : (
+                <DiffBadge diff={c.diff} decision={library ? null : c.decision} className="h-4 px-1 text-label-xs" />
+              )}
             </span>
           </div>
         ))}
@@ -666,7 +670,7 @@ function CheckpointColumn({
  */
 function ChangeMarks({ capture, shown }: { capture: ReviewCaptureView; shown: 'full' | 'preview' }) {
   const d = capture.diff;
-  if (!d || d.state !== 'done' || !d.regions.length || capture.status === 'approved') return null;
+  if (!d || d.state !== 'done' || !d.regions.length || (capture.status === 'approved' && !capture.compare)) return null;
   const size = d.head ?? (capture.image.width && capture.image.height ? { width: capture.image.width, height: capture.image.height } : null);
   if (!size) return null;
   const viewport = captureViewport(capture);

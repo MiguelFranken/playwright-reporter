@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useState } from 'react';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
-import { diffStatesFlow, legacyFlow, longTextFlow, placeOrderFlow, reviewFlows, unavailableFlow } from '../../fixtures/review';
+import { diffStatesFlow, legacyFlow, libraryCompareFlows, longTextFlow, placeOrderFlow, reviewFlows, unavailableFlow } from '../../fixtures/review';
 import { CheckpointViewer, type ReviewSelection } from './checkpoint-viewer';
 
 const changed = placeOrderFlow.checkpoints[1];
@@ -146,3 +146,15 @@ export const ContentMoved: Story = { args: { flows: [diffStatesFlow], initial: {
 
 /** Still measuring: the comparisons by eye work meanwhile. */
 export const Measuring: Story = { args: { flows: [diffStatesFlow], initial: { checkpointId: diffStatesFlow.checkpoints[3].id, variant: 'desktop' } } };
+
+/** The library comparing with another line of work: the comparisons come back, labelled with it, and nothing to decide. */
+export const LibraryComparison: Story = {
+  args: { flows: libraryCompareFlows, mode: 'library' },
+  play: async () => {
+    const body = within(document.body);
+    await body.findByRole('dialog');
+    await userEvent.click(body.getByRole('button', { name: 'Side by side' }));
+    await expect(body.getByText('main')).toBeInTheDocument();
+    await expect(body.queryByRole('button', { name: /Approve/ })).toBeNull();
+  },
+};

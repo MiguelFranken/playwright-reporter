@@ -8,6 +8,7 @@ import { audit } from '@/lib/auth/audit';
 import { db } from '@/lib/db/drizzle';
 import { isUuid } from '@/lib/db/queries/shared';
 import { apiTokens, projects } from '@/lib/db/schema';
+import { MAX_TOLERANCE_PERCENT, MAX_TOLERANCE_PIXELS, THRESHOLD_RANGE, visualDiffSettings } from '@/lib/review/diff/settings';
 import { generateToken, hashToken } from '@/lib/tokens';
 
 export type RenameState = { ok: boolean; message?: string } | null;
@@ -71,6 +72,50 @@ export async function updateDefaultBranch(_prev: DefaultBranchState, formData: F
   });
   revalidatePath(`/teams/${teamSlug}/projects/${projectSlug}/settings`);
   return { ok: true, message: branch ? `Base branch set to ${branch}.` : 'Base branch cleared.' };
+}
+
+export type VisualDiffState = { ok: boolean; message?: string } | null;
+
+/**
+ * Sets `projects.settings.visualDiff`: the colour threshold of the pixel
+ * comparison and the tolerance under which a changed review image is
+ * approved automatically. Merged in SQL like the base branch, so other
+ * settings keys survive. Raising the tolerance does not revisit images
+ * already reviewed; it applies to the next measurements.
+ */
+export async function updateVisualDiff(_prev: VisualDiffState, formData: FormData): Promise<VisualDiffState> {
+  const teamSlug = String(formData.get('team') ?? '');
+  const projectSlug = String(formData.get('project') ?? '');
+  if (!teamSlug || !projectSlug) return { ok: false, message: 'Missing project.' };
+  const num = (name: string) => {
+    const raw = String(formData.get(name) ?? '').trim();
+    return raw === '' ? 0 : Number(raw);
+  };
+  const threshold = num('threshold');
+  const maxChangedPixels = num('maxChangedPixels');
+  const maxChangedPercent = num('maxChangedPercent');
+  if (!Number.isFinite(threshold) || threshold < THRESHOLD_RANGE.min || threshold > THRESHOLD_RANGE.max) return { ok: false, message: `The colour threshold is between ${THRESHOLD_RANGE.min} and ${THRESHOLD_RANGE.max}.` };
+  if (!Number.isInteger(maxChangedPixels) || maxChangedPixels < 0 || maxChangedPixels > MAX_TOLERANCE_PIXELS) return { ok: false, message: `Changed pixels are a whole number up to ${MAX_TOLERANCE_PIXELS.toLocaleString('en')}.` };
+  if (!Number.isFinite(maxChangedPercent) || maxChangedPercent < 0 || maxChangedPercent > MAX_TOLERANCE_PERCENT) return { ok: false, message: `The share is between 0 and ${MAX_TOLERANCE_PERCENT}%.` };
+  const next = { threshold, autoApprove: formData.get('autoApprove') === 'on', maxChangedPixels, maxChangedPercent };
+
+  const access = await projectForAction(teamSlug, projectSlug, { project: ['update'] });
+  if (denied(access)) return access;
+  const current = visualDiffSettings(access.project.settings);
+  if (JSON.stringify(current) === JSON.stringify(next)) return { ok: true, message: 'No changes.' };
+
+  await db
+    .update(projects)
+    .set({ settings: sql`${projects.settings} || jsonb_build_object('visualDiff', ${JSON.stringify(next)}::jsonb)`, updatedAt: new Date() })
+    .where(eq(projects.id, access.project.id));
+  await audit('project.update', {
+    actorId: access.user.id,
+    teamId: access.team.id,
+    projectId: access.project.id,
+    target: { slug: access.project.slug, visualDiff: next },
+  });
+  revalidatePath(`/teams/${teamSlug}/projects/${projectSlug}`, 'layout');
+  return { ok: true, message: 'Visual comparison saved.' };
 }
 
 export type CreateTokenResult = { ok: true; token: string; name: string } | { ok: false; message: string };

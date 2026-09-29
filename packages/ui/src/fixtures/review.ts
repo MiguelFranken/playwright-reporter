@@ -312,3 +312,21 @@ export const diffStatesFlow: ReviewFlowView = {
     checkpoint('catalogue-filters', 'Filters open', 3, [capture('Filters', 'desktop', 'changed', { diff: { ...measuredDiff([], { width: 2560, height: 1440 }), state: 'pending', overlayUrl: null } }, { accent: '#e5484d' })]),
   ],
 };
+
+/** The library comparing the shown pull request with `main`: the checkout screens differ, the cart is the same. */
+export const libraryCompareFlows: ReviewFlowView[] = [
+  {
+    ...placeOrderFlow,
+    checkpoints: placeOrderFlow.checkpoints.map((cp) => ({
+      ...cp,
+      captures: cp.captures.map((c) => {
+        const changed = cp.name === 'checkout-ready';
+        return {
+          ...c,
+          compare: { captureId: `main-${c.id}`, image: c.baseline?.image ?? c.image, label: 'main', same: !changed },
+          diff: changed && c.diff ? { ...c.diff, against: 'compare' as const } : null,
+        };
+      }),
+    })),
+  },
+];

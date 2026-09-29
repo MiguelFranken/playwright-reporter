@@ -34,8 +34,8 @@ also accepts `project`, `format` (`markdown` | `json`) and `maxChars`. See the R
 | [`delete_test_suite`](#delete_test_suite) | write | Delete suites that hold no test cases, e.g. |
 | [`link_test_case`](#link_test_case) | write | Link Playwright tests (by test id from find_tests) to a test case, or unlink them. |
 | [`adopt_tests`](#adopt_tests) | write | Turn Playwright tests into test cases already linked to them: steps from their test.step() calls, one case per test across browsers. |
-| [`list_review_checkpoints`](#list_review_checkpoints) | core | A run's review checkpoints — the named screenshots its tests capture at their milestones, per variant (desktop, mobile) — in journey order, with each image's review status: changed against its approved baseline, new, approved or changes requested. |
-| [`get_review_checkpoint`](#get_review_checkpoint) | core | One review checkpoint image to look at, with its approved baseline (or the previous run’s capture) beside it, so you can say what changed. |
+| [`list_review_checkpoints`](#list_review_checkpoints) | core | A run's review checkpoints — the named screenshots its tests capture at their milestones, per variant (desktop, mobile) — in journey order, with each image's review status (changed against its approved baseline, new, approved or changes requested) and its measured pixel change: how much of the image changed, in how many regions, whether the page changed size or its content moved. |
+| [`get_review_checkpoint`](#get_review_checkpoint) | core | One review checkpoint image to look at, with its approved baseline (or the previous run’s capture) beside it, the measured change (changed pixels, regions in image pixels) and close-ups of the largest changed regions, so you can say what changed. |
 | [`review_checkpoint`](#review_checkpoint) | write | Approve review checkpoint images, or ask for changes with a comment. |
 | [`list_library`](#list_library) | core | The visual documentation of the product: the branches and pull requests kept in the library (and the default branch), which run of each is shown — the newest, or a pinned one — and how many of the newest run’s images still wait for review. |
 | [`get_library_flows`](#get_library_flows) | core | The screens of a branch or pull request as the library shows them: each flow (test) with its test cases and its checkpoints in journey order, each with its variants’ capture ids. |
@@ -571,7 +571,7 @@ Structured output fields: `created`, `skipped`, `message`, `truncated`.
 
 **List review checkpoints** · toolset `core`
 
-A run's review checkpoints — the named screenshots its tests capture at their milestones, per variant (desktop, mobile) — in journey order, with each image's review status: changed against its approved baseline, new, approved or changes requested. Defaults to what needs review. Look at one with get_review_checkpoint.
+A run's review checkpoints — the named screenshots its tests capture at their milestones, per variant (desktop, mobile) — in journey order, with each image's review status (changed against its approved baseline, new, approved or changes requested) and its measured pixel change: how much of the image changed, in how many regions, whether the page changed size or its content moved. Changes within the project's tolerance are approved automatically (autoApproved). Defaults to what needs review. Look at one with get_review_checkpoint.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -590,7 +590,7 @@ Structured output fields: `project`, `run`, `reviewUrl`, `counts`, `tests`, `tru
 
 **Get a review checkpoint** · toolset `core`
 
-One review checkpoint image to look at, with its approved baseline (or the previous run’s capture) beside it, so you can say what changed. Full-page images may be tall; a large one comes as a link.
+One review checkpoint image to look at, with its approved baseline (or the previous run’s capture) beside it, the measured change (changed pixels, regions in image pixels) and close-ups of the largest changed regions, so you can say what changed. Full-page images may be tall; a large one comes as a link, but its close-ups still come attached.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -599,8 +599,9 @@ One review checkpoint image to look at, with its approved baseline (or the previ
 | `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
 | `capture` | string | yes | Capture id, from list_review_checkpoints. |
 | `compare` | boolean |  | Also attach the approved baseline image (or the previous run’s) to compare with. Default true. |
+| `changes` | boolean |  | Attach close-ups of the measured changed regions (up to 3), this run’s crop then the reference’s. Default true. |
 
-Structured output fields: `project`, `captureId`, `test`, `checkpoint`, `variant`, `run`, `status`, `viewport`, `sameAsReference`, `reference`, `imageUrl`, `referenceUrl`, `note`, `truncated`.
+Structured output fields: `project`, `captureId`, `test`, `checkpoint`, `variant`, `run`, `status`, `viewport`, `sameAsReference`, `reference`, `imageUrl`, `referenceUrl`, `diff`, `changedRegions`, `note`, `truncated`.
 
 ## review_checkpoint
 

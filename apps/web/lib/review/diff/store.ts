@@ -16,9 +16,9 @@ import { and, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 import { db } from '@/lib/db/drizzle';
 import { attachments, imageDiffs, reviewCaptures, reviewCheckpoints, reviewDecisions, runs } from '@/lib/db/schema';
 import { getStorage } from '@/lib/storage';
-import { checkpointsWhere, type ComparedCapture } from '../queries';
+import { checkpointsWhere, type AttachmentState, type ComparedCapture } from '../queries';
 import { diffImages, DiffTooLargeError } from './engine';
-import { diffSettingsFor, pairOf } from './lookup';
+import { diffSettingsFor, pairOf, type DiffPair, type Rect } from './lookup';
 import { toleranceComment } from './settings';
 
 /** A claim older than this belongs to a worker that died; the row is free again. */
@@ -51,21 +51,35 @@ function referenceOf(c: ComparedCapture) {
 /** Plans the comparisons the captures need and answers the pending ones. */
 export async function planCaptures(captures: readonly ComparedCapture[]): Promise<DiffPlan> {
   const settings = await diffSettingsFor(captures.map((c) => c.projectId));
+  return planPairs(
+    captures.flatMap((c) => {
+      if (c.diff && c.diff.status !== 'pending') return [];
+      const reference = referenceOf(c);
+      const s = settings.get(c.projectId);
+      const pair = s ? pairOf(c, reference, s, c.ignoreRegions) : null;
+      return pair && reference ? [{ pair, head: c.attachment, base: reference.attachment }] : [];
+    }),
+  );
+}
+
+export interface PlannedPair {
+  pair: DiffPair & { options: { threshold: number; ignore: Rect[] } };
+  head: AttachmentState;
+  base: AttachmentState;
+}
+
+/** Plans pairs of images (inserting each once) and answers the pending ones; pairs still uploading wait. */
+export async function planPairs(pairs: readonly PlannedPair[]): Promise<DiffPlan> {
   const rows: (typeof imageDiffs.$inferInsert)[] = [];
   let waiting = 0;
-  for (const c of captures) {
-    if (c.diff && c.diff.status !== 'pending') continue;
-    const reference = referenceOf(c);
-    const s = settings.get(c.projectId);
-    const pair = s ? pairOf(c, reference, s, c.ignoreRegions) : null;
-    if (!pair || !reference) continue;
-    const states = [c.attachment.status, reference.attachment.status];
+  for (const { pair, head, base } of pairs) {
+    const states = [head.status, base.status];
     if (states.some((st) => st === 'pending')) {
       waiting++;
       continue;
     }
     if (states.some((st) => st !== 'uploaded')) continue;
-    rows.push({ id: randomUUID(), ...pair, baseAttachmentId: reference.attachment.id, headAttachmentId: c.attachment.id });
+    rows.push({ id: randomUUID(), ...pair, baseAttachmentId: base.id, headAttachmentId: head.id });
   }
   if (rows.length === 0) return { ids: [], waiting };
   await db.insert(imageDiffs).values(rows).onConflictDoNothing();
@@ -107,7 +121,8 @@ export function needsPlanning(captures: readonly ComparedCapture[], now = Date.n
     const reference = referenceOf(c);
     if (!reference?.sha256 || reference.sha256 === c.sha256) return false;
     if (!c.diff) return c.attachment.status !== 'expired' && reference.attachment.status !== 'expired';
-    return c.diff.status === 'pending' && now - (c.diff.claimedAt ?? c.diff.createdAt).getTime() > CLAIM_TTL_MS;
+    // A cached page may hand the dates back serialized.
+    return c.diff.status === 'pending' && now - new Date(c.diff.claimedAt ?? c.diff.createdAt).getTime() > CLAIM_TTL_MS;
   });
 }
 

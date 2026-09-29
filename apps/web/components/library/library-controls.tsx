@@ -5,7 +5,7 @@ import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Plus } from 'lucide-react';
 import { Button } from '@miguelfranken/ui/components/button';
-import { libraryRefLabel, libraryRefParam, type LibraryReferencePatch, type LibraryReferenceView, type LibraryRefKey, type LibraryRunView } from '@miguelfranken/ui/lib/library';
+import { libraryRefLabel, libraryRefParam, sameLibraryRef, type LibraryReferencePatch, type LibraryReferenceView, type LibraryRefKey, type LibraryRunView } from '@miguelfranken/ui/lib/library';
 import { LibraryCard } from '@miguelfranken/ui/views/library/library-card';
 import { LibraryReferenceBar } from '@miguelfranken/ui/views/library/reference-bar';
 import { AddLibraryReferenceDialog, LibraryReferenceDialog } from '@miguelfranken/ui/views/library/reference-dialogs';
@@ -14,7 +14,8 @@ import { updateLibraryReference } from '@/app/(app)/teams/[team]/projects/[proje
 
 type ProjectRef = { team: string; project: string };
 
-const libraryUrl = (base: string, key: LibraryRefKey) => `${base}/library?ref=${encodeURIComponent(libraryRefParam(key))}`;
+const libraryUrl = (base: string, key: LibraryRefKey, compare?: LibraryRefKey | null) =>
+  `${base}/library?ref=${encodeURIComponent(libraryRefParam(key))}${compare ? `&compare=${encodeURIComponent(libraryRefParam(compare))}` : ''}`;
 
 /** One library change at a time: pending, the error to show in a dialog, and a toast on success. */
 function useLibraryUpdate(ref: ProjectRef) {
@@ -91,6 +92,7 @@ export function ConnectedReferenceBar({
   base,
   references,
   current,
+  compareWith = null,
   runs,
   canManage,
 }: {
@@ -99,6 +101,8 @@ export function ConnectedReferenceBar({
   base: string;
   references: LibraryReferenceView[];
   current: LibraryReferenceView;
+  /** The reference the screens are compared with (`?compare=`). */
+  compareWith?: LibraryReferenceView | null;
   runs: LibraryRunView[];
   canManage: boolean;
 }) {
@@ -110,7 +114,9 @@ export function ConnectedReferenceBar({
       <LibraryReferenceBar
         references={references}
         current={current}
-        onReferenceChange={(key) => router.push(libraryUrl(base, key))}
+        onReferenceChange={(key) => router.push(libraryUrl(base, key, compareWith && !sameLibraryRef(compareWith.key, key) ? compareWith.key : null))}
+        compareWith={compareWith}
+        onCompareChange={(key) => router.push(libraryUrl(base, current.key, key))}
         runHref={(n) => `${base}/runs/${n}`}
         reviewHref={current.latestRun ? `${base}/runs/${current.latestRun.number}/review` : null}
         onSettings={canManage ? () => setSettingsOpen(true) : undefined}

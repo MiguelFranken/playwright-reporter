@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, fn, userEvent, within } from 'storybook/test';
-import { approvedFlows, diffStatesFlow, failedFlow, legacyFlow, longTextFlow, placeOrderFlow, reviewFlows, unavailableFlow } from '../../fixtures/review';
+import { approvedFlows, diffStatesFlow, failedFlow, libraryCompareFlows, legacyFlow, longTextFlow, placeOrderFlow, reviewFlows, unavailableFlow } from '../../fixtures/review';
 import { ReviewStoryboard } from './review-storyboard';
 
 const meta = {
@@ -125,5 +125,15 @@ export const MostChangedFirst: Story = {
     await expect(args.onSortChange).toHaveBeenCalledWith('most-changed');
     const headings = canvas.getAllByRole('heading', { level: 3 });
     await expect(headings[0]).toHaveTextContent('Catalogue › browses the catalogue');
+  },
+};
+
+/** The library comparing two lines of work: what differs is boxed and measured, the rest says it is the same. */
+export const LibraryComparison: Story = {
+  args: { flows: libraryCompareFlows, mode: 'library' },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getAllByText('same as main').length).toBeGreaterThan(0);
+    await expect(canvas.getByLabelText('0.51% changed')).toBeInTheDocument();
   },
 };

@@ -4,6 +4,7 @@ import { errorResponse, json, readJson, requireRunToken } from '@/lib/ingest/htt
 import { finishRun } from '@/lib/ingest/service';
 import { afterPush } from '@/lib/push';
 import { afterRunFinished } from '@/lib/review/diff/dispatch';
+import { sweepDiffs } from '@/lib/review/diff/store';
 import { afterIngest } from '@/lib/runs/watchdog';
 import { ingestSweepEnabled as dataSweepEnabled, sweepDataAfterIngest } from '@/lib/data-retention';
 import { ingestSweepEnabled, sweepAfterIngest } from '@/lib/storage/retention';
@@ -27,6 +28,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ run
       after(async () => {
         if (ingestSweepEnabled()) await sweepAfterIngest().catch((err) => console.error('[retention] ingest sweep failed', err));
         if (dataSweepEnabled()) await sweepDataAfterIngest().catch((err) => console.error('[data-retention] ingest sweep failed', err));
+        await sweepDiffs({ limit: 200 }).catch((err) => console.error('[retention] diff sweep failed', err));
       });
     }
     return json(res satisfies RunFinishResponse);
