@@ -7,7 +7,8 @@
  * merged when their variants do not collide, so the storyboard shows the two
  * devices side by side, as it does for resized variants of one test.
  */
-import type { ReviewCaseRef, ReviewCaptureView, ReviewCheckpointView, ReviewFlowView, ReviewImage, ReviewStatus } from '@miguelfranken/ui/lib/review';
+import type { ReviewCaseRef, ReviewCaptureView, ReviewCheckpointView, ReviewDiffView, ReviewFlowView, ReviewImage, ReviewStatus } from '@miguelfranken/ui/lib/review';
+import type { DiffRecord } from './diff/lookup';
 import { traceViewerUrl } from '@/lib/trace-viewer/url';
 import type { AttachmentState, CaptureRecord, CheckpointRecord, ComparedCapture, ReviewFlowRecord } from './queries';
 
@@ -25,6 +26,34 @@ export function toReviewImage(capture: Pick<CaptureRecord, 'attachment' | 'thumb
   };
 }
 
+export const diffOverlayUrl = (id: string) => `/api/diffs/${id}/overlay`;
+
+/** A measured (or pending) comparison as the viewer shows it. */
+export function toDiffView(diff: DiffRecord, against: ReviewDiffView['against'], withinTolerance = false): ReviewDiffView {
+  const base = diff.baseWidth && diff.baseHeight ? { width: diff.baseWidth, height: diff.baseHeight } : null;
+  const head = diff.headWidth && diff.headHeight ? { width: diff.headWidth, height: diff.headHeight } : null;
+  return {
+    id: diff.id,
+    state: diff.status,
+    against,
+    changedPixels: diff.changedPixels ?? 0,
+    totalPixels: diff.totalPixels ?? 0,
+    ratio: diff.ratio ?? 0,
+    sizeChanged: Boolean(base && head && (base.width !== head.width || base.height !== head.height)),
+    base,
+    head,
+    regions: diff.regions ?? [],
+    regionsTruncated: diff.regionsTruncated,
+    overlayUrl: diff.status === 'done' && diff.overlayKey ? diffOverlayUrl(diff.id) : null,
+    shift: diff.shift,
+    withinTolerance,
+    error: diff.status === 'failed' || diff.status === 'too_large' ? diff.error : null,
+  };
+}
+
+/** A comparison planned (or about to be) and not measured yet. */
+export const pendingDiff = (against: ReviewDiffView['against'], id = ''): ReviewDiffView => ({ id, state: 'pending', against, changedPixels: 0, totalPixels: 0, ratio: 0, sizeChanged: false, regions: [] });
+
 export function toCaptureView(c: ComparedCapture): ReviewCaptureView {
   return {
     id: c.id,
@@ -36,7 +65,7 @@ export function toCaptureView(c: ComparedCapture): ReviewCaptureView {
     isMobile: c.isMobile,
     fullPage: c.fullPage,
     decision: c.decision
-      ? { decision: c.decision.decision, by: c.decision.by, at: c.decision.createdAt.toISOString(), comment: c.decision.comment, runNumber: c.decision.runNumber }
+      ? { decision: c.decision.decision, by: c.decision.by, at: c.decision.createdAt.toISOString(), comment: c.decision.comment, runNumber: c.decision.runNumber, source: c.decision.source }
       : null,
     baseline: c.baseline?.capture
       ? {
@@ -51,6 +80,8 @@ export function toCaptureView(c: ComparedCapture): ReviewCaptureView {
     previous: c.previous
       ? { captureId: c.previous.capture.id, image: toReviewImage(c.previous.capture), runNumber: c.previous.runNumber, same: Boolean(c.sha256 && c.previous.capture.sha256 === c.sha256) }
       : null,
+    diff: c.diff && c.diffAgainst ? toDiffView(c.diff, c.diffAgainst, c.withinTolerance) : null,
+    ignoreRegions: c.ignoreRegions.length ? c.ignoreRegions.map((r) => ({ ...r, pixels: 0 })) : undefined,
   };
 }
 
