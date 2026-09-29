@@ -23,7 +23,7 @@ describe('isPrefetchRoute', () => {
     `${project}/cases/12`,
     `${project}/cases/12/history`,
     `${project}/review`,
-    `${project}/review/screens`,
+    `${project}/library`,
     `${project}/runs/128/review`,
     `${project}/runs/128/review?status=all&cp=abc`,
   ])('prefetches the page behind %s on intent', (href) => {

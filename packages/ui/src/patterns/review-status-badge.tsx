@@ -11,11 +11,15 @@ const ICONS: Record<ReviewStatus, React.ComponentType<{ className?: string }>> =
   new: Sparkles,
 };
 
-/** A review image's status: label, icon and tone, so colour is never the only carrier. */
+/**
+ * A review image's status: label, icon and tone, so colour is never the only
+ * carrier. A flat tinted pill — no border, no shadow — so it sits quietly
+ * beside the screens it describes.
+ */
 export function ReviewStatusBadge({ status, className, label }: { status: ReviewStatus; className?: string; label?: string }) {
   const Icon = ICONS[status];
   return (
-    <Badge variant="outline" className={cn('gap-1.5 font-medium', toneBadge[REVIEW_STATUS_TONES[status]], className)}>
+    <Badge variant="outline" className={cn('gap-1 font-medium', toneBadge[REVIEW_STATUS_TONES[status]], 'border-transparent', className)}>
       <Icon className="size-3" />
       {label ?? REVIEW_STATUS_LABELS[status]}
     </Badge>

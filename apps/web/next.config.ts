@@ -19,6 +19,10 @@ const nextConfig: NextConfig = {
     // request body at 4.5 MB, so 4 MB leaves room for the multipart framing.
     serverActions: { bodySizeLimit: '4mb' },
   },
+  async redirects() {
+    // The visual review's approved screens became the library; the query (a search, a folder) carries over.
+    return [{ source: '/teams/:team/projects/:project/review/screens', destination: '/teams/:team/projects/:project/library', permanent: true }];
+  },
   async headers() {
     // Playwright's Trace Viewer, served from public/trace (lib/trace-viewer).
     return [{ source: '/trace/:path*', headers: traceViewerHeaders() }];

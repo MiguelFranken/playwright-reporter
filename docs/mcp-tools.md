@@ -36,6 +36,9 @@ also accepts `project`, `format` (`markdown` | `json`) and `maxChars`. See the R
 | [`list_review_checkpoints`](#list_review_checkpoints) | core | A run's review checkpoints — the named screenshots its tests capture at their milestones, per variant (desktop, mobile) — in journey order, with each image's review status: changed against its approved baseline, new, approved or changes requested. |
 | [`get_review_checkpoint`](#get_review_checkpoint) | core | One review checkpoint image to look at, with its approved baseline (or the previous run’s capture) beside it, so you can say what changed. |
 | [`review_checkpoint`](#review_checkpoint) | write | Approve review checkpoint images, or ask for changes with a comment. |
+| [`list_library`](#list_library) | core | The visual documentation of the product: the branches and pull requests kept in the library (and the default branch), which run of each is shown — the newest, or a pinned one — and how many of the newest run’s images still wait for review. |
+| [`get_library_flows`](#get_library_flows) | core | The screens of a branch or pull request as the library shows them: each flow (test) with its test cases and its checkpoints in journey order, each with its variants’ capture ids. |
+| [`set_library_reference`](#set_library_reference) | write | Keep a branch or pull request in the library (a long-lived pull request can stay browsable while it is open), pin the run that documents it, make it the default, name it — or take it out. |
 
 ## whoami
 
@@ -594,6 +597,59 @@ Approve review checkpoint images, or ask for changes with a comment. An approval
 | `comment` | string |  | Why — what should change. Shown to the reviewer beside the image. |
 
 Structured output fields: `project`, `decided`, `decision`, `truncated`.
+
+## list_library
+
+**List the library** · toolset `core`
+
+The visual documentation of the product: the branches and pull requests kept in the library (and the default branch), which run of each is shown — the newest, or a pinned one — and how many of the newest run’s images still wait for review. Read a reference’s screens with get_library_flows.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+
+Structured output fields: `project`, `defaultReference`, `url`, `references`, `truncated`.
+
+## get_library_flows
+
+**Get library flows** · toolset `core`
+
+The screens of a branch or pull request as the library shows them: each flow (test) with its test cases and its checkpoints in journey order, each with its variants’ capture ids. Look at an image with get_review_checkpoint. Defaults to the library’s default reference.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+| `branch` | string |  | A branch, e.g. "main". Leave both out for the library’s default reference. |
+| `pullRequest` | integer (–9007199254740991) |  | A pull (merge) request number, e.g. 212. |
+| `test` | string |  | Part of a test title, file or test case key (TC-12), to narrow the flows. |
+| `limit` | integer (1–500) |  | At most this many flows (default 50). |
+
+Structured output fields: `project`, `reference`, `name`, `pinnedRun`, `url`, `total`, `more`, `flows`, `truncated`.
+
+## set_library_reference
+
+**Keep or pin a library reference** · toolset `write` · **writes**
+
+Keep a branch or pull request in the library (a long-lived pull request can stay browsable while it is open), pin the run that documents it, make it the default, name it — or take it out. Needs a branch or pull request.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+| `branch` | string |  | A branch, e.g. "main". Leave both out for the library’s default reference. |
+| `pullRequest` | integer (–9007199254740991) |  | A pull (merge) request number, e.g. 212. |
+| `keep` | boolean |  | false takes it out of the library. Default: keep it. |
+| `pin` | integer (–9007199254740991) \| string |  | A run number to pin as the version shown, or "latest" to follow the newest run. |
+| `default` | boolean |  | true makes it the reference the library opens on. |
+| `title` | string |  | What readers call it, e.g. "Checkout redesign". Empty clears it. |
+| `description` | string |  | A sentence on what it shows. Empty clears it. |
+
+Structured output fields: `project`, `reference`, `kept`, `url`, `truncated`.
 
 ## Prompts
 

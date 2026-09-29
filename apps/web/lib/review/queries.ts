@@ -1,7 +1,6 @@
 /**
  * Reading review checkpoints: a run's storyboard, the status of each image,
- * what it is compared against, and the project-wide views (the review queue,
- * the screen catalogue).
+ * what it is compared against, and the review queue.
  *
  * An image's status comes from `review_decisions`: the newest decision about
  * its exact pixels (same checkpoint, variant and hash) if there is one;
@@ -260,7 +259,7 @@ export async function compareCaptures(
 }
 
 /** The checkpoints of some results' final attempts, in order, with their compared captures. */
-async function checkpointsWhere(where: SQL, context?: { runId: string; runStartedAt: Date }): Promise<CheckpointRecord[]> {
+export async function checkpointsWhere(where: SQL, context?: { runId: string; runStartedAt: Date }): Promise<CheckpointRecord[]> {
   const cps = await db
     .select({
       id: reviewCheckpoints.id,
@@ -313,6 +312,9 @@ export interface ReviewFlowRecord {
   line: number;
   project: string;
   outcome: string;
+  /** The run the result belongs to: one run for a run's review, several in the library. */
+  runNumber: number;
+  runStartedAt: Date;
   attemptId: string;
   /** The attempt's video and trace, and Playwright's failure screenshot. */
   video: AttachmentState | null;
@@ -331,6 +333,15 @@ export async function runReview(run: { id: string; startedAt: Date | string }, f
     ? and(eq(reviewCheckpoints.runId, run.id), eq(reviewCheckpoints.testResultId, filter.resultId))!
     : eq(reviewCheckpoints.runId, run.id);
   const checkpoints = await checkpointsWhere(where, { runId: run.id, runStartedAt: new Date(run.startedAt) });
+  return assembleFlows(checkpoints);
+}
+
+/**
+ * Checkpoints as flows: one per result, with the test, its outcome, the
+ * attempt's video, trace and failure screenshot, in the order the run
+ * summary lists them (file, then title path).
+ */
+export async function assembleFlows(checkpoints: readonly CheckpointRecord[]): Promise<ReviewFlowRecord[]> {
   if (checkpoints.length === 0) return [];
 
   const resultIds = [...new Set(checkpoints.map((c) => c.testResultId))];
@@ -346,9 +357,12 @@ export async function runReview(run: { id: string; startedAt: Date | string }, f
         line: testResults.line,
         project: tests.pwProject,
         outcome: testResults.outcome,
+        runNumber: runs.number,
+        runStartedAt: runs.startedAt,
       })
       .from(testResults)
       .innerJoin(tests, eq(tests.id, testResults.testId))
+      .innerJoin(runs, eq(runs.id, testResults.runId))
       .where(inArray(testResults.id, resultIds)),
     db
       .select({ id: attachments.id, status: attachments.status, attemptId: attachments.attemptId, kind: attachments.kind, name: attachments.name })
@@ -424,12 +438,17 @@ export interface ReviewQueueRow {
   commit: string | null;
   commitMessage: string | null;
   prNumber: number | null;
+  prTitle: string | null;
   startedAt: Date;
   counts: Record<ReviewStatus, number>;
 }
 
-/** The project's recent runs that carry review checkpoints, newest first, with their counts. */
-export async function reviewQueue(projectId: string, { limit = 30, branch }: { limit?: number; branch?: string } = {}): Promise<ReviewQueueRow[]> {
+/**
+ * The project's recent runs that carry review checkpoints, newest first, with
+ * their counts. The queue shows one row per pull request or branch, so it
+ * reads enough runs to find the newest of each.
+ */
+export async function reviewQueue(projectId: string, { limit = 200, branch }: { limit?: number; branch?: string } = {}): Promise<ReviewQueueRow[]> {
   const recent = await db
     .select({
       runId: runs.id,
@@ -439,6 +458,7 @@ export async function reviewQueue(projectId: string, { limit = 30, branch }: { l
       commit: runs.gitShortSha,
       commitMessage: runs.gitMessage,
       prNumber: runs.prNumber,
+      prTitle: sql<string | null>`${runs.git}->>'prTitle'`,
       startedAt: runs.startedAt,
     })
     .from(runs)
@@ -453,108 +473,6 @@ export async function reviewQueue(projectId: string, { limit = 30, branch }: { l
     .limit(limit);
   const counts = await runReviewCounts(recent.map((r) => r.runId));
   return recent.map((r) => ({ ...r, counts: counts[r.runId] ?? { approved: 0, changes_requested: 0, changed: 0, new: 0 } }));
-}
-
-export interface ScreenRecord {
-  testId: string;
-  title: string;
-  titlePath: string[];
-  file: string;
-  project: string;
-  checkpointName: string;
-  checkpointTitle: string | null;
-  sequence: number;
-  variant: string;
-  capture: CaptureRecord;
-  runNumber: number;
-  /** True when a reviewer approved the image; false when it is only the latest one on the default branch. */
-  approved: boolean;
-  approvedAt: Date | null;
-  approvedBy: string | null;
-}
-
-/**
- * The product as the suite sees it: for every checkpoint and variant, the
- * newest approved image — or, for a checkpoint nobody approved yet, its newest
- * capture on the default branch.
- */
-export async function screenCatalogue(projectId: string, defaultBranch: string, filter: { testIds?: readonly string[] } = {}): Promise<ScreenRecord[]> {
-  if (filter.testIds && filter.testIds.length === 0) return [];
-  const forTests = filter.testIds ? inArray(reviewDecisions.testId, [...filter.testIds]) : undefined;
-  const capturesForTests = filter.testIds ? inArray(reviewCaptures.testId, [...filter.testIds]) : undefined;
-  const approved = await db
-    .selectDistinctOn([reviewDecisions.testId, reviewDecisions.checkpointName, reviewDecisions.variant], {
-      captureId: reviewDecisions.captureId,
-      createdAt: reviewDecisions.createdAt,
-      by: users.name,
-    })
-    .from(reviewDecisions)
-    .leftJoin(users, eq(users.id, reviewDecisions.userId))
-    .where(and(eq(reviewDecisions.projectId, projectId), eq(reviewDecisions.decision, 'approved'), sql`${reviewDecisions.captureId} is not null`, forTests))
-    .orderBy(reviewDecisions.testId, reviewDecisions.checkpointName, reviewDecisions.variant, desc(reviewDecisions.createdAt));
-  const latestOnDefault = await db
-    .selectDistinctOn([reviewCaptures.testId, reviewCaptures.checkpointName, reviewCaptures.variant], { id: reviewCaptures.id })
-    .from(reviewCaptures)
-    .innerJoin(runs, eq(runs.id, reviewCaptures.runId))
-    .where(and(eq(reviewCaptures.projectId, projectId), eq(runs.gitBranch, defaultBranch), capturesForTests))
-    .orderBy(reviewCaptures.testId, reviewCaptures.checkpointName, reviewCaptures.variant, desc(runs.startedAt));
-
-  const approvedIds = new Map(approved.map((a) => [a.captureId!, a]));
-  const ids = [...new Set([...approvedIds.keys(), ...latestOnDefault.map((l) => l.id)])];
-  if (ids.length === 0) return [];
-  const rows = await db
-    .select({
-      ...captureColumns,
-      title: tests.title,
-      titlePath: tests.titlePath,
-      file: tests.file,
-      project: tests.pwProject,
-      checkpointTitle: reviewCheckpoints.title,
-      sequence: reviewCheckpoints.sequence,
-      runNumber: runs.number,
-    })
-    .from(reviewCaptures)
-    .innerJoin(attachments, eq(attachments.id, reviewCaptures.attachmentId))
-    .leftJoin(thumbs, eq(thumbs.id, reviewCaptures.thumbnailAttachmentId))
-    .innerJoin(reviewCheckpoints, eq(reviewCheckpoints.id, reviewCaptures.checkpointId))
-    .innerJoin(tests, eq(tests.id, reviewCaptures.testId))
-    .innerJoin(runs, eq(runs.id, reviewCaptures.runId))
-    .where(inArray(reviewCaptures.id, ids));
-
-  const byIdentity = new Map<string, ScreenRecord>();
-  for (const r of rows) {
-    const capture = toCapture(r as CaptureRow);
-    const decision = approvedIds.get(capture.id);
-    const record: ScreenRecord = {
-      testId: capture.testId,
-      title: r.title,
-      titlePath: r.titlePath,
-      file: r.file,
-      project: r.project,
-      checkpointName: capture.checkpointName,
-      checkpointTitle: r.checkpointTitle,
-      sequence: r.sequence,
-      variant: capture.variant,
-      capture,
-      runNumber: r.runNumber,
-      approved: Boolean(decision),
-      approvedAt: decision?.createdAt ?? null,
-      approvedBy: decision?.by ?? null,
-    };
-    const key = identityKey(capture);
-    const existing = byIdentity.get(key);
-    // An approval wins over the default branch's newest capture.
-    if (!existing || (!existing.approved && record.approved)) byIdentity.set(key, record);
-  }
-  return [...byIdentity.values()].sort(
-    (a, b) =>
-      a.file.localeCompare(b.file) ||
-      a.titlePath.join('\u0000').localeCompare(b.titlePath.join('\u0000')) ||
-      a.project.localeCompare(b.project) ||
-      a.sequence - b.sequence ||
-      a.checkpointName.localeCompare(b.checkpointName) ||
-      a.variant.localeCompare(b.variant),
-  );
 }
 
 /** The captures of one checkpoint and variant across runs, newest first. */

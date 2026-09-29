@@ -34,6 +34,7 @@ import {
   type ReviewFilter,
   type ReviewFlowView,
   type ReviewGrouping,
+  type StoryboardMode,
 } from '../../lib/review';
 import { toneSolid } from '../../lib/tone';
 import { CheckpointViewer, type ReviewSelection } from './checkpoint-viewer';
@@ -109,6 +110,7 @@ export function ReviewStoryboard({
   tree = toolbar,
   emptyTitle = 'No review checkpoints in this run',
   emptyDescription,
+  mode = 'review',
 }: {
   flows: readonly ReviewFlowView[];
   filter?: ReviewFilter;
@@ -140,10 +142,13 @@ export function ReviewStoryboard({
   tree?: boolean;
   emptyTitle?: string;
   emptyDescription?: React.ReactNode;
+  /** `library` shows the screens as documentation: no statuses, filters or approvals. */
+  mode?: StoryboardMode;
 }) {
+  const library = mode === 'library';
   const hasNeedsReview = useMemo(() => flows.some((f) => f.checkpoints.some((c) => c.captures.some((cap) => NEEDS_REVIEW.includes(cap.status)))), [flows]);
   const hasCases = useMemo(() => flows.some((f) => f.cases?.length), [flows]);
-  const [filter, setFilter] = useControlled<ReviewFilter>(filterProp, onFilterChange, toolbar && hasNeedsReview ? 'needs-review' : 'all');
+  const [filter, setFilter] = useControlled<ReviewFilter>(filterProp, onFilterChange, toolbar && hasNeedsReview && !library ? 'needs-review' : 'all');
   const [variant, setVariant] = useControlled<string | null>(variantProp, onVariantChange, null);
   const [query, setQuery] = useControlled<string>(queryProp, onQueryChange, '');
   const [selection, setSelectionState] = useControlled<ReviewSelection | null>(selectionProp, onSelectionChange, null);
@@ -155,7 +160,7 @@ export function ReviewStoryboard({
   const [pinned, setPinned] = useState<ReadonlySet<string> | null>(null);
 
   const variants = useMemo(() => variantsOf(flows), [flows]);
-  const effectiveFilter = toolbar ? filter : 'all';
+  const effectiveFilter = toolbar && !library ? filter : 'all';
   const searched = useMemo(() => filterFlows(flows, 'all', variant, toolbar ? query : ''), [flows, variant, query, toolbar]);
   const folders = useMemo(() => buildReviewTree(searched, grouping), [searched, grouping]);
   const visible = useMemo(
@@ -208,17 +213,17 @@ export function ReviewStoryboard({
     visible.length === 0 ? (
       <EmptyState
         icon={Check}
-        title={filter === 'needs-review' && !query && !folder ? 'Nothing needs review' : 'No checkpoints match'}
-        description={filter === 'needs-review' && !query && !folder ? 'Every image matches an approved one or was decided about.' : 'Try another filter, folder or search.'}
+        title={effectiveFilter === 'needs-review' && !query && !folder ? 'Nothing needs review' : 'No checkpoints match'}
+        description={effectiveFilter === 'needs-review' && !query && !folder ? 'Every image matches an approved one or was decided about.' : 'Try another filter, folder or search.'}
       >
-        {filter !== 'all' ? (
+        {effectiveFilter !== 'all' ? (
           <Button variant="outline" size="sm" onClick={() => setFilter('all')}>
             Show all {total} images
           </Button>
         ) : null}
       </EmptyState>
     ) : (
-      <div className="flex flex-col gap-8">
+      <div className="flex flex-col gap-6">
         {sections.map((section) => (
           <section key={section.id} aria-label={section.id}>
             {tree || sections.length > 1 ? (
@@ -239,7 +244,8 @@ export function ReviewStoryboard({
                   key={flow.resultId}
                   flow={flow}
                   size={size}
-                  canDecide={canDecide && Boolean(onDecide)}
+                  canDecide={canDecide && Boolean(onDecide) && !library}
+                  library={library}
                   pending={pending}
                   onOpen={(checkpointId, v) => setSelection({ checkpointId, variant: v })}
                   onApproveFlow={(ids) => onDecide?.({ captureIds: ids, decision: 'approved' })}
@@ -256,7 +262,8 @@ export function ReviewStoryboard({
   return (
     <div className="flex flex-col gap-5">
       {toolbar ? (
-        <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
+        <div className={cn('flex flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between', library && 'items-end 2xl:justify-end')}>
+          {library ? null : (
           <div className="flex flex-wrap items-center gap-1 rounded-xl border border-border bg-surface-sunken p-1" role="group" aria-label="Filter by review status">
             {REVIEW_FILTERS.map((f) => {
               const n = f === 'all' ? total : f === 'needs-review' ? counts.changed + counts.new : counts[f];
@@ -279,6 +286,7 @@ export function ReviewStoryboard({
               );
             })}
           </div>
+          )}
           <div className="flex flex-wrap items-center gap-3">
             {variants.length > 1 ? (
               <ToggleGroup variant="segment" size="sm" value={[variant ?? 'all']} onValueChange={(v) => v[0] && setVariant(v[0] === 'all' ? null : String(v[0]))} aria-label="Variant">
@@ -313,7 +321,7 @@ export function ReviewStoryboard({
               <Search aria-hidden className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find a test, case or checkpoint" aria-label="Find a test, case or checkpoint" className="h-8 w-60 pl-8" />
             </div>
-            {canDecide && onDecide ? (
+            {canDecide && onDecide && !library ? (
               <Button size="sm" disabled={shownToApprove.length === 0 || shownToApprove.some((id) => pending.has(id))} onClick={() => onDecide({ captureIds: shownToApprove, decision: 'approved' })}>
                 <Check /> Approve {shownToApprove.length} shown
               </Button>
@@ -336,6 +344,7 @@ export function ReviewStoryboard({
               }}
               total={searchedCounts.approved + searchedCounts.changes_requested + searchedCounts.changed + searchedCounts.new}
               needsReview={searchedCounts.changed + searchedCounts.new}
+              showNeedsReview={!library}
             />
           </aside>
           <div className="min-w-0">{rows}</div>
@@ -344,7 +353,7 @@ export function ReviewStoryboard({
         rows
       )}
 
-      <CheckpointViewer flows={viewerFlows} selection={selection} onSelectionChange={setSelection} onDecide={onDecide} pendingIds={pendingIds} canDecide={canDecide} frame={frame ?? DEFAULT_FRAME} onFrameChange={onFrameChange} />
+      <CheckpointViewer flows={viewerFlows} selection={selection} onSelectionChange={setSelection} onDecide={onDecide} pendingIds={pendingIds} canDecide={canDecide} frame={frame ?? DEFAULT_FRAME} onFrameChange={onFrameChange} mode={mode} />
     </div>
   );
 }
@@ -353,6 +362,7 @@ function FlowRow({
   flow,
   size,
   canDecide,
+  library,
   pending,
   onOpen,
   onApproveFlow,
@@ -362,6 +372,7 @@ function FlowRow({
   flow: ReviewFlowView;
   size: number;
   canDecide: boolean;
+  library: boolean;
   pending: ReadonlySet<string>;
   onOpen: (checkpointId: string, variant: string | null) => void;
   onApproveFlow: (ids: string[]) => void;
@@ -372,41 +383,39 @@ function FlowRow({
   const heading = flow.titlePath.length ? flow.titlePath.join(' › ') : flow.title;
   return (
     <li className="py-5">
-      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-        <div className="flex min-w-0 items-start gap-2">
-          <StatusIcon status={flow.outcome} className="mt-0.5" />
-          <div className="min-w-0">
-            <h3 className="truncate text-title-s" title={heading}>
-              <Link href={flow.resultHref} className="hover:underline">
-                {heading}
+      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <div className="grid min-w-0 grid-cols-[1.25rem_minmax(0,1fr)] items-center gap-x-2 gap-y-1">
+          {library ? <Route aria-hidden className="size-4 text-muted-foreground" /> : <StatusIcon status={flow.outcome} />}
+          <h3 className="truncate text-title-s" title={heading}>
+            <Link href={flow.resultHref} className="hover:underline">
+              {heading}
+            </Link>
+          </h3>
+          <p className="col-start-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+            <span className="truncate text-code-s" title={flow.file}>
+              {flow.file}
+              {flow.line ? `:${flow.line}` : ''}
+            </span>
+            {flow.project ? (
+              <Badge variant="secondary" className="text-label-xs">
+                {flow.project}
+              </Badge>
+            ) : null}
+            {flow.cases?.map((c) => (
+              <Link key={c.key} href={c.href} className="inline-flex items-center gap-1 rounded-md bg-accent-subtle px-1.5 py-0.5 text-label-xs text-accent-text hover:underline" title={c.title}>
+                <ClipboardList className="size-3" />
+                {c.key} <span className="max-w-48 truncate">{c.title}</span>
               </Link>
-            </h3>
-            <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-              <span className="truncate text-code-s" title={flow.file}>
-                {flow.file}
-                {flow.line ? `:${flow.line}` : ''}
-              </span>
-              {flow.project ? (
-                <Badge variant="secondary" className="text-label-xs">
-                  {flow.project}
-                </Badge>
-              ) : null}
-              {flow.cases?.map((c) => (
-                <Link key={c.key} href={c.href} className="inline-flex items-center gap-1 rounded-md bg-accent-subtle px-1.5 py-0.5 text-label-xs text-accent-text hover:underline" title={c.title}>
-                  <ClipboardList className="size-3" />
-                  {c.key} <span className="max-w-48 truncate">{c.title}</span>
-                </Link>
-              ))}
-            </p>
-          </div>
+            ))}
+          </p>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1 md:self-start">
           {flow.videoUrl ? (
             <Button variant="ghost" size="sm" nativeButton={false} render={<a href={flow.videoUrl} target="_blank" rel="noreferrer" />}>
               <Film /> Video
             </Button>
           ) : null}
-          {flow.traceUrl ? (
+          {flow.traceUrl && !library ? (
             <Button variant="ghost" size="sm" nativeButton={false} render={<a href={flow.traceUrl} target="_blank" rel="noreferrer" />}>
               <Route /> Trace
             </Button>
@@ -418,16 +427,16 @@ function FlowRow({
           ) : null}
         </div>
       </div>
-      <ol className="mt-4 flex items-start gap-8 overflow-x-auto pb-2 pl-7" aria-label={`Checkpoints of ${flow.title}`}>
+      <ol className="mt-4 flex items-start gap-6 overflow-x-auto pb-2 pl-7" aria-label={`Checkpoints of ${flow.title}`}>
         {flow.checkpoints.map((cp) => (
-          <CheckpointColumn key={cp.id} checkpoint={cp} size={size} onOpen={onOpen} variantSelected={variantSelected} />
+          <CheckpointColumn key={cp.id} checkpoint={cp} size={size} onOpen={onOpen} variantSelected={variantSelected} library={library} />
         ))}
-        {failed && flow.failureImage ? (
+        {failed && flow.failureImage && !library ? (
           <li className="flex shrink-0 flex-col gap-2">
-            <a href={flow.resultHref} className="inline-flex items-center gap-1.5 text-label-m text-danger-text hover:underline">
+            <a href={flow.resultHref} className="inline-flex h-6 items-center gap-1.5 text-label-m text-danger-text hover:underline">
               <CircleAlert className="size-4" /> Failed here
             </a>
-            <ScreenFrame image={flow.failureImage} frame={{ width: 1280, height: 720 }} zoom={size} alt="Screenshot at the failure" scroll={false} className="ring-danger-border" />
+            <ScreenFrame image={flow.failureImage} frame={{ width: 1280, height: 720 }} zoom={size} alt="Screenshot at the failure" scroll={false} tone="danger" />
           </li>
         ) : null}
       </ol>
@@ -435,52 +444,63 @@ function FlowRow({
   );
 }
 
+/** The gap between the variants of one checkpoint, in px; the checkpoints themselves sit twice as far apart. */
+const VARIANT_GAP = 12;
+
 function CheckpointColumn({
   checkpoint,
   size,
   onOpen,
   variantSelected,
+  library,
 }: {
   checkpoint: ReviewCheckpointView;
   size: number;
   onOpen: (checkpointId: string, variant: string | null) => void;
   variantSelected: string | null;
+  library: boolean;
 }) {
   const captures = [...checkpoint.captures].sort((a, b) => compareVariants(a.variant, b.variant));
   const status = worstStatus(captures.map((c) => c.status));
   const label = checkpointLabel(checkpoint.name, checkpoint.title);
   const scroll = size >= SCROLL_FROM;
-  const width = captures.reduce((sum, c) => sum + captureViewport(c).width * size, 0) + 12 * (captures.length - 1);
+  const width = captures.reduce((sum, c) => sum + Math.max(24, Math.round(captureViewport(c).width * size)), 0) + VARIANT_GAP * (captures.length - 1);
   const open = (variant: string | null) => onOpen(checkpoint.id, variantSelected ?? variant);
   return (
     <li className="flex shrink-0 flex-col gap-2" style={{ width: Math.max(width, 150) }}>
-      <div className="flex items-start gap-2">
-        <span aria-hidden className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-surface text-label-xs tabular-nums shadow-e1 ring-1 ring-border">
+      <div className="flex h-6 items-center gap-2">
+        <span aria-hidden className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-label-xs text-muted-foreground tabular-nums">
           {checkpoint.sequence + 1}
         </span>
         <button
           type="button"
           onClick={() => open(captures.length === 1 ? captures[0].variant : null)}
           aria-label={`Open ${checkpoint.sequence + 1}. ${label}`}
-          className="min-w-0 flex-1 text-left text-label-m break-words outline-none hover:underline focus-visible:underline"
+          className="min-w-0 truncate text-left text-label-m outline-none hover:underline focus-visible:underline"
           title={checkpoint.description ?? label}
         >
           {label}
         </button>
-        <ReviewStatusBadge status={status} className="shrink-0" />
+        {library || status === 'approved' ? null : <ReviewStatusBadge status={status} className="shrink-0" />}
       </div>
-      <div className="flex items-start gap-3">
+      {library && checkpoint.description ? <p className="-mt-1 line-clamp-2 pl-7 text-body-s text-muted-foreground">{checkpoint.description}</p> : null}
+      <div className="flex items-start" style={{ gap: VARIANT_GAP }}>
         {captures.map((c) => (
           <div key={c.id} className="flex flex-col gap-1.5">
             {/* A click opens the viewer; the wheel scrolls the screen. The label above is the keyboard way in. */}
-            <div
-              onClick={() => open(c.variant)}
-              className={cn('cursor-zoom-in rounded-md', NEEDS_REVIEW.includes(c.status) && 'ring-2 ring-offset-2 ring-offset-surface', c.status === 'changed' && 'ring-warning-border', c.status === 'new' && 'ring-info-border')}
-            >
-              <ScreenFrame image={c.image} frame={captureViewport(c)} zoom={size} alt={`${label} — ${c.variant}`} scroll={scroll} label={`${label}, ${c.variant} screen`} />
+            <div onClick={() => open(c.variant)} className="cursor-zoom-in">
+              <ScreenFrame
+                image={c.image}
+                frame={captureViewport(c)}
+                zoom={size}
+                alt={`${label} — ${c.variant}`}
+                scroll={scroll}
+                label={`${label}, ${c.variant} screen`}
+                tone={library ? undefined : c.status === 'changed' ? 'warning' : c.status === 'new' ? 'info' : c.status === 'changes_requested' ? 'danger' : undefined}
+              />
             </div>
-            <span className="flex items-center gap-1 text-label-xs capitalize text-muted-foreground">
-              <ReviewStatusDot status={c.status} />
+            <span className="flex items-center gap-1.5 text-label-xs capitalize text-muted-foreground">
+              {library ? null : <ReviewStatusDot status={c.status} />}
               {c.variant}
             </span>
           </div>

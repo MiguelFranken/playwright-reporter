@@ -31,6 +31,7 @@ import {
   auditLogs,
   dataSweeps,
   instanceSettings,
+  libraryReferences,
   oauthCodes,
   oauthTokens,
   rateLimits,
@@ -91,14 +92,17 @@ export async function listDataSweeps(limit = 10): Promise<DataSweep[]> {
 // ---------------------------------------------------------------- which runs
 
 /**
- * Runs that may be deleted at all: finished, and holding no live artifact of
+ * Runs that may be deleted at all: finished, holding no live artifact of
  * another store — this instance could not delete those bytes, and dropping
- * the rows would lose track of objects that are still being paid for.
+ * the rows would lose track of objects that are still being paid for — and
+ * not pinned as a library reference's version.
  */
 function deletable(driver: string): SQL {
   return sql`${runs.status} <> 'running' and not exists (
     select 1 from ${attachments}
     where ${attachments.runId} = ${runs.id} and ${attachments.expiredAt} is null and ${attachments.storageDriver} <> ${driver}
+  ) and not exists (
+    select 1 from ${libraryReferences} lr where lr.pinned_run_id = ${runs.id}
   )`;
 }
 

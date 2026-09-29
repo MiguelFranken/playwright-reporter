@@ -9,7 +9,7 @@
  */
 import type { ReviewCaseRef, ReviewCaptureView, ReviewCheckpointView, ReviewFlowView, ReviewImage, ReviewStatus } from '@miguelfranken/ui/lib/review';
 import { traceViewerUrl } from '@/lib/trace-viewer/url';
-import type { AttachmentState, CaptureRecord, CheckpointRecord, ComparedCapture, ReviewFlowRecord, ScreenRecord } from './queries';
+import type { AttachmentState, CaptureRecord, CheckpointRecord, ComparedCapture, ReviewFlowRecord } from './queries';
 
 export const artifactUrl = (id: string) => `/api/artifacts/${id}`;
 
@@ -152,33 +152,8 @@ function mergeCheckpoints(a: readonly ReviewCheckpointView[], b: readonly Review
   return merged;
 }
 
-/** The catalogue's screens as storyboard rows: the approved image, or the default branch's newest. */
-export function screensToFlows(screens: readonly ScreenRecord[], testHref: (testId: string) => string, links?: CaseLinks): ReviewFlowView[] {
-  const byTest = new Map<string, ReviewFlowView>();
-  for (const s of screens) {
-    let flow = byTest.get(s.testId);
-    if (!flow) {
-      flow = { resultId: s.testId, testId: s.testId, cases: casesOf(s.testId, links), title: s.title, titlePath: s.titlePath, file: s.file, project: s.project || null, outcome: 'passed', resultHref: testHref(s.testId), checkpoints: [] };
-      byTest.set(s.testId, flow);
-    }
-    let cp = flow.checkpoints.find((c) => c.name === s.checkpointName);
-    if (!cp) {
-      cp = { id: `${s.testId}:${s.checkpointName}`, name: s.checkpointName, title: s.checkpointTitle, sequence: s.sequence, stepPath: [], tags: [], captures: [] };
-      flow.checkpoints.push(cp);
-    }
-    const status: ReviewStatus = s.approved ? 'approved' : 'new';
-    cp.captures.push({
-      id: s.capture.id,
-      variant: s.variant,
-      status,
-      image: toReviewImage(s.capture),
-      viewport: s.capture.viewportWidth && s.capture.viewportHeight ? { width: s.capture.viewportWidth, height: s.capture.viewportHeight } : null,
-      deviceScaleFactor: s.capture.deviceScaleFactor,
-      isMobile: s.capture.isMobile,
-      fullPage: s.capture.fullPage,
-      decision: s.approved && s.approvedAt ? { decision: 'approved', by: s.approvedBy, at: s.approvedAt.toISOString(), runNumber: s.runNumber } : null,
-    });
-  }
-  const flows = [...byTest.values()].map((f) => ({ ...f, checkpoints: [...f.checkpoints].sort((a, b) => a.sequence - b.sequence).map((c, i) => ({ ...c, sequence: i })) }));
-  return mergeProjects(flows);
+/** Flows from several runs (the library's): each links to the result of its own run. */
+export function flowViewsAcrossRuns(records: readonly ReviewFlowRecord[], hrefs: { result: (runNumber: number, resultId: string) => string }, links?: CaseLinks): ReviewFlowView[] {
+  const runOf = new Map(records.map((r) => [r.resultId, r.runNumber]));
+  return toFlowViews(records, (resultId) => hrefs.result(runOf.get(resultId)!, resultId), links);
 }

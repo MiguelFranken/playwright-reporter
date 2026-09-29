@@ -26,6 +26,7 @@ import {
   type ReviewDecisionInput,
   type ReviewFlowView,
   type ReviewImage,
+  type StoryboardMode,
 } from '../../lib/review';
 import { COMPARE_MODE_LABELS, COMPARE_MODES, ImageCompare, type CompareMode } from './image-compare';
 import { FrameToolbar } from './frame-toolbar';
@@ -90,6 +91,7 @@ export function CheckpointViewer({
   canDecide = true,
   frame: frameProp,
   onFrameChange,
+  mode = 'review',
 }: {
   flows: readonly ReviewFlowView[];
   selection: ReviewSelection | null;
@@ -101,7 +103,10 @@ export function CheckpointViewer({
   /** The screen captures are shown on; uncontrolled when absent. */
   frame?: FrameSettings;
   onFrameChange?: (next: FrameSettings) => void;
+  /** `library`: documentation — the screens, what they show and where, without statuses, comparisons or decisions. */
+  mode?: StoryboardMode;
 }) {
+  const library = mode === 'library';
   const all = useMemo(() => positions(flows), [flows]);
   const at = selection ? all.findIndex((p) => p.checkpoint.id === selection.checkpointId) : -1;
   const pos = at >= 0 ? all[at] : null;
@@ -116,7 +121,7 @@ export function CheckpointViewer({
   const variant = selection?.variant ?? null;
   const shown = variant ? captures.filter((c) => c.variant === variant) : captures;
   const current = shown.length === 1 ? shown[0] : null;
-  const reference = current ? referenceOf(current) : null;
+  const reference = current && !library ? referenceOf(current) : null;
   const effectiveStage: StageMode = current && reference ? stage : 'image';
   const [ownFrame, setOwnFrame] = useState<FrameSettings>(DEFAULT_FRAME);
   const frameSettings = frameProp ?? ownFrame;
@@ -195,6 +200,7 @@ export function CheckpointViewer({
       else if (e.key === 'ArrowUp') moveFlow(-1);
       else if (key === 'v') cycleVariant();
       else if (key === 'c') cycleStage();
+      else if (library) return;
       else if (key === 'a' && canDecide && !busy) decide('approved', shown.map((c) => c.id));
       else if (key === 'r' && canDecide) {
         commentRef.current?.focus();
@@ -241,7 +247,7 @@ export function CheckpointViewer({
               >
                 {captures.map((c) => (
                   <ToggleGroupItem key={c.variant} value={c.variant} className="gap-1.5 capitalize">
-                    <ReviewStatusDot status={c.status} />
+                    {library ? null : <ReviewStatusDot status={c.status} />}
                     {c.variant}
                   </ToggleGroupItem>
                 ))}
@@ -312,7 +318,7 @@ export function CheckpointViewer({
                             <span className="normal-case tabular-nums">
                               {frames[i].width} × {frames[i].height}
                             </span>
-                            {shown.length > 1 ? <ReviewStatusBadge status={c.status} /> : null}
+                            {shown.length > 1 && !library ? <ReviewStatusBadge status={c.status} /> : null}
                           </figcaption>
                           <ScreenFrame image={c.image} frame={frames[i]} zoom={zoom} alt={`${label} — ${c.variant}`} label={`${label}, ${c.variant} screen`} />
                         </figure>
@@ -324,21 +330,23 @@ export function CheckpointViewer({
 
               <aside className="flex min-h-0 flex-col gap-5 overflow-auto border-t border-border p-4 lg:border-t-0 lg:border-l" aria-label="Checkpoint details">
                 <section className="flex flex-col gap-2">
-                  <div className="flex flex-wrap gap-1.5">
-                    {shown.map((c) => (
-                      <ReviewStatusBadge key={c.id} status={c.status} label={shown.length > 1 ? `${c.variant}: ${statusWord(c)}` : undefined} />
-                    ))}
-                  </div>
+                  {library ? null : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {shown.map((c) => (
+                        <ReviewStatusBadge key={c.id} status={c.status} label={shown.length > 1 ? `${c.variant}: ${statusWord(c)}` : undefined} />
+                      ))}
+                    </div>
+                  )}
                   {pos.checkpoint.description ? <p className="text-sm text-pretty">{pos.checkpoint.description}</p> : null}
-                  {current?.decision ? <DecisionNote capture={current} /> : null}
-                  {current && reference ? (
+                  {current?.decision && !library ? <DecisionNote capture={current} /> : null}
+                  {library ? null : current && reference ? (
                     <p className="text-xs text-muted-foreground">{reference.same ? `Identical to ${reference.label.toLowerCase()}.` : `Differs from ${reference.label.toLowerCase()}.`}</p>
                   ) : current ? (
                     <p className="text-xs text-muted-foreground">Nothing to compare with yet: this is the first capture of this checkpoint.</p>
                   ) : null}
                 </section>
 
-                {canDecide && onDecide ? (
+                {canDecide && onDecide && !library ? (
                   <section className="flex flex-col gap-2" aria-label="Decision">
                     <label htmlFor="review-comment" className="text-label-s text-muted-foreground">
                       Comment <span className="font-normal">(optional)</span>
@@ -443,7 +451,7 @@ export function CheckpointViewer({
                     <Keyboard className="size-3.5" /> Keyboard shortcuts
                   </summary>
                   <ul className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-                    {SHORTCUTS.map(([keys, what]) => (
+                    {SHORTCUTS.filter(([keys]) => !library || !['A', 'R', 'C'].includes(keys[0])).map(([keys, what]) => (
                       <li key={what} className="contents">
                         <span className="flex gap-1">
                           {keys.map((k) => (

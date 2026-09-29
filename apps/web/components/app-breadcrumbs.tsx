@@ -17,6 +17,7 @@ const SECTION_LABELS: Record<string, string> = {
   dashboard: 'Dashboard',
   runs: 'Test Runs',
   review: 'Visual Review',
+  library: 'Library',
   tests: 'Test Explorer',
   cases: 'Test Cases',
   branches: 'Branches',

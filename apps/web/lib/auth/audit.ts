@@ -19,6 +19,7 @@ export type AuditAction =
   | 'project.create'
   | 'project.update'
   | 'project.delete'
+  | 'library.update'
   | 'token.create'
   | 'token.revoke'
   | 'pat.create'

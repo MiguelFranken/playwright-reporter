@@ -271,11 +271,18 @@ export function fitZoom(frames: readonly FrameSize[], available: FrameSize, gap 
   return Math.max(0.1, Math.min(1, available.width / width, available.height / height));
 }
 
+/**
+ * What a storyboard is for. `review`: deciding about changes — statuses,
+ * comparisons, approvals. `library`: documentation — the product's screens and
+ * flows as a branch or pull request shows them, nothing to decide.
+ */
+export type StoryboardMode = 'review' | 'library';
+
 // ---------------------------------------------------------------- folders
 
 export const REVIEW_GROUPINGS = ['suite', 'file'] as const;
 export type ReviewGrouping = (typeof REVIEW_GROUPINGS)[number];
-export const REVIEW_GROUPING_LABELS: Record<ReviewGrouping, string> = { suite: 'Test case suites', file: 'Spec files' };
+export const REVIEW_GROUPING_LABELS: Record<ReviewGrouping, string> = { suite: 'Test Cases', file: 'Files' };
 
 /** The folder of flows without a test case, when grouping by suite. */
 export const UNLINKED_FOLDER = 'Not in a test case';

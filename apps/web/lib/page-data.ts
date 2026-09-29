@@ -38,6 +38,7 @@ import * as testCases from '@/lib/db/queries/test-cases';
 import * as mcpQueries from '@/lib/db/queries/mcp';
 import * as review from '@/lib/review/queries';
 import * as reviewCases from '@/lib/review/cases';
+import * as library from '@/lib/review/library';
 
 /**
  * Thirty seconds: the shortest lifetime Next.js still includes in a per-link
@@ -274,12 +275,6 @@ export async function reviewQueue(...args: Parameters<typeof review.reviewQueue>
   return review.reviewQueue(...args);
 }
 
-export async function screenCatalogue(...args: Parameters<typeof review.screenCatalogue>) {
-  'use cache: private';
-  cacheLife(PAGE_DATA);
-  return review.screenCatalogue(...args);
-}
-
 export async function defaultBranch(...args: Parameters<typeof mcpQueries.defaultBranch>) {
   'use cache: private';
   cacheLife(PAGE_DATA);
@@ -290,4 +285,42 @@ export async function casesOfTests(...args: Parameters<typeof reviewCases.casesO
   'use cache: private';
   cacheLife(PAGE_DATA);
   return reviewCases.casesOfTests(...args);
+}
+
+// ---------------------------------------------------------------- the library
+
+export async function listLibraryReferences(...args: Parameters<typeof library.listLibraryReferences>) {
+  'use cache: private';
+  cacheLife(PAGE_DATA);
+  return library.listLibraryReferences(...args);
+}
+
+export async function getLibraryReference(...args: Parameters<typeof library.getLibraryReference>) {
+  'use cache: private';
+  cacheLife(PAGE_DATA);
+  return library.getLibraryReference(...args);
+}
+
+export async function defaultLibraryRef(...args: Parameters<typeof library.defaultLibraryRef>) {
+  'use cache: private';
+  cacheLife(PAGE_DATA);
+  return library.defaultLibraryRef(...args);
+}
+
+export async function libraryFlows(...args: Parameters<typeof library.libraryFlows>) {
+  'use cache: private';
+  cacheLife(PAGE_DATA);
+  return library.libraryFlows(...args);
+}
+
+export async function referenceRuns(...args: Parameters<typeof library.referenceRuns>) {
+  'use cache: private';
+  cacheLife(PAGE_DATA);
+  return library.referenceRuns(...args);
+}
+
+export async function libraryCandidates(...args: Parameters<typeof library.libraryCandidates>) {
+  'use cache: private';
+  cacheLife(PAGE_DATA);
+  return library.libraryCandidates(...args);
 }

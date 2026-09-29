@@ -8168,6 +8168,485 @@
         }
       }
     },
+    "/projects/{team}/{project}/library": {
+      "get": {
+        "operationId": "listLibrary",
+        "summary": "List the library",
+        "description": "The branches and pull requests kept as visual documentation (and the default branch): which run each shows — the newest or a pinned one — and how many of the newest run’s images wait for review.",
+        "tags": [
+          "Visual review"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "team",
+            "schema": {
+              "type": "string",
+              "description": "Team slug, as in the app URL (`/teams/<team>/…`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "project",
+            "schema": {
+              "type": "string",
+              "description": "Project slug, as in the app URL (`…/projects/<project>`)."
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "project": {
+                      "type": "string"
+                    },
+                    "defaultReference": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "references": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "reference": {
+                            "type": "string",
+                            "description": "\"branch:main\" or \"pr:212\"."
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "isDefault": {
+                            "type": "boolean"
+                          },
+                          "kept": {
+                            "type": "boolean"
+                          },
+                          "pinnedRun": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "shownRun": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "latestRun": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "needsReview": {
+                            "type": "number",
+                            "description": "Changed and new images of the newest run."
+                          },
+                          "url": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "reference",
+                          "name",
+                          "description",
+                          "isDefault",
+                          "kept",
+                          "pinnedRun",
+                          "shownRun",
+                          "latestRun",
+                          "needsReview",
+                          "url"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "project",
+                    "defaultReference",
+                    "url",
+                    "references"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters (`BAD_REQUEST`, `INVALID_ARGUMENT`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked token (`UNAUTHORIZED`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the required scope (`INSUFFICIENT_SCOPE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not visible to this token (`NOT_FOUND`). The two are never told apart.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A test reference matches several tests (`AMBIGUOUS`; candidates in `details`), or an attachment is not available (`ARTIFACT_UNAVAILABLE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (`RATE_LIMITED`); see `Retry-After`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{team}/{project}/library/flows": {
+      "get": {
+        "operationId": "getLibraryFlows",
+        "summary": "List a library reference’s flows",
+        "description": "The flows of a branch or pull request as the library shows them — the default reference without `branch` or `pullRequest` — each with its test cases and its checkpoints in journey order, with capture ids for `/review-captures/{capture}`.",
+        "tags": [
+          "Visual review"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "team",
+            "schema": {
+              "type": "string",
+              "description": "Team slug, as in the app URL (`/teams/<team>/…`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "project",
+            "schema": {
+              "type": "string",
+              "description": "Project slug, as in the app URL (`…/projects/<project>`)."
+            }
+          },
+          {
+            "in": "query",
+            "name": "branch",
+            "schema": {
+              "description": "A branch, e.g. \"main\". Leave both out for the library’s default reference.",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "pullRequest",
+            "schema": {
+              "description": "A pull (merge) request number, e.g. 212.",
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "test",
+            "schema": {
+              "description": "Part of a test title, file or test case key (TC-12), to narrow the flows.",
+              "type": "string"
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "description": "At most this many flows (default 50).",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "project": {
+                      "type": "string"
+                    },
+                    "reference": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "pinnedRun": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "total": {
+                      "type": "number"
+                    },
+                    "more": {
+                      "type": "boolean",
+                      "description": "More flows match than were returned: raise limit or narrow with test."
+                    },
+                    "flows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "title": {
+                            "type": "string"
+                          },
+                          "file": {
+                            "type": "string"
+                          },
+                          "project": {
+                            "type": "string"
+                          },
+                          "run": {
+                            "type": "number"
+                          },
+                          "cases": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "title": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "title"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "checkpoints": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "order": {
+                                  "type": "number"
+                                },
+                                "title": {
+                                  "type": "string"
+                                },
+                                "description": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "url": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "captures": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "captureId": {
+                                        "type": "string"
+                                      },
+                                      "variant": {
+                                        "type": "string"
+                                      },
+                                      "viewport": {
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "captureId",
+                                      "variant",
+                                      "viewport"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                }
+                              },
+                              "required": [
+                                "order",
+                                "title",
+                                "description",
+                                "url",
+                                "captures"
+                              ],
+                              "additionalProperties": false
+                            }
+                          }
+                        },
+                        "required": [
+                          "title",
+                          "file",
+                          "project",
+                          "run",
+                          "cases",
+                          "checkpoints"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "project",
+                    "reference",
+                    "name",
+                    "pinnedRun",
+                    "url",
+                    "total",
+                    "more",
+                    "flows"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters (`BAD_REQUEST`, `INVALID_ARGUMENT`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked token (`UNAUTHORIZED`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the required scope (`INSUFFICIENT_SCOPE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not visible to this token (`NOT_FOUND`). The two are never told apart.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A test reference matches several tests (`AMBIGUOUS`; candidates in `details`), or an attachment is not available (`ARTIFACT_UNAVAILABLE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (`RATE_LIMITED`); see `Retry-After`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/projects/{team}/{project}/review-captures/{capture}": {
       "get": {
         "operationId": "getReviewCheckpoint",

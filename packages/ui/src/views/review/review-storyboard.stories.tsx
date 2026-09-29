@@ -98,3 +98,19 @@ export const LargeScreens: Story = {
 
 /** Old captures without a recorded viewport: the mobile screen is still a portrait phone. */
 export const LegacyCaptures: Story = { args: { flows: [legacyFlow], filter: 'all', size: 0.3 } };
+
+/**
+ * The library: the same flows as documentation. No status filter, badges or
+ * approvals — the screens, their descriptions and the test cases they belong to.
+ */
+export const Library: Story = {
+  args: { mode: 'library', canDecide: false },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.queryByRole('group', { name: 'Filter by review status' })).toBeNull();
+    await expect(canvas.queryByRole('button', { name: /Approve/ })).toBeNull();
+    await expect(canvas.queryByText('Changed')).toBeNull();
+    // Everything shows, approved or not: documentation has no to-do filter.
+    await expect(canvas.getByRole('button', { name: /Open 1\. Cart with two products/ })).toBeInTheDocument();
+  },
+};

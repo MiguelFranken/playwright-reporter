@@ -86,3 +86,14 @@ export const ScreenSettings: Story = {
     await expect(body.getByRole('region', { name: /mobile screen/ })).toHaveStyle({ width: '195px' });
   },
 };
+
+/** In the library: the screen and what it shows, without statuses, comparisons or decisions. */
+export const InTheLibrary: Story = {
+  args: { mode: 'library' },
+  play: async () => {
+    const body = within(document.body);
+    await body.findByRole('dialog');
+    await expect(body.queryByRole('group', { name: 'Comparison' })).toBeNull();
+    await expect(body.queryByRole('button', { name: /Approve/ })).toBeNull();
+  },
+};
