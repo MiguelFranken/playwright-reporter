@@ -108,7 +108,7 @@ describe.each(ERAS)('handshake on the %s protocol generation', (era) => {
     const client = await mcpClient({ token, era });
     const { tools } = await client.listTools();
     const writers = tools.filter((t) => t.annotations?.readOnlyHint === false).map((t) => t.name).sort();
-    expect(writers).toEqual(['adopt_tests', 'create_test_case', 'create_test_suite', 'delete_test_suite', 'link_test_case', 'review_checkpoint', 'update_test_case']);
+    expect(writers).toEqual(['adopt_tests', 'create_test_case', 'create_test_suite', 'delete_test_suite', 'link_test_case', 'review_checkpoint', 'set_library_reference', 'update_test_case']);
     expect(tools).toHaveLength(28);
     await client.close();
   });

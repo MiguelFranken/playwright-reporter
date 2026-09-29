@@ -27,6 +27,7 @@ import { verifyFixTool } from '@/lib/mcp/tools/verify-fix';
 import { whoami } from '@/lib/mcp/tools/whoami';
 import { getTestCase, listTestCases, listTestSuites } from '@/lib/mcp/tools/test-cases';
 import { getReviewCheckpoint, listReviewCheckpoints } from '@/lib/mcp/tools/review';
+import { getLibraryFlows, listLibrary } from '@/lib/mcp/tools/library';
 import type { ToolDef } from '@/lib/mcp/registry';
 import { authed } from '../base';
 import { fromTool } from '../from-tool';
@@ -232,6 +233,22 @@ export const router = {
       summary: 'List test suites',
       description: 'The suite tree of the test cases, with each suite’s path, id and case counts.',
       tags: ['Test cases'],
+    }),
+  },
+  library: {
+    list: fromTool(tool(listLibrary), {
+      path: `${P}/library`,
+      summary: 'List the library',
+      description:
+        'The branches and pull requests kept as visual documentation (and the default branch): which run each shows — the newest or a pinned one — and how many of the newest run’s images wait for review.',
+      tags: ['Visual review'],
+    }),
+    flows: fromTool(tool(getLibraryFlows), {
+      path: `${P}/library/flows`,
+      summary: 'List a library reference’s flows',
+      description:
+        'The flows of a branch or pull request as the library shows them — the default reference without `branch` or `pullRequest` — each with its test cases and its checkpoints in journey order, with capture ids for `/review-captures/{capture}`.',
+      tags: ['Visual review'],
     }),
   },
   reviewCaptures: {
