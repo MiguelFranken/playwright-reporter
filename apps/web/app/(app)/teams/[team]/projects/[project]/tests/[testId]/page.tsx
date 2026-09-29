@@ -8,8 +8,8 @@ import { ChartSkeleton, MetricCardsSkeleton } from '@miguelfranken/ui/patterns/s
 import { Badge } from '@miguelfranken/ui/components/badge';
 import { requireProject } from '@/lib/auth/access';
 import { projectHrefs } from '@/lib/view-models';
-import { getTestOverview } from '@/lib/db/queries/explorer';
 import { parseRange } from '@/lib/db/queries/shared';
+import { getTestOverview } from '@/lib/page-data';
 
 type Params = Promise<{ team: string; project: string; testId: string }>;
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;

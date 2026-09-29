@@ -27,7 +27,16 @@ import { formatPercent, formatRelative } from '../../lib/format';
 import { NO_BRANCH_LABEL, passRateClass } from '../../lib/branch';
 import { cn } from '../../lib/cn';
 
-export function BranchSummaryTable({ hrefs, rows }: { hrefs: BranchSummaryHrefs; rows: BranchSummaryRow[] }) {
+export function BranchSummaryTable({
+  hrefs,
+  rows,
+  now,
+}: {
+  hrefs: BranchSummaryHrefs;
+  rows: BranchSummaryRow[];
+  /** The instant "5 minutes ago" is measured from; the wall clock when left out. */
+  now?: Date;
+}) {
   if (rows.length === 0) {
     return <EmptyState icon={GitBranch} title="No runs in this range" description="Runs grouped by git branch will appear here." className="m-(--card-spacing) py-8" />;
   }
@@ -73,7 +82,7 @@ export function BranchSummaryTable({ hrefs, rows }: { hrefs: BranchSummaryHrefs;
                 className="block truncate text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
                 title={r.lastRunAt.toISOString()}
               >
-                #{r.lastRunNumber} · {formatRelative(r.lastRunAt)}
+                #{r.lastRunNumber} · <span suppressHydrationWarning>{formatRelative(r.lastRunAt, { now })}</span>
               </Link>
             </TableCell>
             <TableCell className={cn('text-right font-medium tabular-nums', passRateClass(r.passRate))}>{formatPercent(r.passRate)}</TableCell>

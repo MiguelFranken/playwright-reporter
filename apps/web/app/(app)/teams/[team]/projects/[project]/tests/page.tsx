@@ -9,11 +9,11 @@ import { RangeToggle, UrlSearch, UrlSelect } from '@/components/filters/url-filt
 import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
 import { FilterSkeleton, TableRowsSkeleton } from '@miguelfranken/ui/patterns/skeletons';
 import { requireProject } from '@/lib/auth/access';
-import { EXPLORER_SORTS, exploreTests, getTestOverview, type ExplorerSort } from '@/lib/db/queries/explorer';
-import { listEnvironments, listPlatforms, listTestTags } from '@/lib/db/queries/runs';
+import { EXPLORER_SORTS, type ExplorerSort } from '@/lib/db/queries/explorer';
 import { isUuid, parsePage, parseRange } from '@/lib/db/queries/shared';
 import { makeServerQueryClient } from '@/lib/rpc/prefetch';
 import { testOverviewQuery } from '@/lib/rpc/queries';
+import { exploreTests, getTestOverview, listEnvironments, listPlatforms, listTestTags } from '@/lib/page-data';
 
 type SearchParams = Record<string, string | string[] | undefined>;
 type Params = Promise<{ team: string; project: string }>;

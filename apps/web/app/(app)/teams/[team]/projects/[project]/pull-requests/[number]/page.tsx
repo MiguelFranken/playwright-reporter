@@ -17,12 +17,10 @@ import { RangeToggle } from '@/components/filters/url-filters';
 import { LiveRunsTable } from '@/components/live/live-runs';
 import { LiveConnection, LiveStoreProvider } from '@/components/live/live-store';
 import { requireProject } from '@/lib/auth/access';
-import { getPullRequestOverview } from '@/lib/db/queries/pull-requests';
-import { chronicFailures, dashboardStats, mostFlakyTests, passFailTrend } from '@/lib/db/queries/dashboard';
-import { listRuns } from '@/lib/db/queries/runs';
 import { parsePage, parseRange } from '@/lib/db/queries/shared';
 import { reliabilityLabel } from '@/lib/metrics/score';
 import { projectHrefs, toRunListItem } from '@/lib/view-models';
+import { chronicFailures, dashboardStats, getPullRequestOverview, listRuns, mostFlakyTests, passFailTrend, renderedAt } from '@/lib/page-data';
 
 type Params = Promise<{ team: string; project: string; number: string }>;
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -137,7 +135,7 @@ async function Header(props: Props) {
   const overview = await getPullRequestOverview(project.id, prNumber);
   if (!overview) notFound();
   return (
-    <PullRequestHeader pullRequest={overview} hrefs={projectHrefs(base)}>
+    <PullRequestHeader pullRequest={overview} hrefs={projectHrefs(base)} now={await renderedAt()}>
       <RangeToggle />
     </PullRequestHeader>
   );

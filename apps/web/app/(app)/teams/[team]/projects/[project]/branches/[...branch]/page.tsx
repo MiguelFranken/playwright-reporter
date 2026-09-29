@@ -17,12 +17,10 @@ import { RangeToggle } from '@/components/filters/url-filters';
 import { LiveRunsTable } from '@/components/live/live-runs';
 import { LiveConnection, LiveStoreProvider } from '@/components/live/live-store';
 import { requireProject } from '@/lib/auth/access';
-import { getBranchOverview } from '@/lib/db/queries/branches';
-import { chronicFailures, dashboardStats, mostFlakyTests, passFailTrend } from '@/lib/db/queries/dashboard';
-import { listRuns } from '@/lib/db/queries/runs';
 import { parsePage, parseRange } from '@/lib/db/queries/shared';
 import { reliabilityLabel } from '@/lib/metrics/score';
 import { projectHrefs, toRunListItem } from '@/lib/view-models';
+import { chronicFailures, dashboardStats, getBranchOverview, listRuns, mostFlakyTests, passFailTrend, renderedAt } from '@/lib/page-data';
 
 type Params = Promise<{ team: string; project: string; branch: string[] }>;
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -136,7 +134,7 @@ async function Header(props: Props) {
   const overview = await getBranchOverview(project.id, branch);
   if (!overview) notFound();
   return (
-    <BranchHeader branch={overview} hrefs={projectHrefs(base)}>
+    <BranchHeader branch={overview} hrefs={projectHrefs(base)} now={await renderedAt()}>
       <RangeToggle />
     </BranchHeader>
   );
