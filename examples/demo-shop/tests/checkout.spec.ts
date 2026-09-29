@@ -15,7 +15,7 @@ test.describe('Checkout', () => {
     await expect(page.locator('#total')).toHaveText('$26.99');
   });
 
-  test('lists everything that is missing', async ({ shop, page }) => {
+  test('lists everything that is missing', async ({ shop, page, review }) => {
     await shop.addToCart('wool-socks');
     await shop.open('#/checkout');
     await page.getByRole('button', { name: 'Place order' }).click();
@@ -25,6 +25,7 @@ test.describe('Checkout', () => {
       'Enter your address.',
       'Enter a 5-digit postal code.',
     ]);
+    await review('checkout-validation', { title: 'Every missing field is listed', description: 'Four messages, next to the fields they belong to.' });
   });
 
   test('declines a card that does not work', async ({ shop, page }) => {
@@ -35,17 +36,24 @@ test.describe('Checkout', () => {
     await expect(page.getByText('Your card was declined.')).toBeVisible();
   });
 
-  test('places an order', { tag: ['@smoke', '@critical'] }, async ({ shop, page }, testInfo) => {
+  test('places an order', { tag: ['@smoke', '@critical'] }, async ({ shop, page, review }, testInfo) => {
     await shop.addToCart('rain-shell');
     await shop.addToCart('wool-socks', 2);
+    await shop.open('#/cart');
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await review('cart-with-items', { title: 'Cart with two products' });
+
     await shop.open('#/checkout');
     await shop.fillCheckout();
+    await expect(page.locator('#total')).toHaveText('$157.00');
+    await review('checkout-ready', { title: 'Checkout filled in', description: 'Every field complete, just before the order is placed.' });
     await page.getByRole('button', { name: 'Place order' }).click();
 
     await expect(page.getByRole('heading', { name: 'Thank you for your order!' })).toBeVisible();
     await expect(page.locator('#order-id')).toHaveText(/^A-\d{5}$/);
     await expect(page.locator('#order-total')).toHaveText('$157.00');
     await expect(page.getByLabel('Items in cart')).toHaveText('0');
+    await review('order-confirmation', { title: 'Order confirmation' });
 
     await testInfo.attach('order', {
       body: JSON.stringify({ id: await page.locator('#order-id').textContent(), total: '$157.00' }, null, 2),

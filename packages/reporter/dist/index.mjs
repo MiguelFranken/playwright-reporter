@@ -1,9 +1,127 @@
-import { n as IngestClient, t as HttpError } from "./client-DDTrKbkt.mjs";
+import { a as checkpointRecordSchema, t as CHECKPOINT_CONTENT_TYPE, u as legacyCheckpoints } from "./dist-C_hxvOdh.mjs";
+import { n as IngestClient, t as HttpError } from "./client-D4XTXo1n.mjs";
 import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
+import { readFileSync, statSync } from "node:fs";
 import os from "node:os";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+//#region src/checkpoints.ts
+/** The step prefix `review.ts` wraps captures in; kept out of a checkpoint's step path. */
+const REVIEW_STEP_PREFIX = "Review checkpoint: ";
+/** Hashing a legacy image reads it; past this size the checkpoint goes without a hash. */
+const MAX_HASH_BYTES = 67108864;
+function isCheckpointRecord(a) {
+	return a.contentType === CHECKPOINT_CONTENT_TYPE;
+}
+/**
+* Where each attachment was attached: the titles of the `test.step`s around
+* it, outermost first, and when. Playwright records an attachment on the step
+* that was running (`TestStep.attachments`, 1.50+).
+*/
+function attachmentSteps(steps) {
+	const out = /* @__PURE__ */ new Map();
+	const walk = (list, path) => {
+		for (const s of list) {
+			const own = s.category === "test.step" && !s.title.startsWith(REVIEW_STEP_PREFIX) ? [...path, s.title] : path;
+			for (const a of s.attachments ?? []) if (!out.has(a.name)) out.set(a.name, {
+				path: own,
+				at: s.startTime
+			});
+			if (s.steps.length) walk(s.steps, own);
+		}
+	};
+	walk(steps, []);
+	return out;
+}
+function sha256Of(a) {
+	try {
+		let buf = a.body;
+		if (!buf && a.path) {
+			if (statSync(a.path).size > MAX_HASH_BYTES) return {};
+			buf = readFileSync(a.path);
+		}
+		if (!buf) return {};
+		const png = buf.length >= 24 && buf.readUInt32BE(0) === 2303741511 ? {
+			width: buf.readUInt32BE(16),
+			height: buf.readUInt32BE(20)
+		} : {};
+		return {
+			sha256: createHash("sha256").update(buf).digest("hex"),
+			...png
+		};
+	} catch {
+		return {};
+	}
+}
+/**
+* The attempt's review checkpoints, ready for `attempt.end`.
+*
+* Records from the capture helper name their images by attachment name; they
+* become the ids the reporter sends. A suite that only attaches
+* `review:<name>:<variant>` images gets checkpoints too, hashed here so an
+* unchanged image keeps its approval. Either way the step path and the time
+* come from the steps the images were attached in.
+*/
+function buildCheckpoints(result, refs) {
+	const idByName = /* @__PURE__ */ new Map();
+	for (const [a, ref] of refs) if (!idByName.has(a.name)) idByName.set(a.name, ref.id);
+	const steps = attachmentSteps(result.steps);
+	const records = result.attachments.filter((a) => isCheckpointRecord(a) && a.body).map((a) => {
+		try {
+			const parsed = checkpointRecordSchema.safeParse(JSON.parse(a.body.toString("utf8")));
+			return parsed.success ? parsed.data : null;
+		} catch {
+			return null;
+		}
+	}).filter((r) => r !== null);
+	let checkpoints;
+	if (records.length) checkpoints = records.flatMap((r) => {
+		const { v: _v, variants, ...rest } = r;
+		const resolved = variants.flatMap((v) => {
+			const { attachment, thumbnail, ...fields } = v;
+			const id = idByName.get(attachment);
+			if (!id) return [];
+			const thumbId = thumbnail ? idByName.get(thumbnail) : void 0;
+			return [{
+				...fields,
+				attachmentId: id,
+				...thumbId ? { thumbnailAttachmentId: thumbId } : {}
+			}];
+		});
+		if (!resolved.length) return [];
+		const where = steps.get(variants[0].attachment);
+		return [{
+			...rest,
+			stepPath: rest.stepPath ?? where?.path ?? [],
+			variants: resolved
+		}];
+	});
+	else {
+		const byId = new Map([...refs].map(([a, ref]) => [ref.id, a]));
+		checkpoints = legacyCheckpoints([...refs.values()]).map((cp) => {
+			const first = byId.get(cp.variants[0].attachmentId);
+			const where = first ? steps.get(first.name) : void 0;
+			return {
+				...cp,
+				stepPath: where?.path ?? [],
+				capturedAt: where?.at.toISOString(),
+				variants: cp.variants.map((v) => {
+					const a = byId.get(v.attachmentId);
+					return a ? {
+						...v,
+						...sha256Of(a)
+					} : v;
+				})
+			};
+		});
+	}
+	return checkpoints.sort((a, b) => a.sequence - b.sequence).map((cp, i) => ({
+		...cp,
+		sequence: i,
+		stepPath: (cp.stepPath ?? []).slice(-20).map((t) => t.slice(0, 500))
+	})).slice(0, 500);
+}
+//#endregion
 //#region src/metadata.ts
 function git(args, cwd) {
 	try {
@@ -532,8 +650,10 @@ var PlaywrightReporterApp = class {
 		if (this.disabled || !this.opts) return;
 		const willRetry = (result.status === "failed" || result.status === "timedOut") && result.retry < test.retries;
 		const attachments = [];
+		const refs = /* @__PURE__ */ new Map();
 		if (this.opts.artifacts) for (const a of result.attachments) {
 			if (!a.path && !a.body) continue;
+			if (isCheckpointRecord(a)) continue;
 			const ref = {
 				id: randomUUID(),
 				name: a.name,
@@ -541,6 +661,7 @@ var PlaywrightReporterApp = class {
 				size: a.body?.byteLength
 			};
 			attachments.push(ref);
+			refs.set(a, ref);
 			this.uploads.push({
 				ref,
 				source: {
@@ -549,6 +670,7 @@ var PlaywrightReporterApp = class {
 				}
 			});
 		}
+		const checkpoints = refs.size ? buildCheckpoints(result, refs) : [];
 		const ev = {
 			seq: this.queue.nextSeq(),
 			type: "attempt.end",
@@ -568,6 +690,7 @@ var PlaywrightReporterApp = class {
 				description: a.description
 			})),
 			attachments,
+			...checkpoints.length ? { checkpoints } : {},
 			outcome: test.outcome(),
 			isFinal: !willRetry
 		};

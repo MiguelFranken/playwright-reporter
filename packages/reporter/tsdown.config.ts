@@ -8,7 +8,7 @@ import { defineConfig } from 'tsdown';
 const ORPC = [/^@orpc\//, /^@standard-server\//, /^@openapi-spec\//, 'rou3', 'cookie'];
 
 export default defineConfig({
-  entry: { index: './src/index.ts', types: './src/types.ts', client: './src/client.ts' },
+  entry: { index: './src/index.ts', types: './src/types.ts', client: './src/client.ts', review: './src/review.ts' },
   format: ['esm', 'cjs'],
   platform: 'node',
   target: 'node18',

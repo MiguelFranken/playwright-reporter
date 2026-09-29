@@ -1,11 +1,21 @@
 import { test as base, expect, type Page } from '@playwright/test';
+import { reviewFixtures, type ReviewFixture } from '@miguelfranken/reporter/review';
 import { scenario } from '../schedule';
 
 /**
  * Every test starts with an empty shop in the scenario `DEMO_SCENARIO` names
  * (see `schedule.ts`): its latencies and the regressions it ships with.
+ *
+ * `review(name)` captures a review checkpoint. The suite already runs as a
+ * desktop and a mobile device, so each checkpoint is taken once per project
+ * (`variants: 'project'`) and the app shows the two side by side.
  */
-export const test = base.extend<{ shop: Shop }>({
+export const test = base.extend<{ shop: Shop; review: ReviewFixture }>({
+  ...reviewFixtures({
+    variants: 'project',
+    // The order id is new on every run; masking it keeps an unchanged page unchanged.
+    mask: ({ page }) => [page.locator('#order-id')],
+  }),
   page: async ({ page }, use) => {
     await page.addInitScript((config) => {
       (window as unknown as { __ACME__: unknown }).__ACME__ = config;

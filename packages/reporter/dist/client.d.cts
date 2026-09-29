@@ -1,3 +1,4 @@
+import { i as UploadInstruction } from "./index-C4OzotD2.cjs";
 import { ResolvedOptions } from "./types.cjs";
 import { z } from "zod";
 //#region ../../node_modules/.store/type-fest@5.10.0/node_modules/type-fest/source/promisable.d.ts
@@ -457,19 +458,6 @@ type ProcedureContractClient<TClientContext extends ClientContext, TInputSchema 
  */
 type RouterContractClient<TRouter extends RouterContract, TClientContext extends ClientContext = object> = TRouter extends ProcedureContract<infer UInputSchema, infer UOutputSchema, infer UErrorMap> ? ProcedureContractClient<TClientContext, UInputSchema, UOutputSchema, UErrorMap> : { [K in keyof TRouter]: TRouter[K] extends RouterContract ? RouterContractClient<TRouter[K], TClientContext> : never; };
 //#endregion
-//#region ../protocol/dist/index.d.mts
-declare const uploadInstructionSchema: z.ZodObject<{
-  attachmentId: z.ZodString;
-  strategy: z.ZodEnum<{
-    presigned: "presigned";
-    proxy: "proxy";
-  }>;
-  method: z.ZodLiteral<"PUT">;
-  url: z.ZodString;
-  headers: z.ZodRecord<z.ZodString, z.ZodString>;
-}, z.core.$strip>;
-type UploadInstruction = z.infer<typeof uploadInstructionSchema>;
-//#endregion
 //#region ../protocol/dist/contract.d.mts
 declare const ingestContract: {
   runs: {
@@ -619,6 +607,40 @@ declare const ingestContract: {
           contentType: z.ZodString;
           size: z.ZodOptional<z.ZodNumber>;
         }, z.core.$strip>>;
+        checkpoints: z.ZodOptional<z.ZodArray<z.ZodObject<{
+          name: z.ZodString;
+          title: z.ZodOptional<z.ZodString>;
+          description: z.ZodOptional<z.ZodString>;
+          sequence: z.ZodNumber;
+          capturedAt: z.ZodOptional<z.ZodString>;
+          stepPath: z.ZodOptional<z.ZodArray<z.ZodString>>;
+          url: z.ZodOptional<z.ZodString>;
+          pageTitle: z.ZodOptional<z.ZodString>;
+          kind: z.ZodOptional<z.ZodEnum<{
+            component: "component";
+            dialog: "dialog";
+            email: "email";
+            other: "other";
+            page: "page";
+          }>>;
+          flow: z.ZodOptional<z.ZodString>;
+          tags: z.ZodOptional<z.ZodArray<z.ZodString>>;
+          variants: z.ZodArray<z.ZodObject<{
+            variant: z.ZodString;
+            viewport: z.ZodOptional<z.ZodObject<{
+              width: z.ZodNumber;
+              height: z.ZodNumber;
+            }, z.core.$strip>>;
+            deviceScaleFactor: z.ZodOptional<z.ZodNumber>;
+            isMobile: z.ZodOptional<z.ZodBoolean>;
+            fullPage: z.ZodOptional<z.ZodBoolean>;
+            width: z.ZodOptional<z.ZodNumber>;
+            height: z.ZodOptional<z.ZodNumber>;
+            sha256: z.ZodOptional<z.ZodString>;
+            attachmentId: z.ZodString;
+            thumbnailAttachmentId: z.ZodOptional<z.ZodString>;
+          }, z.core.$strip>>;
+        }, z.core.$strip>>>;
         outcome: z.ZodEnum<{
           expected: "expected";
           flaky: "flaky";
