@@ -330,3 +330,23 @@ export const libraryCompareFlows: ReviewFlowView[] = [
     })),
   },
 ];
+
+/**
+ * A run the size of a real suite: 240 tests in twelve spec files, each a copy
+ * of the sample flows with ids of its own, to show that the storyboard keeps
+ * only the rows on screen in the document.
+ */
+export const manyFlows: ReviewFlowView[] = Array.from({ length: 240 }, (_, i) => {
+  const base = reviewFlows[i % reviewFlows.length];
+  const n = String(i + 1).padStart(3, '0');
+  return {
+    ...base,
+    resultId: `many-${n}`,
+    testId: `many-test-${n}`,
+    cases: [],
+    title: `${base.title} #${n}`,
+    titlePath: [...base.titlePath.slice(0, -1), `${base.titlePath.at(-1) ?? base.title} #${n}`],
+    file: `suite-${String((i % 12) + 1).padStart(2, '0')}.spec.ts`,
+    checkpoints: base.checkpoints.map((c) => ({ ...c, id: `many-${n}-${c.id}`, captures: c.captures.map((cap) => ({ ...cap, id: `many-${n}-${cap.id}` })) })),
+  };
+});

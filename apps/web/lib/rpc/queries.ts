@@ -115,3 +115,19 @@ export function automatedTestsQuery(ref: ProjectRef, q: string, uncovered: boole
     placeholderData: keepPreviousData,
   });
 }
+
+/** A run of one project, by the number its pages show. */
+export type RunNumberRef = ProjectRef & { runNumber: number };
+
+/**
+ * A run's review storyboard: every flow, checkpoint and image status of the
+ * run. The page renders it on the server into this query, so the first
+ * screen of rows arrives with the HTML; the cache keeps it while the
+ * reviewer moves between the storyboard and a result, and decisions change
+ * it in place (`decideReviewMutation`) instead of rendering the page again.
+ * A run's images do not change once it has finished, and the page seeds a
+ * fresh answer on every visit, so the cache does not refetch on its own.
+ */
+export function runReviewQuery(ref: RunNumberRef) {
+  return orpc.review.run.queryOptions({ input: ref, staleTime: 5 * 60_000, gcTime: 30 * 60_000 });
+}

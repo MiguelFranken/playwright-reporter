@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { expect, fn, userEvent, within } from 'storybook/test';
-import { approvedFlows, diffStatesFlow, failedFlow, libraryCompareFlows, legacyFlow, longTextFlow, placeOrderFlow, reviewFlows, unavailableFlow } from '../../fixtures/review';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
+import { approvedFlows, diffStatesFlow, failedFlow, libraryCompareFlows, legacyFlow, longTextFlow, manyFlows, placeOrderFlow, reviewFlows, unavailableFlow } from '../../fixtures/review';
 import { ReviewStoryboard } from './review-storyboard';
 
 const meta = {
@@ -135,5 +135,35 @@ export const LibraryComparison: Story = {
     const canvas = within(canvasElement);
     await expect(canvas.getAllByText('same as main').length).toBeGreaterThan(0);
     await expect(canvas.getByLabelText('0.51% changed')).toBeInTheDocument();
+  },
+};
+
+/**
+ * A run the size of a real suite, 240 tests: only the rows on screen (and a
+ * few either side) are in the document, and scrolling brings the rest.
+ */
+export const ManyTests: Story = {
+  args: { flows: manyFlows, filter: 'all', grouping: 'file' },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await waitFor(() => expect(canvas.getAllByRole('article').length).toBeGreaterThan(0));
+    await expect(canvas.getAllByRole('article').length).toBeLessThan(40);
+    await expect(canvas.queryByRole('heading', { name: /#240$/ })).toBeNull();
+    window.scrollTo(0, document.documentElement.scrollHeight);
+    await waitFor(() => expect(canvas.getByRole('heading', { name: /#240$/ })).toBeInTheDocument());
+    await expect(canvas.getAllByRole('article').length).toBeLessThan(40);
+    // Larger screens: the rendered rows measure themselves again and still sit edge to edge.
+    await userEvent.click(canvas.getByRole('button', { name: 'Larger screens' }));
+    await waitFor(() => expect(canvas.getByText('23%')).toBeInTheDocument());
+    await waitFor(() => {
+      // Each row's slot, in order; the pinned heading sits outside the order.
+      const slots = [...canvasElement.querySelectorAll<HTMLElement>('[data-index]:not(.sticky)')]
+        .filter((el) => el.closest('article') === null && el.querySelector('article, h2'))
+        .sort((a, b) => Number(a.dataset.index) - Number(b.dataset.index))
+        .map((el) => el.getBoundingClientRect());
+      expect(slots.length).toBeGreaterThan(3);
+      slots.slice(1).forEach((r, i) => expect(Math.abs(r.top - slots[i].bottom)).toBeLessThan(1));
+    });
+    window.scrollTo(0, 0);
   },
 };
