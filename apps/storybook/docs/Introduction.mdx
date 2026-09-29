@@ -22,6 +22,10 @@ something below it.
 | **Views** | `src/views` | Presentational domain views driven by a view model: RunsTable, RunHeader… |
 | **Pages** | stories only | Views composed into whole screens, to prove they fit together. |
 
+Inside a layer, components are grouped by purpose — Primitives › Forms holds
+every field control, Patterns › Status every badge and indicator. Views group by
+domain, and a large domain by area (Views › Run › Header).
+
 Feature components — the ones that talk to server actions, `next/navigation` or
 the auth client — stay in `apps/web/components` and are not catalogued here.
 

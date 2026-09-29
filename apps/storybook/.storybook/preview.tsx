@@ -16,7 +16,46 @@ const preview: Preview = {
     a11y: { test: 'error' },
     controls: { expanded: true, matchers: { date: /At$/ } },
     options: {
-      storySort: { order: ['Docs', 'Foundations', 'Primitives', 'Patterns', 'Marketing', 'Views', 'Pages'] },
+      // Layer, then group, then component. Groups are listed so the sidebar
+      // reads by purpose rather than alphabet; anything unlisted lands at `*`.
+      storySort: {
+        order: [
+          'Docs',
+          'Foundations',
+          'Primitives',
+          ['Forms', 'Actions', 'Overlays', 'Navigation', 'Layout', 'Feedback', 'Data display', '*'],
+          'Patterns',
+          ['Navigation', 'Status', 'Metrics & charts', 'States', 'Dialogs', 'Controls', 'Identity', '*'],
+          'Marketing',
+          ['Site chrome', 'Sections', 'Content', 'Demos', '*'],
+          'Views',
+          // Every domain is listed, alphabetically: a listed name sorts ahead
+          // of every unlisted one, which would break the alphabet otherwise.
+          [
+            'Account',
+            ['Profile', 'Access', 'AI', '*'],
+            'Admin',
+            ['Directory', 'Database', 'Storage', 'Retention', '*'],
+            'Auth',
+            'Branches',
+            'Connect',
+            'Dashboard',
+            'Explorer',
+            'Pull requests',
+            'Run',
+            ['Header', 'Tab content', '*'],
+            'Runs',
+            'Settings',
+            ['General', 'Integrations', '*'],
+            'Shell',
+            'Teams',
+            'TestCases',
+            ['Library', 'Case', 'Dialogs', '*'],
+            '*',
+          ],
+          'Pages',
+        ],
+      },
     },
   },
   decorators: [

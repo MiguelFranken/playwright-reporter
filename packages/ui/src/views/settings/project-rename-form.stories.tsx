@@ -3,7 +3,7 @@ import { expect, fn, userEvent, within } from 'storybook/test';
 import { ProjectRenameForm } from './project-rename-form';
 
 const meta = {
-  title: 'Views/Settings/Project name',
+  title: 'Views/Settings/General/Project name',
   component: ProjectRenameForm,
   parameters: { layout: 'padded' },
   tags: ['themed'],

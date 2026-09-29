@@ -5,7 +5,7 @@ import { automatedTests, suiteOptions } from '../../fixtures/test-cases';
 import { TestPickerDialog } from './test-picker-dialog';
 
 const meta = {
-  title: 'Views/TestCases/TestPickerDialog',
+  title: 'Views/TestCases/Dialogs/TestPickerDialog',
   component: TestPickerDialog,
   tags: ['themed'],
   args: {

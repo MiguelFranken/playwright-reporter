@@ -3,7 +3,7 @@ import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './tabs';
 
 const meta = {
-  title: 'Primitives/Tabs',
+  title: 'Primitives/Navigation/Tabs',
   component: Tabs,
   parameters: { layout: 'padded' },
   args: { onValueChange: fn() },

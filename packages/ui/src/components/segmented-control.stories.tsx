@@ -10,7 +10,7 @@ const RANGES = [
 ];
 
 const meta = {
-  title: 'Primitives/SegmentedControl',
+  title: 'Primitives/Actions/SegmentedControl',
   component: SegmentedControl,
   args: { items: RANGES, value: '30', onValueChange: fn(), 'aria-label': 'Time range' },
   argTypes: { size: { control: 'inline-radio', options: ['sm', 'default'] } },

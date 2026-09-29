@@ -23,7 +23,7 @@ const editing: CaseEditorValues = {
 };
 
 const meta = {
-  title: 'Views/TestCases/CaseEditor',
+  title: 'Views/TestCases/Case/CaseEditor',
   component: CaseEditor,
   tags: ['themed'],
   args: {

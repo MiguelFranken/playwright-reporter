@@ -6,7 +6,7 @@ import { Badge } from './badge';
 const VARIANTS = ['default', 'secondary', 'outline', 'destructive', 'ghost', 'link'] as const;
 
 const meta = {
-  title: 'Primitives/Badge',
+  title: 'Primitives/Data display/Badge',
   component: Badge,
   args: { children: 'main' },
   argTypes: { variant: { control: 'select', options: VARIANTS } },

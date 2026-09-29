@@ -3,7 +3,7 @@ import { screenshotPair } from '../fixtures/marketing';
 import { ThemedImage } from './themed-image';
 
 const meta = {
-  title: 'Marketing/ThemedImage',
+  title: 'Marketing/Content/ThemedImage',
   component: ThemedImage,
   parameters: { layout: 'padded' },
   tags: ['themed'],

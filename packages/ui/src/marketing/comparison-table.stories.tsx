@@ -4,7 +4,7 @@ import { comparisonColumns, comparisonRows } from '../fixtures/marketing';
 import { ComparisonTable } from './comparison-table';
 
 const meta = {
-  title: 'Marketing/ComparisonTable',
+  title: 'Marketing/Sections/ComparisonTable',
   component: ComparisonTable,
   parameters: { layout: 'fullscreen' },
   tags: ['themed'],

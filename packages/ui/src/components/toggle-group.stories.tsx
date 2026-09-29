@@ -6,7 +6,7 @@ import { ToggleGroup, ToggleGroupItem } from './toggle-group';
 const OUTCOMES = ['passed', 'flaky', 'failed'] as const;
 
 const meta = {
-  title: 'Primitives/ToggleGroup',
+  title: 'Primitives/Actions/ToggleGroup',
   component: ToggleGroup,
   args: { onValueChange: fn() },
   argTypes: {

@@ -5,7 +5,7 @@ import { ReporterSetup } from './reporter-setup';
 import { StorageCard } from './storage-card';
 
 const meta = {
-  title: 'Views/Settings',
+  title: 'Views/Settings/Integrations/Storage & reporter',
   parameters: { layout: 'padded' },
   tags: ['themed'],
 } satisfies Meta;

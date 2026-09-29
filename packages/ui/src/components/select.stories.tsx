@@ -10,7 +10,7 @@ const BROWSERS = [
 ];
 
 const meta = {
-  title: 'Primitives/Select',
+  title: 'Primitives/Forms/Select',
   component: Select,
   parameters: {
     layout: 'centered',

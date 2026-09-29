@@ -8,7 +8,7 @@ import { DataRetentionPolicyForm, DataRetentionPolicySource } from './data-reten
 import { PolicyPreview } from './policy-preview';
 
 const meta = {
-  title: 'Views/Admin/Data retention policy',
+  title: 'Views/Admin/Retention/Data retention policy',
   component: DataRetentionPolicyForm,
   parameters: { layout: 'padded' },
   tags: ['themed'],

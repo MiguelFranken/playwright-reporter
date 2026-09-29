@@ -5,7 +5,7 @@ import { REACHABLE_PROJECTS } from '../../fixtures/account';
 import { McpConnectionTest, type McpConnectionResult } from './mcp-connection-test';
 
 const meta = {
-  title: 'Views/Account/MCP connection test',
+  title: 'Views/Account/AI/MCP connection test',
   component: McpConnectionTest,
   parameters: { layout: 'padded' },
   tags: ['themed'],

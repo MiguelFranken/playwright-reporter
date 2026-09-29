@@ -6,7 +6,7 @@ import { TooltipProvider } from '../components/tooltip';
 import { MetricCard, toneClass } from './metric-card';
 
 const meta = {
-  title: 'Patterns/MetricCard',
+  title: 'Patterns/Metrics & charts/MetricCard',
   component: MetricCard,
   args: { label: 'Pass rate', value: '98.4%' },
   parameters: { layout: 'padded' },

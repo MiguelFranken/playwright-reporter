@@ -9,7 +9,7 @@ const ROWS = [
 ];
 
 const meta = {
-  title: 'Primitives/Table',
+  title: 'Primitives/Data display/Table',
   component: Table,
   parameters: { layout: 'padded' },
 } satisfies Meta<typeof Table>;

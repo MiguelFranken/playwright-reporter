@@ -8,7 +8,7 @@ import { LiveRunDemo } from './live-run-demo';
 import { ThemedImage } from './themed-image';
 
 const meta = {
-  title: 'Marketing/Hero',
+  title: 'Marketing/Sections/Hero',
   component: Hero,
   parameters: { layout: 'fullscreen' },
   tags: ['themed'],

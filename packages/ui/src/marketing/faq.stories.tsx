@@ -4,7 +4,7 @@ import { faqItems } from '../fixtures/marketing';
 import { Faq } from './faq';
 
 const meta = {
-  title: 'Marketing/Faq',
+  title: 'Marketing/Sections/Faq',
   component: Faq,
   parameters: { layout: 'fullscreen' },
   tags: ['themed'],

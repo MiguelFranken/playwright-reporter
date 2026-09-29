@@ -5,7 +5,7 @@ import { Button } from './button';
 import { Badge } from './badge';
 
 const meta = {
-  title: 'Primitives/HoverCard',
+  title: 'Primitives/Overlays/HoverCard',
   component: HoverCard,
   parameters: { layout: 'centered' },
 } satisfies Meta<typeof HoverCard>;

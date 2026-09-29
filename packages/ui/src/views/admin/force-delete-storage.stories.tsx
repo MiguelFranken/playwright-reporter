@@ -3,7 +3,7 @@ import { expect, fn, userEvent, within } from 'storybook/test';
 import { ForceDeleteStorage } from './force-delete-storage';
 
 const meta = {
-  title: 'Views/Admin/ForceDeleteStorage',
+  title: 'Views/Admin/Storage/Force delete',
   component: ForceDeleteStorage,
   tags: ['themed'],
   args: { open: false, onOpenChange: fn(), expected: 'delete all artifacts', onConfirm: fn() },

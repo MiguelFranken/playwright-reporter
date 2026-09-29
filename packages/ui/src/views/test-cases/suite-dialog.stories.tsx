@@ -4,7 +4,7 @@ import { suiteOptions } from '../../fixtures/test-cases';
 import { SuiteDialog } from './suite-dialog';
 
 const meta = {
-  title: 'Views/TestCases/SuiteDialog',
+  title: 'Views/TestCases/Dialogs/SuiteDialog',
   component: SuiteDialog,
   tags: ['themed'],
   args: {

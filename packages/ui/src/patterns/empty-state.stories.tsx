@@ -5,7 +5,7 @@ import { Button } from '../components/button';
 import { EmptyState } from './empty-state';
 
 const meta = {
-  title: 'Patterns/EmptyState',
+  title: 'Patterns/States/EmptyState',
   component: EmptyState,
   args: { title: 'No runs yet' },
   parameters: { layout: 'padded' },

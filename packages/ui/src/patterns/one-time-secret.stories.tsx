@@ -3,7 +3,7 @@ import { expect, fn, userEvent, within } from 'storybook/test';
 import { OneTimeSecret } from './one-time-secret';
 
 const meta = {
-  title: 'Patterns/OneTimeSecret',
+  title: 'Patterns/Dialogs/OneTimeSecret',
   component: OneTimeSecret,
   parameters: { layout: 'padded' },
   tags: ['themed'],

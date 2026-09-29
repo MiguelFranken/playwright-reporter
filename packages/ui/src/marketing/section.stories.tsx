@@ -3,7 +3,7 @@ import { Section } from './section';
 import { SectionHeader } from './section-header';
 
 const meta = {
-  title: 'Marketing/Section',
+  title: 'Marketing/Sections/Section',
   component: Section,
   parameters: { layout: 'fullscreen' },
   tags: ['themed'],

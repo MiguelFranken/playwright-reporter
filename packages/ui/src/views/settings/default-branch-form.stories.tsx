@@ -3,7 +3,7 @@ import { expect, fn, userEvent, within } from 'storybook/test';
 import { DefaultBranchForm } from './default-branch-form';
 
 const meta = {
-  title: 'Views/Settings/Default branch',
+  title: 'Views/Settings/General/Default branch',
   component: DefaultBranchForm,
   parameters: { layout: 'padded' },
   tags: ['themed'],

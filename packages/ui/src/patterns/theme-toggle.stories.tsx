@@ -10,7 +10,7 @@ import { ThemeMenuItem, ThemeToggle } from './theme-toggle';
  * the control itself.
  */
 const meta = {
-  title: 'Patterns/ThemeToggle',
+  title: 'Patterns/Controls/ThemeToggle',
   component: ThemeToggle,
   parameters: { layout: 'centered' },
   tags: ['themed'],

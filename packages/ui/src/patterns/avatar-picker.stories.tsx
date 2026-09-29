@@ -4,7 +4,7 @@ import { TEAM_AVATAR, USER_AVATAR } from '../fixtures/avatars';
 import { AvatarPicker } from './avatar-picker';
 
 const meta = {
-  title: 'Patterns/AvatarPicker',
+  title: 'Patterns/Identity/AvatarPicker',
   component: AvatarPicker,
   args: { name: 'Ada Lovelace', image: USER_AVATAR, onFileSelect: fn(), onRemove: fn() },
   parameters: { layout: 'centered' },

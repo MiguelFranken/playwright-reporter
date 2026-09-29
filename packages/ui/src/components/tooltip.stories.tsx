@@ -5,7 +5,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './tool
 import { Button } from './button';
 
 const meta = {
-  title: 'Primitives/Tooltip',
+  title: 'Primitives/Overlays/Tooltip',
   component: Tooltip,
   parameters: { layout: 'centered' },
 } satisfies Meta<typeof Tooltip>;

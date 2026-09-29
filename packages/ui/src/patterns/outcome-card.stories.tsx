@@ -4,7 +4,7 @@ import { CheckCircle2, MinusCircle, Repeat2, XCircle } from 'lucide-react';
 import { OutcomeCard } from './outcome-card';
 
 const meta = {
-  title: 'Patterns/OutcomeCard',
+  title: 'Patterns/Status/OutcomeCard',
   component: OutcomeCard,
   args: {
     label: 'Failed',

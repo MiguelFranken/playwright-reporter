@@ -8,7 +8,7 @@ import { NOW } from '../../fixtures/now';
 import { RunHeader, RunHeaderSkeleton } from './run-header';
 
 const meta = {
-  title: 'Views/Run/RunHeader',
+  title: 'Views/Run/Header/RunHeader',
   component: RunHeader,
   args: {
     run: runHeader,

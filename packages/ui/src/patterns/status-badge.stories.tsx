@@ -4,7 +4,7 @@ import { ALL_STATUSES } from '../lib/tone';
 import { StatusBadge, StatusDot } from './status-badge';
 
 const meta = {
-  title: 'Patterns/StatusBadge',
+  title: 'Patterns/Status/StatusBadge',
   component: StatusBadge,
   args: { status: 'passed' },
   argTypes: { status: { control: 'select', options: ALL_STATUSES } },

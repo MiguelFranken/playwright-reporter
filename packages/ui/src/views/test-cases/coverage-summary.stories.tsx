@@ -4,7 +4,7 @@ import { coverage, emptyCoverage } from '../../fixtures/test-cases';
 import { CoverageSummary } from './coverage-summary';
 
 const meta = {
-  title: 'Views/TestCases/CoverageSummary',
+  title: 'Views/TestCases/Library/CoverageSummary',
   component: CoverageSummary,
   tags: ['themed'],
   args: {

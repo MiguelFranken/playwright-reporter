@@ -5,7 +5,7 @@ import { ADMIN_TEAMS } from '../../fixtures/teams';
 import { AdminTeams } from './admin-teams';
 
 const meta = {
-  title: 'Views/Admin/Teams',
+  title: 'Views/Admin/Directory/Teams',
   component: AdminTeams,
   parameters: { layout: 'padded' },
   tags: ['themed'],

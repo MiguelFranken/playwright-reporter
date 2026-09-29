@@ -42,7 +42,7 @@ const config = Object.fromEntries(
  * `Patterns/ChartFrame`, and a finished one is `Views/Dashboard/PassFailChart`.
  */
 const meta = {
-  title: 'Primitives/Chart',
+  title: 'Primitives/Data display/Chart',
   component: ChartContainer,
   // ChartContainer requires `config` and `children`, so they are declared here
   // and every story overrides them through its own `render`.

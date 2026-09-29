@@ -6,7 +6,7 @@ import { SuiteTree } from './suite-tree';
 const hrefs = { all: '/cases', unassigned: '/cases?suite=unassigned', suite: (id: string) => `/cases?suite=${id}` };
 
 const meta = {
-  title: 'Views/TestCases/SuiteTree',
+  title: 'Views/TestCases/Library/SuiteTree',
   component: SuiteTree,
   tags: ['themed'],
   args: {

@@ -5,7 +5,7 @@ import { ADMIN_USERS } from '../../fixtures/teams';
 import { AdminUsers, CreateUserDialog } from './admin-users';
 
 const meta = {
-  title: 'Views/Admin/Users',
+  title: 'Views/Admin/Directory/Users',
   component: AdminUsers,
   parameters: { layout: 'padded' },
   tags: ['themed'],

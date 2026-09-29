@@ -3,7 +3,7 @@ import { expect, within } from 'storybook/test';
 import { Progress, ProgressLabel, ProgressValue } from './progress';
 
 const meta = {
-  title: 'Primitives/Progress',
+  title: 'Primitives/Feedback/Progress',
   component: Progress,
   args: { value: 64 },
   argTypes: { value: { control: { type: 'range', min: 0, max: 100 } } },

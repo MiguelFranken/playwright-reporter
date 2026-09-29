@@ -14,7 +14,7 @@ import {
 import { Button } from './button';
 
 const meta = {
-  title: 'Primitives/DropdownMenu',
+  title: 'Primitives/Overlays/DropdownMenu',
   component: DropdownMenu,
   parameters: { layout: 'centered' },
   args: { onOpenChange: fn() },

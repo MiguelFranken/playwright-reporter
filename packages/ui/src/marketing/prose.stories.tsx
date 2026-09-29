@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { Prose } from './prose';
 
 const meta = {
-  title: 'Marketing/Prose',
+  title: 'Marketing/Content/Prose',
   component: Prose,
   parameters: { layout: 'padded' },
   tags: ['themed'],

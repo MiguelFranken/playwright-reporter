@@ -15,7 +15,7 @@ const counts = (over: Partial<RunCounts> = {}): RunCounts => ({
 });
 
 const meta = {
-  title: 'Patterns/CountsBar',
+  title: 'Patterns/Metrics & charts/CountsBar',
   component: CountsBar,
   args: { counts: counts({ total: 240, passed: 228, flaky: 7, failed: 5 }) },
   parameters: { layout: 'padded' },

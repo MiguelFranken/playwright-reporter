@@ -9,7 +9,7 @@ import { OUTCOME_SERIES } from '../lib/chart';
  * is what these stories are about, and a real chart would only argue with it.
  */
 const meta = {
-  title: 'Patterns/ChartFrame',
+  title: 'Patterns/Metrics & charts/ChartFrame',
   component: ChartFrame,
   parameters: { layout: 'padded' },
   tags: ['themed'],

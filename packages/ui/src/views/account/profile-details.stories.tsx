@@ -4,7 +4,7 @@ import { PROFILE_TEAMS } from '../../fixtures/account';
 import { ProfileDetails } from './profile-details';
 
 const meta = {
-  title: 'Views/Account/Profile details',
+  title: 'Views/Account/Profile/Profile details',
   component: ProfileDetails,
   parameters: { layout: 'padded' },
   tags: ['themed'],

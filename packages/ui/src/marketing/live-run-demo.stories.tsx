@@ -9,7 +9,7 @@ import { LiveRunDemo } from './live-run-demo';
  * the hero is showing the product rather than a drawing of it.
  */
 const meta = {
-  title: 'Marketing/LiveRunDemo',
+  title: 'Marketing/Demos/LiveRunDemo',
   component: LiveRunDemo,
   parameters: { layout: 'padded' },
   tags: ['themed'],

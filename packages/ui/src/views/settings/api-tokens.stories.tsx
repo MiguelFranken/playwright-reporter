@@ -6,7 +6,7 @@ import type { RevealedToken } from '../../patterns/token-reveal-dialog';
 import { ApiTokens } from './api-tokens';
 
 const meta = {
-  title: 'Views/Settings/API tokens',
+  title: 'Views/Settings/Integrations/API tokens',
   component: ApiTokens,
   parameters: { layout: 'padded' },
   tags: ['themed'],

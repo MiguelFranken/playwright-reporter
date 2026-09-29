@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Pagination } from './pagination';
 
 const meta = {
-  title: 'Patterns/Pagination',
+  title: 'Patterns/Navigation/Pagination',
   component: Pagination,
   args: { page: 3, pageSize: 25, total: 240, onPageChange: fn() },
   parameters: { layout: 'padded' },

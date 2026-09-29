@@ -9,7 +9,7 @@ const ITEMS = [
 ];
 
 const meta = {
-  title: 'Patterns/NavTabs',
+  title: 'Patterns/Navigation/NavTabs',
   component: NavTabs,
   args: { items: ITEMS, activeHref: ITEMS[1]!.href, label: 'Team settings sections' },
   parameters: { layout: 'padded' },

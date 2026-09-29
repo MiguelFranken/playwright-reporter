@@ -4,7 +4,7 @@ import { Badge } from '../components/badge';
 import { PageHeader } from './page-header';
 
 const meta = {
-  title: 'Patterns/PageHeader',
+  title: 'Patterns/Navigation/PageHeader',
   component: PageHeader,
   args: { title: 'Runs' },
   parameters: { layout: 'padded' },

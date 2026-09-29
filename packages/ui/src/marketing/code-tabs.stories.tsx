@@ -10,7 +10,7 @@ const ciSnippet = `- name: Run Playwright
     PW_REPORTER_TOKEN: \${{ secrets.PW_REPORTER_TOKEN }}`;
 
 const meta = {
-  title: 'Marketing/CodeTabs',
+  title: 'Marketing/Content/CodeTabs',
   component: CodeTabs,
   parameters: { layout: 'padded' },
   tags: ['themed'],

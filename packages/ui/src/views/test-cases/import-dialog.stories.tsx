@@ -3,7 +3,7 @@ import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { ImportDialog } from './import-dialog';
 
 const meta = {
-  title: 'Views/TestCases/ImportDialog',
+  title: 'Views/TestCases/Dialogs/ImportDialog',
   component: ImportDialog,
   tags: ['themed'],
   args: { open: true, onOpenChange: fn(), action: fn() },

@@ -5,7 +5,7 @@ import { NOW } from '../../fixtures/now';
 import { DataRetentionDue, DataRetentionSchedule, DataSweepsTable, ProjectFootprintTable } from './database';
 
 const meta = {
-  title: 'Views/Admin/Database',
+  title: 'Views/Admin/Database/Overview',
   component: DataRetentionSchedule,
   parameters: { layout: 'padded' },
   tags: ['themed'],

@@ -5,7 +5,7 @@ import { Bold } from 'lucide-react';
 import { Toggle } from './toggle';
 
 const meta = {
-  title: 'Primitives/Toggle',
+  title: 'Primitives/Actions/Toggle',
   component: Toggle,
   args: { children: 'Only failures', onPressedChange: fn(), 'aria-label': 'Only failures' },
   argTypes: {

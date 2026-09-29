@@ -4,7 +4,7 @@ import { TEAM_AVATAR, USER_AVATAR } from '../fixtures/avatars';
 import { ProfileAvatar } from './profile-avatar';
 
 const meta = {
-  title: 'Patterns/ProfileAvatar',
+  title: 'Patterns/Identity/ProfileAvatar',
   component: ProfileAvatar,
   args: { name: 'Ada Lovelace', image: USER_AVATAR },
   argTypes: {

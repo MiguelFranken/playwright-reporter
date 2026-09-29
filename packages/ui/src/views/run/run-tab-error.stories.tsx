@@ -3,7 +3,7 @@ import { expect, fn, userEvent, within } from 'storybook/test';
 import { RunTabError } from './run-tab-error';
 
 const meta = {
-  title: 'Views/Run/RunTabError',
+  title: 'Views/Run/Tab content/RunTabError',
   component: RunTabError,
   args: { onRetry: fn() },
   parameters: { layout: 'padded' },

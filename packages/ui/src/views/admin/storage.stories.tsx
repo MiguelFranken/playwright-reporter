@@ -5,7 +5,7 @@ import { NOW } from '../../fixtures/now';
 import { RetentionSweepsTable, StorageUsageTable, StoreSchedule } from './storage';
 
 const meta = {
-  title: 'Views/Admin/Storage',
+  title: 'Views/Admin/Storage/Overview',
   component: StoreSchedule,
   parameters: { layout: 'padded' },
   tags: ['themed'],

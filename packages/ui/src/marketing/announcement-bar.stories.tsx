@@ -3,7 +3,7 @@ import { expect, userEvent, within } from 'storybook/test';
 import { AnnouncementBar } from './announcement-bar';
 
 const meta = {
-  title: 'Marketing/AnnouncementBar',
+  title: 'Marketing/Site chrome/AnnouncementBar',
   component: AnnouncementBar,
   parameters: { layout: 'fullscreen' },
   tags: ['themed'],

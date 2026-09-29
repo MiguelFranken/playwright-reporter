@@ -75,7 +75,8 @@ Domains under `src/views/`: `run`, `runs`, `explorer`, `dashboard`, `branches`,
 `pull-requests`, `settings` (project settings), `teams` (team settings), `account` (the
 signed-in user's own page), `admin` (superadmin screens), `auth` (sign-in and
 invitations), `connect` (the OAuth consent screen), `shell` (the sidebar). Add a folder
-when a new area of the app appears; its story titles are `Views/<Domain>/…`.
+when a new area of the app appears; its story titles are `Views/<Domain>/…`, with an
+area level (`Views/Run/Header/…`) once a domain grows past a handful of entries.
 
 ### Moving a component out of `apps/web`
 
@@ -277,7 +278,7 @@ importing the Storybook config from `apps/storybook`, which would be a cycle.
 
 ```tsx
 const meta = {
-  title: 'Primitives/Button',
+  title: 'Primitives/Actions/Button',
   component: Button,
   args: { children: 'Save changes', onClick: fn() },
 } satisfies Meta<typeof Button>;
@@ -287,8 +288,17 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {};
 ```
 
-- `title` follows the layer path: `Primitives/…`, `Patterns/…`, `Views/Run/…`,
-  `Pages/…`. Sidebar order is `Docs, Foundations, Primitives, Patterns, Views, Pages`.
+- `title` is `Layer/Group/Component`: `Primitives/Forms/Input`, `Patterns/Status/StatusBadge`,
+  `Marketing/Sections/Hero`. Views are `Views/<Domain>/…`, plus an area in a large domain
+  (`Views/TestCases/Dialogs/SuiteDialog`). Foundations and Pages stay flat. Reuse a group
+  from `storySort` in `apps/storybook/.storybook/preview.tsx`, which also sets the sidebar
+  order; a group needs at least two members. `src/lib/story-titles.test.ts` enforces all of it.
+
+  | Layer | Groups |
+  | --- | --- |
+  | Primitives | Forms, Actions, Overlays, Navigation, Layout, Feedback, Data display |
+  | Patterns | Navigation, Status, Metrics & charts, States, Dialogs, Controls, Identity |
+  | Marketing | Site chrome, Sections, Content, Demos |
 - `satisfies Meta<typeof X>` + `StoryObj<typeof meta>` everywhere, so args are
   checked against props and fixtures against the view model.
 - Callback props default to `fn()` in `meta.args` so `play` can assert on them.

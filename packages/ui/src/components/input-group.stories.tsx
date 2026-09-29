@@ -4,7 +4,7 @@ import { Search, X } from 'lucide-react';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput, InputGroupText, InputGroupTextarea } from './input-group';
 
 const meta = {
-  title: 'Primitives/InputGroup',
+  title: 'Primitives/Forms/InputGroup',
   component: InputGroup,
   parameters: { layout: 'centered' },
 } satisfies Meta<typeof InputGroup>;

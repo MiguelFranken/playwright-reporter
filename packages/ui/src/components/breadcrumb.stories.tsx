@@ -11,7 +11,7 @@ import {
 } from './breadcrumb';
 
 const meta = {
-  title: 'Primitives/Breadcrumb',
+  title: 'Primitives/Navigation/Breadcrumb',
   component: Breadcrumb,
   parameters: { layout: 'padded' },
 } satisfies Meta<typeof Breadcrumb>;
