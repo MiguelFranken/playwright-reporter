@@ -7,6 +7,7 @@
  * content hash — and holds for every later capture of the same pixels. That is
  * what lets a run with nothing new ask for no review at all.
  */
+import type { ReviewThreadView } from './review-threads';
 import type { Tone } from './tone';
 
 /** What a reviewer records. */
@@ -126,6 +127,8 @@ export interface ReviewCaptureView {
   baseline?: { captureId: string; image: ReviewImage; runNumber: number | null; same: boolean; approvedAt: string; approvedBy?: string | null } | null;
   /** The same checkpoint and variant in the run before, for a comparison without an approval. */
   previous?: { captureId: string; image: ReviewImage; runNumber: number; same: boolean } | null;
+  /** Comment threads on the image: its own and the open ones placed on earlier captures of it. */
+  threads?: ReviewThreadView[];
 }
 
 export interface ReviewCheckpointView {
@@ -180,6 +183,8 @@ export interface ReviewDecisionInput {
   captureIds: string[];
   decision: ReviewDecision;
   comment?: string;
+  /** With an approval: also resolve the images' open comment threads. */
+  resolveThreads?: boolean;
 }
 
 /** Counts per status over a set of images. */

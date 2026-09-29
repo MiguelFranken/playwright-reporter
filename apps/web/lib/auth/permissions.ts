@@ -23,8 +23,11 @@ export const statements = {
   artifact: ['read'],
   audit: ['read'],
   testCase: ['read', 'create', 'update', 'delete'],
-  /** Approving review checkpoint images, or asking for changes to them. */
-  review: ['decide'],
+  /**
+   * `decide`: approving review checkpoint images, or asking for changes to them.
+   * `comment`: pinning comment threads on them, replying and resolving — feedback, not a verdict, so viewers may.
+   */
+  review: ['decide', 'comment'],
 } as const;
 
 export const ac = createAccessControl(statements);
@@ -39,7 +42,7 @@ export const teamRoles = {
     artifact: ['read'],
     audit: ['read'],
     testCase: ['read', 'create', 'update', 'delete'],
-    review: ['decide'],
+    review: ['decide', 'comment'],
   }),
   member: ac.newRole({
     team: ['read'],
@@ -49,7 +52,7 @@ export const teamRoles = {
     run: ['read', 'delete'],
     artifact: ['read'],
     testCase: ['read', 'create', 'update', 'delete'],
-    review: ['decide'],
+    review: ['decide', 'comment'],
   }),
   viewer: ac.newRole({
     team: ['read'],
@@ -58,6 +61,7 @@ export const teamRoles = {
     run: ['read'],
     artifact: ['read'],
     testCase: ['read'],
+    review: ['comment'],
   }),
 } as const;
 

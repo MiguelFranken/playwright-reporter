@@ -1,10 +1,15 @@
 import { relations, sql } from 'drizzle-orm';
 import { boolean, check, index, integer, jsonb, pgEnum, pgTable, real, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { REVIEW_DECISIONS } from '@miguelfranken/ui/lib/review';
+import { ANCHOR_KINDS, COMMENT_KINDS, COMMENT_SOURCES, THREAD_STATUSES } from '@miguelfranken/ui/lib/review-threads';
 import { users } from './auth';
 import { attachments, projects, runs, testAttempts, testResults, tests } from './reporting';
 
 export const reviewDecisionEnum = pgEnum('review_decision', REVIEW_DECISIONS);
+export const reviewThreadStatusEnum = pgEnum('review_thread_status', THREAD_STATUSES);
+export const reviewAnchorKindEnum = pgEnum('review_anchor_kind', ANCHOR_KINDS);
+export const reviewCommentKindEnum = pgEnum('review_comment_kind', COMMENT_KINDS);
+export const commentSourceEnum = pgEnum('comment_source', COMMENT_SOURCES);
 
 /**
  * A named human-review milestone of one attempt (`coupon-applied`), in capture
@@ -134,6 +139,83 @@ export const reviewDecisions = pgTable(
 );
 
 /**
+ * A comment thread on a review image: a numbered pin on a spot or an area of
+ * a screenshot (or on the whole image), and the conversation under it. It
+ * belongs to the image's identity — `(test_id, checkpoint_name, variant)` —
+ * so an open thread follows the image into later runs; `origin_*` is the
+ * capture it was placed on, and the anchor is in that image's pixels.
+ * `number` counts per identity: the number on the pin.
+ */
+export const reviewThreads = pgTable(
+  'review_threads',
+  {
+    id: uuid('id').primaryKey(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    testId: uuid('test_id')
+      .notNull()
+      .references(() => tests.id, { onDelete: 'cascade' }),
+    checkpointName: text('checkpoint_name').notNull(),
+    variant: text('variant').notNull(),
+    number: integer('number').notNull(),
+    originCaptureId: uuid('origin_capture_id').references(() => reviewCaptures.id, { onDelete: 'set null' }),
+    originRunId: uuid('origin_run_id').references(() => runs.id, { onDelete: 'set null' }),
+    originSha256: text('origin_sha256'),
+    /** The origin image's size, kept so the anchor survives the capture's deletion. */
+    originWidth: integer('origin_width').notNull(),
+    originHeight: integer('origin_height').notNull(),
+    originScale: real('origin_scale'),
+    anchor: reviewAnchorKindEnum('anchor').notNull(),
+    x: real('x').notNull().default(0),
+    y: real('y').notNull().default(0),
+    w: real('w'),
+    h: real('h'),
+    status: reviewThreadStatusEnum('status').notNull().default('open'),
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+    resolvedBy: uuid('resolved_by').references(() => users.id, { onDelete: 'set null' }),
+    /** The capture the thread was resolved on: where a resolved thread is still shown. */
+    resolvedCaptureId: uuid('resolved_capture_id').references(() => reviewCaptures.id, { onDelete: 'set null' }),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    lastActivityAt: timestamp('last_activity_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('review_threads_number_idx').on(t.testId, t.checkpointName, t.variant, t.number),
+    index('review_threads_identity_idx').on(t.testId, t.checkpointName, t.variant, t.status),
+    index('review_threads_project_idx').on(t.projectId, t.status, t.lastActivityAt),
+    index('review_threads_origin_capture_idx').on(t.originCaptureId),
+    index('review_threads_resolved_capture_idx').on(t.resolvedCaptureId),
+    check('review_threads_area_check', sql`${t.anchor} <> 'area' or (${t.w} is not null and ${t.h} is not null)`),
+  ],
+);
+
+/**
+ * A comment in a thread, or an event in its history (`resolved`, `reopened`).
+ * A deleted comment keeps its row (`deleted_at`) so the thread still reads.
+ */
+export const reviewComments = pgTable(
+  'review_comments',
+  {
+    id: uuid('id').primaryKey(),
+    threadId: uuid('thread_id')
+      .notNull()
+      .references(() => reviewThreads.id, { onDelete: 'cascade' }),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+    kind: reviewCommentKindEnum('kind').notNull().default('comment'),
+    body: text('body').notNull().default(''),
+    source: commentSourceEnum('source').notNull().default('app'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    editedAt: timestamp('edited_at', { withTimezone: true }),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  },
+  (t) => [index('review_comments_thread_idx').on(t.threadId, t.createdAt)],
+);
+
+/**
  * A branch or pull request kept in the library: the visual documentation of
  * the product as that line of work shows it. It follows its newest run, or is
  * pinned to one run (`pinned_run_id`). One reference per project is the
@@ -181,4 +263,6 @@ export const reviewCapturesRelations = relations(reviewCaptures, ({ one }) => ({
 export type ReviewCheckpointRow = typeof reviewCheckpoints.$inferSelect;
 export type ReviewCaptureRow = typeof reviewCaptures.$inferSelect;
 export type ReviewDecisionRow = typeof reviewDecisions.$inferSelect;
+export type ReviewThreadRow = typeof reviewThreads.$inferSelect;
+export type ReviewCommentRow = typeof reviewComments.$inferSelect;
 export type LibraryReferenceRow = typeof libraryReferences.$inferSelect;
