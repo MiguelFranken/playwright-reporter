@@ -13,8 +13,10 @@ import { scenario } from '../schedule';
 export const test = base.extend<{ shop: Shop; review: ReviewFixture }>({
   ...reviewFixtures({
     variants: 'project',
-    // The order id is new on every run; masking it keeps an unchanged page unchanged.
+    // The order id is new on every run. Masked, and in tabular figures so its
+    // width — and the text after it — stays put: an unchanged page stays unchanged.
     mask: ({ page }) => [page.locator('#order-id')],
+    style: '#order-id { font-variant-numeric: tabular-nums; }',
   }),
   page: async ({ page }, use) => {
     await page.addInitScript((config) => {

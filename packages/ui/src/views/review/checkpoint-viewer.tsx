@@ -51,9 +51,10 @@ function sortedCaptures(cp: ReviewCheckpointView) {
   return [...cp.captures].sort((a, b) => compareVariants(a.variant, b.variant));
 }
 
+/** `4.2 s`, `1:03.5`: where the moment is in the attempt's video. */
 function seconds(ms: number) {
-  const s = Math.max(0, Math.floor(ms / 1000));
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  const s = Math.max(0, ms / 1000);
+  return s < 60 ? `${s.toFixed(1)} s` : `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`;
 }
 
 /** The reference a capture is compared with: the approved baseline, else the run before. */
@@ -196,10 +197,10 @@ export function CheckpointViewer({
                 <StatusIcon status={pos.flow.outcome} />
                 <div className="min-w-0">
                   <DialogTitle className="truncate text-title-s" title={label}>
-                    {pos.index + 1}. {label}
+                    {pos.checkpoint.sequence + 1}. {label}
                   </DialogTitle>
                   <DialogDescription className="truncate text-xs text-muted-foreground" title={pos.flow.titlePath.join(' › ')}>
-                    {pos.flow.titlePath.join(' › ')} · checkpoint {pos.index + 1} of {pos.flow.checkpoints.length}
+                    {pos.flow.titlePath.join(' › ')} · {pos.index + 1} of {pos.flow.checkpoints.length} shown
                   </DialogDescription>
                 </div>
               </div>
@@ -412,7 +413,7 @@ export function CheckpointViewer({
 
             <footer className="border-t border-border px-4 py-2">
               <ol className="flex gap-2 overflow-x-auto pb-1" aria-label={`Checkpoints of ${pos.flow.title}`}>
-                {pos.flow.checkpoints.map((cp, i) => {
+                {pos.flow.checkpoints.map((cp) => {
                   const first = sortedCaptures(cp).find((c) => !variant || c.variant === variant) ?? sortedCaptures(cp)[0];
                   const active = cp.id === pos.checkpoint.id;
                   return (
@@ -421,10 +422,10 @@ export function CheckpointViewer({
                         type="button"
                         onClick={() => onSelectionChange({ checkpointId: cp.id, variant })}
                         aria-current={active ? 'step' : undefined}
-                        aria-label={`${i + 1}. ${checkpointLabel(cp.name, cp.title)}`}
+                        aria-label={`${cp.sequence + 1}. ${checkpointLabel(cp.name, cp.title)}`}
                         className={cn('flex items-center gap-2 rounded-md p-1 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/25', active ? 'bg-accent-subtle ring-1 ring-accent-border' : 'hover:bg-muted')}
                       >
-                        <span className="text-label-s tabular-nums text-muted-foreground">{i + 1}</span>
+                        <span className="text-label-s tabular-nums text-muted-foreground">{cp.sequence + 1}</span>
                         {first ? <ReviewFrame image={first.image} viewport={first.viewport} alt="" height={48} /> : null}
                       </button>
                     </li>

@@ -26,6 +26,17 @@ export const Default: Story = {};
 /** Counts are optional per tab — Configuration never has one. */
 export const WithoutCounts: Story = { args: { counts: undefined } };
 
+/** A link to another page of the run, at the end of the strip. */
+export const WithActions: Story = {
+  args: {
+    actions: (
+      <a href="#review" className="text-label-s text-accent-text hover:underline">
+        Visual review (6 to review)
+      </a>
+    ),
+  },
+};
+
 export const OnErrorsTab: Story = { args: { value: 'errors' } };
 
 /** While the host's navigation transition is in flight. */

@@ -103,7 +103,10 @@ export function ReviewStoryboard({
   const [filter, setFilter] = useControlled<ReviewFilter>(filterProp, onFilterChange, toolbar && hasNeedsReview ? 'needs-review' : 'all');
   const [variant, setVariant] = useControlled<string | null>(variantProp, onVariantChange, null);
   const [query, setQuery] = useControlled<string>(queryProp, onQueryChange, '');
-  const [selection, setSelection] = useControlled<ReviewSelection | null>(selectionProp, onSelectionChange, null);
+  const [selection, setSelectionState] = useControlled<ReviewSelection | null>(selectionProp, onSelectionChange, null);
+  // While the viewer is open it keeps the checkpoints it opened with, so a
+  // decision that moves one out of the filter does not pull it from under the reviewer.
+  const [pinned, setPinned] = useState<ReadonlySet<string> | null>(null);
 
   const variants = useMemo(() => variantsOf(flows), [flows]);
   const effectiveFilter = toolbar ? filter : 'all';
@@ -111,6 +114,17 @@ export function ReviewStoryboard({
   const counts = useMemo(() => countStatuses(flows, variant), [flows, variant]);
   const total = counts.approved + counts.changes_requested + counts.changed + counts.new;
   const pending = new Set(pendingIds);
+  const setSelection = (next: ReviewSelection | null) => {
+    if (next && !pinned) setPinned(new Set(visible.flatMap((f) => f.checkpoints.map((c) => c.id))));
+    if (!next) setPinned(null);
+    setSelectionState(next);
+  };
+  const viewerFlows = useMemo(() => {
+    if (!pinned) return visible;
+    return filterFlows(flows, 'all', variant, '')
+      .map((f) => ({ ...f, checkpoints: f.checkpoints.filter((c) => pinned.has(c.id)) }))
+      .filter((f) => f.checkpoints.length > 0);
+  }, [pinned, visible, flows, variant]);
 
   const needsReviewIds = (list: readonly ReviewFlowView[]) =>
     list.flatMap((f) => f.checkpoints.flatMap((c) => c.captures.filter((cap) => NEEDS_REVIEW.includes(cap.status)).map((cap) => cap.id)));
@@ -212,7 +226,7 @@ export function ReviewStoryboard({
         </ol>
       )}
 
-      <CheckpointViewer flows={visible} selection={selection} onSelectionChange={setSelection} onDecide={onDecide} pendingIds={pendingIds} canDecide={canDecide} />
+      <CheckpointViewer flows={viewerFlows} selection={selection} onSelectionChange={setSelection} onDecide={onDecide} pendingIds={pendingIds} canDecide={canDecide} />
     </div>
   );
 }

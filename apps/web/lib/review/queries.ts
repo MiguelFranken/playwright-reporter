@@ -326,11 +326,11 @@ export interface ReviewFlowRecord {
  * run summary lists them (file, then title path), each with its checkpoints
  * in capture order.
  */
-export async function runReview(run: { id: string; startedAt: Date }, filter: { resultId?: string } = {}): Promise<ReviewFlowRecord[]> {
+export async function runReview(run: { id: string; startedAt: Date | string }, filter: { resultId?: string } = {}): Promise<ReviewFlowRecord[]> {
   const where = filter.resultId
     ? and(eq(reviewCheckpoints.runId, run.id), eq(reviewCheckpoints.testResultId, filter.resultId))!
     : eq(reviewCheckpoints.runId, run.id);
-  const checkpoints = await checkpointsWhere(where, { runId: run.id, runStartedAt: run.startedAt });
+  const checkpoints = await checkpointsWhere(where, { runId: run.id, runStartedAt: new Date(run.startedAt) });
   if (checkpoints.length === 0) return [];
 
   const resultIds = [...new Set(checkpoints.map((c) => c.testResultId))];
@@ -380,8 +380,8 @@ export async function runReview(run: { id: string; startedAt: Date }, filter: { 
 }
 
 /** Per-status image counts of a run's final attempts, for badges and the queue. */
-export async function runReviewCounts(runIds: readonly string[]): Promise<Map<string, Record<ReviewStatus, number>>> {
-  const out = new Map<string, Record<ReviewStatus, number>>();
+export async function runReviewCounts(runIds: readonly string[]): Promise<Record<string, Record<ReviewStatus, number>>> {
+  const out: Record<string, Record<ReviewStatus, number>> = {};
   if (runIds.length === 0) return out;
   const rows = await db.execute<{ run_id: string; status: ReviewStatus; n: string }>(sql`
     select c.run_id, ${statusSql} as status, count(*)::text as n
@@ -396,9 +396,8 @@ export async function runReviewCounts(runIds: readonly string[]): Promise<Map<st
     group by 1, 2
   `);
   for (const r of rows) {
-    const counts = out.get(r.run_id) ?? { approved: 0, changes_requested: 0, changed: 0, new: 0 };
+    const counts = (out[r.run_id] ??= { approved: 0, changes_requested: 0, changed: 0, new: 0 });
     counts[r.status] = Number(r.n);
-    out.set(r.run_id, counts);
   }
   return out;
 }
@@ -453,7 +452,7 @@ export async function reviewQueue(projectId: string, { limit = 30, branch }: { l
     .orderBy(desc(runs.startedAt))
     .limit(limit);
   const counts = await runReviewCounts(recent.map((r) => r.runId));
-  return recent.map((r) => ({ ...r, counts: counts.get(r.runId) ?? { approved: 0, changes_requested: 0, changed: 0, new: 0 } }));
+  return recent.map((r) => ({ ...r, counts: counts[r.runId] ?? { approved: 0, changes_requested: 0, changed: 0, new: 0 } }));
 }
 
 export interface ScreenRecord {

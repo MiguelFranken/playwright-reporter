@@ -56,7 +56,10 @@ export function ResultAttempts({ attempts }: { attempts: AttemptView[] }) {
 }
 
 function AttemptCard({ attempt }: { attempt: AttemptView }) {
-  const images = attempt.attachments.filter((x) => x.kind === 'screenshot' || x.kind === 'image');
+  // Review checkpoint images have their own storyboard; the grid keeps Playwright's own screenshots.
+  const allImages = attempt.attachments.filter((x) => x.kind === 'screenshot' || x.kind === 'image');
+  const images = allImages.filter((x) => !x.name.startsWith('review:'));
+  const reviewImages = allImages.length - images.length;
   const videos = attempt.attachments.filter((x) => x.kind === 'video');
   const traces = attempt.attachments.filter((x) => x.kind === 'trace');
   const hasConsole = attempt.stdout.trim().length > 0 || attempt.stderr.trim().length > 0;
@@ -162,7 +165,12 @@ function AttemptCard({ attempt }: { attempt: AttemptView }) {
             )}
           </TabsContent>
           <TabsContent value="screenshots">
-            <Screenshots images={images} />
+            {reviewImages ? (
+              <p className="mb-3 text-sm text-muted-foreground">
+                {reviewImages} review checkpoint image{reviewImages === 1 ? ' is' : 's are'} in the visual review of this test, and under Attachments.
+              </p>
+            ) : null}
+            {images.length || !reviewImages ? <Screenshots images={images} /> : null}
           </TabsContent>
           <TabsContent value="video">
             {videos.length === 0 ? (

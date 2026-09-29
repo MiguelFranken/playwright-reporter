@@ -172,7 +172,7 @@ describe('statuses', () => {
     expect(await statuses(third.run.id, t2)).toEqual({ desktop: 'changed', mobile: 'new' });
 
     const counts = await runReviewCounts([third.run.id]);
-    expect(counts.get(third.run.id)).toEqual({ approved: 0, changes_requested: 0, changed: 1, new: 1 });
+    expect(counts[third.run.id]).toEqual({ approved: 0, changes_requested: 0, changed: 1, new: 1 });
     const queue = await reviewQueue(tenant.project.id);
     expect(queue.map((q) => q.number)).toEqual([third.run.number, second.run.number, first.run.number]);
 
