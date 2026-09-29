@@ -58,3 +58,34 @@ export const NoMatch: Story = { args: { options: [], total: 0, query: 'checkout'
 export const LoadFailed: Story = { args: { options: [], total: 0, error: 'The tests could not be loaded. Try again.' } };
 
 export const Pending: Story = { args: { pending: true } };
+
+/** Long titles, files and a long description stay inside the dialog: titles truncate, nothing scrolls sideways. */
+export const LongContent: Story = {
+  args: {
+    mode: 'adopt',
+    title: 'Adopt Playwright tests',
+    description:
+      'Each test becomes a test case that is already linked to it: its title, its test.step()s as steps, and suites named after its file and describe blocks. The same test in several browsers becomes one case.',
+    suites: suiteOptions,
+    options: [
+      ...automatedTests,
+      {
+        testId: 'a5',
+        title: 'sends a reminder for a partially used coupon with more than €10 remaining after the second purchase in the same month',
+        titlePath: ['coupons', 'reminders', 'sends a reminder'],
+        file: 'tests/checkout/coupons/reminders/coupon-reminder-for-partially-used-coupons.spec.ts',
+        pwProject: 'mobile-safari-landscape',
+        lastRunAt: automatedTests[0]!.lastRunAt,
+        lastOutcome: 'passed',
+        linkedCases: [],
+      },
+    ],
+    total: 5,
+  },
+  play: async () => {
+    const dialog = await within(document.body).findByRole('dialog');
+    for (const el of dialog.querySelectorAll('*')) {
+      await expect(el.getBoundingClientRect().right).toBeLessThanOrEqual(dialog.getBoundingClientRect().right + 0.5);
+    }
+  },
+};
