@@ -36,7 +36,18 @@ export type AuditAction =
   | 'database.retention.update'
   | 'database.retention.sweep'
   | 'database.purge'
-  | 'mcp.settings.update';
+  | 'mcp.settings.update'
+  | 'test-case.create'
+  | 'test-case.update'
+  | 'test-case.delete'
+  | 'test-case.restore'
+  | 'test-case.link'
+  | 'test-case.unlink'
+  | 'test-case.import'
+  | 'test-suite.create'
+  | 'test-suite.update'
+  | 'test-suite.delete'
+  | 'test-case-field.update';
 
 /**
  * Audit writes are best effort: a failure here must never fail the mutation

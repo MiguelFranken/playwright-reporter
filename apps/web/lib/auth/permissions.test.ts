@@ -14,6 +14,7 @@ const EXPECTED: Record<EffectiveRole, Partial<Record<keyof typeof statements, st
     run: ['read', 'delete'],
     artifact: ['read'],
     audit: ['read'],
+    testCase: ['read', 'create', 'update', 'delete'],
   },
   member: {
     team: ['read'],
@@ -22,6 +23,7 @@ const EXPECTED: Record<EffectiveRole, Partial<Record<keyof typeof statements, st
     token: ['read', 'create', 'revoke'],
     run: ['read', 'delete'],
     artifact: ['read'],
+    testCase: ['read', 'create', 'update', 'delete'],
   },
   viewer: {
     team: ['read'],
@@ -29,6 +31,7 @@ const EXPECTED: Record<EffectiveRole, Partial<Record<keyof typeof statements, st
     project: ['read'],
     run: ['read'],
     artifact: ['read'],
+    testCase: ['read'],
   },
   superadmin: Object.fromEntries(Object.entries(statements).map(([k, v]) => [k, [...v]])) as Record<string, string[]>,
 };
