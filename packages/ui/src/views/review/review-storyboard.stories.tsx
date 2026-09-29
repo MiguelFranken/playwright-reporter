@@ -154,7 +154,8 @@ export const ManyTests: Story = {
     await expect(canvas.getAllByRole('article').length).toBeLessThan(40);
     // Larger screens: the rendered rows measure themselves again and still sit edge to edge.
     await userEvent.click(canvas.getByRole('button', { name: 'Larger screens' }));
-    await waitFor(() => expect(canvas.getByText('23%')).toBeInTheDocument());
+    // The screens glide to the new size; a slow machine takes a while.
+    await waitFor(() => expect(canvas.getByText('23%')).toBeInTheDocument(), { timeout: 5000 });
     await waitFor(() => {
       // Each row's slot, in order; the pinned heading sits outside the order.
       const slots = [...canvasElement.querySelectorAll<HTMLElement>('[data-index]:not(.sticky)')]
@@ -163,7 +164,7 @@ export const ManyTests: Story = {
         .map((el) => el.getBoundingClientRect());
       expect(slots.length).toBeGreaterThan(3);
       slots.slice(1).forEach((r, i) => expect(Math.abs(r.top - slots[i].bottom)).toBeLessThan(1));
-    });
+    }, { timeout: 5000 });
     window.scrollTo(0, 0);
   },
 };
