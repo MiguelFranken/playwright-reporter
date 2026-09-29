@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.0.46](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.45...v0.0.46) (2026-09-29)
+
+### Features
+
+* **api:** write endpoints for test cases and visual review, and the run page's result filters ([#55](https://github.com/MiguelFranken/playwright-reporter/issues/55)) ([4af34c7](https://github.com/MiguelFranken/playwright-reporter/commit/4af34c7f95f3863504f69dc398e4472d7738cf18))
+* **test-cases:** hand organizing adopted tests to an AI assistant from the adopt dialog ([#56](https://github.com/MiguelFranken/playwright-reporter/issues/56)) ([4f61c2a](https://github.com/MiguelFranken/playwright-reporter/commit/4f61c2a3124ce65afb39c8aa587d69802c7dde45))
+* **ui:** a smooth screen-size slider that keeps its thumb inside the track ([#52](https://github.com/MiguelFranken/playwright-reporter/issues/52)) ([d3d7d0a](https://github.com/MiguelFranken/playwright-reporter/commit/d3d7d0a7504bf38ce6774b1755fea10003efd3f7))
+* **ui:** design-system selects in the screen toolbar and run history pager ([#54](https://github.com/MiguelFranken/playwright-reporter/issues/54)) ([8601b29](https://github.com/MiguelFranken/playwright-reporter/commit/8601b2909786013ab4d91152ac0180809aa537c7))
+
+### Bug Fixes
+
+* **ui:** tighten the checkpoint viewer's pager and put its close button in the header row ([#53](https://github.com/MiguelFranken/playwright-reporter/issues/53)) ([aaf73bc](https://github.com/MiguelFranken/playwright-reporter/commit/aaf73bcea830d558263f417f1b0c53d6c5334de7))
+
 ## [0.0.45](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.44...v0.0.45) (2026-09-29)
 
 ### Features
