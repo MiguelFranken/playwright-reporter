@@ -335,13 +335,19 @@ describe('triggers', () => {
     expect(await res.json()).toMatchObject({ status: 'done', deleted: { runs: 1 } });
   });
 
-  test('a finished run sweeps at most every twelve hours, and only where allowed', async ({ db, tenant }) => {
+  test('a finished run sweeps every twelve hours or to continue one, and only where allowed', async ({ db, tenant }) => {
     await saveDataRetentionPolicy(policy({ runDays: 1 }), tenant.adminUser.id);
     await oldRun(tenant, 3);
     expect(await sweepDataAfterIngest()).toEqual({ status: 'skipped' });
 
     vi.stubEnv('DATA_RETENTION_INGEST_SWEEP', 'on');
     expect(await sweepDataAfterIngest()).toMatchObject({ status: 'done', deleted: { runs: 1 } });
+    await oldRun(tenant, 3);
+    expect(await sweepDataAfterIngest()).toEqual({ status: 'skipped' });
+
+    // A sweep that ran out of time is continued by the next finished run.
+    await db.update(dataSweeps).set({ hasMore: true });
+    expect(await sweepDataAfterIngest()).toMatchObject({ status: 'done', deleted: { runs: 1 }, hasMore: false });
     await oldRun(tenant, 3);
     expect(await sweepDataAfterIngest()).toEqual({ status: 'skipped' });
 
