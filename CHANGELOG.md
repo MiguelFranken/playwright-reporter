@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.44](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.43...v0.0.44) (2026-09-29)
+
+### Features
+
+* a Library for visual documentation, and a Visual Review per pull request ([#50](https://github.com/MiguelFranken/playwright-reporter/issues/50)) ([288854e](https://github.com/MiguelFranken/playwright-reporter/commit/288854e1f7468200c8a089cbe5e2cb4a900425bb))
+
 ## [0.0.43](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.42...v0.0.43) (2026-09-29)
 
 ### Features
