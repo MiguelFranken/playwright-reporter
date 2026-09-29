@@ -1,3 +1,4 @@
+import { connection } from 'next/server';
 import { cache, Suspense } from 'react';
 import { DataRetentionPolicyForm, PurgeRunHistoryButton, RunDataSweepButton } from '@/components/admin/data-retention-card';
 import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
@@ -20,7 +21,12 @@ import { getRetentionPolicy } from '@/lib/storage/retention';
 
 // One read per request, shared by the cards that stream in separately.
 const loadSize = cache(databaseSize);
-const loadIngest = cache(() => ingestByDay(365));
+// Counts back from today, so it is computed per request — `connection()` keeps
+// a prefetch, which gets past the cached access check, from reading the clock.
+const loadIngest = cache(async () => {
+  await connection();
+  return ingestByDay(365);
+});
 const loadTotals = cache(async () => historyTotals(await loadSize()));
 
 export default function AdminDatabasePage() {

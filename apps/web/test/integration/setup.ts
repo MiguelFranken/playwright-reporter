@@ -34,6 +34,8 @@ vi.mock('next/server', async (importOriginal) => ({
 vi.mock('next/cache', () => ({
   revalidatePath: () => undefined,
   revalidateTag: () => undefined,
+  // `'use cache: private'` is a plain string outside Next's compiler; its lifetime call is a no-op here.
+  cacheLife: () => undefined,
   unstable_cache: (fn: unknown) => fn,
 }));
 

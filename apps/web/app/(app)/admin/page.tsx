@@ -1,5 +1,6 @@
 import { Building2, Database, FolderKanban, ScrollText, Users } from 'lucide-react';
 import Link from 'next/link';
+import { connection } from 'next/server';
 import { Suspense } from 'react';
 import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
 import { ListRowsSkeleton, MetricCardsSkeleton } from '@miguelfranken/ui/patterns/skeletons';
@@ -51,6 +52,10 @@ export default function AdminOverviewPage() {
 
 async function InstanceStats() {
   await requireSuperadmin();
+  // The ingest trend counts back from today, so it is computed per request.
+  // Without this, a prefetch — which now gets past the cached access check —
+  // would reach `ingestByDay`'s clock read while prerendering.
+  await connection();
   const [teams, users, size, days] = await Promise.all([listAllTeams(), listUsers(undefined, { pageSize: 1 }), databaseSize(), ingestByDay(30)]);
   const projectCount = teams.reduce((sum, t) => sum + t.projectCount, 0);
   return (
