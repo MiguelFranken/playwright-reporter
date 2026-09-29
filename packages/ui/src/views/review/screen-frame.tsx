@@ -2,6 +2,13 @@ import { cn } from '../../lib/cn';
 import type { FrameSize, ReviewImage } from '../../lib/review';
 import { UnavailableImage } from './review-frame';
 
+/**
+ * The CSS variable a `live` frame takes its zoom from, when an ancestor sets
+ * it: the storyboard's size slider moves it on every frame of a drag without
+ * re-rendering the screens.
+ */
+export const SCREEN_ZOOM_VAR = '--screen-zoom';
+
 /** Below this width a frame shows the small preview; above it the full image, which can scroll. */
 const PREVIEW_MAX_WIDTH = 360;
 
@@ -27,6 +34,7 @@ export function ScreenFrame({
   className,
   label,
   tone,
+  live = false,
 }: {
   image: ReviewImage;
   frame: FrameSize;
@@ -39,6 +47,8 @@ export function ScreenFrame({
   label?: string;
   /** Colours the outline: a new (info), changed (warning) or rejected/failed (danger) screen. */
   tone?: keyof typeof TONE_RING;
+  /** Sizes the frame from `SCREEN_ZOOM_VAR` when an ancestor sets it, `zoom` otherwise (which still picks the image). */
+  live?: boolean;
 }) {
   const width = Math.max(24, Math.round(frame.width * zoom));
   const height = Math.max(24, Math.round(frame.height * zoom));
@@ -55,7 +65,7 @@ export function ScreenFrame({
         scroll ? 'overflow-x-hidden overflow-y-auto' : 'overflow-hidden',
         className,
       )}
-      style={{ width, height }}
+      style={live ? { width: liveLength(frame.width, zoom), height: liveLength(frame.height, zoom) } : { width, height }}
     >
       {image.available ? (
         // eslint-disable-next-line @next/next/no-img-element
@@ -65,4 +75,9 @@ export function ScreenFrame({
       )}
     </div>
   );
+}
+
+/** `px` CSS pixels at the live zoom, never below the 24px a frame keeps. */
+function liveLength(px: number, zoom: number): string {
+  return `max(24px, calc(${px}px * var(${SCREEN_ZOOM_VAR}, ${zoom})))`;
 }
