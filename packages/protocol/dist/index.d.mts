@@ -87,6 +87,124 @@ export declare const attachmentRefSchema: z.ZodObject<{
   size: z.ZodOptional<z.ZodNumber>;
 }, z.core.$strip>;
 export type AttachmentRef = z.infer<typeof attachmentRefSchema>;
+/**
+ * A review checkpoint is a named, human-review milestone of a test: the same
+ * moment captured once per variant (a desktop and a mobile viewport, say).
+ * The images travel as ordinary attachments; the checkpoint says what they
+ * show, in which order, and how they were taken.
+ *
+ * The capture helper (`@miguelfranken/reporter/review`) attaches one
+ * `CheckpointRecord` per checkpoint, as JSON with `CHECKPOINT_CONTENT_TYPE`,
+ * naming its images by attachment name. The reporter resolves those names to
+ * the attachment ids it sends and puts the result on `attempt.end` as
+ * `checkpoints`. Older suites name their images `review:<name>:<variant>` and
+ * nothing else; `legacyCheckpoints` reads that convention.
+ */
+export declare const CHECKPOINT_CONTENT_TYPE = "application/vnd.pw-reporter.checkpoint+json";
+export declare const REVIEW_ATTACHMENT_PREFIX = "review:";
+/** The variant name of a checkpoint captured once, without variants. */
+export declare const DEFAULT_VARIANT = "default";
+export declare const checkpointKindSchema: z.ZodEnum<{
+  component: "component";
+  dialog: "dialog";
+  email: "email";
+  other: "other";
+  page: "page";
+}>;
+export type CheckpointKind = z.infer<typeof checkpointKindSchema>;
+export declare const viewportSchema: z.ZodObject<{
+  width: z.ZodNumber;
+  height: z.ZodNumber;
+}, z.core.$strip>;
+export type Viewport = z.infer<typeof viewportSchema>;
+export declare const checkpointVariantSchema: z.ZodObject<{
+  variant: z.ZodString;
+  viewport: z.ZodOptional<z.ZodObject<{
+    width: z.ZodNumber;
+    height: z.ZodNumber;
+  }, z.core.$strip>>;
+  deviceScaleFactor: z.ZodOptional<z.ZodNumber>;
+  isMobile: z.ZodOptional<z.ZodBoolean>;
+  fullPage: z.ZodOptional<z.ZodBoolean>;
+  width: z.ZodOptional<z.ZodNumber>;
+  height: z.ZodOptional<z.ZodNumber>;
+  sha256: z.ZodOptional<z.ZodString>;
+  attachmentId: z.ZodString;
+  thumbnailAttachmentId: z.ZodOptional<z.ZodString>;
+}, z.core.$strip>;
+export type CheckpointVariant = z.infer<typeof checkpointVariantSchema>;
+export declare const checkpointSchema: z.ZodObject<{
+  name: z.ZodString;
+  title: z.ZodOptional<z.ZodString>;
+  description: z.ZodOptional<z.ZodString>;
+  sequence: z.ZodNumber;
+  capturedAt: z.ZodOptional<z.ZodString>;
+  stepPath: z.ZodOptional<z.ZodArray<z.ZodString>>;
+  url: z.ZodOptional<z.ZodString>;
+  pageTitle: z.ZodOptional<z.ZodString>;
+  kind: z.ZodOptional<z.ZodEnum<{
+    component: "component";
+    dialog: "dialog";
+    email: "email";
+    other: "other";
+    page: "page";
+  }>>;
+  flow: z.ZodOptional<z.ZodString>;
+  tags: z.ZodOptional<z.ZodArray<z.ZodString>>;
+  variants: z.ZodArray<z.ZodObject<{
+    variant: z.ZodString;
+    viewport: z.ZodOptional<z.ZodObject<{
+      width: z.ZodNumber;
+      height: z.ZodNumber;
+    }, z.core.$strip>>;
+    deviceScaleFactor: z.ZodOptional<z.ZodNumber>;
+    isMobile: z.ZodOptional<z.ZodBoolean>;
+    fullPage: z.ZodOptional<z.ZodBoolean>;
+    width: z.ZodOptional<z.ZodNumber>;
+    height: z.ZodOptional<z.ZodNumber>;
+    sha256: z.ZodOptional<z.ZodString>;
+    attachmentId: z.ZodString;
+    thumbnailAttachmentId: z.ZodOptional<z.ZodString>;
+  }, z.core.$strip>>;
+}, z.core.$strip>;
+export type Checkpoint = z.infer<typeof checkpointSchema>;
+/** What the capture helper attaches: variants name their images by attachment name. */
+export declare const checkpointRecordSchema: z.ZodObject<{
+  name: z.ZodString;
+  title: z.ZodOptional<z.ZodString>;
+  description: z.ZodOptional<z.ZodString>;
+  sequence: z.ZodNumber;
+  capturedAt: z.ZodOptional<z.ZodString>;
+  stepPath: z.ZodOptional<z.ZodArray<z.ZodString>>;
+  url: z.ZodOptional<z.ZodString>;
+  pageTitle: z.ZodOptional<z.ZodString>;
+  kind: z.ZodOptional<z.ZodEnum<{
+    component: "component";
+    dialog: "dialog";
+    email: "email";
+    other: "other";
+    page: "page";
+  }>>;
+  flow: z.ZodOptional<z.ZodString>;
+  tags: z.ZodOptional<z.ZodArray<z.ZodString>>;
+  v: z.ZodLiteral<1>;
+  variants: z.ZodArray<z.ZodObject<{
+    variant: z.ZodString;
+    viewport: z.ZodOptional<z.ZodObject<{
+      width: z.ZodNumber;
+      height: z.ZodNumber;
+    }, z.core.$strip>>;
+    deviceScaleFactor: z.ZodOptional<z.ZodNumber>;
+    isMobile: z.ZodOptional<z.ZodBoolean>;
+    fullPage: z.ZodOptional<z.ZodBoolean>;
+    width: z.ZodOptional<z.ZodNumber>;
+    height: z.ZodOptional<z.ZodNumber>;
+    sha256: z.ZodOptional<z.ZodString>;
+    attachment: z.ZodString;
+    thumbnail: z.ZodOptional<z.ZodString>;
+  }, z.core.$strip>>;
+}, z.core.$strip>;
+export type CheckpointRecord = z.infer<typeof checkpointRecordSchema>;
 export declare const gitInfoSchema: z.ZodObject<{
   branch: z.ZodOptional<z.ZodString>;
   sha: z.ZodOptional<z.ZodString>;
@@ -297,6 +415,40 @@ export declare const attemptEndEventSchema: z.ZodObject<{
     contentType: z.ZodString;
     size: z.ZodOptional<z.ZodNumber>;
   }, z.core.$strip>>;
+  checkpoints: z.ZodOptional<z.ZodArray<z.ZodObject<{
+    name: z.ZodString;
+    title: z.ZodOptional<z.ZodString>;
+    description: z.ZodOptional<z.ZodString>;
+    sequence: z.ZodNumber;
+    capturedAt: z.ZodOptional<z.ZodString>;
+    stepPath: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    url: z.ZodOptional<z.ZodString>;
+    pageTitle: z.ZodOptional<z.ZodString>;
+    kind: z.ZodOptional<z.ZodEnum<{
+      component: "component";
+      dialog: "dialog";
+      email: "email";
+      other: "other";
+      page: "page";
+    }>>;
+    flow: z.ZodOptional<z.ZodString>;
+    tags: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    variants: z.ZodArray<z.ZodObject<{
+      variant: z.ZodString;
+      viewport: z.ZodOptional<z.ZodObject<{
+        width: z.ZodNumber;
+        height: z.ZodNumber;
+      }, z.core.$strip>>;
+      deviceScaleFactor: z.ZodOptional<z.ZodNumber>;
+      isMobile: z.ZodOptional<z.ZodBoolean>;
+      fullPage: z.ZodOptional<z.ZodBoolean>;
+      width: z.ZodOptional<z.ZodNumber>;
+      height: z.ZodOptional<z.ZodNumber>;
+      sha256: z.ZodOptional<z.ZodString>;
+      attachmentId: z.ZodString;
+      thumbnailAttachmentId: z.ZodOptional<z.ZodString>;
+    }, z.core.$strip>>;
+  }, z.core.$strip>>>;
   outcome: z.ZodEnum<{
     expected: "expected";
     flaky: "flaky";
@@ -396,6 +548,40 @@ export declare const ingestEventSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
     contentType: z.ZodString;
     size: z.ZodOptional<z.ZodNumber>;
   }, z.core.$strip>>;
+  checkpoints: z.ZodOptional<z.ZodArray<z.ZodObject<{
+    name: z.ZodString;
+    title: z.ZodOptional<z.ZodString>;
+    description: z.ZodOptional<z.ZodString>;
+    sequence: z.ZodNumber;
+    capturedAt: z.ZodOptional<z.ZodString>;
+    stepPath: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    url: z.ZodOptional<z.ZodString>;
+    pageTitle: z.ZodOptional<z.ZodString>;
+    kind: z.ZodOptional<z.ZodEnum<{
+      component: "component";
+      dialog: "dialog";
+      email: "email";
+      other: "other";
+      page: "page";
+    }>>;
+    flow: z.ZodOptional<z.ZodString>;
+    tags: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    variants: z.ZodArray<z.ZodObject<{
+      variant: z.ZodString;
+      viewport: z.ZodOptional<z.ZodObject<{
+        width: z.ZodNumber;
+        height: z.ZodNumber;
+      }, z.core.$strip>>;
+      deviceScaleFactor: z.ZodOptional<z.ZodNumber>;
+      isMobile: z.ZodOptional<z.ZodBoolean>;
+      fullPage: z.ZodOptional<z.ZodBoolean>;
+      width: z.ZodOptional<z.ZodNumber>;
+      height: z.ZodOptional<z.ZodNumber>;
+      sha256: z.ZodOptional<z.ZodString>;
+      attachmentId: z.ZodString;
+      thumbnailAttachmentId: z.ZodOptional<z.ZodString>;
+    }, z.core.$strip>>;
+  }, z.core.$strip>>>;
   outcome: z.ZodEnum<{
     expected: "expected";
     flaky: "flaky";
@@ -495,6 +681,40 @@ export declare const eventBatchSchema: z.ZodObject<{
       contentType: z.ZodString;
       size: z.ZodOptional<z.ZodNumber>;
     }, z.core.$strip>>;
+    checkpoints: z.ZodOptional<z.ZodArray<z.ZodObject<{
+      name: z.ZodString;
+      title: z.ZodOptional<z.ZodString>;
+      description: z.ZodOptional<z.ZodString>;
+      sequence: z.ZodNumber;
+      capturedAt: z.ZodOptional<z.ZodString>;
+      stepPath: z.ZodOptional<z.ZodArray<z.ZodString>>;
+      url: z.ZodOptional<z.ZodString>;
+      pageTitle: z.ZodOptional<z.ZodString>;
+      kind: z.ZodOptional<z.ZodEnum<{
+        component: "component";
+        dialog: "dialog";
+        email: "email";
+        other: "other";
+        page: "page";
+      }>>;
+      flow: z.ZodOptional<z.ZodString>;
+      tags: z.ZodOptional<z.ZodArray<z.ZodString>>;
+      variants: z.ZodArray<z.ZodObject<{
+        variant: z.ZodString;
+        viewport: z.ZodOptional<z.ZodObject<{
+          width: z.ZodNumber;
+          height: z.ZodNumber;
+        }, z.core.$strip>>;
+        deviceScaleFactor: z.ZodOptional<z.ZodNumber>;
+        isMobile: z.ZodOptional<z.ZodBoolean>;
+        fullPage: z.ZodOptional<z.ZodBoolean>;
+        width: z.ZodOptional<z.ZodNumber>;
+        height: z.ZodOptional<z.ZodNumber>;
+        sha256: z.ZodOptional<z.ZodString>;
+        attachmentId: z.ZodString;
+        thumbnailAttachmentId: z.ZodOptional<z.ZodString>;
+      }, z.core.$strip>>;
+    }, z.core.$strip>>>;
     outcome: z.ZodEnum<{
       expected: "expected";
       flaky: "flaky";
@@ -603,5 +823,20 @@ export declare const runHeartbeatResponseSchema: z.ZodObject<{
 export type RunHeartbeatResponse = z.infer<typeof runHeartbeatResponseSchema>;
 /** Classifies a Playwright attachment by name and content type. */
 export declare function classifyAttachment(name: string, contentType: string): AttachmentKind;
+/**
+ * Reads the `review:<name>:<variant>` naming convention; a trailing `:thumb`
+ * marks the variant's preview. A name without a variant is the default one.
+ */
+export declare function parseReviewAttachmentName(name: string): {
+  name: string;
+  variant: string;
+  thumbnail: boolean;
+} | null;
+/**
+ * Checkpoints from image attachments named `review:<name>:<variant>`, for
+ * suites that attach review screenshots without a checkpoint record. Order is
+ * the order the first image of each checkpoint was attached in.
+ */
+export declare function legacyCheckpoints(attachments: readonly Pick<AttachmentRef, 'id' | 'name' | 'contentType'>[]): Checkpoint[];
 //#endregion
 //# sourceMappingURL=index.d.mts.map

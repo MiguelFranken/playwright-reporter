@@ -247,6 +247,8 @@ export const attachments = pgTable(
     storageKey: text('storage_key').notNull(),
     storageDriver: text('storage_driver').notNull(),
     sizeBytes: integer('size_bytes'),
+    /** Position in the attempt's attachment list: the order Playwright attached them in. */
+    ordinal: integer('ordinal'),
     status: attachmentStatusEnum('status').notNull().default('pending'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     /** When the stored bytes went away. Set together with `status = 'expired'`. */

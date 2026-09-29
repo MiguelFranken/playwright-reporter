@@ -15,6 +15,7 @@ const EXPECTED: Record<EffectiveRole, Partial<Record<keyof typeof statements, st
     artifact: ['read'],
     audit: ['read'],
     testCase: ['read', 'create', 'update', 'delete'],
+    review: ['decide'],
   },
   member: {
     team: ['read'],
@@ -24,6 +25,7 @@ const EXPECTED: Record<EffectiveRole, Partial<Record<keyof typeof statements, st
     run: ['read', 'delete'],
     artifact: ['read'],
     testCase: ['read', 'create', 'update', 'delete'],
+    review: ['decide'],
   },
   viewer: {
     team: ['read'],

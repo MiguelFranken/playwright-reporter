@@ -14,6 +14,8 @@ import { db } from '@/lib/db/drizzle';
 import {
   attachments,
   projects,
+  reviewCaptures,
+  reviewCheckpoints,
   runEvents,
   runShards,
   runs,
@@ -33,6 +35,7 @@ import { projectStaleTimeoutMs } from '@/lib/runs/config';
 import { clampDuration, MAX_DURATION_MS, reviveRun, settleOpenResults } from '@/lib/runs/lifecycle';
 import type { WatchdogEffect } from '@/lib/runs/watchdog/types';
 import type { PushEffect } from '@/lib/push';
+import { checkpointRows } from '@/lib/review/ingest';
 import { IngestError, type TokenProject } from './http';
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -234,6 +237,8 @@ export async function ingestEvents(project: TokenProject, run: Run, batch: Event
 
     const storage = getStorage();
     const attachmentRows: (typeof attachments.$inferInsert)[] = [];
+    const checkpointInserts: (typeof reviewCheckpoints.$inferInsert)[] = [];
+    const captureInserts: (typeof reviewCaptures.$inferInsert)[] = [];
     const eventRows: (typeof runEvents.$inferInsert)[] = [];
     const touched = new Set<ResultState>();
 
@@ -266,7 +271,7 @@ export async function ingestEvents(project: TokenProject, run: Run, batch: Event
         state.isNew = false;
         applyAttempt(state.row, ev);
         touched.add(state);
-        for (const a of ev.attachments) {
+        ev.attachments.forEach((a, ordinal) => {
           attachmentRows.push({
             id: a.id,
             attemptId,
@@ -277,9 +282,16 @@ export async function ingestEvents(project: TokenProject, run: Run, batch: Event
             storageKey: storageKey({ projectId: project.id, runId: run.id, attemptId, attachmentId: a.id, name: a.name }),
             storageDriver: storage.name,
             sizeBytes: a.size ?? null,
+            ordinal,
             status: 'pending' as const,
           });
-        }
+        });
+        const review = checkpointRows(
+          { projectId: project.id, runId: run.id, testResultId: state.row.id, attemptId, testId: test.id },
+          ev,
+        );
+        checkpointInserts.push(...review.checkpoints);
+        captureInserts.push(...review.captures);
         const payload: AttemptEndPayload = {
           testId: test.id,
           resultId: state.row.id,
@@ -306,6 +318,8 @@ export async function ingestEvents(project: TokenProject, run: Run, batch: Event
     }
 
     if (attachmentRows.length) await tx.insert(attachments).values(attachmentRows).onConflictDoNothing();
+    if (checkpointInserts.length) await tx.insert(reviewCheckpoints).values(checkpointInserts).onConflictDoNothing();
+    if (captureInserts.length) await tx.insert(reviewCaptures).values(captureInserts).onConflictDoNothing();
     if (touched.size) await updateResults(tx, [...touched].map((s) => s.row));
     if (eventRows.length) await tx.insert(runEvents).values(eventRows);
     const lastSeq = Math.max(shard.lastSeq, ...fresh.map((e) => e.seq));

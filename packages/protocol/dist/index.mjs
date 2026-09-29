@@ -66,6 +66,86 @@ const attachmentRefSchema = z.object({
 	contentType: z.string(),
 	size: z.number().int().nonnegative().optional()
 });
+/**
+* A review checkpoint is a named, human-review milestone of a test: the same
+* moment captured once per variant (a desktop and a mobile viewport, say).
+* The images travel as ordinary attachments; the checkpoint says what they
+* show, in which order, and how they were taken.
+*
+* The capture helper (`@miguelfranken/reporter/review`) attaches one
+* `CheckpointRecord` per checkpoint, as JSON with `CHECKPOINT_CONTENT_TYPE`,
+* naming its images by attachment name. The reporter resolves those names to
+* the attachment ids it sends and puts the result on `attempt.end` as
+* `checkpoints`. Older suites name their images `review:<name>:<variant>` and
+* nothing else; `legacyCheckpoints` reads that convention.
+*/
+const CHECKPOINT_CONTENT_TYPE = "application/vnd.pw-reporter.checkpoint+json";
+const REVIEW_ATTACHMENT_PREFIX = "review:";
+/** The variant name of a checkpoint captured once, without variants. */
+const DEFAULT_VARIANT = "default";
+const checkpointKindSchema = z.enum([
+	"page",
+	"dialog",
+	"email",
+	"component",
+	"other"
+]);
+const viewportSchema = z.object({
+	width: z.number().int().positive(),
+	height: z.number().int().positive()
+});
+const sha256Schema = z.string().regex(/^[0-9a-f]{64}$/);
+/** How one variant of a checkpoint was taken; everything but the name is optional. */
+const variantFields = {
+	/** `desktop`, `mobile`, a Playwright project name… */
+	variant: z.string().min(1).max(60),
+	viewport: viewportSchema.optional(),
+	deviceScaleFactor: z.number().positive().max(10).optional(),
+	isMobile: z.boolean().optional(),
+	fullPage: z.boolean().optional(),
+	/** The image's size in pixels. */
+	width: z.number().int().positive().optional(),
+	height: z.number().int().positive().optional(),
+	/** Of the image bytes: equal hashes are identical pictures. */
+	sha256: sha256Schema.optional()
+};
+const checkpointFields = {
+	/** Stable within a test: identifies the checkpoint across runs. kebab-case by convention. */
+	name: z.string().min(1).max(200),
+	title: z.string().max(300).optional(),
+	description: z.string().max(4e3).optional(),
+	/** Order within the attempt, from 0. */
+	sequence: z.number().int().nonnegative(),
+	capturedAt: z.string().optional(),
+	/** Titles of the `test.step`s the capture ran inside, outermost first. */
+	stepPath: z.array(z.string().max(500)).max(20).optional(),
+	url: z.string().max(2e3).optional(),
+	pageTitle: z.string().max(500).optional(),
+	kind: checkpointKindSchema.optional(),
+	/** Groups checkpoints of several tests into one journey; defaults to the test. */
+	flow: z.string().max(200).optional(),
+	tags: z.array(z.string().max(100)).max(20).optional()
+};
+const checkpointVariantSchema = z.object({
+	...variantFields,
+	attachmentId: z.string().uuid(),
+	/** A small, above-the-fold preview of the image, for overviews. */
+	thumbnailAttachmentId: z.string().uuid().optional()
+});
+const checkpointSchema = z.object({
+	...checkpointFields,
+	variants: z.array(checkpointVariantSchema).min(1).max(20)
+});
+/** What the capture helper attaches: variants name their images by attachment name. */
+const checkpointRecordSchema = z.object({
+	v: z.literal(1),
+	...checkpointFields,
+	variants: z.array(z.object({
+		...variantFields,
+		attachment: z.string(),
+		thumbnail: z.string().optional()
+	})).min(1).max(20)
+});
 const gitInfoSchema = z.object({
 	branch: z.string().optional(),
 	sha: z.string().optional(),
@@ -168,6 +248,8 @@ const attemptEndEventSchema = z.object({
 	stderr: z.string(),
 	annotations: z.array(annotationSchema),
 	attachments: z.array(attachmentRefSchema),
+	/** Review checkpoints, in capture order. Absent from reporters that predate them. */
+	checkpoints: z.array(checkpointSchema).max(500).optional(),
 	/** Playwright's outcome() for the test after this attempt. */
 	outcome: testOutcomeSchema,
 	/** True when no further retry will follow. */
@@ -250,7 +332,65 @@ function classifyAttachment(name, contentType) {
 	if (contentType.startsWith("text/") || contentType.includes("json") || contentType.includes("xml")) return "text";
 	return "other";
 }
+/**
+* Reads the `review:<name>:<variant>` naming convention; a trailing `:thumb`
+* marks the variant's preview. A name without a variant is the default one.
+*/
+function parseReviewAttachmentName(name) {
+	if (!name.startsWith("review:")) return null;
+	const parts = name.slice(7).split(":");
+	const thumbnail = parts.length > 2 && parts[parts.length - 1] === "thumb";
+	if (thumbnail) parts.pop();
+	if (parts.length === 1) return parts[0] ? {
+		name: parts[0],
+		variant: DEFAULT_VARIANT,
+		thumbnail
+	} : null;
+	const variant = parts.pop();
+	const base = parts.join(":");
+	return base && variant ? {
+		name: base,
+		variant,
+		thumbnail
+	} : null;
+}
+/**
+* Checkpoints from image attachments named `review:<name>:<variant>`, for
+* suites that attach review screenshots without a checkpoint record. Order is
+* the order the first image of each checkpoint was attached in.
+*/
+function legacyCheckpoints(attachments) {
+	const byName = /* @__PURE__ */ new Map();
+	const thumbs = /* @__PURE__ */ new Map();
+	for (const a of attachments) {
+		if (!a.contentType.startsWith("image/")) continue;
+		const parsed = parseReviewAttachmentName(a.name);
+		if (!parsed) continue;
+		if (parsed.thumbnail) {
+			thumbs.set(`${parsed.name}\u0000${parsed.variant}`, a.id);
+			continue;
+		}
+		let cp = byName.get(parsed.name);
+		if (!cp) {
+			cp = {
+				name: parsed.name.slice(0, 200),
+				sequence: byName.size,
+				variants: []
+			};
+			byName.set(parsed.name, cp);
+		}
+		if (cp.variants.length < 20 && !cp.variants.some((v) => v.variant === parsed.variant)) cp.variants.push({
+			variant: parsed.variant.slice(0, 60),
+			attachmentId: a.id
+		});
+	}
+	for (const [key, cp] of byName) for (const v of cp.variants) {
+		const thumb = thumbs.get(`${key}\u0000${v.variant}`);
+		if (thumb) v.thumbnailAttachmentId = thumb;
+	}
+	return [...byName.values()].slice(0, 500);
+}
 //#endregion
-export { PROTOCOL_HEADER, PROTOCOL_VERSION, annotationSchema, attachmentKindSchema, attachmentRefSchema, attemptEndEventSchema, attemptStatusSchema, ciInfoSchema, classifyAttachment, completeUploadRequestSchema, completeUploadResponseSchema, eventBatchResponseSchema, eventBatchSchema, executorSchema, gitInfoSchema, ingestEventSchema, locationSchema, playwrightInfoSchema, playwrightProjectInfoSchema, runFinishResponseSchema, runFinishSchema, runHeartbeatResponseSchema, runHeartbeatSchema, runLogEventSchema, runStartResponseSchema, runStartSchema, runStatusSchema, shardSchema, stepSchema, systemInfoSchema, testBeginEventSchema, testErrorSchema, testOutcomeSchema, uploadInstructionSchema, uploadUrlsRequestSchema, uploadUrlsResponseSchema };
+export { CHECKPOINT_CONTENT_TYPE, DEFAULT_VARIANT, PROTOCOL_HEADER, PROTOCOL_VERSION, REVIEW_ATTACHMENT_PREFIX, annotationSchema, attachmentKindSchema, attachmentRefSchema, attemptEndEventSchema, attemptStatusSchema, checkpointKindSchema, checkpointRecordSchema, checkpointSchema, checkpointVariantSchema, ciInfoSchema, classifyAttachment, completeUploadRequestSchema, completeUploadResponseSchema, eventBatchResponseSchema, eventBatchSchema, executorSchema, gitInfoSchema, ingestEventSchema, legacyCheckpoints, locationSchema, parseReviewAttachmentName, playwrightInfoSchema, playwrightProjectInfoSchema, runFinishResponseSchema, runFinishSchema, runHeartbeatResponseSchema, runHeartbeatSchema, runLogEventSchema, runStartResponseSchema, runStartSchema, runStatusSchema, shardSchema, stepSchema, systemInfoSchema, testBeginEventSchema, testErrorSchema, testOutcomeSchema, uploadInstructionSchema, uploadUrlsRequestSchema, uploadUrlsResponseSchema, viewportSchema };
 
 //# sourceMappingURL=index.mjs.map
