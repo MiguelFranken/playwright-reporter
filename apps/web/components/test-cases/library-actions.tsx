@@ -1,13 +1,20 @@
 'use client';
 
-import { Plus, Wand2 } from 'lucide-react';
+import { Download, FileJson, FileSpreadsheet, Plus, Upload, Wand2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useActionState, useEffect, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Button, buttonVariants } from '@miguelfranken/ui/components/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@miguelfranken/ui/components/dropdown-menu';
+import { ImportDialog } from '@miguelfranken/ui/views/test-cases/import-dialog';
 import type { SuiteOption } from '@miguelfranken/ui/lib/test-case-models';
 import { PrefetchLink } from '@/components/prefetch-link';
-import { adoptTests } from '@/app/(app)/teams/[team]/projects/[project]/cases/actions';
+import { adoptTests, importCasesAction } from '@/app/(app)/teams/[team]/projects/[project]/cases/actions';
 import type { ProjectRef } from '@/lib/rpc/client';
 import { ConnectedTestPicker } from './test-picker';
 
@@ -23,8 +30,11 @@ export function LibraryActions({
   newCaseHref,
   canCreate,
   startAdopting = false,
+  exportHref,
   extra,
 }: {
+  /** The export route, already scoped to the suite on screen. */
+  exportHref: string;
   base: string;
   projectRef: ProjectRef;
   suites: SuiteOption[];
@@ -36,10 +46,47 @@ export function LibraryActions({
   const router = useRouter();
   const [adopting, setAdopting] = useState(startAdopting && canCreate);
   const [pending, startTransition] = useTransition();
-  if (!canCreate) return <>{extra}</>;
+  const [importing, setImporting] = useState(false);
+  const [imported, importAction, importPending] = useActionState(importCasesAction, null);
+  useEffect(() => {
+    if (imported?.ok) toast.success(imported.message);
+  }, [imported]);
+  const exportMenu = (
+    <DropdownMenu>
+      <DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>
+        <Download className="size-3.5" />
+        Export
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuItem render={<a href={exportHref} download />}>
+          <FileJson />
+          JSON (re-imports fully)
+        </DropdownMenuItem>
+        <DropdownMenuItem render={<a href={`${exportHref}${exportHref.includes('?') ? '&' : '?'}format=csv`} download />}>
+          <FileSpreadsheet />
+          CSV (spreadsheet)
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+  if (!canCreate) return <>{extra}{exportMenu}</>;
   return (
     <>
       {extra}
+      {exportMenu}
+      <Button variant="outline" size="sm" onClick={() => setImporting(true)}>
+        <Upload className="size-3.5" />
+        Import
+      </Button>
+      <ImportDialog
+        open={importing}
+        onOpenChange={setImporting}
+        action={importAction}
+        pending={importPending}
+        error={imported && !imported.ok ? imported.message : null}
+        summary={imported?.ok ? imported.summary : null}
+        hidden={projectRef}
+      />
       <Button variant="outline" size="sm" onClick={() => setAdopting(true)}>
         <Wand2 className="size-3.5" />
         Adopt tests

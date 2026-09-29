@@ -21,9 +21,14 @@ import {
   unlinkTest as unlinkTestService,
   updateCase as updateCaseService,
   updateSuite as updateSuiteService,
+  importCases as importCasesService,
   type BulkPatch,
   type CaseContext,
+  type ImportDuplicates,
+  type ImportSummary,
 } from '@/lib/test-cases/service';
+import { listFieldDefs } from '@/lib/db/queries/test-cases';
+import { parseImport } from '@/lib/test-cases/transfer';
 import type { CreateCaseInput, UpdateCaseInput } from '@/lib/test-cases/model';
 
 /**
@@ -170,4 +175,27 @@ export async function saveFieldDefs(ref: ProjectRef, defs: CaseFieldDef[]) {
     await saveFieldDefsService(ctx, defs);
     return { message: 'Custom fields saved.' };
   });
+}
+
+// ---------------------------------------------------------------- import
+
+export type ImportState = { ok: boolean; message?: string; summary?: ImportSummary } | null;
+
+/** Below the Server Action body limit in `next.config.ts` (4 MB), less the multipart framing. */
+const MAX_IMPORT_BYTES = 4 * 1024 * 1024 - 64 * 1024;
+
+/** A form action: the file arrives as `file`, the duplicate policy as `duplicates`, the project as `team` and `project`. */
+export async function importCasesAction(_prev: ImportState, formData: FormData): Promise<ImportState> {
+  const ref = { team: String(formData.get('team') ?? ''), project: String(formData.get('project') ?? '') };
+  const file = formData.get('file');
+  if (!(file instanceof File) || file.size === 0) return { ok: false, message: 'Choose a file to import.' };
+  if (file.size > MAX_IMPORT_BYTES) return { ok: false, message: 'The file is larger than 4 MB. Split it, or import one suite at a time.' };
+  const raw = String(formData.get('duplicates') ?? 'skip');
+  const duplicates: ImportDuplicates = raw === 'update' || raw === 'copy' ? raw : 'skip';
+  const result = await run(ref, { testCase: ['create', 'update'] }, async (ctx) => {
+    const parsed = parseImport({ name: file.name, text: await file.text() }, await listFieldDefs(ctx.projectId));
+    const summary = await importCasesService(ctx, parsed, duplicates);
+    return { summary, message: `${summary.created} created, ${summary.updated} updated, ${summary.skipped} skipped.` };
+  });
+  return result.ok ? { ok: true, message: result.message, summary: result.summary } : result;
 }

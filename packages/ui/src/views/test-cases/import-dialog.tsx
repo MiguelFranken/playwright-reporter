@@ -29,7 +29,10 @@ export function ImportDialog({
   pending = false,
   error,
   summary,
+  hidden = {},
 }: {
+  /** Extra form fields the action needs, such as the project. */
+  hidden?: Record<string, string>;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** The native form action: fields `file` and `duplicates`. */
@@ -50,10 +53,13 @@ export function ImportDialog({
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="import-file">File (JSON or CSV, up to 10 MB)</Label>
+            <Label htmlFor="import-file">File (JSON or CSV, up to 4 MB)</Label>
             <Input id="import-file" name="file" type="file" accept=".json,.csv,application/json,text/csv" required disabled={pending} />
           </div>
           <input type="hidden" name="duplicates" value={duplicates} />
+          {Object.entries(hidden).map(([name, value]) => (
+            <input key={name} type="hidden" name={name} value={value} />
+          ))}
           <FieldSelect
             id="import-duplicates"
             label="When a case already exists"

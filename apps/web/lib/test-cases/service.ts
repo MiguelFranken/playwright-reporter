@@ -41,6 +41,7 @@ import {
   type CaseSnapshot,
   type FieldDefInput,
 } from './model';
+import { importedNumber, type ParsedImport } from './transfer';
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Db = typeof db | Tx;
@@ -707,3 +708,89 @@ export async function saveFieldDefs(ctx: CaseContext, input: FieldDefInput[]): P
 }
 
 export type { CustomFieldValue };
+
+// ---------------------------------------------------------------- import
+
+export type ImportDuplicates = 'skip' | 'update' | 'copy';
+
+export interface ImportSummary {
+  created: number;
+  updated: number;
+  skipped: number;
+  suites: number;
+  errors: string[];
+}
+
+/**
+ * Writes parsed cases in one transaction. A case is a duplicate when the file
+ * names its key (`TC-12`) and that case exists here, or else when a case with
+ * the same title sits in the same suite. Suites are created by path. A row
+ * that does not validate is reported and skipped; the others still import.
+ */
+export async function importCases(ctx: CaseContext, parsed: ParsedImport, duplicates: ImportDuplicates): Promise<ImportSummary> {
+  const summary: ImportSummary = { created: 0, updated: 0, skipped: 0, suites: 0, errors: [...parsed.errors] };
+  if (parsed.cases.length === 0) return summary;
+  await db.transaction(async (tx) => {
+    const suites = await suitesOf(tx, ctx.projectId);
+    const before = suites.length;
+    const cache = new Map<string, string>();
+    for (const s of parsed.suites) {
+      if (s.path.length === 0) continue;
+      const id = await ensureSuitePath(tx, ctx, suites, cache, s.path);
+      if (id && s.description) await tx.update(testSuites).set({ description: s.description.slice(0, LIMITS.suiteDescription) }).where(and(eq(testSuites.id, id), eq(testSuites.description, '')));
+    }
+    const existing = await tx.select().from(testCases).where(eq(testCases.projectId, ctx.projectId));
+    const byNumber = new Map(existing.map((c) => [c.number, c]));
+    const byTitle = new Map(existing.map((c) => [`${c.suiteId ?? ''}\u0000${c.title.toLowerCase()}`, c]));
+    const defs = await fieldDefs(tx, ctx.projectId);
+
+    for (const [i, item] of parsed.cases.entries()) {
+      const label = `Case ${i + 1} (${item.title.slice(0, 40)})`;
+      const suiteId = item.suite.length ? await ensureSuitePath(tx, ctx, suites, cache, item.suite) : null;
+      const { key, suite: _suite, ...fields } = item;
+      const number = importedNumber(key);
+      // A key names a case of the project the file came from; elsewhere it only counts when the title agrees.
+      const byKey = number !== null ? byNumber.get(number) : undefined;
+      const keyMatch = byKey && (parsed.projectId === ctx.projectId || byKey.title.toLowerCase() === item.title.toLowerCase()) ? byKey : undefined;
+      const match = keyMatch ?? byTitle.get(`${suiteId ?? ''}\u0000${item.title.toLowerCase()}`);
+      const custom = coerceCustomFields(defs, (fields.customFields ?? {}) as Record<string, CustomFieldValue>, { requireAll: false });
+      if (!custom.ok) {
+        summary.errors.push(`${label}: ${custom.message}`);
+        continue;
+      }
+      if (match && duplicates === 'skip') {
+        summary.skipped++;
+        continue;
+      }
+      const candidate = { ...fields, suiteId, customFields: custom.value };
+      if (match && duplicates === 'update') {
+        const result = updateCaseSchema.safeParse(candidate);
+        if (!result.success) {
+          summary.errors.push(`${label}: ${firstIssue(result.error)}`);
+          continue;
+        }
+        // Automation follows links; an import does not claim or drop them.
+        const { automation: _a, ...patch } = result.data;
+        const { changed } = await applyUpdate(ctx, tx, match, patch);
+        if (changed.length) summary.updated++;
+        else summary.skipped++;
+        continue;
+      }
+      const result = createCaseSchema.safeParse(candidate);
+      if (!result.success) {
+        summary.errors.push(`${label}: ${firstIssue(result.error)}`);
+        continue;
+      }
+      const all = { ...CASE_DEFAULTS, suiteId: null, ...result.data } as CaseFields;
+      // Nothing links to a new case yet, so it cannot be automated for real.
+      if (all.automation === 'automated') all.automation = 'planned';
+      const [n] = await allocateNumbers(tx, ctx.projectId, 1);
+      const row = await insertCase(ctx, tx, all, n);
+      byTitle.set(`${row.suiteId ?? ''}\u0000${row.title.toLowerCase()}`, row);
+      summary.created++;
+    }
+    summary.suites = suites.length - before;
+  });
+  await record(ctx, 'test-case.import', { created: summary.created, updated: summary.updated, skipped: summary.skipped, suites: summary.suites });
+  return summary;
+}

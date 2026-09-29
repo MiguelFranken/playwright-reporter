@@ -95,6 +95,7 @@ async function HeaderActions({ params, searchParams }: Props) {
       canCreate={access.can({ testCase: ['create'] })}
       startAdopting={first(sp.adopt) === '1'}
       newCaseHref={`${base}/cases/new${suite && suite !== 'unassigned' ? `?suite=${suite}` : ''}`}
+      exportHref={`${base}/cases/export${suite ? `?suite=${suite}` : ''}`}
     />
   );
 }

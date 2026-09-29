@@ -39,6 +39,7 @@ import type {
   SuiteNode,
 } from '@miguelfranken/ui/lib/test-case-models';
 import { num, sinceDate } from './shared';
+import { EXPORT_FORMAT, type ExportDocument } from '@/lib/test-cases/transfer';
 
 export type { AutomatedTestOption, CaseDetail, CaseRow, CaseVersionRow, CoverageSummary, LinkedTest, SuiteNode };
 
@@ -524,3 +525,54 @@ export async function listCaseTags(projectId: string): Promise<string[]> {
 }
 
 export { caseKey };
+
+// ---------------------------------------------------------------- export
+
+/** Every case of the project (or of one suite's subtree) as an export file holds it. */
+export async function exportCases(projectId: string, f: Pick<CaseFilters, 'suite'> = {}): Promise<ExportDocument> {
+  const [suites, fields] = await Promise.all([listSuites(projectId), listFieldDefs(projectId)]);
+  const paths = suitePaths(suites);
+  const where: SQL[] = [eq(testCases.projectId, projectId)];
+  if (f.suite === 'unassigned') where.push(sql`${testCases.suiteId} is null`);
+  else if (f.suite) where.push(inArray(testCases.suiteId, subtreeIds(suites, f.suite)));
+  const rows = await db.select().from(testCases).where(and(...where)).orderBy(asc(testCases.number));
+  const links = rows.length
+    ? await db
+        .select({ caseId: testCaseLinks.caseId, file: tests.file, title: tests.title, project: tests.pwProject })
+        .from(testCaseLinks)
+        .innerJoin(tests, eq(tests.id, testCaseLinks.testId))
+        .where(inArray(testCaseLinks.caseId, rows.map((r) => r.id)))
+    : [];
+  const linksOf = groupBy(links, (l) => l.caseId);
+  const order = suiteOrderIndex(suites);
+  return {
+    format: EXPORT_FORMAT,
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    projectId,
+    fields,
+    suites: [...suites]
+      .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))
+      .map((s) => ({ path: paths.get(s.id) ?? [s.name], description: s.description })),
+    cases: rows.map((r) => ({
+      key: caseKey(r.number),
+      title: r.title,
+      suite: r.suiteId ? (paths.get(r.suiteId) ?? []) : [],
+      description: r.description,
+      preconditions: r.preconditions,
+      postconditions: r.postconditions,
+      stepsFormat: r.stepsFormat,
+      steps: r.steps,
+      status: r.status,
+      priority: r.priority,
+      severity: r.severity,
+      type: r.type,
+      behavior: r.behavior,
+      automation: r.automation,
+      muted: r.muted,
+      tags: r.tags,
+      customFields: r.customFields,
+      links: (linksOf.get(r.id) ?? []).map(({ caseId: _c, ...l }) => l),
+    })),
+  };
+}

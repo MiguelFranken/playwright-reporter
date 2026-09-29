@@ -15,7 +15,7 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
   play: async () => {
     const d = within(await within(document.body).findByRole('dialog', { name: 'Import test cases' }));
-    await expect(d.getByLabelText('File (JSON or CSV, up to 10 MB)')).toHaveAttribute('name', 'file');
+    await expect(d.getByLabelText('File (JSON or CSV, up to 4 MB)')).toHaveAttribute('name', 'file');
   },
 };
 
