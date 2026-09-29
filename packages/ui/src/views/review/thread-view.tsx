@@ -1,6 +1,7 @@
 'use client';
 
 import { Check, History, RotateCcw, X } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 import { Button } from '../../components/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../components/tooltip';
 import { cn } from '../../lib/cn';
@@ -46,6 +47,14 @@ export function ThreadView({
   className,
 }: ThreadViewProps) {
   const resolved = thread.status === 'resolved';
+  const listRef = useRef<HTMLOListElement>(null);
+  const count = thread.comments.length;
+  // A new comment (a reply just posted, an event) scrolls into view at the bottom.
+  const seen = useRef(count);
+  useEffect(() => {
+    if (count > seen.current) listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' });
+    seen.current = count;
+  }, [count]);
   const toggle = () => onSetThreadStatus?.({ threadId: thread.id, status: resolved ? 'open' : 'resolved', captureId });
   const toggleLabel = resolved ? `Reopen thread ${thread.number}` : `Resolve thread ${thread.number}`;
   return (
@@ -83,7 +92,7 @@ export function ThreadView({
         </p>
       ) : null}
 
-      <ol className="flex max-h-80 flex-col gap-3 overflow-y-auto overscroll-contain">
+      <ol ref={listRef} className="flex max-h-80 flex-col gap-3 overflow-y-auto overscroll-contain">
         {thread.comments.map((c) => (
           <li key={c.id}>
             <CommentItem

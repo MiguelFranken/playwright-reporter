@@ -94,9 +94,8 @@ export function CommentComposer({
         </Button>
       ) : (
         <div className="flex items-center justify-between gap-2">
-          <span className="hidden items-center gap-1 text-label-xs text-muted-foreground sm:inline-flex">
-            <Kbd>Enter</Kbd> to post · <Kbd>Shift</Kbd>
-            <Kbd>Enter</Kbd> new line
+          <span className="hidden items-center gap-1 text-label-xs whitespace-nowrap text-muted-foreground sm:inline-flex" title="Shift + Enter for a new line">
+            <Kbd>↵</Kbd> to post
           </span>
           <div className="ml-auto flex gap-2">
             {onCancel ? (

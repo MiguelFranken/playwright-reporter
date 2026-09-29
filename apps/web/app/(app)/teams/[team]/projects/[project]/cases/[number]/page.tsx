@@ -82,7 +82,15 @@ async function CaseContent({ params, searchParams }: { params: Params; searchPar
       />
       {detail.links.length ? (
         <Suspense fallback={<ReviewStoryboardSkeleton rows={1} />}>
-          <CaseScreens team={team} projectSlug={project.slug} projectId={project.id} settings={project.settings} caseNumber={detail.number} testIds={detail.links.map((l) => l.testId)} />
+          <CaseScreens
+            team={team}
+            projectSlug={project.slug}
+            projectId={project.id}
+            settings={project.settings}
+            caseNumber={detail.number}
+            testIds={detail.links.map((l) => l.testId)}
+            comments={{ canComment: access.can({ review: ['comment'] }), canModerate: access.can({ project: ['delete'] }), viewerId: access.user.id }}
+          />
         </Suspense>
       ) : null}
     </div>
@@ -100,7 +108,9 @@ async function CaseScreens({
   settings,
   caseNumber,
   testIds,
+  comments,
 }: {
+  comments: { canComment: boolean; canModerate: boolean; viewerId: string };
   team: string;
   projectSlug: string;
   projectId: string;
@@ -131,7 +141,7 @@ async function CaseScreens({
         </Button>
       </CardHeader>
       <CardContent>
-        <UrlReviewStoryboard team={team} project={projectSlug} flows={flows} canDecide={false} toolbar={false} tree={false} syncUrl={false} mode="library" />
+        <UrlReviewStoryboard team={team} project={projectSlug} flows={flows} canDecide={false} {...comments} toolbar={false} tree={false} syncUrl={false} mode="library" />
       </CardContent>
     </Card>
   );

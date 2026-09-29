@@ -88,7 +88,7 @@ async function Bar(props: Props) {
 }
 
 async function Screens(props: Props) {
-  const { team, project, key, base } = await scope(props);
+  const { team, access, project, key, base } = await scope(props);
   const hrefs = projectHrefs(base);
   const records = await libraryFlows(project.id, key);
   const byTest = await casesOfTests(project.id, records.map((r) => r.testId));
@@ -99,6 +99,9 @@ async function Screens(props: Props) {
       project={project.slug}
       flows={flows}
       canDecide={false}
+      canComment={access.can({ review: ['comment'] })}
+      canModerate={access.can({ project: ['delete'] })}
+      viewerId={access.user.id}
       defaultFilter="all"
       mode="library"
       emptyTitle={`No screens for ${libraryRefShort(key)} yet`}

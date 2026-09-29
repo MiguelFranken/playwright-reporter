@@ -165,13 +165,15 @@ export function ThreadList({
       {all.length === 0 ? (
         <p className="flex flex-col items-center gap-1.5 rounded-lg border border-dashed border-border px-3 py-5 text-center text-label-s text-muted-foreground">
           <MessageSquare aria-hidden className="size-4" />
-          {canComment ? (
-            <>
-              No comments yet. Press <Kbd>C</Kbd> and click the screenshot to point at what should change.
-            </>
-          ) : (
-            'No comments on this image.'
-          )}
+          <span>
+            {canComment ? (
+              <>
+                No comments yet. Press <Kbd>C</Kbd> and click the screenshot to point at what should change.
+              </>
+            ) : (
+              'No comments on this image.'
+            )}
+          </span>
         </p>
       ) : all.every((t) => !matchesThreadFilter(t, filter)) ? (
         <p className="text-label-s text-muted-foreground">{filter === 'open' ? 'Every thread is resolved.' : 'No resolved threads.'}</p>

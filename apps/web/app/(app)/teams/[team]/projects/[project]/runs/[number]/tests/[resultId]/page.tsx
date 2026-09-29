@@ -196,7 +196,7 @@ async function ResultContent({ params }: Props) {
             </Button>
           </CardHeader>
           <CardContent>
-            <UrlReviewStoryboard team={team} project={project.slug} flows={reviewFlows} canDecide={access.can({ review: ['decide'] })} toolbar={false} syncUrl={false} />
+            <UrlReviewStoryboard team={team} project={project.slug} flows={reviewFlows} canDecide={access.can({ review: ['decide'] })} canComment={access.can({ review: ['comment'] })} canModerate={access.can({ project: ['delete'] })} viewerId={access.user.id} toolbar={false} syncUrl={false} />
           </CardContent>
         </Card>
       ) : null}

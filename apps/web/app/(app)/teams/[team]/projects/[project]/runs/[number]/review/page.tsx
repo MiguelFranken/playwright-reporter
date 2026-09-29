@@ -75,7 +75,15 @@ async function Content({ params }: Props) {
           </p>
         ) : null}
       </div>
-      <UrlReviewStoryboard team={team} project={access.project.slug} flows={flows} canDecide={access.can({ review: ['decide'] })} />
+      <UrlReviewStoryboard
+        team={team}
+        project={access.project.slug}
+        flows={flows}
+        canDecide={access.can({ review: ['decide'] })}
+        canComment={access.can({ review: ['comment'] })}
+        canModerate={access.can({ project: ['delete'] })}
+        viewerId={access.user.id}
+      />
     </div>
   );
 }
