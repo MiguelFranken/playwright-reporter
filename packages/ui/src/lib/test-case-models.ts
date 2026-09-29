@@ -137,3 +137,42 @@ export interface AutomatedTestOption {
 }
 
 export type { CaseFieldDef };
+
+/** A suite as a picker lists it: indented by depth, in tree order. */
+export interface SuiteOption {
+  value: string;
+  label: string;
+  depth: number;
+}
+
+export function flattenSuites(roots: readonly SuiteNode[]): SuiteOption[] {
+  const out: SuiteOption[] = [];
+  const walk = (nodes: readonly SuiteNode[]) => {
+    for (const n of nodes) {
+      out.push({ value: n.id, label: n.name, depth: n.depth });
+      walk(n.children);
+    }
+  };
+  walk(roots);
+  return out;
+}
+
+/** The suite and every suite below it, so a move can leave them out. */
+export function suiteSubtree(roots: readonly SuiteNode[], id: string): Set<string> {
+  const out = new Set<string>();
+  const find = (nodes: readonly SuiteNode[]): SuiteNode | undefined => {
+    for (const n of nodes) {
+      if (n.id === id) return n;
+      const hit = find(n.children);
+      if (hit) return hit;
+    }
+    return undefined;
+  };
+  const collect = (n: SuiteNode) => {
+    out.add(n.id);
+    n.children.forEach(collect);
+  };
+  const root = find(roots);
+  if (root) collect(root);
+  return out;
+}
