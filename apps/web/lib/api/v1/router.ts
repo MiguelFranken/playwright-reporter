@@ -26,6 +26,7 @@ import { summarizeFailures } from '@/lib/mcp/tools/summarize-failures';
 import { verifyFixTool } from '@/lib/mcp/tools/verify-fix';
 import { whoami } from '@/lib/mcp/tools/whoami';
 import { getTestCase, listTestCases, listTestSuites } from '@/lib/mcp/tools/test-cases';
+import { getReviewCheckpoint, listReviewCheckpoints } from '@/lib/mcp/tools/review';
 import type { ToolDef } from '@/lib/mcp/registry';
 import { authed } from '../base';
 import { fromTool } from '../from-tool';
@@ -38,6 +39,7 @@ const runRef = z.string().describe('Run number (`128`), run id, `latest` or `lat
 const testRef = z.string().describe('Test id, as returned by `/tests`, a run result or a failure context.');
 const resultRef = z.string().describe('Result id: one test in one run, as returned by `/runs/{run}/results`.');
 const attachmentRef = z.string().describe('Attachment id, as listed by a result.');
+const captureRef = z.string().describe('Capture id: one variant of one review checkpoint, as returned by `/runs/{run}/review-checkpoints`.');
 const caseRef = z.string().describe('Test case key (`TC-12` or `12`) or id, as returned by `/test-cases`.');
 
 const projectSchema = z.object({
@@ -142,6 +144,14 @@ export const router = {
       rename: { run: 'head' },
       omit: ['branch'],
     }),
+    reviewCheckpoints: fromTool(tool(listReviewCheckpoints), {
+      path: `${P}/runs/{run}/review-checkpoints`,
+      summary: 'List a run’s review checkpoints',
+      description:
+        'The named review screenshots the run’s tests captured, per variant, in journey order, with each image’s review status against its approved baseline. `status` defaults to `needs-review` (changed and new).',
+      tags: ['Visual review'],
+      params: { run: runRef },
+    }),
     rerunCommand: fromTool(tool(getRerunCommand), {
       path: `${P}/runs/{run}/rerun-command`,
       summary: 'Re-run command',
@@ -222,6 +232,16 @@ export const router = {
       summary: 'List test suites',
       description: 'The suite tree of the test cases, with each suite’s path, id and case counts.',
       tags: ['Test cases'],
+    }),
+  },
+  reviewCaptures: {
+    get: fromTool(tool(getReviewCheckpoint), {
+      path: `${P}/review-captures/{capture}`,
+      summary: 'Get a review checkpoint image',
+      description: 'One review checkpoint image: its status, viewport, whether it matches the approved baseline, and short-lived links to it and to the baseline.',
+      tags: ['Visual review'],
+      params: { capture: captureRef },
+      omit: ['compare'],
     }),
   },
   attachments: {

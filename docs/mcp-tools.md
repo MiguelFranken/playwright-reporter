@@ -33,6 +33,9 @@ also accepts `project`, `format` (`markdown` | `json`) and `maxChars`. See the R
 | [`delete_test_suite`](#delete_test_suite) | write | Delete suites that hold no test cases, e.g. |
 | [`link_test_case`](#link_test_case) | write | Link Playwright tests (by test id from find_tests) to a test case, or unlink them. |
 | [`adopt_tests`](#adopt_tests) | write | Turn Playwright tests into test cases that are already linked to them: title from the test, steps from its test.step() calls, suites from its file and describe blocks. |
+| [`list_review_checkpoints`](#list_review_checkpoints) | core | A run's review checkpoints — the named screenshots its tests capture at their milestones, per variant (desktop, mobile) — in journey order, with each image's review status: changed against its approved baseline, new, approved or changes requested. |
+| [`get_review_checkpoint`](#get_review_checkpoint) | core | One review checkpoint image to look at, with its approved baseline (or the previous run’s capture) beside it, so you can say what changed. |
+| [`review_checkpoint`](#review_checkpoint) | write | Approve review checkpoint images, or ask for changes with a comment. |
 
 ## whoami
 
@@ -539,6 +542,58 @@ Turn Playwright tests into test cases that are already linked to them: title fro
 | `suite` | string |  | Put every new case in this suite (id or path; created if missing). Omit to mirror each test's file and describe blocks as suites. |
 
 Structured output fields: `created`, `skipped`, `message`, `truncated`.
+
+## list_review_checkpoints
+
+**List review checkpoints** · toolset `core`
+
+A run's review checkpoints — the named screenshots its tests capture at their milestones, per variant (desktop, mobile) — in journey order, with each image's review status: changed against its approved baseline, new, approved or changes requested. Defaults to what needs review. Look at one with get_review_checkpoint.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+| `run` | integer (–9007199254740991) \| string |  | The run (default "latest"). Scope "latest" with branch. |
+| `branch` | string |  | Git branch name, e.g. "main". |
+| `status` | `"needs-review"` \| `"all"` \| `"changed"` \| `"new"` \| `"changes_requested"` \| `"approved"` |  | needs-review (default: changed and new images), all, changed, new, changes_requested or approved. |
+| `test` | string |  | Part of a test title or file, to narrow the list. |
+| `variant` | string |  | Only this variant, e.g. "desktop" or "mobile". |
+
+Structured output fields: `project`, `run`, `reviewUrl`, `counts`, `tests`, `truncated`.
+
+## get_review_checkpoint
+
+**Get a review checkpoint** · toolset `core`
+
+One review checkpoint image to look at, with its approved baseline (or the previous run’s capture) beside it, so you can say what changed. Full-page images may be tall; a large one comes as a link.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+| `capture` | string | yes | Capture id, from list_review_checkpoints. |
+| `compare` | boolean |  | Also attach the approved baseline image (or the previous run’s) to compare with. Default true. |
+
+Structured output fields: `project`, `captureId`, `test`, `checkpoint`, `variant`, `run`, `status`, `viewport`, `sameAsReference`, `reference`, `imageUrl`, `referenceUrl`, `note`, `truncated`.
+
+## review_checkpoint
+
+**Approve or reject review checkpoints** · toolset `write` · **writes**
+
+Approve review checkpoint images, or ask for changes with a comment. An approval holds for the exact pixels: later runs with the same image need no review. Only approve what you looked at with get_review_checkpoint.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+| `captures` | string[] | yes | Capture ids, from list_review_checkpoints. |
+| `decision` | `"approved"` \| `"changes_requested"` | yes | approved, or changes_requested. |
+| `comment` | string |  | Why — what should change. Shown to the reviewer beside the image. |
+
+Structured output fields: `project`, `decided`, `decision`, `truncated`.
 
 ## Prompts
 

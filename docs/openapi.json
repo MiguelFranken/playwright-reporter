@@ -46,6 +46,10 @@
       "description": "Manual and automated test cases, their suites, and what their linked Playwright tests say."
     },
     {
+      "name": "Visual review",
+      "description": "Review checkpoints: the screenshots tests capture at their milestones, and whether each matches its approved baseline."
+    },
+    {
       "name": "Diagnostics",
       "description": "Verdicts computed from stored attempts: failure groups, flakiness, run diffs, fix verification."
     }
@@ -4006,6 +4010,325 @@
         }
       }
     },
+    "/projects/{team}/{project}/runs/{run}/review-checkpoints": {
+      "get": {
+        "operationId": "listReviewCheckpoints",
+        "summary": "List a run’s review checkpoints",
+        "description": "The named review screenshots the run’s tests captured, per variant, in journey order, with each image’s review status against its approved baseline. `status` defaults to `needs-review` (changed and new).",
+        "tags": [
+          "Visual review"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "team",
+            "schema": {
+              "type": "string",
+              "description": "Team slug, as in the app URL (`/teams/<team>/…`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "project",
+            "schema": {
+              "type": "string",
+              "description": "Project slug, as in the app URL (`…/projects/<project>`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "run",
+            "schema": {
+              "type": "string",
+              "description": "Run number (`128`), run id, `latest` or `latest-failed`. `latest` can be scoped with `branch` and `environment`."
+            }
+          },
+          {
+            "in": "query",
+            "name": "branch",
+            "schema": {
+              "description": "Git branch name, e.g. \"main\".",
+              "type": "string"
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "description": "needs-review (default: changed and new images), all, changed, new, changes_requested or approved.",
+              "type": "string",
+              "enum": [
+                "needs-review",
+                "all",
+                "changed",
+                "new",
+                "changes_requested",
+                "approved"
+              ]
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "test",
+            "schema": {
+              "description": "Part of a test title or file, to narrow the list.",
+              "type": "string"
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "variant",
+            "schema": {
+              "description": "Only this variant, e.g. \"desktop\" or \"mobile\".",
+              "type": "string"
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "project": {
+                      "type": "string"
+                    },
+                    "run": {
+                      "type": "number"
+                    },
+                    "reviewUrl": {
+                      "type": "string"
+                    },
+                    "counts": {
+                      "type": "object",
+                      "properties": {
+                        "approved": {
+                          "type": "number"
+                        },
+                        "changes_requested": {
+                          "type": "number"
+                        },
+                        "changed": {
+                          "type": "number"
+                        },
+                        "new": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "approved",
+                        "changes_requested",
+                        "changed",
+                        "new"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "tests": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "title": {
+                            "type": "string"
+                          },
+                          "file": {
+                            "type": "string"
+                          },
+                          "project": {
+                            "type": "string"
+                          },
+                          "outcome": {
+                            "type": "string"
+                          },
+                          "checkpoints": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "order": {
+                                  "type": "number"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "title": {
+                                  "type": "string"
+                                },
+                                "description": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "steps": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "url": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "captures": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "captureId": {
+                                        "type": "string"
+                                      },
+                                      "variant": {
+                                        "type": "string"
+                                      },
+                                      "status": {
+                                        "type": "string"
+                                      },
+                                      "sameAsBaseline": {
+                                        "type": [
+                                          "boolean",
+                                          "null"
+                                        ]
+                                      },
+                                      "baselineRun": {
+                                        "type": [
+                                          "number",
+                                          "null"
+                                        ]
+                                      },
+                                      "comment": {
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "captureId",
+                                      "variant",
+                                      "status",
+                                      "sameAsBaseline",
+                                      "baselineRun",
+                                      "comment"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                }
+                              },
+                              "required": [
+                                "order",
+                                "name",
+                                "title",
+                                "description",
+                                "steps",
+                                "url",
+                                "captures"
+                              ],
+                              "additionalProperties": false
+                            }
+                          }
+                        },
+                        "required": [
+                          "title",
+                          "file",
+                          "project",
+                          "outcome",
+                          "checkpoints"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "project",
+                    "run",
+                    "reviewUrl",
+                    "counts",
+                    "tests"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters (`BAD_REQUEST`, `INVALID_ARGUMENT`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked token (`UNAUTHORIZED`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the required scope (`INSUFFICIENT_SCOPE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not visible to this token (`NOT_FOUND`). The two are never told apart.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A test reference matches several tests (`AMBIGUOUS`; candidates in `details`), or an attachment is not available (`ARTIFACT_UNAVAILABLE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (`RATE_LIMITED`); see `Retry-After`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/projects/{team}/{project}/runs/{run}/rerun-command": {
       "get": {
         "operationId": "getRerunCommand",
@@ -7776,6 +8099,189 @@
                     "total",
                     "unassigned",
                     "suites"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters (`BAD_REQUEST`, `INVALID_ARGUMENT`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked token (`UNAUTHORIZED`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the required scope (`INSUFFICIENT_SCOPE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not visible to this token (`NOT_FOUND`). The two are never told apart.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A test reference matches several tests (`AMBIGUOUS`; candidates in `details`), or an attachment is not available (`ARTIFACT_UNAVAILABLE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (`RATE_LIMITED`); see `Retry-After`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{team}/{project}/review-captures/{capture}": {
+      "get": {
+        "operationId": "getReviewCheckpoint",
+        "summary": "Get a review checkpoint image",
+        "description": "One review checkpoint image: its status, viewport, whether it matches the approved baseline, and short-lived links to it and to the baseline.",
+        "tags": [
+          "Visual review"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "team",
+            "schema": {
+              "type": "string",
+              "description": "Team slug, as in the app URL (`/teams/<team>/…`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "project",
+            "schema": {
+              "type": "string",
+              "description": "Project slug, as in the app URL (`…/projects/<project>`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "capture",
+            "schema": {
+              "type": "string",
+              "description": "Capture id: one variant of one review checkpoint, as returned by `/runs/{run}/review-checkpoints`."
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "project": {
+                      "type": "string"
+                    },
+                    "captureId": {
+                      "type": "string"
+                    },
+                    "test": {
+                      "type": "string"
+                    },
+                    "checkpoint": {
+                      "type": "string"
+                    },
+                    "variant": {
+                      "type": "string"
+                    },
+                    "run": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "viewport": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "sameAsReference": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "reference": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "imageUrl": {
+                      "type": "string"
+                    },
+                    "referenceUrl": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "note": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "project",
+                    "captureId",
+                    "test",
+                    "checkpoint",
+                    "variant",
+                    "run",
+                    "status",
+                    "viewport",
+                    "sameAsReference",
+                    "reference",
+                    "imageUrl",
+                    "referenceUrl",
+                    "note"
                   ],
                   "additionalProperties": false
                 }

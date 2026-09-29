@@ -50,6 +50,12 @@ image run outside CI (a Kubernetes job, say) has none of those; set `git` and `c
   List the `PW_REPORTER_*` variables in the task's `passThroughEnv`, or turbo removes them before Playwright starts.
 </Callout>
 
+## Review screenshots
+
+The package also ships `@miguelfranken/reporter/review`: a fixture that captures named review checkpoints — desktop and
+mobile screenshots of a test's milestones — which the app shows as a storyboard to review and approve. See
+[Visual review](/docs/using/visual-review).
+
 ## Abandoned runs
 
 A reporter that dies mid-run never finishes its run. Once a run hasn't heard from its reporter for 5 minutes

@@ -56,6 +56,7 @@ export async function openApiDocument(servers: Server[] = [INSTANCE_SERVER]): Pr
         { name: 'Results', description: 'One test in one run, and its attachments.' },
         { name: 'Tests', description: 'Tests across runs.' },
         { name: 'Test cases', description: 'Manual and automated test cases, their suites, and what their linked Playwright tests say.' },
+        { name: 'Visual review', description: 'Review checkpoints: the screenshots tests capture at their milestones, and whether each matches its approved baseline.' },
         { name: 'Diagnostics', description: 'Verdicts computed from stored attempts: failure groups, flakiness, run diffs, fix verification.' },
       ],
     },

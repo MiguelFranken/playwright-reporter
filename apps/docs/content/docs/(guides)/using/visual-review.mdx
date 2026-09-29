@@ -1,0 +1,119 @@
+---
+title: Visual review
+description: Review what every flow looks like, desktop beside mobile, and approve only what changed.
+---
+
+Your Playwright tests already walk through every flow of the product. **Visual review** has them take a named
+screenshot at each milestone — the form filled in, the price after a coupon, the confirmation — once per variant, and
+lays those checkpoints out as a storyboard: one row per test, the milestones left to right in the order they
+happened, desktop beside mobile.
+
+An approval holds for the exact pixels. When the next run captures the same image, it is already approved; only images
+that changed, and checkpoints nobody approved yet, wait for a reviewer. A run where nothing changed asks for nothing.
+
+## Capturing checkpoints
+
+Add the `review` fixture from `@miguelfranken/reporter/review` to your test, and call it once the state you want to
+review is asserted:
+
+```ts title="tests/fixtures.ts"
+import { test as base } from '@playwright/test';
+import { reviewFixtures, type ReviewFixture } from '@miguelfranken/reporter/review';
+
+export const test = base.extend<{ review: ReviewFixture }>(reviewFixtures());
+```
+
+```ts title="tests/checkout.spec.ts"
+import { expect } from '@playwright/test';
+import { test } from './fixtures';
+
+test('places an order', async ({ page, review }) => {
+  // …add to the cart, fill in the form…
+  await expect(page.locator('#total')).toHaveText('$157.00');
+  await review('checkout-ready', { title: 'Checkout filled in', description: 'Every field complete, before submitting.' });
+
+  await page.getByRole('button', { name: 'Place order' }).click();
+  await expect(page.getByRole('heading', { name: 'Thank you for your order!' })).toBeVisible();
+  await review('order-confirmation', { title: 'Order confirmation' });
+});
+```
+
+Each call captures the page at a desktop (1280 × 720) and a mobile (390 × 844) viewport, full page, and restores the
+viewport afterwards. Before each capture it waits for web fonts, scrolls through the page so lazy and scroll-revealed
+content loads, turns off animations and hides the caret. The name is the checkpoint's identity across runs: keep it
+stable, and short (`coupon-applied`, `booking-confirmation`).
+
+Pick milestones a person should look at: a complete form before submitting, a recalculated price, a meaningful error,
+the final result. Two or three per happy path are plenty; a spinner or every click is noise.
+
+### Options
+
+`reviewFixtures(config)` sets the defaults, and each `review(name, options)` call can override them.
+
+| Option | Default | What it does |
+| --- | --- | --- |
+| `variants` | desktop and mobile | Viewports to resize to, as `[{ name, viewport: { width, height } }]`. `'project'` captures once, as the running Playwright project: use it with one project per device to review real device emulation (touch, mobile user agent). |
+| `fullPage` | `true` | The whole scrollable page. Use `false` for dialogs, drawers and other fixed overlays, which a full-page capture would repeat down the page. |
+| `scale` | `'device'` | Pixels at the device scale factor (2× on a retina config), or `'css'` for one per CSS pixel. |
+| `style` | | CSS applied only while the screenshot is taken: pin a sticky header, hide a cookie banner. A function gets the page. |
+| `mask` | | Elements painted over, such as generated ids or timestamps, so they never make an unchanged page look changed. |
+| `beforeCapture` / `prepareViewport` | | Runs after each resize, before the capture: reopen a menu that closed at the new breakpoint. |
+| `thumbnails` | `true` | Also attach a small JPEG of the first viewport, which the storyboard shows. |
+| `title`, `description`, `kind`, `tags`, `flow` | | Per checkpoint: what a reviewer sees next to the image. |
+
+Emails and other HTML render into the page with `review.html(name, html)`, captured the same way.
+
+Set `PW_REVIEW_SCREENSHOTS=off` to skip every capture, for example in a fast local loop.
+
+### What gets sent
+
+Each checkpoint attaches its images as `review:<name>:<variant>`, a preview of each, and a small record: the order, the
+title, the URL and page title, the viewport and scale, and a hash of every image. The reporter adds the steps the
+capture ran inside and the moment it happened, so the app can take you to that point in the video.
+
+A suite that already attaches its own screenshots named `review:<name>:<variant>` gets checkpoints too, without the
+helper: the reporter reads the names, hashes the images and takes the steps and times from the report. Runs ingested
+before visual review existed are read the same way.
+
+Other reporters see the images as ordinary attachments; `readCheckpoints(result)` from the same module gives them the
+records.
+
+## Reviewing
+
+A run with checkpoints has a **Visual review** button on its page, with how many images still need review. The
+storyboard opens on those: **Changed** images differ from the approved one, **New** ones were never approved. Filter by
+status or variant, or search for a test.
+
+Open a checkpoint to see it full size, every variant side by side, or compared with its approved baseline — side by
+side, with a slider, as a **Difference** (identical pixels turn black, every change lights up) or as an overlay. Next
+to it: the steps it was captured in, the URL, the viewport, and a link to the moment in the video.
+
+| Key | Does |
+| --- | --- |
+| <kbd>←</kbd> <kbd>→</kbd> | Previous / next checkpoint |
+| <kbd>↑</kbd> <kbd>↓</kbd> | Previous / next test |
+| <kbd>V</kbd> | Next variant |
+| <kbd>C</kbd> | Next comparison mode |
+| <kbd>A</kbd> | Approve, and go to the next image that needs review |
+| <kbd>R</kbd> | Write a change request |
+
+**Approve test** and **Approve … shown** approve many images at once. **Request changes** keeps a comment next to the
+image, for whoever fixes it — a person or an [AI assistant](/docs/ai-assistants/tools).
+
+Admins and members can decide; viewers can look.
+
+## The project's visual review
+
+**Visual Review** in the sidebar lists the recent runs with checkpoints and what each still needs, and
+**Screens** shows every flow as last approved — living documentation of what the product looks like. A checkpoint
+nobody approved yet shows its newest capture from the default branch, marked **New**.
+
+The approved image of each checkpoint is its baseline and is kept by the
+[artifact retention](/docs/administration/retention) policy, however old it is.
+
+## For AI assistants
+
+`list_review_checkpoints` answers what changed in a run, `get_review_checkpoint` attaches an image with its baseline
+so the assistant can look at it, and — with a write-scoped token — `review_checkpoint` approves or asks for changes.
+An agent that changed the UI can check its own work before you do. The REST API has the same reads under
+`/runs/{run}/review-checkpoints` and `/review-captures/{capture}`.
