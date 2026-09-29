@@ -39,3 +39,19 @@ export function verifyArtifactSignature(attachmentId: string, exp: string | null
   const given = Buffer.from(sig);
   return expected.length === given.length && timingSafeEqual(expected, given);
 }
+
+/**
+ * A review capture drawn with its comment threads as numbered pins
+ * (`/api/review-captures/{id}/annotated`), signed like an artifact link. The
+ * signature covers a distinct subject, so it cannot be replayed as one.
+ */
+const captureImageSubject = (captureId: string) => `review-annotated:${captureId}`;
+
+export function signCaptureImagePath(captureId: string, ttlSeconds = artifactUrlTtlSeconds()) {
+  const exp = Math.floor(Date.now() / 1000) + ttlSeconds;
+  return `/api/review-captures/${captureId}/annotated?exp=${exp}&sig=${sign(captureImageSubject(captureId), exp)}`;
+}
+
+export function verifyCaptureImageSignature(captureId: string, exp: string | null, sig: string | null): boolean {
+  return verifyArtifactSignature(captureImageSubject(captureId), exp, sig);
+}

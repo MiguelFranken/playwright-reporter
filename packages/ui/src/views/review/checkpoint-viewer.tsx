@@ -127,7 +127,7 @@ export function CheckpointViewer({
 }) {
   const library = mode === 'library';
   const all = useMemo(() => positions(flows), [flows]);
-  const at = selection ? all.findIndex((p) => p.checkpoint.id === selection.checkpointId) : -1;
+  const at = selection ? all.findIndex((p) => p.checkpoint.id === selection.checkpointId || p.checkpoint.aliases?.includes(selection.checkpointId)) : -1;
   const pos = at >= 0 ? all[at] : null;
   const [stage, setStage] = useState<StageMode>('image');
   const [commenting, setCommenting] = useState(false);

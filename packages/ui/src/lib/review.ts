@@ -133,6 +133,8 @@ export interface ReviewCaptureView {
 
 export interface ReviewCheckpointView {
   id: string;
+  /** Ids of checkpoints merged into this one (the same test in another Playwright project): links to them open this one. */
+  aliases?: string[];
   name: string;
   title?: string | null;
   description?: string | null;

@@ -237,6 +237,9 @@ importers:
       react-dom:
         specifier: 19.3.0
         version: 19.3.0(react@19.3.0)
+      sharp:
+        specifier: ^0.35.4
+        version: 0.35.4(@types/node@24.13.5)
       sonner:
         specifier: ^2.0.8
         version: 2.0.8(@types/react@19.3.0)(react@19.3.0)(react-dom@19.3.0(react@19.3.0))

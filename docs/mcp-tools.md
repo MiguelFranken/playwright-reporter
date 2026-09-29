@@ -34,9 +34,12 @@ also accepts `project`, `format` (`markdown` | `json`) and `maxChars`. See the R
 | [`delete_test_suite`](#delete_test_suite) | write | Delete suites that hold no test cases, e.g. |
 | [`link_test_case`](#link_test_case) | write | Link Playwright tests (by test id from find_tests) to a test case, or unlink them. |
 | [`adopt_tests`](#adopt_tests) | write | Turn Playwright tests into test cases already linked to them: steps from their test.step() calls, one case per test across browsers. |
-| [`list_review_checkpoints`](#list_review_checkpoints) | core | A run's review checkpoints — the named screenshots its tests capture at their milestones, per variant (desktop, mobile) — in journey order, with each image's review status: changed against its approved baseline, new, approved or changes requested. |
-| [`get_review_checkpoint`](#get_review_checkpoint) | core | One review checkpoint image to look at, with its approved baseline (or the previous run’s capture) beside it, so you can say what changed. |
-| [`review_checkpoint`](#review_checkpoint) | write | Approve review checkpoint images, or ask for changes with a comment. |
+| [`list_review_checkpoints`](#list_review_checkpoints) | core | A run's review checkpoints — the named screenshots its tests capture at their milestones, per variant (desktop, mobile) — in journey order, with each image's review status (changed against its approved baseline, new, approved or changes requested) and its open comment threads. |
+| [`get_review_checkpoint`](#get_review_checkpoint) | core | One review checkpoint image, with its approved baseline (or the previous run’s capture) beside it, so you can say what changed. |
+| [`review_checkpoint`](#review_checkpoint) | write | Approve review checkpoint images, or ask for changes — with a comment, and on one image with pins that mark each change where it is. |
+| [`list_review_threads`](#list_review_threads) | core | The comment threads people (or assistants) pinned on a run’s review images — change requests at a spot or an area of a screenshot — per image, by the number on the pin, with where each points (pixels, percent, CSS pixels) and the conversation. |
+| [`comment_on_review`](#comment_on_review) | write | Pin a comment thread on a review image — at a spot or an area (in percent of the image), or about the whole image — or reply to a thread by its number. |
+| [`resolve_review_thread`](#resolve_review_thread) | write | Mark a comment thread on a review image resolved — or open again — by the image and the number on its pin, with an optional closing note. |
 | [`list_library`](#list_library) | core | The visual documentation of the product: the branches and pull requests kept in the library (and the default branch), which run of each is shown — the newest, or a pinned one — and how many of the newest run’s images still wait for review. |
 | [`get_library_flows`](#get_library_flows) | core | The screens of a branch or pull request as the library shows them: each flow (test) with its test cases and its checkpoints in journey order, each with its variants’ capture ids. |
 | [`set_library_reference`](#set_library_reference) | write | Keep a branch or pull request in the library (a long-lived pull request can stay browsable while it is open), pin the run that documents it, make it the default, name it — or take it out. |
@@ -571,7 +574,7 @@ Structured output fields: `created`, `skipped`, `message`, `truncated`.
 
 **List review checkpoints** · toolset `core`
 
-A run's review checkpoints — the named screenshots its tests capture at their milestones, per variant (desktop, mobile) — in journey order, with each image's review status: changed against its approved baseline, new, approved or changes requested. Defaults to what needs review. Look at one with get_review_checkpoint.
+A run's review checkpoints — the named screenshots its tests capture at their milestones, per variant (desktop, mobile) — in journey order, with each image's review status (changed against its approved baseline, new, approved or changes requested) and its open comment threads. Defaults to what needs review. Look at one with get_review_checkpoint.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -590,7 +593,7 @@ Structured output fields: `project`, `run`, `reviewUrl`, `counts`, `tests`, `tru
 
 **Get a review checkpoint** · toolset `core`
 
-One review checkpoint image to look at, with its approved baseline (or the previous run’s capture) beside it, so you can say what changed. Full-page images may be tall; a large one comes as a link.
+One review checkpoint image, with its approved baseline (or the previous run’s capture) beside it, so you can say what changed. Open comment threads are drawn on the image as numbered pins, a close-up per pin follows, and the threads are listed by the same numbers — what each asks to change, and where. Large images are scaled to fit.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -599,14 +602,18 @@ One review checkpoint image to look at, with its approved baseline (or the previ
 | `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
 | `capture` | string | yes | Capture id, from list_review_checkpoints. |
 | `compare` | boolean |  | Also attach the approved baseline image (or the previous run’s) to compare with. Default true. |
+| `pins` | boolean |  | Draw the open comment threads on the image as numbered pins. Default true. |
+| `thread` | integer (–9007199254740991) |  | Focus one thread by its number: its close-up is attached (and its pin drawn even if resolved). |
+| `crops` | boolean |  | Attach a close-up around each pin. Default: when at most 6 threads are open. |
+| `includeResolved` | boolean |  | Also list (and pin) resolved threads. Default false. |
 
-Structured output fields: `project`, `captureId`, `test`, `checkpoint`, `variant`, `run`, `status`, `viewport`, `sameAsReference`, `reference`, `imageUrl`, `referenceUrl`, `note`, `truncated`.
+Structured output fields: `project`, `captureId`, `test`, `checkpoint`, `variant`, `run`, `status`, `viewport`, `sameAsReference`, `reference`, `imageUrl`, `referenceUrl`, `note`, `image`, `annotatedImageUrl`, `reviewUrl`, `threads`, `attachments`, `truncated`.
 
 ## review_checkpoint
 
 **Approve or reject review checkpoints** · toolset `write` · **writes**
 
-Approve review checkpoint images, or ask for changes with a comment. An approval holds for the exact pixels: later runs with the same image need no review. Only approve what you looked at with get_review_checkpoint.
+Approve review checkpoint images, or ask for changes — with a comment, and on one image with pins that mark each change where it is. An approval holds for the exact pixels: later runs with the same image need no review. Only approve what you looked at with get_review_checkpoint.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -615,9 +622,66 @@ Approve review checkpoint images, or ask for changes with a comment. An approval
 | `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
 | `captures` | string[] | yes | Capture ids, from list_review_checkpoints. |
 | `decision` | `"approved"` \| `"changes_requested"` | yes | approved, or changes_requested. |
-| `comment` | string |  | Why — what should change. Shown to the reviewer beside the image. |
+| `comment` | string |  | Why — what should change. Opens a thread about the whole image with a change request. |
+| `pins` | object[] |  | With changes_requested on one capture: pin each change where it is, in percent of the image, as a numbered thread. |
+| `resolveThreads` | boolean |  | With approved: also resolve the images’ open threads (their changes are done). |
 
-Structured output fields: `project`, `decided`, `decision`, `truncated`.
+Structured output fields: `project`, `decided`, `decision`, `pinned`, `resolvedThreads`, `truncated`.
+
+## list_review_threads
+
+**List review comment threads** · toolset `core`
+
+The comment threads people (or assistants) pinned on a run’s review images — change requests at a spot or an area of a screenshot — per image, by the number on the pin, with where each points (pixels, percent, CSS pixels) and the conversation. Open ones by default. See one pinned on its image with get_review_checkpoint and thread.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+| `run` | integer (–9007199254740991) \| string |  | The run (default "latest"). Scope "latest" with branch. Ignored with capture. |
+| `branch` | string |  | Git branch name, e.g. "main". |
+| `capture` | string |  | Only this image’s threads. |
+| `status` | `"open"` \| `"resolved"` \| `"all"` |  | open (default), resolved or all. |
+| `test` | string |  | Part of a test title or file, to narrow the list. |
+
+Structured output fields: `project`, `run`, `counts`, `images`, `truncated`.
+
+## comment_on_review
+
+**Comment on a review image** · toolset `write` · **writes**
+
+Pin a comment thread on a review image — at a spot or an area (in percent of the image), or about the whole image — or reply to a thread by its number. Say what should change and where, as a reviewer would; after fixing one, reply with what you did. Shown to people in the review viewer.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+| `capture` | string | yes | Capture id: one image, from list_review_checkpoints or list_review_threads. |
+| `body` | string | yes | The comment: what should change, or the answer to the thread. |
+| `thread` | integer (–9007199254740991) |  | Reply to this thread, by the number on its pin. Without it, a new thread. |
+| `at` | object |  | Where a new thread points, in percent of the image: a spot, or an area with w and h. Without it, the whole image. |
+
+Structured output fields: `project`, `captureId`, `action`, `thread`, `threadId`, `url`, `truncated`.
+
+## resolve_review_thread
+
+**Resolve or reopen a review comment thread** · toolset `write` · **writes**
+
+Mark a comment thread on a review image resolved — or open again — by the image and the number on its pin, with an optional closing note. Resolve only what is done; when the user asked you to fix a thread, prefer replying with what you did and let the reviewer resolve it.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+| `capture` | string | yes | Capture id: one image, from list_review_checkpoints or list_review_threads. |
+| `thread` | integer (–9007199254740991) | yes | The thread’s number: the one on its pin. |
+| `status` | `"resolved"` \| `"open"` |  | resolved (default), or open to reopen it. |
+| `comment` | string |  | A closing note: what was done, or why it is reopened. |
+
+Structured output fields: `project`, `thread`, `status`, `changed`, `url`, `truncated`.
 
 ## list_library
 

@@ -112,14 +112,37 @@ to it: the steps it was captured in, the URL, the viewport, and a link to the mo
 | <kbd>←</kbd> <kbd>→</kbd> | Previous / next checkpoint |
 | <kbd>↑</kbd> <kbd>↓</kbd> | Previous / next test |
 | <kbd>V</kbd> | Next variant |
-| <kbd>C</kbd> | Next comparison mode |
+| <kbd>M</kbd> | Next comparison mode |
 | <kbd>A</kbd> | Approve, and go to the next image that needs review |
-| <kbd>R</kbd> | Write a change request |
+| <kbd>C</kbd> | Comment mode: click to pin a comment, drag to mark an area |
+| <kbd>R</kbd> | Comment on the whole image |
+| <kbd>[</kbd> <kbd>]</kbd> | Previous / next comment |
+| <kbd>E</kbd> | Resolve or reopen the open comment |
+| <kbd>H</kbd> | Hide or show the pins |
 
-**Approve test** and **Approve … shown** approve many images at once. **Request changes** keeps a comment next to the
-image, for whoever fixes it — a person or an [AI assistant](/docs/ai-assistants/tools).
+**Approve test** and **Approve … shown** approve many images at once. **Request changes** records that the image needs
+work; point at what should change with comments.
 
-Admins and members can decide; viewers can look.
+### Comments
+
+Comments sit on the screenshot, where the change belongs, like comments in Figma. Press <kbd>C</kbd> (or **Comment**)
+and click a spot to drop a numbered pin, or drag to mark an area; write what should change and press <kbd>Enter</kbd>.
+Hover a pin to read its thread, click it to keep it open, reply under it, and resolve it with ✓ once it is done. From
+the keyboard, focus the screenshot in comment mode, press <kbd>Enter</kbd> for a crosshair, move it with the arrow keys
+and press <kbd>Enter</kbd> again. **Comment on the whole image** starts a thread without a pin.
+
+The panel beside the image lists every thread by its number — open ones first, with **Resolved** and **All** a click
+away — and a row opens its pin. The storyboard shows how many comments are open on each screen. A thread's number stays
+the same, and a link to it (`…/review?cp=…&v=desktop&thread=3`) opens the viewer at its pin.
+
+A thread belongs to the image — the checkpoint and variant — not to one run. While it is open it shows on later runs'
+captures too: where the pixels are the same, exactly where it was placed; where the image changed since, with a dashed
+pin that says it was placed on an earlier run. That is how a change request reaches the run that fixes it, and the
+reviewer resolves it there. Approving an image with open comments asks whether to resolve them. The image an open
+thread was placed on is kept by the retention policy until it is resolved.
+
+Admins and members can decide; everyone in the team, viewers included, can comment. You can edit and delete your own
+comments, and admins can delete anyone's; deleting a thread's first comment deletes the thread.
 
 ## The review queue
 
@@ -163,9 +186,18 @@ and the runs pinned in it.
 so the assistant can look at it, and — with a write-scoped token — `review_checkpoint` approves or asks for changes.
 An agent that changed the UI can check its own work before you do.
 
+Comments reach the assistant the way you placed them: `get_review_checkpoint` draws the open threads on the image as
+numbered pins (and the areas they mark), attaches a close-up of each pin, and lists the threads by the same numbers —
+so "#2: the totals lost their border" points at a place on the page. `list_review_threads` lists a run's open threads
+with their positions in pixels, percent and CSS pixels. With a write-scoped token, `comment_on_review` pins a thread or
+replies to one, and `resolve_review_thread` resolves it; comments an assistant writes say so. Ask it to fix the open
+comments of a run, and it can reply with what it changed for you to check.
+
 `list_library` names the references in the library and the run each shows; `get_library_flows` lists a reference's
 flows and checkpoints, with capture ids to look at, and the link to hand a person. With a write-scoped token,
 `set_library_reference` keeps a pull request in the library, pins its run or makes it the default. The [REST API](/docs/api)
-has the same reads under `/runs/{run}/review-checkpoints`, `/review-captures/{capture}`, `/library` and
-`/library/flows`, and — with a write-scoped token — the same changes: `POST /review-captures/decisions` approves or
-asks for changes, `POST /library/references` keeps, pins or names a reference.
+has the same reads under `/runs/{run}/review-checkpoints`, `/review-captures/{capture}` (with `annotatedImageUrl`, the
+image with its pins drawn on it), `/review-threads`, `/library` and `/library/flows`, and — with a write-scoped token —
+the same changes: `POST /review-captures/decisions` approves or asks for changes, `POST /review-threads` pins a comment
+or replies, `POST /review-threads/status` resolves or reopens one, and `POST /library/references` keeps, pins or names
+a reference.

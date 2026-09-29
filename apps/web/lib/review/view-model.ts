@@ -178,7 +178,10 @@ function mergeCheckpoints(a: readonly ReviewCheckpointView[], b: readonly Review
   const merged = a.map((c) => ({ ...c, captures: [...c.captures] }));
   for (const cp of b) {
     const same = merged.find((m) => m.name === cp.name);
-    if (same) same.captures.push(...cp.captures);
+    if (same) {
+      same.captures.push(...cp.captures);
+      same.aliases = [...(same.aliases ?? []), cp.id, ...(cp.aliases ?? [])];
+    }
     else merged.push({ ...cp, sequence: merged.length });
   }
   return merged;
