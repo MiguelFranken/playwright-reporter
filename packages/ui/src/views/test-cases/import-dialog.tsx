@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Button } from '../../components/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../components/dialog';
-import { Input } from '../../components/input';
+import { FileInput } from '../../components/file-input';
 import { Label } from '../../components/label';
 import { FieldSelect } from './field-select';
 
@@ -53,8 +53,16 @@ export function ImportDialog({
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="import-file">File (JSON or CSV, up to 4 MB)</Label>
-            <Input id="import-file" name="file" type="file" accept=".json,.csv,application/json,text/csv" required disabled={pending} />
+            <Label htmlFor="import-file">File</Label>
+            <FileInput
+              id="import-file"
+              name="file"
+              accept=".json,.csv,application/json,text/csv"
+              required
+              disabled={pending}
+              prompt="Choose a file or drag it here"
+              hint="JSON or CSV, up to 4 MB"
+            />
           </div>
           <input type="hidden" name="duplicates" value={duplicates} />
           {Object.entries(hidden).map(([name, value]) => (

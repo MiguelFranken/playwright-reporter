@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { expect, fn, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { ImportDialog } from './import-dialog';
 
 const meta = {
@@ -15,7 +15,15 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
   play: async () => {
     const d = within(await within(document.body).findByRole('dialog', { name: 'Import test cases' }));
-    await expect(d.getByLabelText('File (JSON or CSV, up to 4 MB)')).toHaveAttribute('name', 'file');
+    await expect(d.getByLabelText('File')).toHaveAttribute('name', 'file');
+  },
+};
+
+export const FilePicked: Story = {
+  play: async () => {
+    const d = within(await within(document.body).findByRole('dialog', { name: 'Import test cases' }));
+    await userEvent.upload(d.getByLabelText('File'), new File(['title,suite\nCheckout,Cart'], 'test-cases.csv', { type: 'text/csv' }));
+    await waitFor(() => expect(d.getByText('test-cases.csv')).toBeVisible());
   },
 };
 
