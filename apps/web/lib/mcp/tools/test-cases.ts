@@ -23,6 +23,7 @@ import {
   CaseError,
   createCase,
   createSuite,
+  deleteEmptySuites,
   ensureSuite,
   linkTests,
   resolveCaseId,
@@ -37,6 +38,7 @@ import { link, type MarkdownBuilder } from '../render/markdown';
 import type { ResolvedProject } from '../context';
 
 const WRITE = { readOnlyHint: false, destructiveHint: false, idempotentHint: false } as const;
+const REMOVE = { readOnlyHint: false, destructiveHint: true, idempotentHint: true } as const;
 
 const caseParam = z.string().describe('Test case key ("TC-12" or "12") or its id.');
 const suiteParam = z
@@ -457,6 +459,52 @@ export const createTestSuite = defineTool({
   },
 });
 
+// ---------------------------------------------------------------- delete_test_suite
+
+const deleteSuiteInput = z.object({
+  ...commonParams,
+  suites: z.array(suiteParam).min(1).max(100).optional().describe('Suites to delete (id or path), with the suites below them. Refused if any of them still holds cases.'),
+  allEmpty: z.boolean().optional().describe('Instead: delete every suite that holds no cases, itself or below it.'),
+});
+const deleteSuiteOutput = output({ deleted: z.array(z.string()), message: z.string() });
+
+export const deleteTestSuite = defineTool({
+  name: 'delete_test_suite',
+  title: 'Delete empty test suites',
+  toolset: 'write',
+  description:
+    'Delete suites that hold no test cases, e.g. the ones left empty after moving cases elsewhere: the named suites, or every empty suite with allEmpty. Never deletes a case; a suite that still holds cases is refused.',
+  input: deleteSuiteInput,
+  output: deleteSuiteOutput,
+  annotations: REMOVE,
+  async handler(args, ctx) {
+    if (!args.suites?.length === !args.allEmpty) throw invalid('Pass either "suites" or "allEmpty: true".');
+    const project = await ctx.project(args.project, { testCase: ['delete'] });
+    const before = suitePaths(await listSuites(project.project.id));
+    let ids: string[] | undefined;
+    if (args.suites) {
+      ids = [];
+      for (const ref of args.suites) {
+        const id = await suiteId(project, ref, false);
+        if (!id) throw invalid('"unassigned" is not a suite.');
+        ids.push(id);
+      }
+    }
+    const deleted = await deleteEmptySuites(contextOf(project), ids).catch(caseError);
+    const paths = deleted.map((s) => (before.get(s.id) ?? [s.name]).join(' / '));
+    return {
+      data: {
+        deleted: paths,
+        message: deleted.length === 0 ? 'No empty suites to delete.' : `Deleted ${deleted.length} empty ${deleted.length === 1 ? 'suite' : 'suites'}.`,
+      },
+      render(md, d) {
+        md.line(d.message);
+        if (d.deleted.length) md.list(d.deleted);
+      },
+    };
+  },
+});
+
 // ---------------------------------------------------------------- link_test_case
 
 const linkInput = z.object({
@@ -540,4 +588,4 @@ export const adoptTestsTool = defineTool({
   },
 });
 
-export const TEST_CASE_TOOLS = [listTestSuites, listTestCases, getTestCase, createTestCase, updateTestCase, createTestSuite, linkTestCase, adoptTestsTool];
+export const TEST_CASE_TOOLS = [listTestSuites, listTestCases, getTestCase, createTestCase, updateTestCase, createTestSuite, deleteTestSuite, linkTestCase, adoptTestsTool];

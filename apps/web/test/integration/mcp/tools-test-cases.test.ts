@@ -70,6 +70,24 @@ describe('test case tools', () => {
     await client.close();
   });
 
+  test('a write token deletes empty suites and refuses ones with cases', async ({ tenant }) => {
+    const { token } = await createPat(tenant.adminUser, { scopes: ['read', 'write'] });
+    const client = await mcpClient({ token });
+    const project = `${tenant.team.slug}/${tenant.project.slug}`;
+    await call(client, 'create_test_case', { project, title: 'Pay by card', suite: 'Checkout / Payments' });
+    await call(client, 'create_test_suite', { project, name: 'old-file' });
+    await call(client, 'create_test_suite', { project, name: 'describe block', parent: 'old-file' });
+
+    expect((await call(client, 'delete_test_suite', { project })).isError).toBe(true);
+    expect((await call(client, 'delete_test_suite', { project, suites: ['Checkout'] })).isError).toBe(true);
+    const swept = await call(client, 'delete_test_suite', { project, allEmpty: true });
+    expect(swept.structuredContent).toMatchObject({ deleted: ['old-file', 'old-file / describe block'] });
+
+    const suites = await call(client, 'list_test_suites', { project });
+    expect(suites.structuredContent).toMatchObject({ suites: [{ path: 'Checkout' }, { path: 'Checkout / Payments', cases: 1 }] });
+    await client.close();
+  });
+
   test('a write token of a viewer cannot write', async ({ db, tenant }) => {
     const viewer = await createMember(db, tenant.team.id, 'viewer');
     const { token } = await createPat(viewer, { scopes: ['read', 'write'] });

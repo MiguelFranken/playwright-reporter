@@ -15,6 +15,7 @@ import {
   createCase,
   createSuite,
   deleteCases,
+  deleteEmptySuites,
   deleteSuite,
   describePath,
   fileLabel,
@@ -89,6 +90,30 @@ describe('suites', () => {
     await expect(deleteSuite(ctx, a.id)).resolves.toEqual({ cases: 2 });
     const left = await db.select({ id: testCases.id }).from(testCases).where(eq(testCases.projectId, tenant.project.id));
     expect(left.map((r) => r.id)).toEqual([keep.id]);
+  });
+
+  test('delete only when empty, and sweep every empty suite', async ({ db, tenant }) => {
+    const ctx = ctxOf(tenant);
+    const full = await createSuite(ctx, { name: 'Full' });
+    await createSuite(ctx, { name: 'Empty child', parentId: full.id });
+    const holder = await createSuite(ctx, { name: 'Holder' });
+    const deep = await createSuite(ctx, { name: 'Deep', parentId: holder.id });
+    await createCase(ctx, { title: 'in full', suiteId: full.id });
+    await createCase(ctx, { title: 'deep down', suiteId: deep.id });
+    const old = await createSuite(ctx, { name: 'Old' });
+    await createSuite(ctx, { name: 'Old child', parentId: old.id });
+    await createSuite(ctx, { name: 'Lonely' });
+
+    // A suite whose cases sit in a sub-suite still holds cases.
+    await expect(deleteEmptySuites(ctx, [holder.id])).rejects.toThrow(/still holds 1 cases/);
+    await expect(deleteEmptySuites(ctx, [old.id]).then((s) => s.map((x) => x.name))).resolves.toEqual(['Old', 'Old child']);
+    await expect(deleteEmptySuites(ctx).then((s) => s.map((x) => x.name))).resolves.toEqual(['Lonely', 'Empty child']);
+    await expect(deleteEmptySuites(ctx)).resolves.toEqual([]);
+
+    const tree = await getSuiteTree(tenant.project.id);
+    expect(tree.roots.map((r) => r.name).sort()).toEqual(['Full', 'Holder']);
+    const cases = await db.select({ id: testCases.id }).from(testCases).where(eq(testCases.projectId, tenant.project.id));
+    expect(cases).toHaveLength(2);
   });
 });
 
