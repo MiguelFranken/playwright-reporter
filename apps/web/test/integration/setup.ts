@@ -83,6 +83,9 @@ process.env.INGEST_MAX_BATCH_BYTES ??= String(4 * 1024 * 1024);
 // No workflow runtime here: runs read as stale, and tests close them through
 // `checkStaleRun`, the watchdog's step, directly.
 process.env.RUN_WATCHDOG_DRIVER = 'none';
+// Likewise nothing measures image comparisons behind the tests' back; they
+// plan and measure through `lib/review/diff/store` themselves.
+process.env.IMAGE_DIFF_DRIVER = 'none';
 // Likewise no `after()` scope for the sweep a finished run may start; tests
 // call `sweepAfterIngest` directly and switch this back on where they do.
 process.env.ARTIFACT_RETENTION_INGEST_SWEEP = 'off';

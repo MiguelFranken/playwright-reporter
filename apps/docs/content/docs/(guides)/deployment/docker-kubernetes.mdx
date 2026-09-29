@@ -25,6 +25,14 @@ Bootstrap it once per database with `npx --package=@workflow/world-postgres boot
 worker in `instrumentation.ts`. The worker polls the database twice a second, so a Neon compute behind it never
 scales to zero.
 
+## Measuring changed images
+
+When a run finishes, the images that changed against their baseline are measured by a workflow on the same Postgres
+world — nothing more to run. Without a workflow runtime, `IMAGE_DIFF_DRIVER=inline` measures them in the process that
+received the finished run, after its response; `none` turns measuring off. The comparison uses `sharp`, whose prebuilt
+binaries cover glibc and musl (Alpine) images on x64 and arm64. Give the app about 500 MB of headroom per image being
+measured at the default `IMAGE_DIFF_MAX_PIXELS`.
+
 ## Retention sweeps
 
 A finished run starts an artifact and a data sweep when none ran for 12 hours, so nothing else is required. For a fixed

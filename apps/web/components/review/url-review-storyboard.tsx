@@ -1,11 +1,30 @@
 'use client';
 
-import { useEffect, useOptimistic, useState, useTransition } from 'react';
+import { useQueries, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useOptimistic, useState, useTransition } from 'react';
 import { toast } from 'sonner';
-import { DEFAULT_FRAME, parseReviewFilter, REVIEW_GROUPINGS, type FrameSettings, type ReviewDecisionInput, type ReviewFilter, type ReviewFlowView, type ReviewGrouping, type StoryboardMode } from '@miguelfranken/ui/lib/review';
+import {
+  DEFAULT_FRAME,
+  parseReviewFilter,
+  REVIEW_GROUPINGS,
+  REVIEW_SORTS,
+  type FrameSettings,
+  type ReviewCaptureView,
+  type ReviewDecisionInput,
+  type ReviewDecisionView,
+  type ReviewDiffView,
+  type ReviewFilter,
+  type ReviewFlowView,
+  type ReviewGrouping,
+  type ReviewSort,
+  type ReviewStatus,
+  type StoryboardMode,
+} from '@miguelfranken/ui/lib/review';
+import type { IgnoreRect } from '@miguelfranken/ui/views/review/ignore-regions-editor';
 import { ReviewStoryboard, STORYBOARD_SIZE, type ReviewSelection } from '@miguelfranken/ui/views/review/review-storyboard';
 import { useShallowSearch } from '@/components/filters/url-filters';
-import { decideReview } from '@/app/(app)/teams/[team]/projects/[project]/review/actions';
+import { decideReview, saveIgnoreRegions } from '@/app/(app)/teams/[team]/projects/[project]/review/actions';
+import { captureDiffQuery } from '@/lib/rpc/queries';
 
 /** Marks the decided images at once; the revalidated page confirms it. */
 function applyDecision(flows: ReviewFlowView[], input: ReviewDecisionInput): ReviewFlowView[] {
@@ -15,6 +34,58 @@ function applyDecision(flows: ReviewFlowView[], input: ReviewDecisionInput): Rev
     checkpoints: f.checkpoints.map((c) => ({
       ...c,
       captures: c.captures.map((cap) => (ids.has(cap.id) ? { ...cap, status: input.decision, decision: { decision: input.decision, at: new Date().toISOString(), comment: input.comment ?? null, by: 'You' } } : cap)),
+    })),
+  }));
+}
+
+/** A capture that differs from its reference and has no finished measurement: what the viewer waits for. */
+function awaitsDiff(c: ReviewCaptureView) {
+  if (c.diff && c.diff.state !== 'pending') return false;
+  if (c.compare) return !c.compare.same;
+  return c.baseline ? !c.baseline.same : Boolean(c.previous && !c.previous.same);
+}
+
+interface LiveCapture {
+  diff: ReviewDiffView | null;
+  status: ReviewStatus;
+  decision: ReviewDecisionView | null;
+}
+
+/**
+ * The open checkpoint's measurements, asked for while they are being made:
+ * the viewer gets the numbers (and a tolerance approval) as soon as the
+ * workflow has them, without reloading the page.
+ */
+function useLiveDiffs(ref: { team: string; project: string }, flows: readonly ReviewFlowView[], selection: ReviewSelection | null, library: boolean) {
+  const targets = useMemo(() => {
+    if (!selection) return [];
+    const cp = flows.flatMap((f) => f.checkpoints).find((c) => c.id === selection.checkpointId);
+    return (cp?.captures ?? [])
+      // The library has nothing to review; it only measures when it compares two lines of work.
+      .filter((c) => (!selection.variant || c.variant === selection.variant) && (!library || c.compare) && awaitsDiff(c))
+      .map((c) => ({ id: c.id, compareId: c.compare?.captureId }))
+      .slice(0, 4);
+  }, [flows, selection, library]);
+  const results = useQueries({ queries: targets.map((t) => captureDiffQuery(ref, t.id, t.compareId)) });
+  const live = new Map<string, LiveCapture>();
+  results.forEach((r, i) => {
+    if (r.data) live.set(targets[i].id, r.data);
+  });
+  return live;
+}
+
+function withLive(flows: ReviewFlowView[], live: ReadonlyMap<string, LiveCapture>): ReviewFlowView[] {
+  if (live.size === 0) return flows;
+  return flows.map((f) => ({
+    ...f,
+    checkpoints: f.checkpoints.map((c) => ({
+      ...c,
+      captures: c.captures.map((cap) => {
+        const l = live.get(cap.id);
+        if (!l) return cap;
+        // A library comparison carries no review status of its own.
+        return cap.compare ? { ...cap, diff: l.diff ?? cap.diff } : { ...cap, diff: l.diff ?? cap.diff, status: l.status, decision: l.decision ?? cap.decision };
+      }),
     })),
   }));
 }
@@ -89,7 +160,8 @@ export function UrlReviewStoryboard({
   const { params, set } = useShallowSearch();
   const [local, setLocal] = useState<ReviewSelection | null>(null);
   const [pendingIds, setPendingIds] = useState<string[]>([]);
-  const [optimistic, addDecision] = useOptimistic(flows, applyDecision);
+  const [ignorePendingId, setIgnorePendingId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const [, startTransition] = useTransition();
   const [view, setView] = useViewSettings();
   const [localFolder, setLocalFolder] = useState<string | null>(null);
@@ -99,6 +171,25 @@ export function UrlReviewStoryboard({
   const filter: ReviewFilter | undefined = syncUrl && params.get('status') ? parseReviewFilter(params.get('status')) : defaultFilter;
   const cp = params.get('cp');
   const selection = syncUrl ? (cp ? { checkpointId: cp, variant: params.get('v') } : null) : local;
+  const sortParam = params.get('sort');
+  const sort = (REVIEW_SORTS as readonly string[]).includes(sortParam ?? '') ? (sortParam as ReviewSort) : undefined;
+  const live = useLiveDiffs({ team, project }, flows, selection, mode === 'library');
+  const [optimistic, addDecision] = useOptimistic(withLive(flows, live), applyDecision);
+
+  const onIgnoreRegionsChange = (input: { captureId: string; regions: IgnoreRect[] }) => {
+    setIgnorePendingId(input.captureId);
+    startTransition(async () => {
+      const res = await saveIgnoreRegions({ team, project }, input);
+      setIgnorePendingId(null);
+      if (!res.ok) {
+        toast.error(res.message);
+        return;
+      }
+      // The old measurement no longer applies; the viewer asks for the new one.
+      queryClient.removeQueries({ queryKey: captureDiffQuery({ team, project }, input.captureId).queryKey });
+      toast.success(input.regions.length ? 'Areas saved. Measuring again…' : 'Nothing is left out any more. Measuring again…');
+    });
+  };
 
   const onDecide = (input: ReviewDecisionInput) => {
     setPendingIds((ids) => [...ids, ...input.captureIds]);
@@ -138,6 +229,10 @@ export function UrlReviewStoryboard({
       emptyTitle={emptyTitle}
       emptyDescription={emptyDescription}
       mode={mode}
+      sort={syncUrl ? sort : undefined}
+      onSortChange={syncUrl ? (next) => set({ sort: next === 'sequence' ? null : next }) : undefined}
+      onIgnoreRegionsChange={canDecide && mode !== 'library' ? onIgnoreRegionsChange : undefined}
+      ignorePendingId={ignorePendingId}
     />
   );
 }

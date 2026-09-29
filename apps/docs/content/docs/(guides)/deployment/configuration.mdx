@@ -23,6 +23,8 @@ description: Every environment variable of the app.
 | `RUN_STALE_TIMEOUT_MS` | When a silent run reads as abandoned: 5 minutes, clamped to 1–60. |
 | `RUN_WATCHDOG_DRIVER` | `workflow` or `none`. |
 | `WORKFLOW_TARGET_WORLD`, `WORKFLOW_POSTGRES_URL` | The Workflow SDK's Postgres world, outside Vercel. |
+| `IMAGE_DIFF_DRIVER` | Who measures changed review images: `workflow` (the Workflow SDK, durable), `inline` (after the response, in the same function) or `none`. Default: `workflow`, except on Vercel previews. |
+| `IMAGE_DIFF_MAX_PIXELS` | The largest image measured, in pixels (default 40 000 000). Memory is about 12 bytes a pixel while one is measured. |
 
 ## Retention
 

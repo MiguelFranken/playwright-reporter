@@ -1,5 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { buildReviewTree, captureViewport, fitZoom, flattenFolders, folderPathOf, inFolder, type ReviewFlowView } from './review';
+import {
+  buildReviewTree,
+  captureViewport,
+  changeScore,
+  describeDiff,
+  diffMagnitude,
+  fitZoom,
+  flattenFolders,
+  folderPathOf,
+  formatChangedShare,
+  inFolder,
+  sizeChange,
+  type ReviewDiffView,
+  type ReviewFlowView,
+} from './review';
 
 const flow = (file: string, cases: ReviewFlowView['cases'] = [], status: 'new' | 'approved' = 'new'): ReviewFlowView => ({
   resultId: file,
@@ -53,5 +67,52 @@ describe('review tree', () => {
     expect(folderPathOf(flows[0], 'file')).toEqual(['tests', 'checkout', 'coupon.spec.ts']);
     const tree = buildReviewTree(flows, 'file');
     expect(tree[0].children.map((c) => c.name)).toEqual(['checkout', 'account.spec.ts']);
+  });
+});
+
+describe('diffs', () => {
+  const diff = (over: Partial<ReviewDiffView> = {}): ReviewDiffView => ({
+    id: 'd',
+    state: 'done',
+    against: 'baseline',
+    changedPixels: 40,
+    totalPixels: 10_000,
+    ratio: 0.004,
+    sizeChanged: false,
+    base: { width: 100, height: 100 },
+    head: { width: 100, height: 100 },
+    regions: [{ x: 0, y: 0, width: 10, height: 4, pixels: 40 }],
+    ...over,
+  });
+
+  it('formats a changed share for a glance', () => {
+    expect(formatChangedShare(0)).toBe('0%');
+    expect(formatChangedShare(0.00005)).toBe('< 0.01%');
+    expect(formatChangedShare(0.0042)).toBe('0.42%');
+    expect(formatChangedShare(0.004)).toBe('0.4%');
+    expect(formatChangedShare(0.05)).toBe('5%');
+    expect(formatChangedShare(0.183)).toBe('18%');
+  });
+
+  it('describes a diff in a few words', () => {
+    expect(describeDiff(diff())).toBe('1 region · 0.4%');
+    expect(describeDiff(diff({ changedPixels: 0, ratio: 0, regions: [] }))).toBe('No visible change');
+    expect(describeDiff(diff({ state: 'pending' }))).toMatch(/Measuring/);
+    expect(describeDiff(diff({ sizeChanged: true, head: { width: 100, height: 140 } }))).toBe('1 region · 0.4% · height +40 px');
+  });
+
+  it('names the size change', () => {
+    expect(sizeChange(diff())).toBeNull();
+    expect(sizeChange(diff({ sizeChanged: true, head: { width: 92, height: 100 } }))).toBe('width −8 px');
+  });
+
+  it('grades the magnitude and ranks changes', () => {
+    expect(diffMagnitude(diff())).toBe('minor');
+    expect(diffMagnitude(diff({ ratio: 0.02 }))).toBe('major');
+    expect(diffMagnitude(diff({ changedPixels: 0, ratio: 0 }))).toBe('none');
+    expect(diffMagnitude(diff({ state: 'too_large' }))).toBeNull();
+    const grew = changeScore({ status: 'changed', diff: diff({ sizeChanged: true }) });
+    expect(grew).toBeGreaterThan(changeScore({ status: 'changed', diff: diff({ ratio: 0.5 }) }));
+    expect(changeScore({ status: 'changed', diff: null })).toBeGreaterThan(changeScore({ status: 'approved', diff: null }));
   });
 });

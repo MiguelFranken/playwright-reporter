@@ -30,6 +30,21 @@ export function testOverviewQuery(ref: ProjectRef, testId: string, days: number)
 }
 
 /**
+ * One capture's measured comparison while the viewer waits for it. It asks
+ * every two seconds until the measurement is done (or cannot be), and a
+ * settled answer never goes stale: a diff id's numbers do not change.
+ */
+export function captureDiffQuery(ref: ProjectRef, captureId: string, compareCaptureId?: string) {
+  return orpc.review.diff.queryOptions({
+    input: { ...ref, captureId, ...(compareCaptureId ? { compareCaptureId } : {}) },
+    staleTime: Infinity,
+    gcTime: 10 * 60_000,
+    retry: false,
+    refetchInterval: (query) => (query.state.data?.diff?.state === 'pending' ? 2000 : false),
+  });
+}
+
+/**
  * What a retention form would delete if saved as it is being edited. Each
  * set of fields is its own entry, so going back to values already previewed
  * answers from the cache; the previous answer stays on screen while the next

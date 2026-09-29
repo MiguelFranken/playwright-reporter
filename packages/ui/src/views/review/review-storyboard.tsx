@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, ChevronRight, CircleAlert, ClipboardList, Film, Folder, Images, Route, Search, ZoomIn, ZoomOut } from 'lucide-react';
+import { ArrowDownWideNarrow, Check, ChevronRight, CircleAlert, ClipboardList, Film, Folder, Images, Route, Search, ZoomIn, ZoomOut } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '../../components/badge';
 import { Button } from '../../components/button';
@@ -15,6 +15,7 @@ import { cn } from '../../lib/cn';
 import {
   buildReviewTree,
   captureViewport,
+  changeScore,
   checkpointLabel,
   compareVariants,
   countStatuses,
@@ -33,11 +34,15 @@ import {
   type ReviewDecisionInput,
   type ReviewFilter,
   type ReviewFlowView,
+  type ReviewCaptureView,
   type ReviewGrouping,
+  type ReviewSort,
   type StoryboardMode,
 } from '../../lib/review';
 import { toneSolid } from '../../lib/tone';
 import { CheckpointViewer, type ReviewSelection } from './checkpoint-viewer';
+import { DiffBadge, DiffMarks } from './diff-summary';
+import type { IgnoreRect } from './ignore-regions-editor';
 import { ReviewTree } from './review-tree';
 import { SCREEN_ZOOM_VAR, ScreenFrame } from './screen-frame';
 
@@ -72,6 +77,18 @@ export function filterFlows(flows: readonly ReviewFlowView[], filter: ReviewFilt
         .filter((c) => c.captures.length > 0),
     }))
     .filter((f) => f.checkpoints.length > 0);
+}
+
+/** The most a flow changed: its most changed image's score (see `changeScore`). */
+const flowChange = (f: ReviewFlowView) => Math.max(0, ...f.checkpoints.flatMap((c) => c.captures.map(changeScore)));
+
+/** Flows with the most changed first; ties keep their order. */
+export function sortFlows(flows: readonly ReviewFlowView[], sort: ReviewSort): ReviewFlowView[] {
+  if (sort === 'sequence') return [...flows];
+  return flows
+    .map((f, i) => ({ f, i, score: flowChange(f) }))
+    .sort((a, b) => b.score - a.score || a.i - b.i)
+    .map((x) => x.f);
 }
 
 /**
@@ -111,6 +128,10 @@ export function ReviewStoryboard({
   emptyTitle = 'No review checkpoints in this run',
   emptyDescription,
   mode = 'review',
+  sort: sortProp,
+  onSortChange,
+  onIgnoreRegionsChange,
+  ignorePendingId,
 }: {
   flows: readonly ReviewFlowView[];
   filter?: ReviewFilter;
@@ -144,6 +165,11 @@ export function ReviewStoryboard({
   emptyDescription?: React.ReactNode;
   /** `library` shows the screens as documentation: no statuses, filters or approvals. */
   mode?: StoryboardMode;
+  /** Journey order, or the most changed tests first. */
+  sort?: ReviewSort;
+  onSortChange?: (next: ReviewSort) => void;
+  onIgnoreRegionsChange?: (input: { captureId: string; regions: IgnoreRect[] }) => void;
+  ignorePendingId?: string | null;
 }) {
   const library = mode === 'library';
   const hasNeedsReview = useMemo(() => flows.some((f) => f.checkpoints.some((c) => c.captures.some((cap) => NEEDS_REVIEW.includes(cap.status)))), [flows]);
@@ -155,6 +181,8 @@ export function ReviewStoryboard({
   const [grouping, setGrouping] = useControlled<ReviewGrouping>(groupingProp, onGroupingChange, hasCases ? 'suite' : 'file');
   const [folder, setFolder] = useControlled<string | null>(folderProp, onFolderChange, null);
   const [size, setSize] = useControlled<number>(sizeProp, onSizeChange, STORYBOARD_SIZE.default);
+  const [sort, setSort] = useControlled<ReviewSort>(sortProp, onSortChange, 'sequence');
+  const measured = useMemo(() => flows.some((f) => f.checkpoints.some((c) => c.captures.some((cap) => cap.diff?.state === 'done'))), [flows]);
   // Dragging the size slider scales the screens through a CSS variable, set at most once a frame, instead of
   // re-rendering every row; the rows render again once, when the slider lets go.
   const rootRef = useRef<HTMLDivElement>(null);
@@ -171,7 +199,14 @@ export function ReviewStoryboard({
     () => filterFlows(searched, effectiveFilter, null, '').filter((f) => !tree || inFolder(f, grouping, folder)),
     [searched, effectiveFilter, tree, grouping, folder],
   );
-  const sections = useMemo(() => flattenFolders(buildReviewTree(visible, grouping)), [visible, grouping]);
+  // Most changed first ranks across folders: one list, the loudest change on top.
+  const sections = useMemo(
+    () =>
+      sort === 'most-changed' && !library
+        ? [{ id: 'Most changed first', name: 'Most changed first', path: ['Most changed first'], flows: sortFlows(visible, 'most-changed'), children: [], total: 0, needsReview: 0 }]
+        : flattenFolders(buildReviewTree(visible, grouping)),
+    [visible, grouping, sort, library],
+  );
   const counts = useMemo(() => countStatuses(flows, variant), [flows, variant]);
   const total = counts.approved + counts.changes_requested + counts.changed + counts.new;
   const searchedCounts = useMemo(() => countStatuses(searched), [searched]);
@@ -302,6 +337,11 @@ export function ReviewStoryboard({
                 ))}
               </ToggleGroup>
             ) : null}
+            {measured && !library ? (
+              <Button variant={sort === 'most-changed' ? 'secondary' : 'outline'} size="sm" aria-pressed={sort === 'most-changed'} onClick={() => setSort(sort === 'most-changed' ? 'sequence' : 'most-changed')}>
+                <ArrowDownWideNarrow /> Most changed first
+              </Button>
+            ) : null}
             <SizeControl size={size} onLive={setLiveSize} onCommit={setSize} />
             <div className="relative">
               <Search aria-hidden className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -339,7 +379,19 @@ export function ReviewStoryboard({
         rows
       )}
 
-      <CheckpointViewer flows={viewerFlows} selection={selection} onSelectionChange={setSelection} onDecide={onDecide} pendingIds={pendingIds} canDecide={canDecide} frame={frame ?? DEFAULT_FRAME} onFrameChange={onFrameChange} mode={mode} />
+      <CheckpointViewer
+        flows={viewerFlows}
+        selection={selection}
+        onSelectionChange={setSelection}
+        onDecide={onDecide}
+        pendingIds={pendingIds}
+        canDecide={canDecide}
+        frame={frame ?? DEFAULT_FRAME}
+        onFrameChange={onFrameChange}
+        mode={mode}
+        onIgnoreRegionsChange={onIgnoreRegionsChange}
+        ignorePendingId={ignorePendingId}
+      />
     </div>
   );
 }
@@ -593,15 +645,35 @@ function CheckpointColumn({
                 scroll={scroll}
                 label={`${label}, ${c.variant} screen`}
                 tone={library ? undefined : c.status === 'changed' ? 'warning' : c.status === 'new' ? 'info' : c.status === 'changes_requested' ? 'danger' : undefined}
+                overlay={library && !c.compare ? undefined : (shown) => <ChangeMarks capture={c} shown={shown} />}
               />
             </div>
-            <span className="flex items-center gap-1.5 text-label-xs capitalize text-muted-foreground">
+            <span className="flex flex-wrap items-center gap-1.5 text-label-xs text-muted-foreground">
               {library ? null : <ReviewStatusDot status={c.status} />}
-              {c.variant}
+              <span className="capitalize">{c.variant}</span>
+              {library && !c.compare ? null : c.compare?.same ? (
+                <span>same as {c.compare.label}</span>
+              ) : (
+                <DiffBadge diff={c.diff} decision={library ? null : c.decision} className="h-4 px-1 text-label-xs" />
+              )}
             </span>
           </div>
         ))}
       </div>
     </li>
   );
+}
+
+/**
+ * Where a screen changed, boxed on the storyboard's small screen. A preview
+ * shows only the first screen of the page, so only the boxes on it are drawn.
+ */
+function ChangeMarks({ capture, shown }: { capture: ReviewCaptureView; shown: 'full' | 'preview' }) {
+  const d = capture.diff;
+  if (!d || d.state !== 'done' || !d.regions.length || (capture.status === 'approved' && !capture.compare)) return null;
+  const size = d.head ?? (capture.image.width && capture.image.height ? { width: capture.image.width, height: capture.image.height } : null);
+  if (!size) return null;
+  const viewport = captureViewport(capture);
+  const cover = shown === 'full' ? size.height : Math.min(size.height, Math.round((viewport.height * size.width) / viewport.width));
+  return <DiffMarks regions={d.regions} width={size.width} height={size.height} coverHeight={cover} />;
 }

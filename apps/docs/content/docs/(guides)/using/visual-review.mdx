@@ -10,6 +10,8 @@ happened, desktop beside mobile.
 
 An approval holds for the exact pixels. When the next run captures the same image, it is already approved; only images
 that changed, and checkpoints nobody approved yet, wait for a reviewer. A run where nothing changed asks for nothing.
+Every changed image is also **measured** against the approved one, pixel by pixel: how much changed and where, so the
+viewer takes you straight to the change — and noise nobody can see is approved for you.
 
 The same screens serve two purposes, with a place each in the sidebar:
 
@@ -113,8 +115,41 @@ to it: the steps it was captured in, the URL, the viewport, and a link to the mo
 | <kbd>↑</kbd> <kbd>↓</kbd> | Previous / next test |
 | <kbd>V</kbd> | Next variant |
 | <kbd>C</kbd> | Next comparison mode |
+| <kbd>N</kbd> <kbd>P</kbd> | Next / previous measured change |
 | <kbd>A</kbd> | Approve, and go to the next image that needs review |
 | <kbd>R</kbd> | Write a change request |
+
+### Measured changes
+
+When a run finishes, each image that differs from its approved baseline (or, before anything is approved, from the
+run before) is compared pixel by pixel, in the background. The comparison ignores anti-aliasing — a font edge
+rendered a shade differently is not a change — and groups what really changed into **regions**.
+
+- On the storyboard each measured screen gets a badge (**0.4%**, **No visible change**) and boxes around its changes.
+  **Most changed first** ranks the tests by their largest change, across every folder.
+- The viewer opens a measured image on **Changes**: this run's image with the changed pixels in red, a numbered box
+  per region, and a pager (<kbd>N</kbd> / <kbd>P</kbd>) that scrolls from one to the next. A page taller than the
+  screen gets a strip beside it that shows where on the page the changes are.
+- The side panel says how many pixels changed, in how many regions, and whether the page changed size. When content
+  was inserted or removed (a banner near the top), the rest of the page only moved: the panel says how many pixels were
+  added or removed and where, so a pushed-down page is not mistaken for a changed one.
+- An image too large to measure (over 40 megapixels by default) still has every comparison by eye.
+
+A checkpoint whose image has a part that always differs — a clock, a rotating promotion — can **leave out areas**:
+open it, choose **Leave out areas**, and drag rectangles over the image. They hold for that checkpoint and variant in
+every later run, and the image is measured again without them. (Better still, when you can: `mask` them in the test.)
+
+### Approved within tolerance
+
+A changed image whose measured change is within the project's **tolerance** is approved automatically, with the
+numbers as the reason ("Within the project's diff tolerance: no visible change against the approved image of run
+#470"). It shows as **Auto-approved**, and like any approval it holds for those exact pixels. The baseline stays the
+image a person approved, so small changes cannot add up, approval by approval, into a large one nobody looked at.
+
+By default the tolerance approves only images with **no visible change at all** — the same pixels in a different PNG
+encoding, or differences anti-aliasing explains — which is always safe. **Project settings → Visual comparison**
+can allow a number of changed pixels or a share of the image, turn automatic approval off, and make the comparison
+more or less sensitive to colour. A page that changed size is never within the tolerance.
 
 **Approve test** and **Approve … shown** approve many images at once. **Request changes** keeps a comment next to the
 image, for whoever fixes it — a person or an [AI assistant](/docs/ai-assistants/tools).
@@ -150,6 +185,10 @@ everyone can see the product state it builds. **Library settings** give a refere
 who do not know the branch ("Checkout redesign"), choose its version, and make it the default: the library opens on
 it, and test case pages show its screens.
 
+**Compare with…** in the library measures every screen against another branch or pull request: what differs is boxed
+and measured on the storyboard, a screen that is the same says so, and the viewer offers the comparisons with the other
+line of work. Useful to show a product owner what a pull request changes compared with `main`.
+
 Admins and members can change the library; viewers browse it. Links to a reference (`/library?ref=pr:212`) work for
 references nobody kept, too.
 
@@ -159,8 +198,9 @@ and the runs pinned in it.
 
 ## For AI assistants
 
-`list_review_checkpoints` answers what changed in a run, `get_review_checkpoint` attaches an image with its baseline
-so the assistant can look at it, and — with a write-scoped token — `review_checkpoint` approves or asks for changes.
+`list_review_checkpoints` answers what changed in a run and by how much (the measured change, and whether the
+tolerance approved it), `get_review_checkpoint` attaches an image with its baseline and close-ups of its largest
+changed regions so the assistant can look at exactly what changed, and — with a write-scoped token — `review_checkpoint` approves or asks for changes.
 An agent that changed the UI can check its own work before you do.
 
 `list_library` names the references in the library and the run each shows; `get_library_flows` lists a reference's

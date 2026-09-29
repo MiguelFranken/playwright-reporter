@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, ChevronLeft, ChevronRight, ExternalLink, Film, Keyboard, MessageSquareWarning, Route, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, ExternalLink, EyeOff, Film, Keyboard, MessageSquareWarning, Route, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '../../components/badge';
 import { Button } from '../../components/button';
@@ -28,7 +28,10 @@ import {
   type ReviewImage,
   type StoryboardMode,
 } from '../../lib/review';
+import { DiffHighlight, diffImageSize } from './diff-highlight';
+import { DiffSummary } from './diff-summary';
 import { COMPARE_MODE_LABELS, COMPARE_MODES, ImageCompare, type CompareMode } from './image-compare';
+import { IgnoreRegionsEditor, type IgnoreRect } from './ignore-regions-editor';
 import { FrameToolbar } from './frame-toolbar';
 import { ScreenFrame } from './screen-frame';
 
@@ -38,7 +41,8 @@ export interface ReviewSelection {
   variant: string | null;
 }
 
-type StageMode = 'image' | CompareMode;
+/** `changes`: this run's image with the measured changes marked; `ignore`: drawing the areas left out. */
+type StageMode = 'image' | 'changes' | 'ignore' | CompareMode;
 
 interface Position {
   flow: ReviewFlowView;
@@ -64,8 +68,14 @@ function seconds(ms: number) {
   return s < 60 ? `${s.toFixed(1)} s` : `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`;
 }
 
-/** The reference a capture is compared with: the approved baseline, else the run before. */
-function referenceOf(capture: ReviewCaptureView): { image: ReviewImage; label: string; same: boolean } | null {
+/**
+ * The reference a capture is compared with: another line of work's capture
+ * when the library compares two, else (in review) the approved baseline, else
+ * the run before.
+ */
+function referenceOf(capture: ReviewCaptureView, library: boolean): { image: ReviewImage; label: string; same: boolean } | null {
+  if (capture.compare) return { image: capture.compare.image, label: capture.compare.label, same: capture.compare.same };
+  if (library) return null;
   if (capture.baseline) return { image: capture.baseline.image, label: `Approved${capture.baseline.runNumber ? ` (#${capture.baseline.runNumber})` : ''}`, same: capture.baseline.same };
   if (capture.previous) return { image: capture.previous.image, label: `Run #${capture.previous.runNumber}`, same: capture.previous.same };
   return null;
@@ -92,6 +102,8 @@ export function CheckpointViewer({
   frame: frameProp,
   onFrameChange,
   mode = 'review',
+  onIgnoreRegionsChange,
+  ignorePendingId,
 }: {
   flows: readonly ReviewFlowView[];
   selection: ReviewSelection | null;
@@ -105,12 +117,17 @@ export function CheckpointViewer({
   onFrameChange?: (next: FrameSettings) => void;
   /** `library`: documentation — the screens, what they show and where, without statuses, comparisons or decisions. */
   mode?: StoryboardMode;
+  /** Saves the areas a capture's checkpoint and variant leave out of comparisons; without it they cannot be edited. */
+  onIgnoreRegionsChange?: (input: { captureId: string; regions: IgnoreRect[] }) => void;
+  /** The capture whose ignored areas are being saved. */
+  ignorePendingId?: string | null;
 }) {
   const library = mode === 'library';
   const all = useMemo(() => positions(flows), [flows]);
   const at = selection ? all.findIndex((p) => p.checkpoint.id === selection.checkpointId) : -1;
   const pos = at >= 0 ? all[at] : null;
-  const [stage, setStage] = useState<StageMode>('image');
+  const [stage, setStage] = useState<StageMode>('changes');
+  const [activeRegion, setActiveRegion] = useState<number | null>(null);
   const [comment, setComment] = useState('');
   const commentRef = useRef<HTMLTextAreaElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -121,8 +138,26 @@ export function CheckpointViewer({
   const variant = selection?.variant ?? null;
   const shown = variant ? captures.filter((c) => c.variant === variant) : captures;
   const current = shown.length === 1 ? shown[0] : null;
-  const reference = current && !library ? referenceOf(current) : null;
-  const effectiveStage: StageMode = current && reference ? stage : 'image';
+  const reference = current ? referenceOf(current, library) : null;
+  const diff = current && reference ? (current.diff ?? null) : null;
+  const measuredSize = current && diff ? diffImageSize(current.image, diff) : null;
+  const hasChanges = Boolean(current?.image.available && diff?.state === 'done' && (diff.changedPixels > 0 || diff.sizeChanged) && measuredSize);
+  const regions = hasChanges ? diff!.regions : [];
+  const ownSize = current?.image.width && current.image.height ? { width: current.image.width, height: current.image.height } : null;
+  const canIgnore = Boolean(onIgnoreRegionsChange && canDecide && !library && current?.image.available && (measuredSize ?? ownSize));
+  const effectiveStage: StageMode = !current
+    ? 'image'
+    : stage === 'ignore'
+      ? canIgnore
+        ? 'ignore'
+        : 'image'
+      : stage === 'changes'
+        ? hasChanges
+          ? 'changes'
+          : 'image'
+        : reference && stage !== 'image'
+          ? stage
+          : 'image';
   const [ownFrame, setOwnFrame] = useState<FrameSettings>(DEFAULT_FRAME);
   const frameSettings = frameProp ?? ownFrame;
   const setFrame = (next: FrameSettings) => {
@@ -130,7 +165,7 @@ export function CheckpointViewer({
     onFrameChange?.(next);
   };
   const stageSize = useElementSize(stageEl);
-  const comparing = Boolean(current && reference && effectiveStage !== 'image');
+  const comparing = Boolean(current && effectiveStage !== 'image');
   const frames = (comparing && current ? [current] : shown).map((c) => frameFor(frameSettings, c));
   const zoomFrames = comparing && effectiveStage === 'side-by-side' ? [frames[0], frames[0]] : frames;
   // Room for the captions above the screens and the stage's padding.
@@ -138,8 +173,16 @@ export function CheckpointViewer({
   const pending = new Set(pendingIds);
   const busy = shown.some((c) => pending.has(c.id));
 
-  // A new checkpoint starts without a half-written comment.
-  useEffect(() => setComment(''), [selection?.checkpointId, selection?.variant]);
+  // A new checkpoint starts without a half-written comment, at its first change.
+  useEffect(() => {
+    setComment('');
+    setActiveRegion(null);
+  }, [selection?.checkpointId, selection?.variant]);
+  const moveRegion = (delta: number) => {
+    if (regions.length === 0) return;
+    if (effectiveStage !== 'changes') setStage('changes');
+    setActiveRegion((i) => (i == null ? (delta > 0 ? 0 : regions.length - 1) : (i + delta + regions.length) % regions.length));
+  };
 
   const select = (p: Position | undefined, keepVariant = true) => {
     if (!p) return;
@@ -160,7 +203,7 @@ export function CheckpointViewer({
   };
   const cycleStage = () => {
     if (!reference) return;
-    const modes: StageMode[] = ['image', ...COMPARE_MODES];
+    const modes: StageMode[] = ['image', ...(hasChanges ? (['changes'] as const) : []), ...COMPARE_MODES];
     setStage(modes[(modes.indexOf(effectiveStage) + 1) % modes.length]);
   };
 
@@ -200,6 +243,8 @@ export function CheckpointViewer({
       else if (e.key === 'ArrowUp') moveFlow(-1);
       else if (key === 'v') cycleVariant();
       else if (key === 'c') cycleStage();
+      else if (key === 'n' && regions.length) moveRegion(1);
+      else if (key === 'p' && regions.length) moveRegion(-1);
       else if (library) return;
       else if (key === 'a' && canDecide && !busy) decide('approved', shown.map((c) => c.id));
       else if (key === 'r' && canDecide) {
@@ -256,6 +301,7 @@ export function CheckpointViewer({
               {current && reference ? (
                 <ToggleGroup variant="segment" size="sm" value={[effectiveStage]} onValueChange={(v) => v[0] && setStage(v[0] as StageMode)} aria-label="Comparison">
                   <ToggleGroupItem value="image">Image</ToggleGroupItem>
+                  {hasChanges ? <ToggleGroupItem value="changes">Changes</ToggleGroupItem> : null}
                   {COMPARE_MODES.map((m) => (
                     <ToggleGroupItem key={m} value={m}>
                       {COMPARE_MODE_LABELS[m]}
@@ -286,7 +332,27 @@ export function CheckpointViewer({
               <section className="flex min-h-0 flex-col bg-surface" aria-label="Checkpoint image">
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-surface px-4 py-2">
                   <FrameToolbar value={frameSettings} onChange={setFrame} captured={current ? captureViewport(current) : null} />
-                  <span className="text-label-s text-muted-foreground tabular-nums">{Math.round(zoom * 100)}%</span>
+                  <div className="flex items-center gap-3">
+                    {effectiveStage === 'changes' && regions.length ? (
+                      <div className="flex items-center gap-0.5" role="group" aria-label="Changes">
+                        <Button variant="ghost" size="icon-sm" aria-label="Previous change" onClick={() => moveRegion(-1)}>
+                          <ChevronLeft />
+                        </Button>
+                        <span className="min-w-24 text-center text-label-s text-muted-foreground tabular-nums" aria-live="polite">
+                          {activeRegion == null ? `${regions.length} ${regions.length === 1 ? 'change' : 'changes'}` : `Change ${activeRegion + 1} of ${regions.length}`}
+                        </span>
+                        <Button variant="ghost" size="icon-sm" aria-label="Next change" onClick={() => moveRegion(1)}>
+                          <ChevronRight />
+                        </Button>
+                      </div>
+                    ) : null}
+                    {canIgnore ? (
+                      <Button variant={effectiveStage === 'ignore' ? 'secondary' : 'ghost'} size="sm" aria-pressed={effectiveStage === 'ignore'} onClick={() => setStage(effectiveStage === 'ignore' ? 'changes' : 'ignore')}>
+                        <EyeOff /> Leave out areas
+                      </Button>
+                    ) : null}
+                    <span className="text-label-s text-muted-foreground tabular-nums">{Math.round(zoom * 100)}%</span>
+                  </div>
                 </div>
                 <div
                   ref={(el) => {
@@ -297,7 +363,26 @@ export function CheckpointViewer({
                   aria-label="Checkpoint screens"
                   className="min-h-0 flex-1 overflow-auto p-6 outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/25"
                 >
-                  {current && reference && effectiveStage !== 'image' ? (
+                  {current && effectiveStage === 'changes' && diff ? (
+                    <div className="flex min-w-max justify-center">
+                      <DiffHighlight image={current.image} diff={diff} frame={frames[0]} zoom={zoom} alt={label} active={activeRegion} onActiveChange={setActiveRegion} />
+                    </div>
+                  ) : current && effectiveStage === 'ignore' && onIgnoreRegionsChange ? (
+                    <IgnoreRegionsEditor
+                      image={current.image}
+                      imageSize={(measuredSize ?? ownSize)!}
+                      frame={frames[0]}
+                      zoom={zoom}
+                      alt={label}
+                      value={current.ignoreRegions ?? []}
+                      pending={ignorePendingId === current.id}
+                      onSave={(next) => {
+                        onIgnoreRegionsChange({ captureId: current.id, regions: next });
+                        setStage('changes');
+                      }}
+                      onCancel={() => setStage('changes')}
+                    />
+                  ) : current && reference && effectiveStage !== 'image' ? (
                     effectiveStage === 'side-by-side' ? (
                       <div className="flex min-w-max items-start justify-center gap-6">
                         {[
@@ -312,7 +397,7 @@ export function CheckpointViewer({
                       </div>
                     ) : (
                       <div role="region" aria-label={`${label}, comparison`} tabIndex={0} className="mx-auto overflow-x-hidden overflow-y-auto rounded-md ring-1 ring-border outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40" style={{ width: frames[0].width * zoom, height: frames[0].height * zoom + 40 }}>
-                        <ImageCompare current={current.image} reference={reference.image} mode={effectiveStage as CompareMode} referenceLabel={reference.label} alt={label} />
+                        <ImageCompare current={current.image} reference={reference.image} mode={effectiveStage as CompareMode} referenceLabel={reference.label} currentLabel={library ? 'This one' : 'This run'} alt={label} />
                       </div>
                     )
                   ) : (
@@ -345,10 +430,17 @@ export function CheckpointViewer({
                   )}
                   {pos.checkpoint.description ? <p className="text-sm text-pretty">{pos.checkpoint.description}</p> : null}
                   {current?.decision && !library ? <DecisionNote capture={current} /> : null}
-                  {library ? null : current && reference ? (
+                  {current && reference && diff && !reference.same ? (
+                    <DiffSummary diff={diff} referenceLabel={reference.label} />
+                  ) : current && reference ? (
                     <p className="text-xs text-muted-foreground">{reference.same ? `Identical to ${reference.label.toLowerCase()}.` : `Differs from ${reference.label.toLowerCase()}.`}</p>
-                  ) : current ? (
+                  ) : current && !library ? (
                     <p className="text-xs text-muted-foreground">Nothing to compare with yet: this is the first capture of this checkpoint.</p>
+                  ) : null}
+                  {current?.ignoreRegions?.length && !library ? (
+                    <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <EyeOff className="size-3.5" /> {current.ignoreRegions.length} {current.ignoreRegions.length === 1 ? 'area is' : 'areas are'} left out of the comparison.
+                    </p>
                   ) : null}
                 </section>
 
@@ -457,7 +549,7 @@ export function CheckpointViewer({
                     <Keyboard className="size-3.5" /> Keyboard shortcuts
                   </summary>
                   <ul className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-                    {SHORTCUTS.filter(([keys]) => !library || !['A', 'R', 'C'].includes(keys[0])).map(([keys, what]) => (
+                    {SHORTCUTS.filter(([keys]) => !library || !['A', 'R'].includes(keys[0])).map(([keys, what]) => (
                       <li key={what} className="contents">
                         <span className="flex gap-1">
                           {keys.map((k) => (
@@ -506,6 +598,7 @@ const SHORTCUTS: [string[], string][] = [
   [['↑', '↓'], 'Previous / next test'],
   [['V'], 'Next variant'],
   [['C'], 'Next comparison'],
+  [['N', 'P'], 'Next / previous change'],
   [['A'], 'Approve and go to the next image to review'],
   [['R'], 'Write a change request'],
   [['Esc'], 'Close'],
@@ -521,7 +614,7 @@ function DecisionNote({ capture }: { capture: ReviewCaptureView }) {
   return (
     <div className="rounded-md border border-border bg-surface-sunken p-2 text-xs">
       <p className="text-muted-foreground">
-        {d.decision === 'approved' ? 'Approved' : 'Changes requested'}
+        {d.source === 'tolerance' ? 'Approved automatically' : d.decision === 'approved' ? 'Approved' : 'Changes requested'}
         {d.by ? ` by ${d.by}` : ''} · {formatDateTime(d.at)}
         {d.runNumber ? ` · run #${d.runNumber}` : ''}
       </p>

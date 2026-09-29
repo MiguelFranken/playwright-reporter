@@ -4279,6 +4279,77 @@
                                           "string",
                                           "null"
                                         ]
+                                      },
+                                      "autoApproved": {
+                                        "type": "boolean",
+                                        "description": "Approved by the project’s diff tolerance, not by a person."
+                                      },
+                                      "diff": {
+                                        "anyOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "against": {
+                                                "type": "string",
+                                                "enum": [
+                                                  "baseline",
+                                                  "previous",
+                                                  "compare"
+                                                ],
+                                                "description": "What the image was measured against: its approved baseline, else the run before."
+                                              },
+                                              "state": {
+                                                "type": "string",
+                                                "enum": [
+                                                  "pending",
+                                                  "done",
+                                                  "failed",
+                                                  "too_large"
+                                                ]
+                                              },
+                                              "changedPixels": {
+                                                "type": "number"
+                                              },
+                                              "changedPercent": {
+                                                "type": "number",
+                                                "description": "Changed pixels as a percentage of the image, anti-aliasing excluded."
+                                              },
+                                              "regions": {
+                                                "type": "number",
+                                                "description": "How many separate changed regions."
+                                              },
+                                              "sizeChanged": {
+                                                "type": "boolean"
+                                              },
+                                              "contentMoved": {
+                                                "type": "boolean",
+                                                "description": "Rows were inserted or removed, so the rest of the page only shifted."
+                                              },
+                                              "withinTolerance": {
+                                                "type": "boolean"
+                                              },
+                                              "summary": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "against",
+                                              "state",
+                                              "changedPixels",
+                                              "changedPercent",
+                                              "regions",
+                                              "sizeChanged",
+                                              "contentMoved",
+                                              "withinTolerance",
+                                              "summary"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ],
+                                        "description": "The measured pixel comparison, when there is one."
                                       }
                                     },
                                     "required": [
@@ -4287,7 +4358,9 @@
                                       "status",
                                       "sameAsBaseline",
                                       "baselineRun",
-                                      "comment"
+                                      "comment",
+                                      "autoApproved",
+                                      "diff"
                                     ],
                                     "additionalProperties": false
                                   }
@@ -10387,6 +10460,16 @@
               "type": "string",
               "description": "Capture id: one variant of one review checkpoint, as returned by `/runs/{run}/review-checkpoints`."
             }
+          },
+          {
+            "in": "query",
+            "name": "changes",
+            "schema": {
+              "description": "Attach close-ups of the measured changed regions (up to 3), this run’s crop then the reference’s. Default true.",
+              "type": "boolean"
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
           }
         ],
         "responses": {
@@ -10445,6 +10528,104 @@
                         "null"
                       ]
                     },
+                    "diff": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "against": {
+                              "type": "string",
+                              "enum": [
+                                "baseline",
+                                "previous",
+                                "compare"
+                              ],
+                              "description": "What the image was measured against: its approved baseline, else the run before."
+                            },
+                            "state": {
+                              "type": "string",
+                              "enum": [
+                                "pending",
+                                "done",
+                                "failed",
+                                "too_large"
+                              ]
+                            },
+                            "changedPixels": {
+                              "type": "number"
+                            },
+                            "changedPercent": {
+                              "type": "number",
+                              "description": "Changed pixels as a percentage of the image, anti-aliasing excluded."
+                            },
+                            "regions": {
+                              "type": "number",
+                              "description": "How many separate changed regions."
+                            },
+                            "sizeChanged": {
+                              "type": "boolean"
+                            },
+                            "contentMoved": {
+                              "type": "boolean",
+                              "description": "Rows were inserted or removed, so the rest of the page only shifted."
+                            },
+                            "withinTolerance": {
+                              "type": "boolean"
+                            },
+                            "summary": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "against",
+                            "state",
+                            "changedPixels",
+                            "changedPercent",
+                            "regions",
+                            "sizeChanged",
+                            "contentMoved",
+                            "withinTolerance",
+                            "summary"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "changedRegions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "x": {
+                            "type": "number"
+                          },
+                          "y": {
+                            "type": "number"
+                          },
+                          "width": {
+                            "type": "number"
+                          },
+                          "height": {
+                            "type": "number"
+                          },
+                          "pixels": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "x",
+                          "y",
+                          "width",
+                          "height",
+                          "pixels"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "description": "The changed regions, in the image’s pixels, largest first (up to 10)."
+                    },
                     "note": {
                       "type": [
                         "string",
@@ -10465,6 +10646,8 @@
                     "reference",
                     "imageUrl",
                     "referenceUrl",
+                    "diff",
+                    "changedRegions",
                     "note"
                   ],
                   "additionalProperties": false
