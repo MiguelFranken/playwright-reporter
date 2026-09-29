@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Slider } from '../../components/slider';
 import { cn } from '../../lib/cn';
 import type { ReviewImage } from '../../lib/review';
 import { UnavailableImage } from './review-frame';
@@ -82,29 +83,13 @@ export function ImageCompare({
     mode === 'slider' ? (
       <label className="flex items-center gap-3 text-label-s text-muted-foreground">
         <span className="shrink-0">{referenceLabel}</span>
-        <input
-          type="range"
-          min={0}
-          max={100}
-          value={position}
-          onChange={(e) => setPosition(Number(e.target.value))}
-          aria-label="Split position"
-          className="w-full accent-[var(--accent-solid)]"
-        />
+        <Slider min={0} max={100} value={position} onValueChange={(v) => setPosition(Array.isArray(v) ? v[0] : v)} thumbLabel="Split position" valueText={(v) => `${v}% of ${referenceLabel}`} />
         <span className="shrink-0">{currentLabel}</span>
       </label>
     ) : mode === 'onion' ? (
       <label className="flex items-center gap-3 text-label-s text-muted-foreground">
         <span className="shrink-0">{referenceLabel}</span>
-        <input
-          type="range"
-          min={0}
-          max={100}
-          value={opacity}
-          onChange={(e) => setOpacity(Number(e.target.value))}
-          aria-label="Opacity of this run's image"
-          className="w-full accent-[var(--accent-solid)]"
-        />
+        <Slider min={0} max={100} value={opacity} onValueChange={(v) => setOpacity(Array.isArray(v) ? v[0] : v)} thumbLabel="Opacity of this run's image" valueText={(v) => `${v}% opaque`} />
         <span className="shrink-0">{currentLabel}</span>
       </label>
     ) : (

@@ -6,7 +6,7 @@ const [desktop, mobile] = placeOrderFlow.checkpoints[0].captures;
 const [pending, expired] = unavailableFlow.checkpoints[0].captures;
 
 const meta = {
-  title: 'Views/Review/ReviewFrame',
+  title: 'Views/Review/Screens/ReviewFrame',
   component: ReviewFrame,
   args: { image: desktop.image, viewport: desktop.viewport, alt: 'Your cart — desktop' },
   tags: ['themed'],

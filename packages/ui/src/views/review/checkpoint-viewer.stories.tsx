@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useState } from 'react';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
-import { longTextFlow, placeOrderFlow, reviewFlows, unavailableFlow } from '../../fixtures/review';
+import { legacyFlow, longTextFlow, placeOrderFlow, reviewFlows, unavailableFlow } from '../../fixtures/review';
 import { CheckpointViewer, type ReviewSelection } from './checkpoint-viewer';
 
 const changed = placeOrderFlow.checkpoints[1];
@@ -23,7 +23,7 @@ function Hosted(props: Omit<React.ComponentProps<typeof CheckpointViewer>, 'sele
 }
 
 const meta = {
-  title: 'Views/Review/CheckpointViewer',
+  title: 'Views/Review/Viewer/CheckpointViewer',
   component: Hosted,
   args: { flows: reviewFlows, initial: { checkpointId: changed.id, variant: 'desktop' }, onDecide: fn(), onSelectionChange: fn() },
   parameters: { layout: 'fullscreen' },
@@ -54,7 +54,7 @@ export const ApproveWithKeyboard: Story = {
     await userEvent.keyboard('a');
     await expect(args.onDecide).toHaveBeenCalledWith({ captureIds: [changed.captures[0].id], decision: 'approved', comment: undefined });
     await waitFor(() => expect(args.onSelectionChange).toHaveBeenLastCalledWith({ checkpointId: placeOrderFlow.checkpoints[2].id, variant: 'desktop' }));
-    await expect(document.activeElement).toHaveAccessibleName('Checkpoint image');
+    await expect(document.activeElement).toHaveAccessibleName('Checkpoint screens');
     await userEvent.keyboard('{ArrowLeft}');
     await waitFor(() => expect(args.onSelectionChange).toHaveBeenLastCalledWith({ checkpointId: changed.id, variant: 'desktop' }));
   },
@@ -73,3 +73,16 @@ export const Saving: Story = { args: { pendingIds: [changed.captures[0].id] } };
 export const LongText: Story = { args: { flows: [longTextFlow], initial: { checkpointId: longTextFlow.checkpoints[0].id, variant: 'desktop' } } };
 
 export const ImagesUnavailable: Story = { args: { flows: [unavailableFlow], initial: { checkpointId: unavailableFlow.checkpoints[0].id, variant: null } } };
+
+/** The screen bar: a legacy mobile capture shown on an iPhone-sized, scrolling screen at a fixed zoom. */
+export const ScreenSettings: Story = {
+  args: { flows: [legacyFlow], initial: { checkpointId: legacyFlow.checkpoints[0].id, variant: 'mobile' } },
+  play: async () => {
+    const body = within(document.body);
+    await body.findByRole('dialog');
+    await expect(body.getByRole('spinbutton', { name: 'Screen width' })).toHaveValue(390);
+    await userEvent.selectOptions(body.getByRole('combobox', { name: 'Zoom' }), '0.5');
+    await expect(body.getByRole('combobox', { name: 'Zoom' })).toHaveValue('0.5');
+    await expect(body.getByRole('region', { name: /mobile screen/ })).toHaveStyle({ width: '195px' });
+  },
+};

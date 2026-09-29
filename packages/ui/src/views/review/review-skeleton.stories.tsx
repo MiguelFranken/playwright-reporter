@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { ReviewStoryboardSkeleton } from './review-skeleton';
 
 const meta = {
-  title: 'Views/Review/ReviewStoryboardSkeleton',
+  title: 'Views/Review/Storyboard/ReviewStoryboardSkeleton',
   component: ReviewStoryboardSkeleton,
   parameters: { layout: 'padded' },
   tags: ['themed'],

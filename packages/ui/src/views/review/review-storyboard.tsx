@@ -1,10 +1,11 @@
 'use client';
 
-import { ArrowRight, Check, CircleAlert, Film, Images, Route, Search } from 'lucide-react';
+import { Check, ChevronRight, CircleAlert, ClipboardList, Film, Folder, Images, Route, Search, ZoomIn, ZoomOut } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Badge } from '../../components/badge';
 import { Button } from '../../components/button';
 import { Input } from '../../components/input';
+import { Slider } from '../../components/slider';
 import { ToggleGroup, ToggleGroupItem } from '../../components/toggle-group';
 import { EmptyState } from '../../patterns/empty-state';
 import { ReviewStatusBadge, ReviewStatusDot } from '../../patterns/review-status-badge';
@@ -12,9 +13,14 @@ import { StatusIcon } from '../../patterns/status-badge';
 import { Link } from '../../provider';
 import { cn } from '../../lib/cn';
 import {
+  buildReviewTree,
+  captureViewport,
   checkpointLabel,
   compareVariants,
   countStatuses,
+  DEFAULT_FRAME,
+  flattenFolders,
+  inFolder,
   matchesReviewFilter,
   NEEDS_REVIEW,
   REVIEW_FILTER_LABELS,
@@ -22,16 +28,24 @@ import {
   REVIEW_STATUS_TONES,
   variantsOf,
   worstStatus,
+  type FrameSettings,
   type ReviewCheckpointView,
   type ReviewDecisionInput,
   type ReviewFilter,
   type ReviewFlowView,
+  type ReviewGrouping,
 } from '../../lib/review';
 import { toneSolid } from '../../lib/tone';
 import { CheckpointViewer, type ReviewSelection } from './checkpoint-viewer';
-import { ReviewFrame } from './review-frame';
+import { ReviewTree } from './review-tree';
+import { ScreenFrame } from './screen-frame';
 
 export type { ReviewSelection };
+
+/** The overview's scale of a capture's real size: 10% (a strip of stamps) to 50% (readable, scrolling screens). */
+export const STORYBOARD_SIZE = { min: 0.1, max: 0.5, step: 0.02, default: 0.18 } as const;
+/** From this scale the frames load the full image and scroll, so a flow can be read without opening it. */
+const SCROLL_FROM = 0.28;
 
 /** Uncontrolled unless the host passes the value: stories drive it, the app binds it to the URL. */
 function useControlled<T>(value: T | undefined, onChange: ((v: T) => void) | undefined, initial: T): [T, (v: T) => void] {
@@ -43,7 +57,13 @@ function useControlled<T>(value: T | undefined, onChange: ((v: T) => void) | und
 export function filterFlows(flows: readonly ReviewFlowView[], filter: ReviewFilter, variant: string | null, query: string): ReviewFlowView[] {
   const q = query.trim().toLowerCase();
   return flows
-    .filter((f) => !q || [...f.titlePath, f.file, ...f.checkpoints.flatMap((c) => [c.name, c.title ?? ''])].some((s) => s.toLowerCase().includes(q)))
+    .filter(
+      (f) =>
+        !q ||
+        [...f.titlePath, f.file, ...(f.cases ?? []).flatMap((c) => [c.key, c.title]), ...f.checkpoints.flatMap((c) => [c.name, c.title ?? ''])].some((s) =>
+          s.toLowerCase().includes(q),
+        ),
+    )
     .map((f) => ({
       ...f,
       checkpoints: f.checkpoints
@@ -54,15 +74,15 @@ export function filterFlows(flows: readonly ReviewFlowView[], filter: ReviewFilt
 }
 
 /**
- * A run's review checkpoints as a storyboard: one row per test — a journey
- * through the product — and its checkpoints left to right in the order they
- * were captured, desktop and mobile side by side. Nothing to read in a list
- * of file names: what changed is what lights up.
+ * A review as a storyboard: the flows in the folders they belong to — their
+ * test cases' suites, or their spec files — each test a row of its
+ * checkpoints left to right in capture order, every capture on a screen of
+ * its own shape (a phone is portrait), desktop beside mobile.
  *
- * The filter defaults to what needs review (changed and new images), so a run
- * whose pixels match their approvals opens empty and says so. The viewer
- * opens on a checkpoint for the full-size images, the comparison with the
- * baseline and the decision.
+ * The size slider scales every screen together; from about a quarter of the
+ * real size the screens load the full image and scroll, so a flow can be
+ * read without opening a single checkpoint. The filter defaults to what needs
+ * review. Opening a checkpoint shows it full size with its baseline.
  */
 export function ReviewStoryboard({
   flows,
@@ -74,10 +94,19 @@ export function ReviewStoryboard({
   onQueryChange,
   selection: selectionProp,
   onSelectionChange,
+  grouping: groupingProp,
+  onGroupingChange,
+  folder: folderProp,
+  onFolderChange,
+  size: sizeProp,
+  onSizeChange,
+  frame,
+  onFrameChange,
   onDecide,
   pendingIds = [],
   canDecide = true,
   toolbar = true,
+  tree = toolbar,
   emptyTitle = 'No review checkpoints in this run',
   emptyDescription,
 }: {
@@ -91,40 +120,68 @@ export function ReviewStoryboard({
   onQueryChange?: (next: string) => void;
   selection?: ReviewSelection | null;
   onSelectionChange?: (next: ReviewSelection | null) => void;
+  grouping?: ReviewGrouping;
+  onGroupingChange?: (next: ReviewGrouping) => void;
+  /** The folder shown, by id (`Checkout / Coupons`), or `null` for all. */
+  folder?: string | null;
+  onFolderChange?: (next: string | null) => void;
+  /** The screens' scale of the real size, within `STORYBOARD_SIZE`. */
+  size?: number;
+  onSizeChange?: (next: number) => void;
+  /** The viewer's screen settings. */
+  frame?: FrameSettings;
+  onFrameChange?: (next: FrameSettings) => void;
   onDecide?: (input: ReviewDecisionInput) => void;
   pendingIds?: readonly string[];
   canDecide?: boolean;
-  /** Filters and bulk actions above the rows; off where one flow is embedded. */
+  /** Filters, size and bulk actions above the rows; off where one flow is embedded. */
   toolbar?: boolean;
+  /** The folder tree beside the rows. */
+  tree?: boolean;
   emptyTitle?: string;
   emptyDescription?: React.ReactNode;
 }) {
   const hasNeedsReview = useMemo(() => flows.some((f) => f.checkpoints.some((c) => c.captures.some((cap) => NEEDS_REVIEW.includes(cap.status)))), [flows]);
+  const hasCases = useMemo(() => flows.some((f) => f.cases?.length), [flows]);
   const [filter, setFilter] = useControlled<ReviewFilter>(filterProp, onFilterChange, toolbar && hasNeedsReview ? 'needs-review' : 'all');
   const [variant, setVariant] = useControlled<string | null>(variantProp, onVariantChange, null);
   const [query, setQuery] = useControlled<string>(queryProp, onQueryChange, '');
   const [selection, setSelectionState] = useControlled<ReviewSelection | null>(selectionProp, onSelectionChange, null);
+  const [grouping, setGrouping] = useControlled<ReviewGrouping>(groupingProp, onGroupingChange, hasCases ? 'suite' : 'file');
+  const [folder, setFolder] = useControlled<string | null>(folderProp, onFolderChange, null);
+  const [size, setSize] = useControlled<number>(sizeProp, onSizeChange, STORYBOARD_SIZE.default);
   // While the viewer is open it keeps the checkpoints it opened with, so a
   // decision that moves one out of the filter does not pull it from under the reviewer.
   const [pinned, setPinned] = useState<ReadonlySet<string> | null>(null);
 
   const variants = useMemo(() => variantsOf(flows), [flows]);
   const effectiveFilter = toolbar ? filter : 'all';
-  const visible = useMemo(() => filterFlows(flows, effectiveFilter, variant, toolbar ? query : ''), [flows, effectiveFilter, variant, query, toolbar]);
+  const searched = useMemo(() => filterFlows(flows, 'all', variant, toolbar ? query : ''), [flows, variant, query, toolbar]);
+  const folders = useMemo(() => buildReviewTree(searched, grouping), [searched, grouping]);
+  const visible = useMemo(
+    () => filterFlows(searched, effectiveFilter, null, '').filter((f) => !tree || inFolder(f, grouping, folder)),
+    [searched, effectiveFilter, tree, grouping, folder],
+  );
+  const sections = useMemo(() => flattenFolders(buildReviewTree(visible, grouping)), [visible, grouping]);
   const counts = useMemo(() => countStatuses(flows, variant), [flows, variant]);
   const total = counts.approved + counts.changes_requested + counts.changed + counts.new;
+  const searchedCounts = useMemo(() => countStatuses(searched), [searched]);
   const pending = new Set(pendingIds);
+  const ordered = useMemo(() => sections.flatMap((s) => s.flows), [sections]);
+
   const setSelection = (next: ReviewSelection | null) => {
-    if (next && !pinned) setPinned(new Set(visible.flatMap((f) => f.checkpoints.map((c) => c.id))));
+    if (next && !pinned) setPinned(new Set(ordered.flatMap((f) => f.checkpoints.map((c) => c.id))));
     if (!next) setPinned(null);
     setSelectionState(next);
   };
   const viewerFlows = useMemo(() => {
-    if (!pinned) return visible;
-    return filterFlows(flows, 'all', variant, '')
+    if (!pinned) return ordered;
+    const all = new Map(filterFlows(flows, 'all', variant, '').map((f) => [f.resultId, f]));
+    return ordered
+      .map((f) => all.get(f.resultId) ?? f)
       .map((f) => ({ ...f, checkpoints: f.checkpoints.filter((c) => pinned.has(c.id)) }))
       .filter((f) => f.checkpoints.length > 0);
-  }, [pinned, visible, flows, variant]);
+  }, [pinned, ordered, flows, variant]);
 
   const needsReviewIds = (list: readonly ReviewFlowView[]) =>
     list.flatMap((f) => f.checkpoints.flatMap((c) => c.captures.filter((cap) => NEEDS_REVIEW.includes(cap.status)).map((cap) => cap.id)));
@@ -147,10 +204,59 @@ export function ReviewStoryboard({
     );
   }
 
+  const rows =
+    visible.length === 0 ? (
+      <EmptyState
+        icon={Check}
+        title={filter === 'needs-review' && !query && !folder ? 'Nothing needs review' : 'No checkpoints match'}
+        description={filter === 'needs-review' && !query && !folder ? 'Every image matches an approved one or was decided about.' : 'Try another filter, folder or search.'}
+      >
+        {filter !== 'all' ? (
+          <Button variant="outline" size="sm" onClick={() => setFilter('all')}>
+            Show all {total} images
+          </Button>
+        ) : null}
+      </EmptyState>
+    ) : (
+      <div className="flex flex-col gap-8">
+        {sections.map((section) => (
+          <section key={section.id} aria-label={section.id}>
+            {tree || sections.length > 1 ? (
+              <h2 className="sticky top-0 z-10 -mx-1 mb-1 flex items-center gap-1.5 border-b border-separator bg-surface/95 px-1 py-2 text-label-m text-muted-foreground backdrop-blur">
+                <Folder className="size-4 shrink-0" />
+                {section.path.map((part, i) => (
+                  <span key={i} className="flex min-w-0 items-center gap-1.5">
+                    {i > 0 ? <ChevronRight aria-hidden className="size-3.5 shrink-0" /> : null}
+                    <span className={cn('truncate', i === section.path.length - 1 && 'text-foreground')}>{part}</span>
+                  </span>
+                ))}
+                <span className="ml-1 text-label-xs tabular-nums">· {section.flows.length}</span>
+              </h2>
+            ) : null}
+            <ol className="flex flex-col divide-y divide-separator" aria-label={`Tests in ${section.name}`}>
+              {section.flows.map((flow) => (
+                <FlowRow
+                  key={flow.resultId}
+                  flow={flow}
+                  size={size}
+                  canDecide={canDecide && Boolean(onDecide)}
+                  pending={pending}
+                  onOpen={(checkpointId, v) => setSelection({ checkpointId, variant: v })}
+                  onApproveFlow={(ids) => onDecide?.({ captureIds: ids, decision: 'approved' })}
+                  needsReview={needsReviewIds([flow])}
+                  variantSelected={variant}
+                />
+              ))}
+            </ol>
+          </section>
+        ))}
+      </div>
+    );
+
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       {toolbar ? (
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
           <div className="flex flex-wrap items-center gap-1 rounded-xl border border-border bg-surface-sunken p-1" role="group" aria-label="Filter by review status">
             {REVIEW_FILTERS.map((f) => {
               const n = f === 'all' ? total : f === 'needs-review' ? counts.changed + counts.new : counts[f];
@@ -173,7 +279,7 @@ export function ReviewStoryboard({
               );
             })}
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-3">
             {variants.length > 1 ? (
               <ToggleGroup variant="segment" size="sm" value={[variant ?? 'all']} onValueChange={(v) => v[0] && setVariant(v[0] === 'all' ? null : String(v[0]))} aria-label="Variant">
                 <ToggleGroupItem value="all">All variants</ToggleGroupItem>
@@ -184,9 +290,28 @@ export function ReviewStoryboard({
                 ))}
               </ToggleGroup>
             ) : null}
+            <div className="flex items-center gap-2 rounded-lg border border-border bg-surface px-2 py-1" title="Screen size">
+              <button type="button" aria-label="Smaller screens" onClick={() => setSize(Math.max(STORYBOARD_SIZE.min, +(size - STORYBOARD_SIZE.step * 2).toFixed(2)))} className="rounded text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/25">
+                <ZoomOut className="size-4" />
+              </button>
+              <Slider
+                className="w-28"
+                min={STORYBOARD_SIZE.min}
+                max={STORYBOARD_SIZE.max}
+                step={STORYBOARD_SIZE.step}
+                value={size}
+                onValueChange={(v) => setSize(Array.isArray(v) ? v[0] : v)}
+                thumbLabel="Screen size"
+                valueText={(v) => `${Math.round(v * 100)}% of the real size`}
+              />
+              <button type="button" aria-label="Larger screens" onClick={() => setSize(Math.min(STORYBOARD_SIZE.max, +(size + STORYBOARD_SIZE.step * 2).toFixed(2)))} className="rounded text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/25">
+                <ZoomIn className="size-4" />
+              </button>
+              <span className="w-9 text-right text-label-s text-muted-foreground tabular-nums">{Math.round(size * 100)}%</span>
+            </div>
             <div className="relative">
               <Search aria-hidden className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
-              <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find a test or checkpoint" aria-label="Find a test or checkpoint" className="h-8 w-56 pl-8" />
+              <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find a test, case or checkpoint" aria-label="Find a test, case or checkpoint" className="h-8 w-60 pl-8" />
             </div>
             {canDecide && onDecide ? (
               <Button size="sm" disabled={shownToApprove.length === 0 || shownToApprove.some((id) => pending.has(id))} onClick={() => onDecide({ captureIds: shownToApprove, decision: 'approved' })}>
@@ -197,42 +322,36 @@ export function ReviewStoryboard({
         </div>
       ) : null}
 
-      {visible.length === 0 ? (
-        <EmptyState
-          icon={Check}
-          title={filter === 'needs-review' && !query ? 'Nothing needs review' : 'No checkpoints match'}
-          description={filter === 'needs-review' && !query ? 'Every image in this run matches an approved one or was decided about.' : 'Try another filter or search.'}
-        >
-          {filter !== 'all' ? (
-            <Button variant="outline" size="sm" onClick={() => setFilter('all')}>
-              Show all {total} images
-            </Button>
-          ) : null}
-        </EmptyState>
-      ) : (
-        <ol className="flex flex-col gap-4" aria-label="Tests with review checkpoints">
-          {visible.map((flow) => (
-            <FlowRow
-              key={flow.resultId}
-              flow={flow}
-              canDecide={canDecide && Boolean(onDecide)}
-              pending={pending}
-              onOpen={(checkpointId, v) => setSelection({ checkpointId, variant: v })}
-              onApproveFlow={(ids) => onDecide?.({ captureIds: ids, decision: 'approved' })}
-              needsReview={needsReviewIds([flow])}
-              variantSelected={variant}
+      {tree ? (
+        <div className="grid gap-6 lg:grid-cols-[15rem_minmax(0,1fr)]">
+          <aside className="lg:sticky lg:top-4 lg:max-h-[calc(100dvh-2rem)] lg:self-start lg:overflow-y-auto">
+            <ReviewTree
+              folders={folders}
+              selected={folder}
+              onSelect={setFolder}
+              grouping={grouping}
+              onGroupingChange={(g) => {
+                setGrouping(g);
+                setFolder(null);
+              }}
+              total={searchedCounts.approved + searchedCounts.changes_requested + searchedCounts.changed + searchedCounts.new}
+              needsReview={searchedCounts.changed + searchedCounts.new}
             />
-          ))}
-        </ol>
+          </aside>
+          <div className="min-w-0">{rows}</div>
+        </div>
+      ) : (
+        rows
       )}
 
-      <CheckpointViewer flows={viewerFlows} selection={selection} onSelectionChange={setSelection} onDecide={onDecide} pendingIds={pendingIds} canDecide={canDecide} />
+      <CheckpointViewer flows={viewerFlows} selection={selection} onSelectionChange={setSelection} onDecide={onDecide} pendingIds={pendingIds} canDecide={canDecide} frame={frame ?? DEFAULT_FRAME} onFrameChange={onFrameChange} />
     </div>
   );
 }
 
 function FlowRow({
   flow,
+  size,
   canDecide,
   pending,
   onOpen,
@@ -241,6 +360,7 @@ function FlowRow({
   variantSelected,
 }: {
   flow: ReviewFlowView;
+  size: number;
   canDecide: boolean;
   pending: ReadonlySet<string>;
   onOpen: (checkpointId: string, variant: string | null) => void;
@@ -251,31 +371,36 @@ function FlowRow({
   const failed = flow.outcome === 'failed' || flow.outcome === 'timedout' || flow.outcome === 'interrupted';
   const heading = flow.titlePath.length ? flow.titlePath.join(' › ') : flow.title;
   return (
-    <li className="overflow-hidden rounded-xl border border-border bg-card shadow-e1">
-      <div className="flex flex-col gap-2 border-b border-border px-4 py-3 md:flex-row md:items-center md:justify-between">
-        <div className="flex min-w-0 items-center gap-2">
-          <StatusIcon status={flow.outcome} />
+    <li className="py-5">
+      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+        <div className="flex min-w-0 items-start gap-2">
+          <StatusIcon status={flow.outcome} className="mt-0.5" />
           <div className="min-w-0">
             <h3 className="truncate text-title-s" title={heading}>
               <Link href={flow.resultHref} className="hover:underline">
                 {heading}
               </Link>
             </h3>
-            <p className="truncate text-xs text-muted-foreground">
-              <span className="text-code-s" title={flow.file}>
+            <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+              <span className="truncate text-code-s" title={flow.file}>
                 {flow.file}
                 {flow.line ? `:${flow.line}` : ''}
               </span>
               {flow.project ? (
-                <Badge variant="secondary" className="ml-2 align-middle text-label-xs">
+                <Badge variant="secondary" className="text-label-xs">
                   {flow.project}
                 </Badge>
               ) : null}
-              {flow.flow ? <span className="ml-2">Journey: {flow.flow}</span> : null}
+              {flow.cases?.map((c) => (
+                <Link key={c.key} href={c.href} className="inline-flex items-center gap-1 rounded-md bg-accent-subtle px-1.5 py-0.5 text-label-xs text-accent-text hover:underline" title={c.title}>
+                  <ClipboardList className="size-3" />
+                  {c.key} <span className="max-w-48 truncate">{c.title}</span>
+                </Link>
+              ))}
             </p>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1">
           {flow.videoUrl ? (
             <Button variant="ghost" size="sm" nativeButton={false} render={<a href={flow.videoUrl} target="_blank" rel="noreferrer" />}>
               <Film /> Video
@@ -293,22 +418,16 @@ function FlowRow({
           ) : null}
         </div>
       </div>
-      <ol className="flex items-stretch gap-2 overflow-x-auto p-4" aria-label={`Checkpoints of ${flow.title}`}>
-        {flow.checkpoints.map((cp, i) => (
-          <li key={cp.id} className="flex items-center gap-2">
-            {i > 0 ? <ArrowRight aria-hidden className="size-4 shrink-0 text-muted-foreground" /> : null}
-            <CheckpointCard checkpoint={cp} onOpen={onOpen} variantSelected={variantSelected} />
-          </li>
+      <ol className="mt-4 flex items-start gap-8 overflow-x-auto pb-2 pl-7" aria-label={`Checkpoints of ${flow.title}`}>
+        {flow.checkpoints.map((cp) => (
+          <CheckpointColumn key={cp.id} checkpoint={cp} size={size} onOpen={onOpen} variantSelected={variantSelected} />
         ))}
         {failed && flow.failureImage ? (
-          <li className="flex items-center gap-2">
-            <ArrowRight aria-hidden className="size-4 shrink-0 text-muted-foreground" />
-            <a href={flow.resultHref} className="flex flex-col gap-2 rounded-lg border border-danger-border bg-danger-subtle/40 p-2 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/25">
-              <ReviewFrame image={flow.failureImage} alt="Screenshot at the failure" height={140} />
-              <span className="inline-flex items-center gap-1.5 text-label-s text-danger-text">
-                <CircleAlert className="size-3.5" /> Failed here
-              </span>
+          <li className="flex shrink-0 flex-col gap-2">
+            <a href={flow.resultHref} className="inline-flex items-center gap-1.5 text-label-m text-danger-text hover:underline">
+              <CircleAlert className="size-4" /> Failed here
             </a>
+            <ScreenFrame image={flow.failureImage} frame={{ width: 1280, height: 720 }} zoom={size} alt="Screenshot at the failure" scroll={false} className="ring-danger-border" />
           </li>
         ) : null}
       </ol>
@@ -316,43 +435,57 @@ function FlowRow({
   );
 }
 
-function CheckpointCard({
+function CheckpointColumn({
   checkpoint,
+  size,
   onOpen,
   variantSelected,
 }: {
   checkpoint: ReviewCheckpointView;
+  size: number;
   onOpen: (checkpointId: string, variant: string | null) => void;
   variantSelected: string | null;
 }) {
   const captures = [...checkpoint.captures].sort((a, b) => compareVariants(a.variant, b.variant));
   const status = worstStatus(captures.map((c) => c.status));
   const label = checkpointLabel(checkpoint.name, checkpoint.title);
+  const scroll = size >= SCROLL_FROM;
+  const width = captures.reduce((sum, c) => sum + captureViewport(c).width * size, 0) + 12 * (captures.length - 1);
+  const open = (variant: string | null) => onOpen(checkpoint.id, variantSelected ?? variant);
   return (
-    <div className="flex h-full flex-col gap-2 rounded-lg border border-border bg-surface p-2">
-      <button
-        type="button"
-        onClick={() => onOpen(checkpoint.id, variantSelected ?? (captures.length === 1 ? captures[0].variant : null))}
-        className="flex items-end gap-2 rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/25"
-        aria-label={`Open ${checkpoint.sequence + 1}. ${label}`}
-      >
+    <li className="flex shrink-0 flex-col gap-2" style={{ width: Math.max(width, 150) }}>
+      <div className="flex items-start gap-2">
+        <span aria-hidden className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-surface text-label-xs tabular-nums shadow-e1 ring-1 ring-border">
+          {checkpoint.sequence + 1}
+        </span>
+        <button
+          type="button"
+          onClick={() => open(captures.length === 1 ? captures[0].variant : null)}
+          aria-label={`Open ${checkpoint.sequence + 1}. ${label}`}
+          className="min-w-0 flex-1 text-left text-label-m break-words outline-none hover:underline focus-visible:underline"
+          title={checkpoint.description ?? label}
+        >
+          {label}
+        </button>
+        <ReviewStatusBadge status={status} className="shrink-0" />
+      </div>
+      <div className="flex items-start gap-3">
         {captures.map((c) => (
-          <div key={c.id} className="flex flex-col items-start gap-1">
-            <ReviewFrame image={c.image} viewport={c.viewport} alt={`${label} — ${c.variant}`} height={140} className={cn(NEEDS_REVIEW.includes(c.status) && 'ring-2 ring-offset-1 ring-offset-surface', c.status === 'changed' && 'ring-warning-border', c.status === 'new' && 'ring-info-border')} />
+          <div key={c.id} className="flex flex-col gap-1.5">
+            {/* A click opens the viewer; the wheel scrolls the screen. The label above is the keyboard way in. */}
+            <div
+              onClick={() => open(c.variant)}
+              className={cn('cursor-zoom-in rounded-md', NEEDS_REVIEW.includes(c.status) && 'ring-2 ring-offset-2 ring-offset-surface', c.status === 'changed' && 'ring-warning-border', c.status === 'new' && 'ring-info-border')}
+            >
+              <ScreenFrame image={c.image} frame={captureViewport(c)} zoom={size} alt={`${label} — ${c.variant}`} scroll={scroll} label={`${label}, ${c.variant} screen`} />
+            </div>
             <span className="flex items-center gap-1 text-label-xs capitalize text-muted-foreground">
               <ReviewStatusDot status={c.status} />
               {c.variant}
             </span>
           </div>
         ))}
-      </button>
-      <div className="flex max-w-80 min-w-0 items-start justify-between gap-2">
-        <p className="min-w-0 text-label-m">
-          <span className="mr-1 tabular-nums text-muted-foreground">{checkpoint.sequence + 1}.</span>
-          <span className="break-words">{label}</span>
-        </p>
-        <ReviewStatusBadge status={status} className="shrink-0" />
       </div>
-    </div>
+    </li>
   );
 }
