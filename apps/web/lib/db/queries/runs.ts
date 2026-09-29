@@ -3,7 +3,7 @@ import { and, asc, desc, eq, getTableColumns, inArray, sql, type SQL } from 'dri
 import { db } from '@/lib/db/drizzle';
 import { attachments, runEvents, runShards, runs, testAttempts, testResults, tests, type Attachment, type Run, type RunShard, type TestAttempt } from '@/lib/db/schema';
 import { effectiveRunColumns, effectiveStatusSql, effectivelyRunningSql } from '@/lib/runs/staleness';
-import { andAll, num, sinceDate } from './shared';
+import { andAll, isUuid, num, sinceDate } from './shared';
 
 /**
  * The row shapes live in `@miguelfranken/ui`, next to the components that render them,
@@ -361,6 +361,7 @@ export async function listRunErrorGroupsWithCursor(runId: string): Promise<{ gro
 export type AttemptWithAttachments = TestAttempt & { attachments: Attachment[] };
 
 export async function getResultDetail(projectId: string, runNumber: number, resultId: string) {
+  if (!isUuid(resultId)) return null;
   const [row] = await db
     .select({ result: testResults, test: tests, run: runColumns })
     .from(testResults)
