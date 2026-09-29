@@ -4,6 +4,7 @@ import * as React from 'react';
 import { History } from 'lucide-react';
 import { Link } from '../../provider';
 import { Button } from '../../components/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/select';
 import { EmptyState } from '../../patterns/empty-state';
 import { MetaChip } from '../../patterns/meta-chip';
 import { StatusBadge } from '../../patterns/status-badge';
@@ -85,23 +86,29 @@ export function RunHistory({ rows, now }: { rows: RunHistoryRow[]; now?: Date })
 
       {rows.length > PAGE_SIZES[0]! ? (
         <div className="flex flex-wrap items-center justify-between gap-2 text-body-xs text-muted-foreground">
-          <label className="flex items-center gap-1.5">
-            Per page
-            <select
-              className="h-7 rounded-md border border-input bg-surface px-1.5 text-body-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/25"
-              value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value));
+          <div className="flex items-center gap-1.5">
+            <span aria-hidden>Per page</span>
+            <Select
+              items={PAGE_SIZES.map((n) => ({ value: String(n), label: String(n) }))}
+              value={String(pageSize)}
+              onValueChange={(next) => {
+                if (!next) return;
+                setPageSize(Number(next));
                 setPage(1);
               }}
             >
-              {PAGE_SIZES.map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
-          </label>
+              <SelectTrigger size="sm" className="h-7 min-w-16 text-body-xs tabular-nums" aria-label="Per page">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="start" className="min-w-20">
+                {PAGE_SIZES.map((n) => (
+                  <SelectItem key={n} value={String(n)} className="text-body-xs tabular-nums">
+                    {n}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="flex items-center gap-1.5">
             <Button variant="outline" size="xs" disabled={current <= 1} onClick={() => setPage(current - 1)}>
               Previous

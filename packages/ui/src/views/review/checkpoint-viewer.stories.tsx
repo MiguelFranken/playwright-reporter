@@ -81,8 +81,10 @@ export const ScreenSettings: Story = {
     const body = within(document.body);
     await body.findByRole('dialog');
     await expect(body.getByRole('spinbutton', { name: 'Screen width' })).toHaveValue(390);
-    await userEvent.selectOptions(body.getByRole('combobox', { name: 'Zoom' }), '0.5');
-    await expect(body.getByRole('combobox', { name: 'Zoom' })).toHaveValue('0.5');
+    await userEvent.click(body.getByRole('combobox', { name: 'Zoom' }));
+    await userEvent.click(await body.findByRole('option', { name: '50%' }));
+    await expect(body.getByRole('combobox', { name: 'Zoom' })).toHaveTextContent('50%');
+    await waitFor(() => expect(body.queryByRole('listbox')).not.toBeInTheDocument());
     await expect(body.getByRole('region', { name: /mobile screen/ })).toHaveStyle({ width: '195px' });
   },
 };
