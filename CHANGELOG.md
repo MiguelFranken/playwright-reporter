@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.0.51](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.50...v0.0.51) (2026-09-29)
+
+### Features
+
+* **review:** pin comment threads on review screenshots, for people and AI assistants ([#62](https://github.com/MiguelFranken/playwright-reporter/issues/62)) ([10a765a](https://github.com/MiguelFranken/playwright-reporter/commit/10a765a017171d0e3baca731a92f85830f0a77d9))
+
+### Performance Improvements
+
+* **review:** virtualize the storyboard and keep a run's review in TanStack Query ([#61](https://github.com/MiguelFranken/playwright-reporter/issues/61)) ([c0bd3de](https://github.com/MiguelFranken/playwright-reporter/commit/c0bd3deec5eb98218475023bfecd94df0a165a2b))
+
 ## [0.0.50](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.49...v0.0.50) (2026-09-29)
 
 ### Bug Fixes
