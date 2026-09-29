@@ -82,9 +82,20 @@ records.
 
 A run with checkpoints has a **Visual review** button on its page, with how many images still need review. The
 storyboard opens on those: **Changed** images differ from the approved one, **New** ones were never approved. Filter by
-status or variant, or search for a test.
+status or variant, or search for a test, a test case key or a checkpoint.
 
-Open a checkpoint to see it full size, every variant side by side, or compared with its approved baseline — side by
+The folders on the left organize the flows the way [test cases](/docs/using/test-cases) do: a test linked to a case
+sits in that case's suite, and tests no case covers are in **Not in a test case**, by spec file. Switch to **Files** to
+browse by spec file instead. Each folder shows how many images below it still need review. A flow links to its test
+cases, and a test case's page shows the visual review of its linked tests.
+
+Every capture is shown on a screen of its own shape — a phone is portrait, a desktop wide — and the size slider scales
+them all. From about a quarter of the real size the screens load the full image and scroll, so a flow can be read
+without opening it. The size is remembered in your browser.
+
+Open a checkpoint to see it on a screen you set like a browser's device toolbar: **As captured** (each variant's own
+viewport), a preset (desktop, laptop, tablet, iPhone) or any width × height, at a zoom that fits the window or a fixed
+percentage. The page scrolls inside the screen. Compare every variant side by side, or a variant with its approved baseline — side by
 side, with a slider, as a **Difference** (identical pixels turn black, every change lights up) or as an overlay. Next
 to it: the steps it was captured in, the URL, the viewport, and a link to the moment in the video.
 

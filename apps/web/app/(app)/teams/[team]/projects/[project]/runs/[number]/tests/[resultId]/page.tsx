@@ -21,9 +21,9 @@ import { projectHrefs } from '@/lib/view-models';
 import { baseUrl, getStorage } from '@/lib/storage';
 import { expiresAt, getRetentionPolicy } from '@/lib/storage/retention';
 import { traceViewerUrl } from '@/lib/trace-viewer/url';
-import { getResultDetail, runReview, testHistory } from '@/lib/page-data';
+import { casesOfTests, getResultDetail, runReview, testHistory } from '@/lib/page-data';
 import { UrlReviewStoryboard } from '@/components/review/url-review-storyboard';
-import { toFlowViews } from '@/lib/review/view-model';
+import { caseHref, toFlowViews } from '@/lib/review/view-model';
 
 type Props = { params: Promise<{ team: string; project: string; number: string; resultId: string }> };
 
@@ -74,7 +74,10 @@ async function ResultContent({ params }: Props) {
     runReview({ id: run.id, startedAt: new Date(run.startedAt).toISOString() }, { resultId: result.id }),
   ]);
   const base = `/teams/${team}/projects/${project.slug}`;
-  const reviewFlows = toFlowViews(review, (id) => `${base}/runs/${run.number}/tests/${id}`);
+  const reviewFlows = toFlowViews(review, (id) => `${base}/runs/${run.number}/tests/${id}`, {
+    byTest: await casesOfTests(project.id, [test.id]),
+    href: caseHref(projectHrefs(base)),
+  });
   const origin = baseUrl();
 
   const views: AttemptView[] = await Promise.all(

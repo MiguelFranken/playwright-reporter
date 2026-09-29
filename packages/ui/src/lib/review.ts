@@ -144,9 +144,22 @@ export interface ReviewCheckpointView {
   captures: ReviewCaptureView[];
 }
 
+/** A test case a flow's test is linked to. */
+export interface ReviewCaseRef {
+  /** `TC-12`. */
+  key: string;
+  title: string;
+  href: string;
+  /** Its suite, outermost first; empty when the case has none. */
+  suitePath: string[];
+}
+
 /** A test's review checkpoints, in order: one journey through the product. */
 export interface ReviewFlowView {
   resultId: string;
+  testId?: string | null;
+  /** The test cases the test is linked to; the first decides its folder when grouping by suite. */
+  cases?: ReviewCaseRef[];
   title: string;
   titlePath: string[];
   file: string;
@@ -183,4 +196,153 @@ export function variantsOf(flows: readonly ReviewFlowView[]): string[] {
   const set = new Set<string>();
   for (const f of flows) for (const c of f.checkpoints) for (const cap of c.captures) set.add(cap.variant);
   return [...set].sort(compareVariants);
+}
+
+// ---------------------------------------------------------------- frames
+
+export interface FrameSize {
+  width: number;
+  height: number;
+}
+
+/** The CSS viewport of a variant nobody recorded: a mobile variant is a phone, not a monitor. */
+const VARIANT_SHAPES: Record<string, FrameSize> = {
+  mobile: { width: 390, height: 844 },
+  phone: { width: 390, height: 844 },
+  tablet: { width: 768, height: 1024 },
+  desktop: { width: 1280, height: 720 },
+  laptop: { width: 1440, height: 900 },
+};
+
+/**
+ * The screen a capture was taken on, in CSS pixels: its recorded viewport,
+ * else what its variant name says (a Playwright project called "mobile" or
+ * "Mobile Safari" is a phone), else a desktop.
+ */
+export function captureViewport(capture: { variant: string; viewport?: FrameSize | null; isMobile?: boolean | null }): FrameSize {
+  if (capture.viewport?.width && capture.viewport.height) return capture.viewport;
+  const name = capture.variant.toLowerCase();
+  if (capture.isMobile) return VARIANT_SHAPES.mobile;
+  for (const [key, size] of Object.entries(VARIANT_SHAPES)) if (name.includes(key)) return size;
+  if (/iphone|pixel|android|galaxy/.test(name)) return VARIANT_SHAPES.mobile;
+  if (/ipad/.test(name)) return VARIANT_SHAPES.tablet;
+  return VARIANT_SHAPES.desktop;
+}
+
+/** Screen sizes to look at a capture on, like a browser's device toolbar. */
+export const FRAME_PRESETS = [
+  { value: 'captured', label: 'As captured' },
+  { value: 'desktop', label: 'Desktop', size: { width: 1280, height: 720 } },
+  { value: 'laptop', label: 'Laptop', size: { width: 1440, height: 900 } },
+  { value: 'tablet', label: 'Tablet', size: { width: 768, height: 1024 } },
+  { value: 'iphone', label: 'iPhone', size: { width: 390, height: 844 } },
+  { value: 'custom', label: 'Custom' },
+] as const satisfies readonly { value: string; label: string; size?: FrameSize }[];
+export type FramePreset = (typeof FRAME_PRESETS)[number]['value'];
+
+export const ZOOM_LEVELS = [0.25, 0.33, 0.5, 0.67, 0.75, 1, 1.25, 1.5] as const;
+
+/**
+ * How the viewer frames an image: a screen of `width` × `height` CSS pixels
+ * the capture is scaled into (by width) and scrolls in, shown at `zoom`.
+ * `captured` uses each capture's own viewport; `fit` picks the zoom that
+ * shows the whole frame.
+ */
+export interface FrameSettings {
+  preset: FramePreset;
+  width: number;
+  height: number;
+  zoom: number | 'fit';
+}
+
+export const DEFAULT_FRAME: FrameSettings = { preset: 'captured', width: 1280, height: 720, zoom: 'fit' };
+
+/** The frame a capture is shown in under the settings. */
+export function frameFor(settings: FrameSettings, capture: Parameters<typeof captureViewport>[0]): FrameSize {
+  if (settings.preset === 'captured') return captureViewport(capture);
+  return { width: Math.max(160, Math.round(settings.width)), height: Math.max(160, Math.round(settings.height)) };
+}
+
+/** The zoom that fits frames side by side (with `gap` between them) into the space available. */
+export function fitZoom(frames: readonly FrameSize[], available: FrameSize, gap = 24): number {
+  if (frames.length === 0 || available.width <= 0 || available.height <= 0) return 1;
+  const width = frames.reduce((sum, f) => sum + f.width, 0) + gap * (frames.length - 1);
+  const height = Math.max(...frames.map((f) => f.height));
+  return Math.max(0.1, Math.min(1, available.width / width, available.height / height));
+}
+
+// ---------------------------------------------------------------- folders
+
+export const REVIEW_GROUPINGS = ['suite', 'file'] as const;
+export type ReviewGrouping = (typeof REVIEW_GROUPINGS)[number];
+export const REVIEW_GROUPING_LABELS: Record<ReviewGrouping, string> = { suite: 'Test case suites', file: 'Spec files' };
+
+/** The folder of flows without a test case, when grouping by suite. */
+export const UNLINKED_FOLDER = 'Not in a test case';
+
+/** A folder of the review tree: a suite (or directory), its flows and sub-folders. */
+export interface ReviewFolder {
+  /** The path joined with ` / `: stable, and what the filter selects. */
+  id: string;
+  name: string;
+  path: string[];
+  flows: ReviewFlowView[];
+  children: ReviewFolder[];
+  /** Over this folder and everything below it. */
+  total: number;
+  needsReview: number;
+}
+
+/** Where a flow sits: its first test case's suite, or its spec file's directories and the file. */
+export function folderPathOf(flow: ReviewFlowView, grouping: ReviewGrouping): string[] {
+  if (grouping === 'suite') {
+    const linked = flow.cases?.[0];
+    if (linked) return linked.suitePath.length ? linked.suitePath : ['Unassigned cases'];
+    return [UNLINKED_FOLDER, flow.file];
+  }
+  return flow.file.split('/').filter(Boolean);
+}
+
+export const folderId = (path: readonly string[]) => path.join(' / ');
+
+/** The flows as a tree of folders, in the order they come. Counts cover every capture below a folder. */
+export function buildReviewTree(flows: readonly ReviewFlowView[], grouping: ReviewGrouping): ReviewFolder[] {
+  const roots: ReviewFolder[] = [];
+  const index = new Map<string, ReviewFolder>();
+  const node = (path: string[]): ReviewFolder => {
+    const id = folderId(path);
+    let found = index.get(id);
+    if (found) return found;
+    found = { id, name: path[path.length - 1], path, flows: [], children: [], total: 0, needsReview: 0 };
+    index.set(id, found);
+    if (path.length === 1) roots.push(found);
+    else node(path.slice(0, -1)).children.push(found);
+    return found;
+  };
+  for (const flow of flows) {
+    const path = folderPathOf(flow, grouping);
+    const folder = node(path);
+    folder.flows.push(flow);
+    const captures = flow.checkpoints.flatMap((c) => c.captures);
+    for (let i = 1; i <= path.length; i++) {
+      const f = index.get(folderId(path.slice(0, i)))!;
+      f.total += captures.length;
+      f.needsReview += captures.filter((c) => NEEDS_REVIEW.includes(c.status)).length;
+    }
+  }
+  // Unlinked tests last: the curated suites are what people browse first.
+  roots.sort((a, b) => Number(a.name === UNLINKED_FOLDER) - Number(b.name === UNLINKED_FOLDER));
+  return roots;
+}
+
+/** Every folder with flows of its own, depth first: the sections of the storyboard. */
+export function flattenFolders(folders: readonly ReviewFolder[]): ReviewFolder[] {
+  return folders.flatMap((f) => [...(f.flows.length ? [f] : []), ...flattenFolders(f.children)]);
+}
+
+/** Whether a flow is inside the folder `id` (or `id` is empty). */
+export function inFolder(flow: ReviewFlowView, grouping: ReviewGrouping, id: string | null | undefined): boolean {
+  if (!id) return true;
+  const path = folderId(folderPathOf(flow, grouping));
+  return path === id || path.startsWith(`${id} / `);
 }

@@ -13,6 +13,8 @@ import { getRunForProject, ingestEvents, startRun } from '@/lib/ingest/service';
 import { attachments, reviewCaptures, reviewCheckpoints } from '@/lib/db/schema';
 import { captureHistory, decide, reviewQueue, runReview, runReviewCounts, screenCatalogue } from '@/lib/review/queries';
 import { dueWhere } from '@/lib/storage/retention';
+import { casesOfTests } from '@/lib/review/cases';
+import { createCase, ensureSuite, linkTests } from '@/lib/test-cases/service';
 import { attachmentRef, attemptEnd, eventBatch, runStart, testBegin } from './factories';
 import { describe, expect, test, type Db, type Tenant } from './fixtures';
 
@@ -213,3 +215,25 @@ describe('retention', () => {
 async function markUploaded(db: Db) {
   await db.update(attachments).set({ status: 'uploaded' });
 }
+
+describe('test cases', () => {
+  test('a flow knows the cases its test is linked to, with their suite path', async ({ db, tenant }) => {
+    await runWithCheckpoints(tenant, { hashes: [sha('a'), sha('b')] });
+    const [capture] = await db.select().from(reviewCaptures);
+    const ctx = { projectId: tenant.project.id, teamId: tenant.team.id, actorId: tenant.adminUser.id };
+    const suiteId = await ensureSuite(ctx, ['Checkout', 'Ordering']);
+    const linked = await createCase(ctx, { title: 'Book a workshop', suiteId });
+    await linkTests(ctx, linked.id, [capture.testId]);
+    const unfiled = await createCase(ctx, { title: 'Booking works on mobile' });
+    await linkTests(ctx, unfiled.id, [capture.testId]);
+
+    const byTest = await casesOfTests(tenant.project.id, [capture.testId, randomUUID()]);
+    expect(byTest[capture.testId]).toEqual([
+      { key: `TC-${linked.number}`, title: 'Book a workshop', suitePath: ['Checkout', 'Ordering'] },
+      { key: `TC-${unfiled.number}`, title: 'Booking works on mobile', suitePath: [] },
+    ]);
+    const screens = await screenCatalogue(tenant.project.id, 'main', { testIds: [capture.testId] });
+    expect(screens.length).toBe(2);
+    expect(await screenCatalogue(tenant.project.id, 'main', { testIds: [] })).toEqual([]);
+  });
+});

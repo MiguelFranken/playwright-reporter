@@ -1,7 +1,7 @@
 'use client';
 
 import { Check, ChevronLeft, ChevronRight, ExternalLink, Film, Keyboard, MessageSquareWarning, Route } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '../../components/badge';
 import { Button } from '../../components/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../../components/dialog';
@@ -13,8 +13,13 @@ import { StatusIcon } from '../../patterns/status-badge';
 import { cn } from '../../lib/cn';
 import { formatDateTime } from '../../lib/format';
 import {
+  captureViewport,
   checkpointLabel,
   compareVariants,
+  DEFAULT_FRAME,
+  fitZoom,
+  frameFor,
+  type FrameSettings,
   NEEDS_REVIEW,
   type ReviewCaptureView,
   type ReviewCheckpointView,
@@ -23,7 +28,8 @@ import {
   type ReviewImage,
 } from '../../lib/review';
 import { COMPARE_MODE_LABELS, COMPARE_MODES, ImageCompare, type CompareMode } from './image-compare';
-import { ReviewFrame, UnavailableImage } from './review-frame';
+import { FrameToolbar } from './frame-toolbar';
+import { ScreenFrame } from './screen-frame';
 
 /** What the viewer shows: a checkpoint, and one of its variants or (`null`) all of them side by side. */
 export interface ReviewSelection {
@@ -82,6 +88,8 @@ export function CheckpointViewer({
   onDecide,
   pendingIds = [],
   canDecide = true,
+  frame: frameProp,
+  onFrameChange,
 }: {
   flows: readonly ReviewFlowView[];
   selection: ReviewSelection | null;
@@ -90,6 +98,9 @@ export function CheckpointViewer({
   /** Captures whose decision is being saved. */
   pendingIds?: readonly string[];
   canDecide?: boolean;
+  /** The screen captures are shown on; uncontrolled when absent. */
+  frame?: FrameSettings;
+  onFrameChange?: (next: FrameSettings) => void;
 }) {
   const all = useMemo(() => positions(flows), [flows]);
   const at = selection ? all.findIndex((p) => p.checkpoint.id === selection.checkpointId) : -1;
@@ -97,7 +108,9 @@ export function CheckpointViewer({
   const [stage, setStage] = useState<StageMode>('image');
   const [comment, setComment] = useState('');
   const commentRef = useRef<HTMLTextAreaElement>(null);
-  const stageRef = useRef<HTMLElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  // The dialog mounts its content in a portal after opening; state follows the element itself.
+  const [stageEl, setStageEl] = useState<HTMLDivElement | null>(null);
 
   const captures = pos ? sortedCaptures(pos.checkpoint) : [];
   const variant = selection?.variant ?? null;
@@ -105,6 +118,18 @@ export function CheckpointViewer({
   const current = shown.length === 1 ? shown[0] : null;
   const reference = current ? referenceOf(current) : null;
   const effectiveStage: StageMode = current && reference ? stage : 'image';
+  const [ownFrame, setOwnFrame] = useState<FrameSettings>(DEFAULT_FRAME);
+  const frameSettings = frameProp ?? ownFrame;
+  const setFrame = (next: FrameSettings) => {
+    setOwnFrame(next);
+    onFrameChange?.(next);
+  };
+  const stageSize = useElementSize(stageEl);
+  const comparing = Boolean(current && reference && effectiveStage !== 'image');
+  const frames = (comparing && current ? [current] : shown).map((c) => frameFor(frameSettings, c));
+  const zoomFrames = comparing && effectiveStage === 'side-by-side' ? [frames[0], frames[0]] : frames;
+  // Room for the captions above the screens and the stage's padding.
+  const zoom = frameSettings.zoom === 'fit' ? fitZoom(zoomFrames, { width: stageSize.width - 48, height: stageSize.height - 48 - 28 }) : frameSettings.zoom;
   const pending = new Set(pendingIds);
   const busy = shown.some((c) => pending.has(c.id));
 
@@ -246,33 +271,55 @@ export function CheckpointViewer({
             </header>
 
             <div className="grid min-h-0 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_20rem]">
-              <section className="min-h-0 overflow-auto bg-surface-sunken p-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/25" aria-label="Checkpoint image" tabIndex={0} ref={stageRef}>
-                {current && reference && effectiveStage !== 'image' ? (
-                  <div className="mx-auto" style={{ maxWidth: stageWidth(current) }}>
-                    <ImageCompare current={current.image} reference={reference.image} mode={effectiveStage as CompareMode} referenceLabel={reference.label} alt={label} />
-                  </div>
-                ) : (
-                  <div className={cn('mx-auto flex items-start justify-center gap-6', shown.length > 1 && 'flex-wrap lg:flex-nowrap')}>
-                    {shown.map((c) => (
-                      <figure key={c.id} className="flex min-w-0 flex-col gap-1.5" style={{ width: shown.length > 1 ? undefined : '100%', maxWidth: stageWidth(c), flex: shown.length > 1 ? `${c.viewport?.width ?? 1280} 1 0` : undefined }}>
-                        {shown.length > 1 ? (
+              <section className="flex min-h-0 flex-col bg-surface" aria-label="Checkpoint image">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-surface px-4 py-2">
+                  <FrameToolbar value={frameSettings} onChange={setFrame} captured={current ? captureViewport(current) : null} />
+                  <span className="text-label-s text-muted-foreground tabular-nums">{Math.round(zoom * 100)}%</span>
+                </div>
+                <div
+                  ref={(el) => {
+                    stageRef.current = el;
+                    setStageEl(el);
+                  }}
+                  tabIndex={0}
+                  aria-label="Checkpoint screens"
+                  className="min-h-0 flex-1 overflow-auto p-6 outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/25"
+                >
+                  {current && reference && effectiveStage !== 'image' ? (
+                    effectiveStage === 'side-by-side' ? (
+                      <div className="flex min-w-max items-start justify-center gap-6">
+                        {[
+                          { key: 'reference', title: reference.label, image: reference.image },
+                          { key: 'current', title: 'This run', image: current.image },
+                        ].map((side) => (
+                          <figure key={side.key} className="flex flex-col gap-1.5">
+                            <figcaption className="text-label-s text-muted-foreground">{side.title}</figcaption>
+                            <ScreenFrame image={side.image} frame={frames[0]} zoom={zoom} alt={`${label} — ${side.title}`} />
+                          </figure>
+                        ))}
+                      </div>
+                    ) : (
+                      <div role="region" aria-label={`${label}, comparison`} tabIndex={0} className="mx-auto overflow-x-hidden overflow-y-auto rounded-md ring-1 ring-border outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40" style={{ width: frames[0].width * zoom, height: frames[0].height * zoom + 40 }}>
+                        <ImageCompare current={current.image} reference={reference.image} mode={effectiveStage as CompareMode} referenceLabel={reference.label} alt={label} />
+                      </div>
+                    )
+                  ) : (
+                    <div className="flex min-w-max items-start justify-center gap-6">
+                      {shown.map((c, i) => (
+                        <figure key={c.id} className="flex flex-col gap-1.5">
                           <figcaption className="flex items-center gap-2 text-label-s capitalize text-muted-foreground">
                             {c.variant}
-                            <ReviewStatusBadge status={c.status} />
+                            <span className="normal-case tabular-nums">
+                              {frames[i].width} × {frames[i].height}
+                            </span>
+                            {shown.length > 1 ? <ReviewStatusBadge status={c.status} /> : null}
                           </figcaption>
-                        ) : null}
-                        <div className="overflow-hidden rounded-md border border-border bg-surface shadow-e1">
-                          {c.image.available ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={c.image.url} alt={`${label} — ${c.variant}`} className="block h-auto w-full" />
-                          ) : (
-                            <UnavailableImage image={c.image} className="min-h-64" />
-                          )}
-                        </div>
-                      </figure>
-                    ))}
-                  </div>
-                )}
+                          <ScreenFrame image={c.image} frame={frames[i]} zoom={zoom} alt={`${label} — ${c.variant}`} label={`${label}, ${c.variant} screen`} />
+                        </figure>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </section>
 
               <aside className="flex min-h-0 flex-col gap-5 overflow-auto border-t border-border p-4 lg:border-t-0 lg:border-l" aria-label="Checkpoint details">
@@ -426,7 +473,7 @@ export function CheckpointViewer({
                         className={cn('flex items-center gap-2 rounded-md p-1 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/25', active ? 'bg-accent-subtle ring-1 ring-accent-border' : 'hover:bg-muted')}
                       >
                         <span className="text-label-s tabular-nums text-muted-foreground">{cp.sequence + 1}</span>
-                        {first ? <ReviewFrame image={first.image} viewport={first.viewport} alt="" height={48} /> : null}
+                        {first ? <ScreenFrame image={first.image} frame={captureViewport(first)} zoom={56 / captureViewport(first).height} alt="" scroll={false} /> : null}
                       </button>
                     </li>
                   );
@@ -450,10 +497,6 @@ const SHORTCUTS: [string[], string][] = [
   [['Esc'], 'Close'],
 ];
 
-/** A capture is shown no wider than its CSS viewport: a mobile page stays phone-sized. */
-function stageWidth(c: ReviewCaptureView) {
-  return c.viewport ? Math.max(c.viewport.width, 320) : undefined;
-}
 
 function statusWord(c: ReviewCaptureView) {
   return { approved: 'approved', changes_requested: 'changes requested', changed: 'changed', new: 'new' }[c.status];
@@ -471,4 +514,18 @@ function DecisionNote({ capture }: { capture: ReviewCaptureView }) {
       {d.comment ? <p className="mt-1 text-sm text-pretty whitespace-pre-wrap">{d.comment}</p> : null}
     </div>
   );
+}
+
+/** The content box of an element, followed as it resizes; zero until it mounts. */
+function useElementSize(el: HTMLElement | null) {
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  useLayoutEffect(() => {
+    if (!el) return;
+    const measure = () => setSize({ width: el.clientWidth, height: el.clientHeight });
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [el]);
+  return size;
 }

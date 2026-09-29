@@ -1,12 +1,12 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { expect, fireEvent, within } from 'storybook/test';
+import { expect, userEvent, within } from 'storybook/test';
 import { placeOrderFlow, unavailableFlow } from '../../fixtures/review';
 import { ImageCompare } from './image-compare';
 
 const changed = placeOrderFlow.checkpoints[1].captures[0];
 
 const meta = {
-  title: 'Views/Review/ImageCompare',
+  title: 'Views/Review/Viewer/ImageCompare',
   component: ImageCompare,
   args: { current: changed.image, reference: changed.baseline!.image, mode: 'side-by-side', referenceLabel: 'Approved (#470)', alt: 'Checkout filled in' },
   parameters: { layout: 'padded' },
@@ -23,8 +23,9 @@ export const Slider: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const range = canvas.getByRole('slider', { name: 'Split position' });
-    fireEvent.change(range, { target: { value: '20' } });
-    await expect(range).toHaveValue('20');
+    range.focus();
+    await userEvent.keyboard('{Home}');
+    await expect(range).toHaveAttribute('aria-valuenow', '0');
   },
 };
 

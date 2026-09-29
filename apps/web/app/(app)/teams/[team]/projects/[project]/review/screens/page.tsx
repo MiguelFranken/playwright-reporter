@@ -3,8 +3,8 @@ import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
 import { ReviewStoryboardSkeleton } from '@miguelfranken/ui/views/review/review-skeleton';
 import { UrlReviewStoryboard } from '@/components/review/url-review-storyboard';
 import { requireProject } from '@/lib/auth/access';
-import { defaultBranch, screenCatalogue } from '@/lib/page-data';
-import { screensToFlows } from '@/lib/review/view-model';
+import { casesOfTests, defaultBranch, screenCatalogue } from '@/lib/page-data';
+import { caseHref, screensToFlows } from '@/lib/review/view-model';
 import { projectHrefs } from '@/lib/view-models';
 import { ReviewTabs } from '@/components/review/review-tabs';
 
@@ -38,6 +38,8 @@ async function Screens({ params }: Props) {
   const { project } = await requireProject(team, projectSlug);
   const hrefs = projectHrefs(`/teams/${team}/projects/${project.slug}`);
   const branch = await defaultBranch(project.id, project.settings);
-  const flows = screensToFlows(await screenCatalogue(project.id, branch), hrefs.test);
+  const screens = await screenCatalogue(project.id, branch);
+  const byTest = await casesOfTests(project.id, screens.map((s) => s.testId));
+  const flows = screensToFlows(screens, hrefs.test, { byTest, href: caseHref(hrefs) });
   return <UrlReviewStoryboard team={team} project={project.slug} flows={flows} canDecide={false} defaultFilter="all" emptyTitle="No screens yet" />;
 }

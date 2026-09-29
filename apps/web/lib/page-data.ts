@@ -37,6 +37,7 @@ import * as teams from '@/lib/db/queries/teams';
 import * as testCases from '@/lib/db/queries/test-cases';
 import * as mcpQueries from '@/lib/db/queries/mcp';
 import * as review from '@/lib/review/queries';
+import * as reviewCases from '@/lib/review/cases';
 
 /**
  * Thirty seconds: the shortest lifetime Next.js still includes in a per-link
@@ -283,4 +284,10 @@ export async function defaultBranch(...args: Parameters<typeof mcpQueries.defaul
   'use cache: private';
   cacheLife(PAGE_DATA);
   return mcpQueries.defaultBranch(...args);
+}
+
+export async function casesOfTests(...args: Parameters<typeof reviewCases.casesOfTests>) {
+  'use cache: private';
+  cacheLife(PAGE_DATA);
+  return reviewCases.casesOfTests(...args);
 }

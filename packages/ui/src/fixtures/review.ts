@@ -81,8 +81,12 @@ function checkpoint(name: string, title: string, sequence: number, captures: Rev
   };
 }
 
+const caseRef = (n: number, title: string, suitePath: string[]) => ({ key: `TC-${n}`, title, href: `#case-${n}`, suitePath });
+
 export const placeOrderFlow: ReviewFlowView = {
   resultId: 'res-order',
+  testId: 'test-order',
+  cases: [caseRef(12, 'Place an order with two products', ['Checkout', 'Ordering'])],
   title: 'places an order',
   titlePath: ['Checkout', 'places an order'],
   file: 'tests/checkout.spec.ts',
@@ -107,6 +111,8 @@ export const placeOrderFlow: ReviewFlowView = {
 
 export const validationFlow: ReviewFlowView = {
   resultId: 'res-validation',
+  testId: 'test-validation',
+  cases: [caseRef(14, 'Checkout lists every missing field', ['Checkout', 'Validation'])],
   title: 'lists everything that is missing',
   titlePath: ['Checkout', 'lists everything that is missing'],
   file: 'tests/checkout.spec.ts',
@@ -125,6 +131,8 @@ export const validationFlow: ReviewFlowView = {
 
 export const failedFlow: ReviewFlowView = {
   resultId: 'res-coupon',
+  testId: 'test-coupon',
+  cases: [caseRef(21, 'Apply a fixed-value coupon', ['Checkout', 'Coupons'])],
   title: 'applies a fixed-value coupon',
   titlePath: ['Coupons', 'applies a fixed-value coupon'],
   file: 'tests/coupon.spec.ts',
@@ -177,7 +185,29 @@ export const unavailableFlow: ReviewFlowView = {
   ],
 };
 
-export const reviewFlows: ReviewFlowView[] = [placeOrderFlow, validationFlow, failedFlow];
+/**
+ * A suite from before checkpoints recorded their viewport (`review:<name>:<variant>`
+ * names only): the variant name still makes the mobile screen a phone.
+ */
+export const legacyFlow: ReviewFlowView = {
+  resultId: 'res-legacy',
+  testId: 'test-legacy',
+  title: 'coupon abandoned payment sends help email',
+  titlePath: ['Abandoned payment follow-up', 'coupon abandoned payment sends help email'],
+  file: 'src/abandoned-payment.spec.ts',
+  line: 40,
+  project: 'chromium',
+  outcome: 'passed',
+  resultHref: '#result-legacy',
+  checkpoints: [
+    checkpoint('abandoned-coupon-help-email', 'Abandoned coupon help email', 0, [
+      capture('Payment pending', 'desktop', 'new', { viewport: null, deviceScaleFactor: null }, { tall: true }),
+      capture('Payment pending', 'mobile', 'new', { viewport: null, deviceScaleFactor: null }, { tall: true }),
+    ], { kind: 'email' }),
+  ],
+};
+
+export const reviewFlows: ReviewFlowView[] = [placeOrderFlow, validationFlow, failedFlow, legacyFlow];
 
 export const approvedFlows: ReviewFlowView[] = [
   {

@@ -7,7 +7,7 @@
  * merged when their variants do not collide, so the storyboard shows the two
  * devices side by side, as it does for resized variants of one test.
  */
-import type { ReviewCaptureView, ReviewCheckpointView, ReviewFlowView, ReviewImage, ReviewStatus } from '@miguelfranken/ui/lib/review';
+import type { ReviewCaseRef, ReviewCaptureView, ReviewCheckpointView, ReviewFlowView, ReviewImage, ReviewStatus } from '@miguelfranken/ui/lib/review';
 import { traceViewerUrl } from '@/lib/trace-viewer/url';
 import type { AttachmentState, CaptureRecord, CheckpointRecord, ComparedCapture, ReviewFlowRecord, ScreenRecord } from './queries';
 
@@ -76,10 +76,24 @@ const media = (a: AttachmentState | null) => (a && a.status === 'uploaded' ? art
 /** Failure first: a merged row is as bad as its worst device. */
 const OUTCOME_RANK = ['failed', 'timedout', 'interrupted', 'flaky', 'running', 'passed', 'skipped'];
 
-export function toFlowViews(records: readonly ReviewFlowRecord[], resultHref: (resultId: string) => string): ReviewFlowView[] {
+/** Test cases by test id, as `casesOfTests` answers, and where a case's page is. */
+export interface CaseLinks {
+  byTest: Record<string, Omit<ReviewCaseRef, 'href'>[]>;
+  href: (key: string) => string;
+}
+
+/** `TC-12` → the case's page. */
+export const caseHref = (hrefs: { testCase: (n: number) => string }) => (key: string) => hrefs.testCase(Number(key.replace(/^TC-/, '')));
+
+const casesOf = (testId: string, links?: CaseLinks): ReviewCaseRef[] =>
+  (links?.byTest[testId] ?? []).map((c) => ({ ...c, href: links!.href(c.key) }));
+
+export function toFlowViews(records: readonly ReviewFlowRecord[], resultHref: (resultId: string) => string, links?: CaseLinks): ReviewFlowView[] {
   const flows = records.map(
     (r): ReviewFlowView => ({
       resultId: r.resultId,
+      testId: r.testId,
+      cases: casesOf(r.testId, links),
       title: r.title,
       titlePath: r.titlePath,
       file: r.file,
@@ -116,6 +130,7 @@ export function mergeProjects(flows: readonly ReviewFlowView[]): ReviewFlowView[
         videoUrl: existing.videoUrl ?? flow.videoUrl,
         traceUrl: existing.traceUrl ?? flow.traceUrl,
         checkpoints: mergeCheckpoints(existing.checkpoints, flow.checkpoints),
+        cases: [...(existing.cases ?? []), ...(flow.cases ?? []).filter((c) => !existing.cases?.some((e) => e.key === c.key))],
       };
       byKey.set(key, merged);
       out[out.indexOf(existing)] = merged;
@@ -138,12 +153,12 @@ function mergeCheckpoints(a: readonly ReviewCheckpointView[], b: readonly Review
 }
 
 /** The catalogue's screens as storyboard rows: the approved image, or the default branch's newest. */
-export function screensToFlows(screens: readonly ScreenRecord[], testHref: (testId: string) => string): ReviewFlowView[] {
+export function screensToFlows(screens: readonly ScreenRecord[], testHref: (testId: string) => string, links?: CaseLinks): ReviewFlowView[] {
   const byTest = new Map<string, ReviewFlowView>();
   for (const s of screens) {
     let flow = byTest.get(s.testId);
     if (!flow) {
-      flow = { resultId: s.testId, title: s.title, titlePath: s.titlePath, file: s.file, project: s.project || null, outcome: 'passed', resultHref: testHref(s.testId), checkpoints: [] };
+      flow = { resultId: s.testId, testId: s.testId, cases: casesOf(s.testId, links), title: s.title, titlePath: s.titlePath, file: s.file, project: s.project || null, outcome: 'passed', resultHref: testHref(s.testId), checkpoints: [] };
       byTest.set(s.testId, flow);
     }
     let cp = flow.checkpoints.find((c) => c.name === s.checkpointName);
