@@ -11,15 +11,21 @@
  * their border" points at a place, as it does for a person in the viewer.
  */
 import type { ImageContent } from '@modelcontextprotocol/server';
+import sharp from 'sharp';
 import { z } from 'zod';
-import { checkpointLabel, matchesReviewFilter, REVIEW_DECISIONS, REVIEW_FILTERS } from '@miguelfranken/ui/lib/review';
+import { checkpointLabel, describeDiff, matchesReviewFilter, REVIEW_DECISIONS, REVIEW_FILTERS } from '@miguelfranken/ui/lib/review';
 import { MAX_COMMENT_LENGTH } from '@miguelfranken/ui/lib/review-threads';
 import { signCaptureImagePath } from '@/lib/auth/artifact-url';
 import { baseUrl } from '@/lib/auth/config';
 import { annotate, cropAround } from '@/lib/review/annotate';
 import { pinSpecs, readCaptureBytes, threadComments, threadPosition } from '@/lib/review/images';
-import { captureInProject, decide, MAX_DECISION_CAPTURES, ReviewError, runReview, type CaptureRecord, type ComparedCapture } from '@/lib/review/queries';
 import { createThread, ThreadError, type CaptureThread } from '@/lib/review/threads';
+import { getStorage } from '@/lib/storage';
+import { db } from '@/lib/db/drizzle';
+import { attachments } from '@/lib/db/schema';
+import { eq } from 'drizzle-orm';
+import { captureInProject, decide, MAX_DECISION_CAPTURES, ReviewError, runReview, type CaptureRecord, type ComparedCapture } from '@/lib/review/queries';
+import { toDiffView } from '@/lib/review/view-model';
 import { artifactUrlTtlSeconds, inlineImageMaxBytes } from '../config';
 import { invalid, notFound } from '../errors';
 import { branchParam, commonParams, isUuid, runParam } from '../params';
@@ -113,6 +119,20 @@ const listInput = z.object({
   variant: z.string().optional().describe('Only this variant, e.g. "desktop" or "mobile".'),
 });
 
+const diffOut = z
+  .object({
+    against: z.enum(['baseline', 'previous', 'compare']).describe('What the image was measured against: its approved baseline, else the run before.'),
+    state: z.enum(['pending', 'done', 'failed', 'too_large']),
+    changedPixels: z.number(),
+    changedPercent: z.number().describe('Changed pixels as a percentage of the image, anti-aliasing excluded.'),
+    regions: z.number().describe('How many separate changed regions.'),
+    sizeChanged: z.boolean(),
+    contentMoved: z.boolean().describe('Rows were inserted or removed, so the rest of the page only shifted.'),
+    withinTolerance: z.boolean(),
+    summary: z.string(),
+  })
+  .nullable();
+
 const captureOut = z.object({
   captureId: z.string(),
   variant: z.string(),
@@ -120,8 +140,26 @@ const captureOut = z.object({
   sameAsBaseline: z.boolean().nullable(),
   baselineRun: z.number().nullable(),
   comment: z.string().nullable(),
+  autoApproved: z.boolean().describe('Approved by the project’s diff tolerance, not by a person.'),
+  diff: diffOut.describe('The measured pixel comparison, when there is one.'),
   openThreads: z.number().optional().describe('Open comment threads on the image: see them pinned with get_review_checkpoint.'),
 });
+
+function diffData(c: ComparedCapture): z.infer<typeof diffOut> {
+  if (!c.diff || !c.diffAgainst) return null;
+  const v = toDiffView(c.diff, c.diffAgainst, c.withinTolerance);
+  return {
+    against: v.against,
+    state: v.state,
+    changedPixels: v.changedPixels,
+    changedPercent: Math.round(v.ratio * 100_000) / 1000,
+    regions: v.regions.length,
+    sizeChanged: v.sizeChanged,
+    contentMoved: Boolean(v.shift && (v.shift.inserted.length || v.shift.removed.length)),
+    withinTolerance: Boolean(v.withinTolerance),
+    summary: describeDiff(v),
+  };
+}
 
 const listOutput = output({
   project: z.string(),
@@ -154,7 +192,7 @@ export const listReviewCheckpoints = defineTool({
   title: 'List review checkpoints',
   toolset: 'core',
   description:
-    "A run's review checkpoints — the named screenshots its tests capture at their milestones, per variant (desktop, mobile) — in journey order, with each image's review status (changed against its approved baseline, new, approved or changes requested) and its open comment threads. Defaults to what needs review. Look at one with get_review_checkpoint.",
+    "A run's review checkpoints — the named screenshots its tests capture at their milestones, per variant (desktop, mobile) — in journey order, with each image's review status (changed against its approved baseline, new, approved or changes requested) its open comment threads, and its measured pixel change: how much of the image changed, in how many regions, whether the page changed size or its content moved. Changes within the project's tolerance are approved automatically (autoApproved). Defaults to what needs review. Look at one with get_review_checkpoint.",
   input: listInput,
   output: listOutput,
   async handler(args, ctx) {
@@ -191,6 +229,8 @@ export const listReviewCheckpoints = defineTool({
                   sameAsBaseline: c.baseline ? Boolean(c.sha256 && c.baseline.capture?.sha256 === c.sha256) : null,
                   baselineRun: c.baseline?.decision.runNumber ?? null,
                   comment: c.decision?.comment ?? null,
+                  autoApproved: c.decision?.source === 'tolerance',
+                  diff: diffData(c),
                   openThreads: c.threads.filter((t) => t.status === 'open').length,
                 })),
             };
@@ -198,9 +238,9 @@ export const listReviewCheckpoints = defineTool({
           .filter((cp) => cp.captures.length > 0),
       }))
       .filter((t) => t.checkpoints.length > 0);
-    const reviewUrlOfRun = `${project.links.run(run.number)}/review`;
+    const reviewUrl = `${project.links.run(run.number)}/review`;
     return {
-      data: { project: project.ref, run: run.number, reviewUrl: reviewUrlOfRun, counts, tests },
+      data: { project: project.ref, run: run.number, reviewUrl, counts, tests },
       render(md, d) {
         md.heading(`Review checkpoints of run #${d.run}`, 2);
         md.line(`${d.counts.changed} changed, ${d.counts.new} new, ${d.counts.changes_requested} with changes requested, ${d.counts.approved} approved. ${link('Review in the app', d.reviewUrl)}`);
@@ -211,8 +251,10 @@ export const listReviewCheckpoints = defineTool({
         for (const t of d.tests) {
           md.heading(`${t.title} (${t.outcome}${t.project ? `, ${t.project}` : ''})`, 3);
           md.table(
-            ['#', 'Checkpoint', 'Variant', 'Status', 'Open threads', 'Capture id'],
-            t.checkpoints.flatMap((cp) => cp.captures.map((c) => [cp.order, cp.title, c.variant, c.status + (c.comment ? ` — "${c.comment}"` : ''), c.openThreads ?? 0, c.captureId])),
+            ['#', 'Checkpoint', 'Variant', 'Status', 'Measured change', 'Open threads', 'Capture id'],
+            t.checkpoints.flatMap((cp) =>
+              cp.captures.map((c) => [cp.order, cp.title, c.variant, (c.autoApproved ? 'approved (tolerance)' : c.status) + (c.comment && !c.autoApproved ? ` — "${c.comment}"` : ''), c.diff?.summary ?? '—', c.openThreads ?? 0, c.captureId]),
+            ),
           );
         }
       },
@@ -226,9 +268,10 @@ const getInput = z.object({
   ...commonParams,
   capture: z.string().describe('Capture id, from list_review_checkpoints.'),
   compare: z.boolean().optional().describe('Also attach the approved baseline image (or the previous run’s) to compare with. Default true.'),
+  changes: z.boolean().optional().describe('Attach close-ups of the measured changed regions (up to 3), this run’s crop then the reference’s. Default true.'),
   pins: z.boolean().optional().describe('Draw the open comment threads on the image as numbered pins. Default true.'),
-  thread: z.number().int().positive().optional().describe('Focus one thread by its number: its close-up is attached (and its pin drawn even if resolved).'),
-  crops: z.boolean().optional().describe(`Attach a close-up around each pin. Default: when at most ${AUTO_CROPS} threads are open.`),
+  thread: z.number().int().positive().optional().describe('Focus one comment thread by its number: its close-up is attached (and its pin drawn even if resolved).'),
+  pinCrops: z.boolean().optional().describe(`Attach a close-up around each pin. Default: when at most ${AUTO_CROPS} threads are open.`),
   includeResolved: z.boolean().optional().describe('Also list (and pin) resolved threads. Default false.'),
 });
 
@@ -245,6 +288,8 @@ const getOutput = output({
   reference: z.string().nullable(),
   imageUrl: z.string(),
   referenceUrl: z.string().nullable(),
+  diff: diffOut,
+  changedRegions: z.array(z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number(), pixels: z.number() })).describe('The changed regions, in the image’s pixels, largest first (up to 10).'),
   note: z.string().nullable(),
   image: z
     .object({ width: z.number(), height: z.number(), attachedWidth: z.number().nullable(), attachedHeight: z.number().nullable() })
@@ -256,6 +301,49 @@ const getOutput = output({
   threads: z.array(threadOut).optional().describe('Comment threads on the image, by the numbers on its pins.'),
   attachments: z.array(z.string()).optional().describe('What each attached image is, in order.'),
 });
+
+/** At most this many regions come as close-ups; each is a pair of images. */
+const MAX_CROPS = 3;
+/** A close-up has this much context around the region, and is scaled down to at most this width. */
+const CROP_MARGIN = 24;
+const CROP_MAX_WIDTH = 800;
+
+async function imageBytes(capture: CaptureRecord): Promise<Buffer | null> {
+  if (capture.attachment.status !== 'uploaded') return null;
+  const [row] = await db.select({ storageKey: attachments.storageKey }).from(attachments).where(eq(attachments.id, capture.attachment.id));
+  const object = row ? await getStorage().get(row.storageKey) : null;
+  return object ? Buffer.from(await new Response(object.stream).arrayBuffer()) : null;
+}
+
+/**
+ * Close-ups of the largest changes: the region with some context, from this
+ * run's image and the same rectangle of the reference, so an agent can say
+ * what changed without reading a 3000-pixel page.
+ */
+async function regionCrops(capture: ComparedCapture, reference: CaptureRecord | null): Promise<ImageContent[]> {
+  const regions = [...(capture.diff?.regions ?? [])].sort((a, b) => b.pixels - a.pixels).slice(0, MAX_CROPS);
+  if (!regions.length) return [];
+  const [head, base] = await Promise.all([imageBytes(capture), reference ? imageBytes(reference) : null]);
+  if (!head) return [];
+  const crop = async (buf: Buffer, r: (typeof regions)[number]) => {
+    const meta = await sharp(buf).metadata();
+    const left = Math.max(0, r.x - CROP_MARGIN);
+    const top = Math.max(0, r.y - CROP_MARGIN);
+    const width = Math.min((meta.width ?? 0) - left, r.width + CROP_MARGIN * 2);
+    const height = Math.min((meta.height ?? 0) - top, r.height + CROP_MARGIN * 2);
+    if (width <= 0 || height <= 0) return null;
+    const png = await sharp(buf).extract({ left, top, width, height }).resize({ width: Math.min(width, CROP_MAX_WIDTH), withoutEnlargement: true }).png().toBuffer();
+    return { type: 'image' as const, data: png.toString('base64'), mimeType: 'image/png' };
+  };
+  const out: ImageContent[] = [];
+  for (const r of regions) {
+    const h = await crop(head, r).catch(() => null);
+    if (h) out.push(h);
+    const b = base ? await crop(base, r).catch(() => null) : null;
+    if (b) out.push(b);
+  }
+  return out;
+}
 
 const asImage = (img: { data: Buffer; mimeType: string }): ImageContent => ({ type: 'image', data: img.data.toString('base64'), mimeType: img.mimeType });
 
@@ -278,7 +366,7 @@ export const getReviewCheckpoint = defineTool({
   title: 'Get a review checkpoint',
   toolset: 'core',
   description:
-    'One review checkpoint image, with its approved baseline (or the previous run’s capture) beside it, so you can say what changed. Open comment threads are drawn on the image as numbered pins, a close-up per pin follows, and the threads are listed by the same numbers — what each asks to change, and where. Large images are scaled to fit.',
+    'One review checkpoint image to look at, with its approved baseline (or the previous run’s capture) beside it, the measured change (changed pixels, regions in image pixels) and close-ups of the largest changed regions, so you can say what changed. Open comment threads are drawn on the image as numbered pins, a close-up per pin follows, and the threads are listed by the same numbers. Large images are scaled to fit.',
   input: getInput,
   output: getOutput,
   async handler(args, ctx) {
@@ -288,6 +376,7 @@ export const getReviewCheckpoint = defineTool({
     if (!found) throw notFound(`Capture ${args.capture} not found in ${project.ref}.`, 'Call list_review_checkpoints for the ids.');
     const { capture } = found;
     const reference = capture.baseline?.capture ?? null;
+    const measuredAgainst = capture.diffAgainst === 'baseline' ? reference : capture.diffAgainst === 'previous' ? (capture.previous?.capture ?? null) : null;
     const shownThreads = capture.threads.filter((t) => args.includeResolved || t.status === 'open' || t.number === args.thread);
     const focus = args.thread != null ? capture.threads.find((t) => t.number === args.thread) : undefined;
     if (args.thread != null && !focus) throw notFound(`This image has no thread #${args.thread}.`, 'The threads are listed without "thread".');
@@ -306,7 +395,10 @@ export const getReviewCheckpoint = defineTool({
       images.push(ref.image);
       described.push('the approved baseline');
     }
-    const cropTargets = focus ? [focus] : args.crops === false || (args.crops !== true && shownThreads.filter((t) => t.status === 'open').length > AUTO_CROPS) ? [] : shownThreads;
+    const crops = (args.changes ?? true) && capture.diff?.status === 'done' ? await regionCrops(capture, measuredAgainst) : [];
+    images.push(...crops);
+    if (crops.length) described.push(`${crops.length} close-ups of the changed regions${measuredAgainst ? ' (this run’s crop, then the reference’s)' : ''}`);
+    const cropTargets = focus ? [focus] : args.pinCrops === false || (args.pinCrops !== true && shownThreads.filter((t) => t.status === 'open').length > AUTO_CROPS) ? [] : shownThreads;
     if (main?.bytes && args.pins !== false) {
       for (const t of cropTargets) {
         const spec = pins.find((p) => p.number === t.number);
@@ -318,7 +410,6 @@ export const getReviewCheckpoint = defineTool({
         }
       }
     }
-
     const notes = [
       !main ? 'The image is not available to attach; open the link.' : null,
       compare && reference && !ref ? 'The baseline is gone or cannot be attached.' : null,
@@ -339,8 +430,14 @@ export const getReviewCheckpoint = defineTool({
       reference: reference ? `approved, run #${capture.baseline!.decision.runNumber ?? '?'}` : null,
       imageUrl: ctx.artifactUrl(capture.attachment.id),
       referenceUrl: reference ? ctx.artifactUrl(reference.attachment.id) : null,
+      diff: diffData(capture),
+      changedRegions: [...(capture.diff?.regions ?? [])].sort((a, b) => b.pixels - a.pixels).slice(0, 10),
       note: [...notes, hidden > 0 ? `${hidden} resolved thread${hidden === 1 ? '' : 's'} not shown (includeResolved).` : null].filter(Boolean).join(' ') || null,
-      image: main?.out ? { width: main.out.source.width, height: main.out.source.height, attachedWidth: main.out.width, attachedHeight: main.out.height } : capture.width && capture.height ? { width: capture.width, height: capture.height, attachedWidth: null, attachedHeight: null } : null,
+      image: main?.out
+        ? { width: main.out.source.width, height: main.out.source.height, attachedWidth: main.out.width, attachedHeight: main.out.height }
+        : capture.width && capture.height
+          ? { width: capture.width, height: capture.height, attachedWidth: null, attachedHeight: null }
+          : null,
       annotatedImageUrl: capture.attachment.status === 'uploaded' ? `${baseUrl()}${signCaptureImagePath(capture.id, artifactUrlTtlSeconds())}` : null,
       reviewUrl: reviewUrl(project.links, found.runNumber, capture),
       threads,
@@ -357,6 +454,7 @@ export const getReviewCheckpoint = defineTool({
           ['Viewport', d.viewport],
           ['Image', d.image ? `${d.image.width}×${d.image.height} px${d.image.attachedWidth && d.image.attachedWidth !== d.image.width ? `, attached at ${d.image.attachedWidth}×${d.image.attachedHeight}` : ''}` : null],
           ['Compared with', d.reference ? `${d.reference}: ${d.sameAsReference ? 'identical' : 'different'}` : null],
+          ['Measured change', d.diff ? `${d.diff.summary} (against the ${d.diff.against === 'baseline' ? 'approved baseline' : 'run before'})${d.diff.withinTolerance ? ', within the tolerance' : ''}` : null],
           ['In the app', d.reviewUrl ?? null],
           ['Image link', d.imageUrl],
           ['With pins', threads.length ? (d.annotatedImageUrl ?? null) : null],
@@ -418,7 +516,7 @@ export const reviewCheckpoint = defineTool({
       comment: args.comment,
       userId: project.user.id,
       resolveThreads: args.resolveThreads,
-      source: 'mcp',
+      commentSource: 'mcp',
     }).catch((error: unknown) => {
       if (error instanceof ReviewError) throw invalid(error.message);
       throw error;

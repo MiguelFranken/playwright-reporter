@@ -338,7 +338,7 @@ export const router = {
       description: 'One review checkpoint image: its status, viewport, whether it matches the approved baseline, and short-lived links to it and to the baseline.',
       tags: ['Visual review'],
       params: { capture: captureRef },
-      omit: ['compare', 'pins', 'crops'],
+      omit: ['compare', 'pins', 'pinCrops'],
     }),
     decide: fromTool(tool(reviewCheckpoint), {
       method: 'POST',

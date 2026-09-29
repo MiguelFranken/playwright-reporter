@@ -50,6 +50,9 @@ export interface PinLayerProps extends ThreadActions {
 
 const KEY_STEP = 0.01;
 
+/** The frames a pin layer sits in, which scroll the image: a screen, or the changes view. */
+const SCROLLER = '[data-slot="screen-frame"], [data-slot="diff-highlight"]';
+
 /**
  * The pins of one screenshot, laid over the image inside its scrolling frame
  * so they scroll with it, at a fixed size whatever the zoom. Hovering a pin
@@ -326,7 +329,7 @@ function useOffscreenPins(layer: React.RefObject<HTMLDivElement | null>, pins: r
   const [state, setState] = useState<{ above: HTMLElement[]; below: HTMLElement[] }>({ above: [], below: [] });
   useLayoutEffect(() => {
     const el = layer.current;
-    const scroller = el?.closest<HTMLElement>('[data-slot="screen-frame"]');
+    const scroller = el?.closest<HTMLElement>(SCROLLER);
     if (!el || !scroller) return;
     let frame = 0;
     const measure = () => {
@@ -357,7 +360,7 @@ function useOffscreenPins(layer: React.RefObject<HTMLDivElement | null>, pins: r
 /** The middle of the part of the layer its frame shows, in fractions of the layer. */
 function visibleCenter(layer: HTMLElement) {
   const r = layer.getBoundingClientRect();
-  const view = layer.closest('[data-slot="screen-frame"]')?.getBoundingClientRect() ?? r;
+  const view = layer.closest(SCROLLER)?.getBoundingClientRect() ?? r;
   const top = Math.max(r.top, view.top);
   const bottom = Math.min(r.bottom, view.bottom);
   return { x: 0.5, y: clamp(((top + bottom) / 2 - r.top) / r.height) };

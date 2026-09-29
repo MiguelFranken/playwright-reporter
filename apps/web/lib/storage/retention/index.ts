@@ -12,10 +12,11 @@
  * overlap: each batch locks its rows with `skip locked`, so two never work on
  * the same artifact.
  */
-import { and, asc, desc, eq, gte, inArray, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import { db } from '@/lib/db/drizzle';
 import { artifactSweeps, attachments, instanceSettings, libraryReferences, reviewCaptures, reviewDecisions, reviewThreads, runs, type ArtifactSweep } from '@/lib/db/schema';
 import { getStorage, type StorageAdapter } from '@/lib/storage';
+import { ingestSweepDue } from '@/lib/sweeps/continuation';
 import { INGEST_SWEEP_INTERVAL_MS, ingestSweepEnabled } from './config';
 import { cutoffs, environmentPolicy, normalizePolicy, type PolicySource, type RetentionPolicy } from './policy';
 
@@ -322,14 +323,24 @@ async function anyDue(policy: RetentionPolicy, storage: StorageAdapter, now: Dat
 
 /**
  * Called after a run finishes: sweeps, briefly, when the policy is on and no
- * sweep of any trigger started within `INGEST_SWEEP_INTERVAL_MS`. Two runs
- * finishing together may both sweep, which the row locks make harmless.
+ * sweep of any trigger started within `INGEST_SWEEP_INTERVAL_MS` — or the
+ * latest one stopped at its budget with work left, which this one then
+ * continues (`ingestSweepDue`). Two runs finishing together may both sweep,
+ * which the row locks make harmless.
  */
 export async function sweepAfterIngest(options: Omit<SweepOptions, 'trigger'> = {}): Promise<SweepResult | { status: 'skipped' }> {
   if (!ingestSweepEnabled()) return { status: 'skipped' };
-  const since = new Date(Date.now() - INGEST_SWEEP_INTERVAL_MS);
-  const [recent] = await db.select({ id: artifactSweeps.id }).from(artifactSweeps).where(gte(artifactSweeps.startedAt, since)).limit(1);
-  if (recent) return { status: 'skipped' };
+  const [latest] = await db
+    .select({
+      startedAt: artifactSweeps.startedAt,
+      finishedAt: artifactSweeps.finishedAt,
+      hasMore: artifactSweeps.hasMore,
+      error: artifactSweeps.error,
+    })
+    .from(artifactSweeps)
+    .orderBy(desc(artifactSweeps.startedAt), desc(artifactSweeps.id))
+    .limit(1);
+  if (!ingestSweepDue(latest, INGEST_SWEEP_INTERVAL_MS)) return { status: 'skipped' };
   return sweepExpiredArtifacts({ budgetMs: 20_000, ...options, trigger: 'ingest' });
 }
 

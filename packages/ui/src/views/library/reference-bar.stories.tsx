@@ -25,7 +25,7 @@ export const Default: Story = {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: /Showing main/ }));
     const body = within(document.body);
-    await userEvent.click(await body.findByRole('menuitem', { name: /Checkout redesign/ }));
+    await userEvent.click(await body.findByRole('menuitem', { name: /212/ }));
     await expect(args.onReferenceChange).toHaveBeenCalledWith({ kind: 'pull_request', prNumber: 212 });
   },
 };
@@ -55,5 +55,33 @@ export const NotKept: Story = {
     await userEvent.click(canvas.getByRole('button', { name: /Keep in library/ }));
     await expect(args.onKeep).toHaveBeenCalled();
     await expect(canvas.queryByRole('button', { name: /Settings/ })).toBeNull();
+  },
+};
+
+/** Picking another reference to compare every screen with. */
+export const CompareWith: Story = {
+  args: { onCompareChange: fn() },
+  // Base UI's focus guards around the open menu (see packages/ui/AGENTS.md).
+  parameters: { a11y: { config: { rules: [{ id: 'aria-hidden-focus', enabled: false }] } } },
+  play: async ({ args }) => {
+    const body = within(document.body);
+    await userEvent.click(body.getByRole('button', { name: 'Compare with…' }));
+    const item = await body.findByRole('menuitem', { name: /212/ });
+    await userEvent.click(item);
+    await expect(args.onCompareChange).toHaveBeenCalledWith(redesignReference.key);
+  },
+};
+
+/** Comparing: the button names the other reference, and stopping is one click. */
+export const Comparing: Story = {
+  args: { current: redesignReference, compareWith: mainReference, onCompareChange: fn() },
+  // Base UI's focus guards around the open menu (see packages/ui/AGENTS.md).
+  parameters: { a11y: { config: { rules: [{ id: 'aria-hidden-focus', enabled: false }] } } },
+  play: async ({ args }) => {
+    const body = within(document.body);
+    await expect(body.getByText(/Every screen is compared with/)).toBeInTheDocument();
+    await userEvent.click(body.getByRole('button', { name: /Compared with/ }));
+    await userEvent.click(await body.findByRole('menuitem', { name: 'Stop comparing' }));
+    await expect(args.onCompareChange).toHaveBeenCalledWith(null);
   },
 };

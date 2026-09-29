@@ -1,6 +1,6 @@
 import { relations, sql } from 'drizzle-orm';
 import { boolean, check, index, integer, jsonb, pgEnum, pgTable, real, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
-import { REVIEW_DECISIONS } from '@miguelfranken/ui/lib/review';
+import { REVIEW_DECISIONS, type DecisionSource, type DiffRegion, type DiffShift, type DiffState } from '@miguelfranken/ui/lib/review';
 import { ANCHOR_KINDS, COMMENT_KINDS, COMMENT_SOURCES, THREAD_STATUSES } from '@miguelfranken/ui/lib/review-threads';
 import { users } from './auth';
 import { attachments, projects, runs, testAttempts, testResults, tests } from './reporting';
@@ -127,6 +127,13 @@ export const reviewDecisions = pgTable(
     captureId: uuid('capture_id').references(() => reviewCaptures.id, { onDelete: 'set null' }),
     runId: uuid('run_id').references(() => runs.id, { onDelete: 'set null' }),
     decision: reviewDecisionEnum('decision').notNull(),
+    /**
+     * `human`: a reviewer (or an agent with their token). `tolerance`: the
+     * project's diff tolerance approved a change too small to matter. Only a
+     * human approval becomes a baseline, so noise cannot creep in approval by
+     * approval.
+     */
+    source: text('source').$type<DecisionSource>().notNull().default('human'),
     comment: text('comment'),
     userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -136,6 +143,83 @@ export const reviewDecisions = pgTable(
     index('review_decisions_project_idx').on(t.projectId, t.createdAt),
     index('review_decisions_capture_idx').on(t.captureId),
   ],
+);
+
+/**
+ * The pixel comparison of two images, by content: `head_sha256` measured
+ * against `base_sha256`, under `options_key` (the algorithm, its threshold
+ * and the ignored areas). Keyed by hashes rather than captures, so the same
+ * pair is measured once however many runs capture it; captures find their
+ * diff by their own hash and their reference's.
+ *
+ * Rows start `pending` (planned), are claimed by one worker (`claimed_at`)
+ * and end `done`, `failed` or `too_large`.
+ */
+export const imageDiffs = pgTable(
+  'image_diffs',
+  {
+    id: uuid('id').primaryKey(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    baseSha256: text('base_sha256').notNull(),
+    headSha256: text('head_sha256').notNull(),
+    optionsKey: text('options_key').notNull(),
+    /** What `options_key` stands for, so a worker can measure with it. */
+    options: jsonb('options').$type<{ threshold: number; ignore: Pick<DiffRegion, 'x' | 'y' | 'width' | 'height'>[] }>().notNull(),
+    /** The images read: any attachment with the hash would do, these are the ones planned with. */
+    baseAttachmentId: uuid('base_attachment_id').references(() => attachments.id, { onDelete: 'set null' }),
+    headAttachmentId: uuid('head_attachment_id').references(() => attachments.id, { onDelete: 'set null' }),
+    status: text('status').$type<DiffState>().notNull().default('pending'),
+    changedPixels: integer('changed_pixels'),
+    totalPixels: integer('total_pixels'),
+    ratio: real('ratio'),
+    baseWidth: integer('base_width'),
+    baseHeight: integer('base_height'),
+    headWidth: integer('head_width'),
+    headHeight: integer('head_height'),
+    regions: jsonb('regions').$type<DiffRegion[]>(),
+    regionsTruncated: boolean('regions_truncated').notNull().default(false),
+    shift: jsonb('shift').$type<DiffShift>(),
+    /** The overlay PNG in the attachment store; null without changes. */
+    overlayKey: text('overlay_key'),
+    overlaySize: integer('overlay_size'),
+    error: text('error'),
+    attempts: integer('attempts').notNull().default(0),
+    durationMs: integer('duration_ms'),
+    claimedAt: timestamp('claimed_at', { withTimezone: true }),
+    computedAt: timestamp('computed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('image_diffs_pair_idx').on(t.projectId, t.baseSha256, t.headSha256, t.optionsKey),
+    index('image_diffs_pending_idx').on(t.status, t.createdAt).where(sql`${t.status} = 'pending'`),
+    index('image_diffs_head_attachment_idx').on(t.headAttachmentId),
+    index('image_diffs_base_attachment_idx').on(t.baseAttachmentId),
+  ],
+);
+
+/**
+ * Areas of a checkpoint's image left out of its comparisons — a clock, a
+ * rotating ad — in the image's pixels, per checkpoint and variant.
+ */
+export const reviewIgnoreRegions = pgTable(
+  'review_ignore_regions',
+  {
+    id: uuid('id').primaryKey(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    testId: uuid('test_id')
+      .notNull()
+      .references(() => tests.id, { onDelete: 'cascade' }),
+    checkpointName: text('checkpoint_name').notNull(),
+    variant: text('variant').notNull(),
+    regions: jsonb('regions').$type<Pick<DiffRegion, 'x' | 'y' | 'width' | 'height'>[]>().notNull().default([]),
+    updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('review_ignore_regions_identity_idx').on(t.testId, t.checkpointName, t.variant)],
 );
 
 /**
@@ -266,3 +350,4 @@ export type ReviewDecisionRow = typeof reviewDecisions.$inferSelect;
 export type ReviewThreadRow = typeof reviewThreads.$inferSelect;
 export type ReviewCommentRow = typeof reviewComments.$inferSelect;
 export type LibraryReferenceRow = typeof libraryReferences.$inferSelect;
+export type ImageDiffRow = typeof imageDiffs.$inferSelect;

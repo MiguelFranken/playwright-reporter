@@ -34,8 +34,8 @@ also accepts `project`, `format` (`markdown` | `json`) and `maxChars`. See the R
 | [`delete_test_suite`](#delete_test_suite) | write | Delete suites that hold no test cases, e.g. |
 | [`link_test_case`](#link_test_case) | write | Link Playwright tests (by test id from find_tests) to a test case, or unlink them. |
 | [`adopt_tests`](#adopt_tests) | write | Turn Playwright tests into test cases already linked to them: steps from their test.step() calls, one case per test across browsers. |
-| [`list_review_checkpoints`](#list_review_checkpoints) | core | A run's review checkpoints — the named screenshots its tests capture at their milestones, per variant (desktop, mobile) — in journey order, with each image's review status (changed against its approved baseline, new, approved or changes requested) and its open comment threads. |
-| [`get_review_checkpoint`](#get_review_checkpoint) | core | One review checkpoint image, with its approved baseline (or the previous run’s capture) beside it, so you can say what changed. |
+| [`list_review_checkpoints`](#list_review_checkpoints) | core | A run's review checkpoints — the named screenshots its tests capture at their milestones, per variant (desktop, mobile) — in journey order, with each image's review status (changed against its approved baseline, new, approved or changes requested) its open comment threads, and its measured pixel change: how much of the image changed, in how many regions, whether the page changed size or its content moved. |
+| [`get_review_checkpoint`](#get_review_checkpoint) | core | One review checkpoint image to look at, with its approved baseline (or the previous run’s capture) beside it, the measured change (changed pixels, regions in image pixels) and close-ups of the largest changed regions, so you can say what changed. |
 | [`review_checkpoint`](#review_checkpoint) | write | Approve review checkpoint images, or ask for changes — with a comment, and on one image with pins that mark each change where it is. |
 | [`list_review_threads`](#list_review_threads) | core | The comment threads people (or assistants) pinned on a run’s review images — change requests at a spot or an area of a screenshot — per image, by the number on the pin, with where each points (pixels, percent, CSS pixels) and the conversation. |
 | [`comment_on_review`](#comment_on_review) | write | Pin a comment thread on a review image — at a spot or an area (in percent of the image), or about the whole image — or reply to a thread by its number. |
@@ -574,7 +574,7 @@ Structured output fields: `created`, `skipped`, `message`, `truncated`.
 
 **List review checkpoints** · toolset `core`
 
-A run's review checkpoints — the named screenshots its tests capture at their milestones, per variant (desktop, mobile) — in journey order, with each image's review status (changed against its approved baseline, new, approved or changes requested) and its open comment threads. Defaults to what needs review. Look at one with get_review_checkpoint.
+A run's review checkpoints — the named screenshots its tests capture at their milestones, per variant (desktop, mobile) — in journey order, with each image's review status (changed against its approved baseline, new, approved or changes requested) its open comment threads, and its measured pixel change: how much of the image changed, in how many regions, whether the page changed size or its content moved. Changes within the project's tolerance are approved automatically (autoApproved). Defaults to what needs review. Look at one with get_review_checkpoint.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -593,7 +593,7 @@ Structured output fields: `project`, `run`, `reviewUrl`, `counts`, `tests`, `tru
 
 **Get a review checkpoint** · toolset `core`
 
-One review checkpoint image, with its approved baseline (or the previous run’s capture) beside it, so you can say what changed. Open comment threads are drawn on the image as numbered pins, a close-up per pin follows, and the threads are listed by the same numbers — what each asks to change, and where. Large images are scaled to fit.
+One review checkpoint image to look at, with its approved baseline (or the previous run’s capture) beside it, the measured change (changed pixels, regions in image pixels) and close-ups of the largest changed regions, so you can say what changed. Open comment threads are drawn on the image as numbered pins, a close-up per pin follows, and the threads are listed by the same numbers. Large images are scaled to fit.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -602,12 +602,13 @@ One review checkpoint image, with its approved baseline (or the previous run’s
 | `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
 | `capture` | string | yes | Capture id, from list_review_checkpoints. |
 | `compare` | boolean |  | Also attach the approved baseline image (or the previous run’s) to compare with. Default true. |
+| `changes` | boolean |  | Attach close-ups of the measured changed regions (up to 3), this run’s crop then the reference’s. Default true. |
 | `pins` | boolean |  | Draw the open comment threads on the image as numbered pins. Default true. |
-| `thread` | integer (–9007199254740991) |  | Focus one thread by its number: its close-up is attached (and its pin drawn even if resolved). |
-| `crops` | boolean |  | Attach a close-up around each pin. Default: when at most 6 threads are open. |
+| `thread` | integer (–9007199254740991) |  | Focus one comment thread by its number: its close-up is attached (and its pin drawn even if resolved). |
+| `pinCrops` | boolean |  | Attach a close-up around each pin. Default: when at most 6 threads are open. |
 | `includeResolved` | boolean |  | Also list (and pin) resolved threads. Default false. |
 
-Structured output fields: `project`, `captureId`, `test`, `checkpoint`, `variant`, `run`, `status`, `viewport`, `sameAsReference`, `reference`, `imageUrl`, `referenceUrl`, `note`, `image`, `annotatedImageUrl`, `reviewUrl`, `threads`, `attachments`, `truncated`.
+Structured output fields: `project`, `captureId`, `test`, `checkpoint`, `variant`, `run`, `status`, `viewport`, `sameAsReference`, `reference`, `imageUrl`, `referenceUrl`, `diff`, `changedRegions`, `note`, `image`, `annotatedImageUrl`, `reviewUrl`, `threads`, `attachments`, `truncated`.
 
 ## review_checkpoint
 

@@ -1,4 +1,3 @@
-import type * as React from 'react';
 import { cn } from '../../lib/cn';
 import type { FrameSize, ReviewImage } from '../../lib/review';
 import { UnavailableImage } from './review-frame';
@@ -51,8 +50,8 @@ export function ScreenFrame({
   tone?: keyof typeof TONE_RING;
   /** Sizes the frame from `SCREEN_ZOOM_VAR` when an ancestor sets it, `zoom` otherwise (which still picks the image). */
   live?: boolean;
-  /** Laid over the image and scrolling with it, in the image's own box: comment pins. */
-  overlay?: React.ReactNode;
+  /** Drawn over the image (marks, boxes), told whether the full image or the first-screen preview is shown. */
+  overlay?: (shown: 'full' | 'preview') => React.ReactNode;
 }) {
   const width = Math.max(24, Math.round(frame.width * zoom));
   const height = Math.max(24, Math.round(frame.height * zoom));
@@ -72,17 +71,15 @@ export function ScreenFrame({
       )}
       style={live ? { width: liveLength(frame.width, zoom), height: liveLength(frame.height, zoom) } : { width, height }}
     >
-      {image.available ? (
-        overlay ? (
-          <div className="relative">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={src} alt={alt} loading="lazy" decoding="async" draggable={false} className="block h-auto w-full" />
-            {overlay}
-          </div>
-        ) : (
-          // eslint-disable-next-line @next/next/no-img-element
+      {image.available && overlay ? (
+        <div className="relative">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={src} alt={alt} loading="lazy" decoding="async" draggable={false} className="block h-auto w-full" />
-        )
+          {overlay(src === image.url ? 'full' : 'preview')}
+        </div>
+      ) : image.available ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt={alt} loading="lazy" decoding="async" draggable={false} className="block h-auto w-full" />
       ) : (
         <UnavailableImage image={image} />
       )}

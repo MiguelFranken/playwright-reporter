@@ -28,7 +28,10 @@ import {
   type StoryboardMode,
 } from '../../lib/review';
 import { openThreadCount, sortThreads, type ThreadActions, type ThreadFilter } from '../../lib/review-threads';
+import { DiffHighlight, diffImageSize } from './diff-highlight';
+import { DiffSummary } from './diff-summary';
 import { COMPARE_MODE_LABELS, COMPARE_MODES, ImageCompare, type CompareMode } from './image-compare';
+import { IgnoreRegionsEditor, type IgnoreRect } from './ignore-regions-editor';
 import { FrameToolbar } from './frame-toolbar';
 import { PinLayer, type PinFocusRequest, type ThreadDraft } from './pin-layer';
 import { ScreenFrame } from './screen-frame';
@@ -55,7 +58,8 @@ export interface ReviewCommentsProps extends ThreadActions {
   onOpenThreadChange?: (number: number | null) => void;
 }
 
-type StageMode = 'image' | CompareMode;
+/** `changes`: this run's image with the measured changes marked; `ignore`: drawing the areas left out. */
+type StageMode = 'image' | 'changes' | 'ignore' | CompareMode;
 
 interface Position {
   flow: ReviewFlowView;
@@ -81,8 +85,14 @@ function seconds(ms: number) {
   return s < 60 ? `${s.toFixed(1)} s` : `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`;
 }
 
-/** The reference a capture is compared with: the approved baseline, else the run before. */
-function referenceOf(capture: ReviewCaptureView): { image: ReviewImage; label: string; same: boolean } | null {
+/**
+ * The reference a capture is compared with: another line of work's capture
+ * when the library compares two, else (in review) the approved baseline, else
+ * the run before.
+ */
+function referenceOf(capture: ReviewCaptureView, library: boolean): { image: ReviewImage; label: string; same: boolean } | null {
+  if (capture.compare) return { image: capture.compare.image, label: capture.compare.label, same: capture.compare.same };
+  if (library) return null;
   if (capture.baseline) return { image: capture.baseline.image, label: `Approved${capture.baseline.runNumber ? ` (#${capture.baseline.runNumber})` : ''}`, same: capture.baseline.same };
   if (capture.previous) return { image: capture.previous.image, label: `Run #${capture.previous.runNumber}`, same: capture.previous.same };
   return null;
@@ -94,9 +104,9 @@ function referenceOf(capture: ReviewCaptureView): { image: ReviewImage; label: s
  * baseline, what was captured where and when, and the decision.
  *
  * Built for going through a run with the keyboard: ← → move between
- * checkpoints, ↑ ↓ between flows, V switches the variant, C the comparison,
- * A approves and moves on to the next image that needs review, R asks for
- * changes. Controlled: the host owns the selection (it may live in the URL)
+ * checkpoints, ↑ ↓ between flows, V switches the variant, M the comparison,
+ * N and P step through the measured changes, A approves and moves on to the
+ * next image that needs review, C pins comments on the screenshot. Controlled: the host owns the selection (it may live in the URL)
  * and records decisions.
  */
 export function CheckpointViewer({
@@ -109,6 +119,8 @@ export function CheckpointViewer({
   frame: frameProp,
   onFrameChange,
   mode = 'review',
+  onIgnoreRegionsChange,
+  ignorePendingId,
   comments = {},
 }: {
   flows: readonly ReviewFlowView[];
@@ -123,13 +135,18 @@ export function CheckpointViewer({
   onFrameChange?: (next: FrameSettings) => void;
   /** `library`: documentation — the screens, what they show and where, without statuses, comparisons or decisions. */
   mode?: StoryboardMode;
+  /** Saves the areas a capture's checkpoint and variant leave out of comparisons; without it they cannot be edited. */
+  onIgnoreRegionsChange?: (input: { captureId: string; regions: IgnoreRect[] }) => void;
+  /** The capture whose ignored areas are being saved. */
+  ignorePendingId?: string | null;
   comments?: ReviewCommentsProps;
 }) {
   const library = mode === 'library';
   const all = useMemo(() => positions(flows), [flows]);
   const at = selection ? all.findIndex((p) => p.checkpoint.id === selection.checkpointId || p.checkpoint.aliases?.includes(selection.checkpointId)) : -1;
   const pos = at >= 0 ? all[at] : null;
-  const [stage, setStage] = useState<StageMode>('image');
+  const [stage, setStage] = useState<StageMode>('changes');
+  const [activeRegion, setActiveRegion] = useState<number | null>(null);
   const [commenting, setCommenting] = useState(false);
   const [draft, setDraft] = useState<ThreadDraft | null>(null);
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
@@ -147,8 +164,26 @@ export function CheckpointViewer({
   const variant = selection?.variant ?? null;
   const shown = variant ? captures.filter((c) => c.variant === variant) : captures;
   const current = shown.length === 1 ? shown[0] : null;
-  const reference = current && !library ? referenceOf(current) : null;
-  const effectiveStage: StageMode = current && reference ? stage : 'image';
+  const reference = current ? referenceOf(current, library) : null;
+  const diff = current && reference ? (current.diff ?? null) : null;
+  const measuredSize = current && diff ? diffImageSize(current.image, diff) : null;
+  const hasChanges = Boolean(current?.image.available && diff?.state === 'done' && (diff.changedPixels > 0 || diff.sizeChanged) && measuredSize);
+  const regions = hasChanges ? diff!.regions : [];
+  const ownSize = current?.image.width && current.image.height ? { width: current.image.width, height: current.image.height } : null;
+  const canIgnore = Boolean(onIgnoreRegionsChange && canDecide && !library && current?.image.available && (measuredSize ?? ownSize));
+  const effectiveStage: StageMode = !current
+    ? 'image'
+    : stage === 'ignore'
+      ? canIgnore
+        ? 'ignore'
+        : 'image'
+      : stage === 'changes'
+        ? hasChanges
+          ? 'changes'
+          : 'image'
+        : reference && stage !== 'image'
+          ? stage
+          : 'image';
   const [ownFrame, setOwnFrame] = useState<FrameSettings>(DEFAULT_FRAME);
   const frameSettings = frameProp ?? ownFrame;
   const setFrame = (next: FrameSettings) => {
@@ -156,24 +191,26 @@ export function CheckpointViewer({
     onFrameChange?.(next);
   };
   const stageSize = useElementSize(stageEl);
-  const comparing = Boolean(current && reference && effectiveStage !== 'image');
+  const comparing = Boolean(current && effectiveStage !== 'image');
   const frames = (comparing && current ? [current] : shown).map((c) => frameFor(frameSettings, c));
   const zoomFrames = comparing && effectiveStage === 'side-by-side' ? [frames[0], frames[0]] : frames;
   // Room for the captions above the screens and the stage's padding.
   const zoom = frameSettings.zoom === 'fit' ? fitZoom(zoomFrames, { width: stageSize.width - 48, height: stageSize.height - 48 - 28 }) : frameSettings.zoom;
   const pending = new Set(pendingIds);
   const busy = shown.some((c) => pending.has(c.id));
+
   const canComment = Boolean(comments.canComment && comments.onCreateThread);
   const threadGroups = shown.map((c) => ({ captureId: c.id, variant: c.variant, threads: c.threads ?? [] }));
   const shownThreads = threadGroups.flatMap((g) => g.threads);
   const openCount = openThreadCount(shownThreads);
-  // Pins sit on images drawn at the capture's own geometry: the plain image, and this run's side of a side-by-side.
-  const pinsOn = effectiveStage === 'image' || effectiveStage === 'side-by-side';
+  // Pins sit on images drawn at the capture's own geometry: the plain image, its changes, and this run's side of a side-by-side.
+  const pinsOn = effectiveStage === 'image' || effectiveStage === 'changes' || effectiveStage === 'side-by-side';
   const listed = sortThreads(shownThreads.filter((t) => threadFilter === 'all' || t.status === threadFilter || t.id === openThreadId));
 
-  // A new checkpoint starts without a half-placed pin or an open thread; comment mode stays on.
+  // A new checkpoint starts at its first change, without a half-placed pin or an open thread; comment mode stays on.
   const selectionKey = `${selection?.checkpointId}\u0000${selection?.variant}`;
   useEffect(() => {
+    setActiveRegion(null);
     setDraft(null);
     setComposing(false);
     setConfirmApprove(false);
@@ -191,25 +228,32 @@ export function CheckpointViewer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linked?.id, selectionKey]);
 
-  const openThread = (id: string | null, opts: { focus?: boolean; byClick?: boolean } = {}) => {
+  const openThread = (id: string | null, opts: { focus?: boolean } = {}) => {
     setOpenThreadId(id);
     if (id) setDraft(null);
     if (opts.focus && id) setFocus((f) => ({ threadId: id, nonce: (f?.nonce ?? 0) + 1, ping: true }));
-    if (opts.byClick !== false) comments.onOpenThreadChange?.(id ? (shownThreads.find((t) => t.id === id)?.number ?? null) : null);
+    comments.onOpenThreadChange?.(id ? (shownThreads.find((t) => t.id === id)?.number ?? null) : null);
   };
   const stepThread = (delta: number) => {
     if (!listed.length) return;
-    const at = listed.findIndex((t) => t.id === openThreadId);
-    const next = listed[(at + delta + listed.length) % listed.length] ?? listed[0];
+    const i = listed.findIndex((t) => t.id === openThreadId);
+    const next = listed[(i + delta + listed.length) % listed.length] ?? listed[0];
+    if (next.anchor.kind !== 'image' && !pinsOn) setStage('image');
     openThread(next.id, { focus: true });
   };
   const toggleCommenting = (next = !commenting) => {
     setCommenting(next);
     if (!next) setDraft(null);
     else {
-      setStage((s) => (s === 'side-by-side' ? s : 'image'));
+      // Pins go on the image as it was captured: the changes view, the plain image, or this run's side.
+      if (!pinsOn) setStage('image');
       setPinsHidden(false);
     }
+  };
+  const moveRegion = (delta: number) => {
+    if (regions.length === 0) return;
+    if (effectiveStage !== 'changes') setStage('changes');
+    setActiveRegion((i) => (i == null ? (delta > 0 ? 0 : regions.length - 1) : (i + delta + regions.length) % regions.length));
   };
 
   const select = (p: Position | undefined, keepVariant = true) => {
@@ -231,7 +275,7 @@ export function CheckpointViewer({
   };
   const cycleStage = () => {
     if (!reference) return;
-    const modes: StageMode[] = ['image', ...COMPARE_MODES];
+    const modes: StageMode[] = ['image', ...(hasChanges ? (['changes'] as const) : []), ...COMPARE_MODES];
     setStage(modes[(modes.indexOf(effectiveStage) + 1) % modes.length]);
   };
 
@@ -286,6 +330,8 @@ export function CheckpointViewer({
       else if (e.key === 'ArrowUp') moveFlow(-1);
       else if (key === 'v') cycleVariant();
       else if (key === 'm') cycleStage();
+      else if (key === 'n' && regions.length) moveRegion(1);
+      else if (key === 'p' && regions.length) moveRegion(-1);
       else if (key === 'c' && canComment) toggleCommenting();
       else if (e.key === ']') stepThread(1);
       else if (e.key === '[') stepThread(-1);
@@ -335,7 +381,7 @@ export function CheckpointViewer({
         onEditComment={comments.onEditComment}
         onDeleteComment={comments.onDeleteComment}
       />
-    ) : undefined;
+    ) : null;
 
   return (
     <Dialog open={Boolean(pos)} onOpenChange={(open) => !open && onSelectionChange(null)}>
@@ -379,6 +425,7 @@ export function CheckpointViewer({
               {current && reference ? (
                 <ToggleGroup variant="segment" size="sm" value={[effectiveStage]} onValueChange={(v) => v[0] && setStage(v[0] as StageMode)} aria-label="Comparison">
                   <ToggleGroupItem value="image">Image</ToggleGroupItem>
+                  {hasChanges ? <ToggleGroupItem value="changes">Changes</ToggleGroupItem> : null}
                   {COMPARE_MODES.map((m) => (
                     <ToggleGroupItem key={m} value={m}>
                       {COMPARE_MODE_LABELS[m]}
@@ -409,7 +456,25 @@ export function CheckpointViewer({
               <section className="flex min-h-0 flex-col bg-surface" aria-label="Checkpoint image">
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-surface px-4 py-2">
                   <FrameToolbar value={frameSettings} onChange={setFrame} captured={current ? captureViewport(current) : null} />
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
+                    {effectiveStage === 'changes' && regions.length ? (
+                      <div className="flex items-center gap-0.5" role="group" aria-label="Changes">
+                        <Button variant="ghost" size="icon-sm" aria-label="Previous change" onClick={() => moveRegion(-1)}>
+                          <ChevronLeft />
+                        </Button>
+                        <span className="min-w-24 text-center text-label-s text-muted-foreground tabular-nums" aria-live="polite">
+                          {activeRegion == null ? `${regions.length} ${regions.length === 1 ? 'change' : 'changes'}` : `Change ${activeRegion + 1} of ${regions.length}`}
+                        </span>
+                        <Button variant="ghost" size="icon-sm" aria-label="Next change" onClick={() => moveRegion(1)}>
+                          <ChevronRight />
+                        </Button>
+                      </div>
+                    ) : null}
+                    {canIgnore ? (
+                      <Button variant={effectiveStage === 'ignore' ? 'secondary' : 'ghost'} size="sm" aria-pressed={effectiveStage === 'ignore'} onClick={() => setStage(effectiveStage === 'ignore' ? 'changes' : 'ignore')}>
+                        <EyeOff /> Leave out areas
+                      </Button>
+                    ) : null}
                     {shownThreads.some((t) => t.anchor.kind !== 'image') && pinsOn ? (
                       <Button variant="ghost" size="xs" aria-pressed={pinsHidden} onClick={() => setPinsHidden((h) => !h)}>
                         {pinsHidden ? <EyeOff /> : <Eye />} {pinsHidden ? 'Pins hidden' : 'Pins'}
@@ -430,7 +495,28 @@ export function CheckpointViewer({
                     commenting && 'shadow-[inset_0_0_0_2px_var(--accent-solid)]',
                   )}
                 >
-                  {current && reference && effectiveStage !== 'image' ? (
+                  {current && effectiveStage === 'changes' && diff ? (
+                    <div className="flex min-w-max justify-center">
+                      <DiffHighlight image={current.image} diff={diff} frame={frames[0]} zoom={zoom} alt={label} active={activeRegion} onActiveChange={setActiveRegion}>
+                        {pinLayer(current, label)}
+                      </DiffHighlight>
+                    </div>
+                  ) : current && effectiveStage === 'ignore' && onIgnoreRegionsChange ? (
+                    <IgnoreRegionsEditor
+                      image={current.image}
+                      imageSize={(measuredSize ?? ownSize)!}
+                      frame={frames[0]}
+                      zoom={zoom}
+                      alt={label}
+                      value={current.ignoreRegions ?? []}
+                      pending={ignorePendingId === current.id}
+                      onSave={(next) => {
+                        onIgnoreRegionsChange({ captureId: current.id, regions: next });
+                        setStage('changes');
+                      }}
+                      onCancel={() => setStage('changes')}
+                    />
+                  ) : current && reference && effectiveStage !== 'image' ? (
                     effectiveStage === 'side-by-side' ? (
                       <div className="flex min-w-max items-start justify-center gap-6">
                         {[
@@ -444,14 +530,14 @@ export function CheckpointViewer({
                               frame={frames[0]}
                               zoom={zoom}
                               alt={`${label} — ${side.title}`}
-                              overlay={side.key === 'current' ? pinLayer(current, `${label}, this run`) : undefined}
+                              overlay={side.key === 'current' && pinLayer(current, `${label}, this run`) ? () => pinLayer(current, `${label}, this run`) : undefined}
                             />
                           </figure>
                         ))}
                       </div>
                     ) : (
                       <div role="region" aria-label={`${label}, comparison`} tabIndex={0} className="mx-auto overflow-x-hidden overflow-y-auto rounded-md ring-1 ring-border outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40" style={{ width: frames[0].width * zoom, height: frames[0].height * zoom + 40 }}>
-                        <ImageCompare current={current.image} reference={reference.image} mode={effectiveStage as CompareMode} referenceLabel={reference.label} alt={label} />
+                        <ImageCompare current={current.image} reference={reference.image} mode={effectiveStage as CompareMode} referenceLabel={reference.label} currentLabel={library ? 'This one' : 'This run'} alt={label} />
                       </div>
                     )
                   ) : (
@@ -465,7 +551,14 @@ export function CheckpointViewer({
                             </span>
                             {shown.length > 1 && !library ? <ReviewStatusBadge status={c.status} /> : null}
                           </figcaption>
-                          <ScreenFrame image={c.image} frame={frames[i]} zoom={zoom} alt={`${label} — ${c.variant}`} label={`${label}, ${c.variant} screen`} overlay={pinLayer(c, `${label}, ${c.variant}`)} />
+                          <ScreenFrame
+                            image={c.image}
+                            frame={frames[i]}
+                            zoom={zoom}
+                            alt={`${label} — ${c.variant}`}
+                            label={`${label}, ${c.variant} screen`}
+                            overlay={pinLayer(c, `${label}, ${c.variant}`) ? () => pinLayer(c, `${label}, ${c.variant}`) : undefined}
+                          />
                         </figure>
                       ))}
                     </div>
@@ -484,10 +577,17 @@ export function CheckpointViewer({
                   )}
                   {pos.checkpoint.description ? <p className="text-sm text-pretty">{pos.checkpoint.description}</p> : null}
                   {current?.decision && !library ? <DecisionNote capture={current} /> : null}
-                  {library ? null : current && reference ? (
+                  {current && reference && diff && !reference.same ? (
+                    <DiffSummary diff={diff} referenceLabel={reference.label} />
+                  ) : current && reference ? (
                     <p className="text-xs text-muted-foreground">{reference.same ? `Identical to ${reference.label.toLowerCase()}.` : `Differs from ${reference.label.toLowerCase()}.`}</p>
-                  ) : current ? (
+                  ) : current && !library ? (
                     <p className="text-xs text-muted-foreground">Nothing to compare with yet: this is the first capture of this checkpoint.</p>
+                  ) : null}
+                  {current?.ignoreRegions?.length && !library ? (
+                    <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <EyeOff className="size-3.5" /> {current.ignoreRegions.length} {current.ignoreRegions.length === 1 ? 'area is' : 'areas are'} left out of the comparison.
+                    </p>
                   ) : null}
                 </section>
 
@@ -532,11 +632,11 @@ export function CheckpointViewer({
                     onOpenThreadChange={(id) => {
                       const t = id ? shownThreads.find((x) => x.id === id) : null;
                       // A thread with a pin opens at its pin; one about the whole image opens in the list.
-                      openThread(id, { focus: Boolean(t && t.anchor.kind !== 'image') });
-                      if (t && t.anchor.kind !== 'image' && (pinsHidden || !pinsOn)) {
+                      if (t && t.anchor.kind !== 'image') {
                         setPinsHidden(false);
-                        setStage('image');
+                        if (!pinsOn) setStage('image');
                       }
+                      openThread(id, { focus: Boolean(t && t.anchor.kind !== 'image') });
                     }}
                     onHighlight={(id) => (id ? setFocus((f) => ({ threadId: id, nonce: (f?.nonce ?? 0) + 1, ping: true, scroll: false })) : undefined)}
                     commenting={commenting}
@@ -635,7 +735,7 @@ export function CheckpointViewer({
                     <Keyboard className="size-3.5" /> Keyboard shortcuts
                   </summary>
                   <ul className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-                    {SHORTCUTS.filter(([keys]) => (!library || !['A', 'M'].includes(keys[0])) && (canComment || !['C', 'R', 'E'].includes(keys[0]))).map(([keys, what]) => (
+                    {SHORTCUTS.filter(([keys]) => (!library || !['A', 'N'].includes(keys[0])) && (canComment || !['C', 'R', 'E'].includes(keys[0]))).map(([keys, what]) => (
                       <li key={what} className="contents">
                         <span className="flex gap-1">
                           {keys.map((k) => (
@@ -684,6 +784,7 @@ const SHORTCUTS: [string[], string][] = [
   [['↑', '↓'], 'Previous / next test'],
   [['V'], 'Next variant'],
   [['M'], 'Next comparison'],
+  [['N', 'P'], 'Next / previous change'],
   [['A'], 'Approve and go to the next image to review'],
   [['C'], 'Comment mode: click to pin, drag for an area'],
   [['R'], 'Comment on the whole image'],
@@ -703,7 +804,7 @@ function DecisionNote({ capture }: { capture: ReviewCaptureView }) {
   return (
     <div className="rounded-md border border-border bg-surface-sunken p-2 text-xs">
       <p className="text-muted-foreground">
-        {d.decision === 'approved' ? 'Approved' : 'Changes requested'}
+        {d.source === 'tolerance' ? 'Approved automatically' : d.decision === 'approved' ? 'Approved' : 'Changes requested'}
         {d.by ? ` by ${d.by}` : ''} · {formatDateTime(d.at)}
         {d.runNumber ? ` · run #${d.runNumber}` : ''}
       </p>

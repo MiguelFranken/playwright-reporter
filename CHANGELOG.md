@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.0.50](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.49...v0.0.50) (2026-09-29)
+
+### Bug Fixes
+
+* **retention:** continue a sweep that ran out of time in a fresh request ([#60](https://github.com/MiguelFranken/playwright-reporter/issues/60)) ([ac8b517](https://github.com/MiguelFranken/playwright-reporter/commit/ac8b517ba27501b3f0d7370ae5b6405dc0412a6f))
+
+## [0.0.49](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.48...v0.0.49) (2026-09-29)
+
+### Features
+
+* **review:** measure changed review images pixel by pixel ([#59](https://github.com/MiguelFranken/playwright-reporter/issues/59)) ([c963af7](https://github.com/MiguelFranken/playwright-reporter/commit/c963af735320251efe8227dd5a9ba9de9e2af2ad))
+
+### Performance Improvements
+
+* **ui:** a continuous screen-size slider that glides ([#58](https://github.com/MiguelFranken/playwright-reporter/issues/58)) ([c6870bd](https://github.com/MiguelFranken/playwright-reporter/commit/c6870bdf7bee9d5eca06c1f2a4adb057eb2d8de4))
+
+## [0.0.48](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.47...v0.0.48) (2026-09-29)
+
+### Bug Fixes
+
+* **web:** keep the current team and project when opening administration ([#57](https://github.com/MiguelFranken/playwright-reporter/issues/57)) ([5708b56](https://github.com/MiguelFranken/playwright-reporter/commit/5708b561b3c4169804fdddd23963f97f29ecff7b))
+
+## [0.0.47](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.46...v0.0.47) (2026-09-29)
+
+### Bug Fixes
+
+* **ui:** let sideways scrolling over a checkpoint screenshot reach the storyboard strip ([483128f](https://github.com/MiguelFranken/playwright-reporter/commit/483128f66cf41fecfb40d0745689b403c66b4e9b))
+
 ## [0.0.46](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.45...v0.0.46) (2026-09-29)
 
 ### Features

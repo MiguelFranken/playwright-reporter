@@ -5,7 +5,9 @@ import { actionError, denied, projectForAction, type Denied } from '@/lib/auth/a
 import type { ReviewDecisionInput } from '@miguelfranken/ui/lib/review';
 import { REVIEW_DECISIONS } from '@miguelfranken/ui/lib/review';
 import { THREAD_STATUSES, type CommentEditInput, type NewThreadInput, type ThreadReplyInput, type ThreadStatusInput } from '@miguelfranken/ui/lib/review-threads';
-import { decide, ReviewError } from '@/lib/review/queries';
+import { requestCaptureDiff } from '@/lib/review/diff/dispatch';
+import { IgnoreRegionsError, parseIgnoreRegions, setIgnoreRegions } from '@/lib/review/diff/ignore';
+import { captureInProject, decide, ReviewError } from '@/lib/review/queries';
 import { createThread, deleteComment, editComment, replyToThread, setThreadStatus, ThreadError } from '@/lib/review/threads';
 
 type Ref = { team: string; project: string };
@@ -104,4 +106,29 @@ export async function deleteReviewComment(ref: Ref, input: { commentId: string }
     revalidate(ref);
     return { ok: true as const, ...res };
   });
+}
+
+/**
+ * Saves the areas a checkpoint's variant leaves out of its comparisons, then
+ * has the capture measured again without them. Deciding about images and
+ * leaving parts of them out take the same permission: both change what a
+ * reviewer is asked to look at.
+ */
+export async function saveIgnoreRegions(ref: { team: string; project: string }, input: { captureId: string; regions: unknown }): Promise<{ ok: true } | Denied> {
+  const access = await projectForAction(ref.team, ref.project, { review: ['decide'] });
+  if (denied(access)) return access;
+  let regions;
+  try {
+    regions = parseIgnoreRegions(input.regions);
+  } catch (error) {
+    if (error instanceof IgnoreRegionsError) return actionError(error.message);
+    throw error;
+  }
+  if (!/^[0-9a-f-]{36}$/i.test(input.captureId)) return actionError('Image not found.');
+  const saved = await setIgnoreRegions(access.project.id, input.captureId.toLowerCase(), regions, access.user.id);
+  if (!saved) return actionError('Image not found.');
+  const found = await captureInProject(access.project.id, input.captureId.toLowerCase());
+  if (found) await requestCaptureDiff(found.capture);
+  revalidatePath(`/teams/${ref.team}/projects/${ref.project}`, 'layout');
+  return { ok: true };
 }

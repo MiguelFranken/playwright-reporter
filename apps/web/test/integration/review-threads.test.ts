@@ -175,7 +175,7 @@ describe('migration', () => {
       { ...base, id: randomUUID(), decision: 'changes_requested', comment: null, createdAt: minutesAgo(2) },
       { ...base, id: randomUUID(), decision: 'approved', comment: null, createdAt: minutesAgo(1) },
     ]);
-    const migration = await readFile(path.join(import.meta.dirname, '../../lib/db/migrations/0015_review_threads.sql'), 'utf8');
+    const migration = await readFile(path.join(import.meta.dirname, '../../lib/db/migrations/0016_review_threads.sql'), 'utf8');
     for (const statement of migration.split('--> statement-breakpoint').slice(-2)) await db.execute(sql.raw(statement));
 
     const threads = await db.select().from(reviewThreads).orderBy(reviewThreads.number);

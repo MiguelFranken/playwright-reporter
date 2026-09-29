@@ -8,6 +8,9 @@ import { ReporterSetup } from '@miguelfranken/ui/views/settings/reporter-setup';
 import { StorageCard } from '@miguelfranken/ui/views/settings/storage-card';
 import { TokensCard, type TokenRow } from '@/components/settings/tokens-card';
 import { FieldSettingsCard } from '@/components/test-cases/field-settings-card';
+import { VisualDiffForm } from '@/components/settings/visual-diff-form';
+import { diffDriver } from '@/lib/review/diff/dispatch';
+import { visualDiffSettings } from '@/lib/review/diff/settings';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@miguelfranken/ui/components/card';
 import { Skeleton } from '@miguelfranken/ui/components/skeleton';
 import { requireProject } from '@/lib/auth/access';
@@ -138,6 +141,22 @@ async function SettingsContent({ params }: { params: Params }) {
           </Card>
         </>
       ) : null}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Visual comparison</CardTitle>
+          <CardDescription>How review checkpoint images are measured against their baseline, and which changes are small enough to approve automatically.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <VisualDiffForm
+            teamSlug={team}
+            projectSlug={project.slug}
+            value={visualDiffSettings(project.settings)}
+            disabled={!canUpdate}
+            inactiveReason={diffDriver() === 'none' ? 'This deployment does not measure image comparisons (IMAGE_DIFF_DRIVER is none; Vercel previews default to it). The settings apply where it does.' : null}
+          />
+        </CardContent>
+      </Card>
 
       <FieldSettingsCard teamSlug={team} projectSlug={project.slug} defs={fieldDefs} canEdit={access.can({ testCase: ['update'] })} />
 

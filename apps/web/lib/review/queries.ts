@@ -11,7 +11,7 @@
 import { randomUUID } from 'node:crypto';
 import { and, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
-import type { ReviewDecision, ReviewStatus } from '@miguelfranken/ui/lib/review';
+import type { DecisionSource, ReviewDecision, ReviewStatus } from '@miguelfranken/ui/lib/review';
 import type { CommentSource } from '@miguelfranken/ui/lib/review-threads';
 import { db } from '@/lib/db/drizzle';
 import {
@@ -26,6 +26,8 @@ import {
   users,
   type Attachment,
 } from '@/lib/db/schema';
+import { diffSettingsFor, diffsFor, identityKey, ignoreRegionsFor, pairKey, pairOf, type DiffRecord, type Rect } from './diff/lookup';
+import { withinTolerance } from './diff/settings';
 import { createThread, resolveThreadsOf, threadsForCaptures, type CaptureThread } from './threads';
 
 const thumbs = alias(attachments, 'thumb_attachments');
@@ -37,6 +39,7 @@ export type AttachmentState = Pick<Attachment, 'id' | 'status'>;
 
 export interface CaptureRecord {
   id: string;
+  projectId: string;
   checkpointId: string;
   runId: string;
   testId: string;
@@ -63,6 +66,7 @@ export interface DecisionRecord {
   sha256: string | null;
   captureId: string | null;
   decision: ReviewDecision;
+  source: DecisionSource;
   comment: string | null;
   createdAt: Date;
   by: string | null;
@@ -72,8 +76,15 @@ export interface DecisionRecord {
 export interface ComparedCapture extends CaptureRecord {
   status: ReviewStatus;
   decision: DecisionRecord | null;
+  /** The newest approval a reviewer made; a tolerance approval never becomes the baseline. */
   baseline: { decision: DecisionRecord; capture: CaptureRecord | null } | null;
   previous: { capture: CaptureRecord; runNumber: number } | null;
+  /** The measured comparison with the reference the viewer shows (the baseline, else the run before). */
+  diff: DiffRecord | null;
+  diffAgainst: 'baseline' | 'previous' | null;
+  /** Measured, against the baseline, and under the project's tolerance. */
+  withinTolerance: boolean;
+  ignoreRegions: Rect[];
   /** The comment threads the image shows (see `threads.ts`). */
   threads: CaptureThread[];
 }
@@ -101,6 +112,7 @@ export interface CheckpointRecord {
 
 const captureColumns = {
   id: reviewCaptures.id,
+  projectId: reviewCaptures.projectId,
   checkpointId: reviewCaptures.checkpointId,
   runId: reviewCaptures.runId,
   testId: reviewCaptures.testId,
@@ -126,6 +138,7 @@ type CaptureRow = { [K in keyof typeof captureColumns]: unknown } & Record<strin
 function toCapture(r: CaptureRow): CaptureRecord {
   return {
     id: r.id as string,
+    projectId: r.projectId as string,
     checkpointId: r.checkpointId as string,
     runId: r.runId as string,
     testId: r.testId as string,
@@ -156,8 +169,6 @@ async function selectCaptures(where: SQL, orderBy: SQL[] = [sql`${reviewCaptures
   return rows.map((r) => toCapture(r as CaptureRow));
 }
 
-const identityKey = (c: { testId: string; checkpointName: string; variant: string }) => `${c.testId}\u0000${c.checkpointName}\u0000${c.variant}`;
-
 function identityTuples(captures: readonly { testId: string; checkpointName: string; variant: string }[]) {
   const unique = new Map(captures.map((c) => [identityKey(c), c]));
   return [...unique.values()].map((c) => sql`(${c.testId}::uuid, ${c.checkpointName}, ${c.variant})`);
@@ -177,6 +188,7 @@ async function decisionsFor(captures: readonly CaptureRecord[]): Promise<Map<str
       sha256: reviewDecisions.sha256,
       captureId: reviewDecisions.captureId,
       decision: reviewDecisions.decision,
+      source: reviewDecisions.source,
       comment: reviewDecisions.comment,
       createdAt: reviewDecisions.createdAt,
       by: users.name,
@@ -234,7 +246,7 @@ export async function compareCaptures(
   const baselineIds = new Set<string>();
   const baselines = new Map<string, DecisionRecord>();
   for (const [key, list] of decisions) {
-    const approved = list.find((d) => d.decision === 'approved');
+    const approved = list.find((d) => d.decision === 'approved' && d.source === 'human');
     if (approved) {
       baselines.set(key, approved);
       if (approved.captureId) baselineIds.add(approved.captureId);
@@ -247,20 +259,32 @@ export async function compareCaptures(
   ]);
   const baselineById = new Map(baselineCaptures.map((c) => [c.id, c]));
 
-  return captures.map((c) => {
+  const [settings, ignores] = await Promise.all([diffSettingsFor(captures.map((c) => c.projectId)), ignoreRegionsFor(captures)]);
+  const compared = captures.map((c) => {
     const key = identityKey(c);
     const list = decisions.get(key) ?? [];
     const exact = list.find((d) => (c.sha256 ? d.sha256 === c.sha256 : d.captureId === c.id)) ?? null;
     const approved = baselines.get(key) ?? null;
     const status: ReviewStatus = exact ? exact.decision : approved ? 'changed' : 'new';
+    const baseline = approved ? { decision: approved, capture: approved.captureId ? (baselineById.get(approved.captureId) ?? null) : null } : null;
+    const prev = previous.get(key) ?? null;
+    // As the viewer compares: the approved image while it still exists, else the run before.
+    const reference = baseline?.capture ?? prev?.capture ?? null;
+    const ignoreRegions = ignores.get(key) ?? [];
+    const pair = settings.has(c.projectId) ? pairOf(c, reference, settings.get(c.projectId)!, ignoreRegions) : null;
     return {
-      ...c,
-      status,
-      decision: exact,
-      baseline: approved ? { decision: approved, capture: approved.captureId ? (baselineById.get(approved.captureId) ?? null) : null } : null,
-      previous: previous.get(key) ?? null,
-      threads: threads.get(c.id) ?? [],
+      compared: { ...c, status, decision: exact, baseline, previous: prev, diff: null, diffAgainst: baseline?.capture ? 'baseline' : prev ? 'previous' : null, withinTolerance: false, ignoreRegions, threads: threads.get(c.id) ?? [] } as ComparedCapture,
+      pair,
     };
+  });
+  const diffs = await diffsFor(compared.flatMap((x) => (x.pair ? [x.pair] : [])));
+  return compared.map(({ compared: c, pair }) => {
+    if (!pair) return c;
+    const diff = diffs.get(pairKey(pair.projectId, pair.baseSha256, pair.headSha256, pair.optionsKey)) ?? null;
+    const done = diff?.status === 'done' && diff.changedPixels !== null && diff.ratio !== null;
+    const sizeChanged = done && (diff.baseWidth !== diff.headWidth || diff.baseHeight !== diff.headHeight);
+    const tolerated = done && c.diffAgainst === 'baseline' && withinTolerance({ changedPixels: diff.changedPixels!, ratio: diff.ratio!, sizeChanged }, settings.get(c.projectId)!);
+    return { ...c, diff, withinTolerance: tolerated };
   });
 }
 
@@ -430,7 +454,7 @@ const statusSql = sql`coalesce(
     order by d.created_at desc, d.id desc limit 1),
   case when exists (
     select 1 from ${reviewDecisions} d
-    where d.test_id = c.test_id and d.checkpoint_name = c.checkpoint_name and d.variant = c.variant and d.decision = 'approved'
+    where d.test_id = c.test_id and d.checkpoint_name = c.checkpoint_name and d.variant = c.variant and d.decision = 'approved' and d.source = 'human'
   ) then 'changed' else 'new' end
 )`;
 
@@ -524,7 +548,8 @@ export async function decide(input: {
   comment?: string | null;
   userId: string | null;
   resolveThreads?: boolean;
-  source?: CommentSource;
+  /** Where the change request's comment was written, for its thread. */
+  commentSource?: CommentSource;
 }): Promise<{ decided: number; resolvedThreads: number }> {
   const ids = [...new Set(input.captureIds)].filter((id) => /^[0-9a-f-]{36}$/i.test(id));
   if (ids.length === 0) throw new ReviewError('Nothing to decide about.');
@@ -557,7 +582,7 @@ export async function decide(input: {
       userId: input.userId,
     })),
   );
-  const author = { userId: input.userId, source: input.source ?? 'app' };
+  const author = { userId: input.userId, source: input.commentSource ?? 'app' };
   if (input.decision === 'changes_requested' && comment) {
     const seen = new Set<string>();
     for (const c of captures) {
@@ -577,7 +602,8 @@ export async function captureInProject(projectId: string, captureId: string) {
   if (!/^[0-9a-f-]{36}$/i.test(captureId)) return null;
   const [row] = await selectCaptures(and(eq(reviewCaptures.projectId, projectId), eq(reviewCaptures.id, captureId))!);
   if (!row) return null;
-  const [compared] = await compareCaptures([row]);
+  const [run] = await db.select({ startedAt: runs.startedAt }).from(runs).where(eq(runs.id, row.runId));
+  const [compared] = await compareCaptures([row], run ? { runId: row.runId, runStartedAt: run.startedAt } : undefined);
   const [meta] = await db
     .select({ runNumber: runs.number, testResultId: reviewCheckpoints.testResultId, checkpointTitle: reviewCheckpoints.title, testTitle: tests.title })
     .from(reviewCheckpoints)

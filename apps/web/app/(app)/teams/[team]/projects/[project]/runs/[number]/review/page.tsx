@@ -10,6 +10,7 @@ import { PrefetchLink } from '@/components/prefetch-link';
 import { UrlReviewStoryboard } from '@/components/review/url-review-storyboard';
 import { requireProject } from '@/lib/auth/access';
 import { casesOfTests, defaultBranch, getLibraryReference, getRunByNumber, runReview } from '@/lib/page-data';
+import { afterCapturesShown } from '@/lib/review/diff/dispatch';
 import { caseHref, toFlowViews } from '@/lib/review/view-model';
 import { projectHrefs } from '@/lib/view-models';
 
@@ -37,6 +38,8 @@ async function Content({ params }: Props) {
   const base = `/teams/${team}/projects/${access.project.slug}`;
   const hrefs = projectHrefs(base);
   const records = await runReview({ id: run.id, startedAt: new Date(run.startedAt).toISOString() });
+  // Comparisons nobody measured yet (a baseline approved since, a run the watchdog closed) are measured after the page is sent.
+  afterCapturesShown(run.id, records.flatMap((r) => r.checkpoints.flatMap((c) => c.captures)));
   const byTest = await casesOfTests(access.project.id, records.map((r) => r.testId));
   const flows = toFlowViews(records, (resultId) => hrefs.result(run.number, resultId), { byTest, href: caseHref(hrefs) });
   const commit = [run.gitBranch, run.gitShortSha].filter(Boolean).join(' @ ');

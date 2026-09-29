@@ -78,7 +78,7 @@ LEFT JOIN "review_captures" c ON c."id" = src."capture_id"
 LEFT JOIN LATERAL (
   SELECT a."created_at" FROM "review_decisions" a
   WHERE a."test_id" = src."test_id" AND a."checkpoint_name" = src."checkpoint_name" AND a."variant" = src."variant"
-    AND a."decision" = 'approved' AND a."created_at" > src."created_at"
+    AND a."decision" = 'approved' AND a."source" = 'human' AND a."created_at" > src."created_at"
   ORDER BY a."created_at" LIMIT 1
 ) approval ON true;--> statement-breakpoint
 INSERT INTO "review_comments" ("id", "thread_id", "project_id", "user_id", "kind", "body", "source", "created_at")

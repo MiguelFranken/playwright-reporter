@@ -4,6 +4,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { eq, inArray } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { headers } from 'next/headers';
+import { after } from 'next/server';
 import { z } from 'zod';
 import { actionError, denied, getCurrentUser, type Denied } from '@/lib/auth/access';
 import { audit } from '@/lib/auth/audit';
@@ -16,6 +17,7 @@ import {
   policyFromForm as dataPolicyFromForm,
   purgeRunHistory as purgeAllRunHistory,
   saveDataRetentionPolicy,
+  deletedTotal,
   sweepExpiredData,
   type DataSweepCounts,
 } from '@/lib/data-retention';
@@ -32,6 +34,7 @@ import {
   saveRetentionPolicy,
   sweepExpiredArtifacts,
 } from '@/lib/storage/retention';
+import { canContinue, requestContinuation, shouldContinue, type SweepKind } from '@/lib/sweeps/continuation';
 
 type Ok<T extends object = object> = { ok: true } & T;
 
@@ -253,9 +256,23 @@ export async function updateRetentionPolicy(_prev: RetentionFormState, formData:
   return { ok: true, message: policy.enabled ? 'Retention policy saved.' : 'Saved. Artifacts are kept until retention is turned on.' };
 }
 
-/** "Run now": one bounded sweep, so the button answers within a request. */
+/**
+ * Hands what a "Run now" sweep left to a fresh invocation, once this response
+ * is sent. Returns whether it will, for the toast.
+ */
+function continueInBackground(kind: SweepKind, result: { hasMore: boolean; error: string | null }, progress: number): boolean {
+  if (!canContinue() || !shouldContinue(result, progress, 0)) return false;
+  after(() => requestContinuation(kind, 1));
+  return true;
+}
+
+/**
+ * "Run now": one bounded sweep, so the button answers within a request. What
+ * it leaves continues in the background when the instance can continue a
+ * sweep (`lib/sweeps/continuation`).
+ */
 export async function runRetentionSweep(): Promise<
-  Ok<{ expiredCount: number; expiredBytes: number; hasMore: boolean }> | Denied
+  Ok<{ expiredCount: number; expiredBytes: number; hasMore: boolean; continuing: boolean }> | Denied
 > {
   const actor = await superadmin();
   if (denied(actor)) return actor;
@@ -268,7 +285,8 @@ export async function runRetentionSweep(): Promise<
   });
   revalidatePath('/admin/storage');
   if (result.error) return actionError(`The sweep stopped: ${result.error}`);
-  return { ok: true, expiredCount: result.expiredCount, expiredBytes: result.expiredBytes, hasMore: result.hasMore };
+  const continuing = continueInBackground('artifacts', result, result.expiredCount);
+  return { ok: true, expiredCount: result.expiredCount, expiredBytes: result.expiredBytes, hasMore: result.hasMore, continuing };
 }
 
 /**
@@ -313,8 +331,8 @@ export async function updateDataRetentionPolicy(_prev: DataRetentionFormState, f
   return { ok: true, message: policy.enabled ? 'Data retention policy saved.' : 'Saved. Nothing is deleted until data retention is turned on.' };
 }
 
-/** "Run now": one bounded sweep, so the button answers within a request. */
-export async function runDataSweep(): Promise<Ok<DataSweepSummary> | Denied> {
+/** "Run now": one bounded sweep, like the artifact one; what it leaves continues in the background. */
+export async function runDataSweep(): Promise<Ok<DataSweepSummary & { continuing: boolean }> | Denied> {
   const actor = await superadmin();
   if (denied(actor)) return actor;
 
@@ -326,7 +344,8 @@ export async function runDataSweep(): Promise<Ok<DataSweepSummary> | Denied> {
   });
   revalidatePath('/admin/database');
   if (result.error) return actionError(`The sweep stopped: ${result.error}`);
-  return { ok: true, deleted: result.deleted, artifactBytes: result.artifactBytes, hasMore: result.hasMore };
+  const continuing = continueInBackground('data', result, deletedTotal(result.deleted));
+  return { ok: true, deleted: result.deleted, artifactBytes: result.artifactBytes, hasMore: result.hasMore, continuing };
 }
 
 /**

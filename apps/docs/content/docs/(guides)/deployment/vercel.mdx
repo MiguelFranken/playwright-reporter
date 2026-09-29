@@ -41,5 +41,8 @@ nub run db:seed
 </Step>
 </Steps>
 
-The watchdog and the retention crons need nothing more on Vercel: the Workflow SDK runs on Vercel, and
-`apps/web/vercel.json` schedules the crons for production.
+The watchdog, the measuring of changed review images and the retention crons need nothing more on Vercel: the
+Workflow SDK runs on Vercel, and `apps/web/vercel.json` schedules the crons for production. Each image comparison is
+its own workflow step, so a large run is measured in parallel batches, each step with a function's full memory and
+time; a full-page 2× capture takes well under a second. Previews measure nothing by default (`IMAGE_DIFF_DRIVER=none`),
+because they share the production database.

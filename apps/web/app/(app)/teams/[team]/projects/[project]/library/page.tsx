@@ -7,6 +7,7 @@ import { AddToLibraryButton, ConnectedReferenceBar } from '@/components/library/
 import { UrlReviewStoryboard } from '@/components/review/url-review-storyboard';
 import { requireProject } from '@/lib/auth/access';
 import { casesOfTests, defaultBranch, defaultLibraryRef, getLibraryReference, libraryCandidates, libraryFlows, listLibraryReferences, referenceRuns } from '@/lib/page-data';
+import { compareFlowViews } from '@/lib/review/diff/compare';
 import { toRunView } from '@/lib/review/library';
 import { caseHref, flowViewsAcrossRuns } from '@/lib/review/view-model';
 import { projectHrefs } from '@/lib/view-models';
@@ -51,7 +52,10 @@ async function scope({ params, searchParams }: Pick<Props, 'params'> & Partial<P
   const branch = await defaultBranch(project.id, project.settings);
   const raw = Array.isArray(sp.ref) ? sp.ref[0] : sp.ref;
   const key = parseLibraryRef(raw) ?? (await defaultLibraryRef(project.id, branch));
-  return { team, access, project, branch, key, base: `/teams/${team}/projects/${project.slug}` };
+  const rawCompare = Array.isArray(sp.compare) ? sp.compare[0] : sp.compare;
+  const parsedCompare = parseLibraryRef(rawCompare);
+  const compare = parsedCompare && !sameLibraryRef(parsedCompare, key) ? parsedCompare : null;
+  return { team, access, project, branch, key, compare, base: `/teams/${team}/projects/${project.slug}` };
 }
 
 async function AddButton({ params }: Pick<Props, 'params'>) {
@@ -71,9 +75,10 @@ async function AddButton({ params }: Pick<Props, 'params'>) {
 }
 
 async function Bar(props: Props) {
-  const { team, access, project, branch, key, base } = await scope(props);
+  const { team, access, project, branch, key, compare, base } = await scope(props);
   const [references, runs] = await Promise.all([listLibraryReferences(project.id, branch), referenceRuns(project.id, key)]);
   const current = references.find((r) => sameLibraryRef(r.key, key)) ?? (await getLibraryReference(project.id, key, branch));
+  const compareWith = compare ? (references.find((r) => sameLibraryRef(r.key, compare)) ?? (await getLibraryReference(project.id, compare, branch))) : null;
   return (
     <ConnectedReferenceBar
       team={team}
@@ -81,6 +86,7 @@ async function Bar(props: Props) {
       base={base}
       references={references}
       current={current}
+      compareWith={compareWith}
       runs={runs.map(toRunView)}
       canManage={access.can({ review: ['decide'] })}
     />
@@ -88,11 +94,12 @@ async function Bar(props: Props) {
 }
 
 async function Screens(props: Props) {
-  const { team, access, project, key, base } = await scope(props);
+  const { team, access, project, key, compare, base } = await scope(props);
   const hrefs = projectHrefs(base);
-  const records = await libraryFlows(project.id, key);
+  const [records, compared] = await Promise.all([libraryFlows(project.id, key), compare ? libraryFlows(project.id, compare) : null]);
   const byTest = await casesOfTests(project.id, records.map((r) => r.testId));
-  const flows = flowViewsAcrossRuns(records, hrefs, { byTest, href: caseHref(hrefs) });
+  const views = flowViewsAcrossRuns(records, hrefs, { byTest, href: caseHref(hrefs) });
+  const flows = compare && compared ? await compareFlowViews(views, records, compared, libraryRefShort(compare)) : views;
   return (
     <UrlReviewStoryboard
       team={team}

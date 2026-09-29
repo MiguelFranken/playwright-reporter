@@ -109,6 +109,128 @@ export interface ReviewDecisionView {
   at: string;
   comment?: string | null;
   runNumber?: number | null;
+  /** `tolerance`: approved automatically, the change measured under the project's tolerance. */
+  source?: DecisionSource;
+}
+
+/** Who made a decision: a reviewer (or an agent acting for one), or the project's diff tolerance. */
+export const DECISION_SOURCES = ['human', 'tolerance'] as const;
+export type DecisionSource = (typeof DECISION_SOURCES)[number];
+
+// ---------------------------------------------------------------- pixel diffs
+
+/** A rectangle of an image, in its own pixels, and how many of them changed. */
+export interface DiffRegion {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  pixels: number;
+}
+
+/** Rows of an image, in its own pixels: a band of content added or removed. */
+export interface DiffBand {
+  y: number;
+  height: number;
+}
+
+/**
+ * A page whose content moved: rows inserted or removed push everything below
+ * them down or up, so a plain pixel comparison marks the rest of the page as
+ * changed. The aligned comparison matches the unmoved rows instead.
+ */
+export interface DiffShift {
+  /** Bands of this run's image that the reference does not have. */
+  inserted: DiffBand[];
+  /** Bands of the reference that this run's image does not have. */
+  removed: DiffBand[];
+  /** Rows of this run's image that match a reference row, moved or not. */
+  matchedRows: number;
+}
+
+/**
+ * - `pending`: queued or being measured.
+ * - `done`: measured; the numbers are there.
+ * - `failed`: an image could not be read (expired, corrupt).
+ * - `too_large`: over the deployment's pixel budget; the CSS comparisons still work.
+ */
+export const DIFF_STATES = ['pending', 'done', 'failed', 'too_large'] as const;
+export type DiffState = (typeof DIFF_STATES)[number];
+
+/** How a capture differs from the image it is compared with, pixel by pixel. */
+export interface ReviewDiffView {
+  id: string;
+  state: DiffState;
+  /** The image it is measured against: the approved baseline, the run before, or another line of work. */
+  against: 'baseline' | 'previous' | 'compare';
+  /** Changed pixels, anti-aliasing excluded; area only one image covers counts as changed. */
+  changedPixels: number;
+  totalPixels: number;
+  /** `changedPixels / totalPixels`, 0–1. */
+  ratio: number;
+  sizeChanged: boolean;
+  base?: { width: number; height: number } | null;
+  head?: { width: number; height: number } | null;
+  /** In this run's image pixels, reading order. */
+  regions: DiffRegion[];
+  regionsTruncated?: boolean;
+  /** This run's image size, transparent except the changed pixels (red). */
+  overlayUrl?: string | null;
+  shift?: DiffShift | null;
+  /** Under the project's tolerance: the change is noise and was approved for the reviewer. */
+  withinTolerance?: boolean;
+  error?: string | null;
+}
+
+/** `0.42%`, `< 0.01%`, `18%`: a changed share a reviewer can compare at a glance. */
+export function formatChangedShare(ratio: number): string {
+  if (ratio <= 0) return '0%';
+  const pct = ratio * 100;
+  if (pct < 0.01) return '< 0.01%';
+  if (pct < 1) return `${pct.toFixed(2).replace(/0$/, '')}%`;
+  if (pct < 10) return `${pct.toFixed(1).replace(/\.0$/, '')}%`;
+  return `${Math.round(pct)}%`;
+}
+
+/** `3 regions · 0.42%`, `1 region · height +120 px`: a measured diff in a few words. */
+export function describeDiff(diff: ReviewDiffView): string {
+  if (diff.state === 'pending') return 'Measuring the difference…';
+  if (diff.state === 'failed') return 'The difference could not be measured.';
+  if (diff.state === 'too_large') return 'Too large to measure; compare by eye.';
+  if (diff.changedPixels === 0 && !diff.sizeChanged) return 'No visible change';
+  const parts = [`${diff.regions.length}${diff.regionsTruncated ? '+' : ''} ${diff.regions.length === 1 ? 'region' : 'regions'}`, formatChangedShare(diff.ratio)];
+  const size = sizeChange(diff);
+  if (size) parts.push(size);
+  return parts.join(' · ');
+}
+
+/** `height +120 px`, `width −8 px, height +40 px`, or null when the size is the same. */
+export function sizeChange(diff: Pick<ReviewDiffView, 'base' | 'head' | 'sizeChanged'>): string | null {
+  if (!diff.sizeChanged || !diff.base || !diff.head) return null;
+  const signed = (n: number) => (n > 0 ? `+${n}` : `−${Math.abs(n)}`);
+  const parts: string[] = [];
+  if (diff.head.width !== diff.base.width) parts.push(`width ${signed(diff.head.width - diff.base.width)} px`);
+  if (diff.head.height !== diff.base.height) parts.push(`height ${signed(diff.head.height - diff.base.height)} px`);
+  return parts.join(', ') || null;
+}
+
+/** How loud a measured change is, for the badge's tone: noise, a small change, a large one. */
+export function diffMagnitude(diff: Pick<ReviewDiffView, 'state' | 'ratio' | 'changedPixels' | 'sizeChanged'>): 'none' | 'minor' | 'major' | null {
+  if (diff.state !== 'done') return null;
+  if (diff.changedPixels === 0 && !diff.sizeChanged) return 'none';
+  return diff.sizeChanged || diff.ratio >= 0.01 ? 'major' : 'minor';
+}
+
+/** The storyboard's order: capture order, or the most changed images first. */
+export const REVIEW_SORTS = ['sequence', 'most-changed'] as const;
+export type ReviewSort = (typeof REVIEW_SORTS)[number];
+export const REVIEW_SORT_LABELS: Record<ReviewSort, string> = { sequence: 'Journey order', 'most-changed': 'Most changed first' };
+
+/** A capture's changed share for sorting: unmeasured images sort after measured changes, before unchanged ones. */
+export function changeScore(capture: Pick<ReviewCaptureView, 'diff' | 'status'>): number {
+  const d = capture.diff;
+  if (!d || d.state !== 'done') return capture.status === 'changed' || capture.status === 'new' ? 0.000001 : 0;
+  return d.sizeChanged ? Math.max(d.ratio, 0.01) + 1 : d.ratio;
 }
 
 /** One variant's image of a checkpoint, with what it is compared against. */
@@ -127,6 +249,12 @@ export interface ReviewCaptureView {
   baseline?: { captureId: string; image: ReviewImage; runNumber: number | null; same: boolean; approvedAt: string; approvedBy?: string | null } | null;
   /** The same checkpoint and variant in the run before, for a comparison without an approval. */
   previous?: { captureId: string; image: ReviewImage; runNumber: number; same: boolean } | null;
+  /** Another line of work's capture of the same screen, when the library compares two. */
+  compare?: { captureId: string; image: ReviewImage; label: string; same: boolean } | null;
+  /** How the image differs from the one the viewer compares it with, when measured. */
+  diff?: ReviewDiffView | null;
+  /** Areas left out of the comparison (a clock, an ad), in this image's pixels. */
+  ignoreRegions?: DiffRegion[];
   /** Comment threads on the image: its own and the open ones placed on earlier captures of it. */
   threads?: ReviewThreadView[];
 }

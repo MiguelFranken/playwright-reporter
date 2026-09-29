@@ -18,7 +18,7 @@ function OnAScreen(props: Omit<React.ComponentProps<typeof PinLayer>, 'openThrea
       frame={{ width: 1280, height: 720 }}
       zoom={0.5}
       alt="Checkout — desktop"
-      overlay={<PinLayer {...props} openThreadId={open} onOpenThreadChange={setOpen} draft={draft} onDraftChange={setDraft} />}
+      overlay={() => <PinLayer {...props} openThreadId={open} onOpenThreadChange={setOpen} draft={draft} onDraftChange={setDraft} />}
     />
   );
 }

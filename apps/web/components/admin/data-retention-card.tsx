@@ -62,13 +62,14 @@ export function DataRetentionPolicyForm({ policy, artifactDays }: { policy: Data
 }
 
 /** "Deleted 12 runs (2,904 results) and freed 1.2 GB of artifacts." */
-function summary(deleted: DataSweepCounts, artifactBytes: number, hasMore: boolean) {
+function summary(deleted: DataSweepCounts, artifactBytes: number, hasMore: boolean, continuing = false) {
   const runs = `${deleted.runs.toLocaleString('en-US')} run${deleted.runs === 1 ? '' : 's'}`;
   const results = deleted.results ? ` (${deleted.results.toLocaleString('en-US')} results)` : '';
   const other = deleted.events + deleted.tests + deleted.audit + deleted.auth + deleted.sweepLogs;
   const rest = other ? `, ${other.toLocaleString('en-US')} other rows` : '';
   const freed = artifactBytes ? ` and freed ${formatBytes(artifactBytes)} of artifacts` : '';
-  return `Deleted ${runs}${results}${rest}${freed}.${hasMore ? ' More is due: run it again.' : ''}`;
+  const more = continuing ? ' More is due: it continues in the background.' : hasMore ? ' More is due: run it again.' : '';
+  return `Deleted ${runs}${results}${rest}${freed}.${more}`;
 }
 
 export function RunDataSweepButton() {
@@ -82,7 +83,7 @@ export function RunDataSweepButton() {
         startTransition(async () => {
           const res = await runDataSweep();
           if (!res.ok) toast.error(res.message);
-          else toast.success(summary(res.deleted, res.artifactBytes, res.hasMore));
+          else toast.success(summary(res.deleted, res.artifactBytes, res.hasMore, res.continuing));
         })
       }
     >

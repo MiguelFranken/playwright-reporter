@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, ChevronDown, Diff, GitBranch, GitPullRequest, Pin, Plus, Settings2, Star } from 'lucide-react';
+import { ArrowLeftRight, Check, ChevronDown, Diff, GitBranch, GitPullRequest, Pin, Plus, Settings2, Star, X } from 'lucide-react';
 import { Badge } from '../../components/badge';
 import { Button } from '../../components/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '../../components/dropdown-menu';
@@ -37,6 +37,8 @@ export function LibraryReferenceBar({
   onKeep,
   pending = false,
   now,
+  compareWith,
+  onCompareChange,
 }: {
   references: readonly LibraryReferenceView[];
   current: LibraryReferenceView;
@@ -50,6 +52,10 @@ export function LibraryReferenceBar({
   onKeep?: () => void;
   pending?: boolean;
   now?: Date;
+  /** The reference every screen is compared with, when the library compares two. */
+  compareWith?: LibraryReferenceView | null;
+  /** Picks the reference to compare with, or `null` to stop; without it the library does not compare. */
+  onCompareChange?: (key: LibraryRefKey | null) => void;
 }) {
   const run = shownRun(current);
   const listed = current.kept || current.isDefault;
@@ -101,6 +107,7 @@ export function LibraryReferenceBar({
         </div>
 
         <div className="ml-auto flex items-center gap-2">
+          {onCompareChange ? <CompareMenu references={references} current={current} compareWith={compareWith ?? null} onChange={onCompareChange} now={now} /> : null}
           {!listed ? <span className="text-body-s text-muted-foreground">Not kept in the library</span> : null}
           {!listed && onKeep ? (
             <Button variant="outline" size="sm" disabled={pending || !run} onClick={onKeep}>
@@ -119,9 +126,57 @@ export function LibraryReferenceBar({
           ) : null}
         </div>
       </div>
+      {compareWith ? (
+        <p className="flex items-center gap-1.5 text-body-s text-muted-foreground">
+          <ArrowLeftRight aria-hidden className="size-3.5" /> Every screen is compared with <span className="font-medium text-foreground">{libraryRefLabel(compareWith)}</span>; open one to see what differs.
+        </p>
+      ) : null}
       {current.description ? <p className="max-w-prose text-body-m text-pretty text-muted-foreground">{current.description}</p> : null}
       {run?.commitMessage && !current.description ? <p className="max-w-prose truncate text-body-s text-muted-foreground">{run.commitMessage}</p> : null}
     </section>
+  );
+}
+
+/** "Compare with…": another reference to measure every screen against, or stop comparing. */
+function CompareMenu({
+  references,
+  current,
+  compareWith,
+  onChange,
+  now,
+}: {
+  references: readonly LibraryReferenceView[];
+  current: LibraryReferenceView;
+  compareWith: LibraryReferenceView | null;
+  onChange: (key: LibraryRefKey | null) => void;
+  now?: Date;
+}) {
+  const others = references.filter((r) => !sameLibraryRef(r.key, current.key));
+  if (!others.length && !compareWith) return null;
+  const branches = others.filter((r) => r.key.kind === 'branch');
+  const pulls = others.filter((r) => r.key.kind === 'pull_request');
+  const shown = compareWith ?? current;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger render={<Button variant={compareWith ? 'secondary' : 'outline'} size="sm" className="max-w-64" />}>
+        <ArrowLeftRight /> <span className="truncate">{compareWith ? `Compared with ${libraryRefLabel(compareWith)}` : 'Compare with…'}</span>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="w-88 max-w-[calc(100vw-2rem)]">
+        {compareWith ? (
+          <>
+            <DropdownMenuGroup>
+              <DropdownMenuItem onClick={() => onChange(null)} className="gap-2">
+                <X aria-hidden className="size-4 text-muted-foreground" /> Stop comparing
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+          </>
+        ) : null}
+        {branches.length ? <RefGroup label="Compare with a branch" refs={branches} current={shown} onPick={onChange} now={now} /> : null}
+        {branches.length && pulls.length ? <DropdownMenuSeparator /> : null}
+        {pulls.length ? <RefGroup label="Compare with a pull request" refs={pulls} current={shown} onPick={onChange} now={now} /> : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

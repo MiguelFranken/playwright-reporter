@@ -23,7 +23,7 @@
  * while, and the "Run now" button. Batches lock their runs with `skip
  * locked`, so overlapping sweeps never work on the same run.
  */
-import { and, asc, desc, eq, gte, inArray, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import { db } from '@/lib/db/drizzle';
 import {
   artifactSweeps,
@@ -46,6 +46,7 @@ import {
   type DataSweep,
 } from '@/lib/db/schema';
 import { getStorage, type StorageAdapter } from '@/lib/storage';
+import { ingestSweepDue } from '@/lib/sweeps/continuation';
 import { EXPIRED_GRACE_DAYS, INGEST_SWEEP_INTERVAL_MS, RATE_LIMIT_MAX_AGE_MS, SWEEP_LOG_DAYS, ingestSweepEnabled } from './config';
 import { cutoffs, environmentPolicy, normalizePolicy, type DataRetentionPolicy, type PolicySource } from './policy';
 
@@ -149,6 +150,11 @@ export const EMPTY_COUNTS: DataSweepCounts = {
   auth: 0,
   sweepLogs: 0,
 };
+
+/** Rows a sweep deleted, all categories together: whether it got anything done. */
+export function deletedTotal(deleted: DataSweepCounts): number {
+  return Object.values(deleted).reduce((sum, n) => sum + n, 0);
+}
 
 export type SweepTrigger = DataSweep['trigger'];
 
@@ -413,12 +419,17 @@ export async function purgeRunHistory(options: Omit<SweepOptions, 'trigger'> = {
 
 /**
  * Called after a run finishes: sweeps, briefly, when the policy is on and no
- * data sweep of any trigger started within `INGEST_SWEEP_INTERVAL_MS`.
+ * data sweep of any trigger started within `INGEST_SWEEP_INTERVAL_MS` — or
+ * the latest one stopped at its budget with work left, which this one then
+ * continues (`ingestSweepDue`).
  */
 export async function sweepDataAfterIngest(options: Omit<SweepOptions, 'trigger'> = {}): Promise<DataSweepResult | { status: 'skipped' }> {
   if (!ingestSweepEnabled()) return { status: 'skipped' };
-  const since = new Date(Date.now() - INGEST_SWEEP_INTERVAL_MS);
-  const [recent] = await db.select({ id: dataSweeps.id }).from(dataSweeps).where(gte(dataSweeps.startedAt, since)).limit(1);
-  if (recent) return { status: 'skipped' };
+  const [latest] = await db
+    .select({ startedAt: dataSweeps.startedAt, finishedAt: dataSweeps.finishedAt, hasMore: dataSweeps.hasMore, error: dataSweeps.error })
+    .from(dataSweeps)
+    .orderBy(desc(dataSweeps.startedAt), desc(dataSweeps.id))
+    .limit(1);
+  if (!ingestSweepDue(latest, INGEST_SWEEP_INTERVAL_MS)) return { status: 'skipped' };
   return sweepExpiredData({ budgetMs: 20_000, ...options, trigger: 'ingest' });
 }
