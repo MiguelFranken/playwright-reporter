@@ -12,7 +12,7 @@ export function toPersonalTokenRow(
     id: t.id,
     name: t.name,
     tokenPrefix: t.tokenPrefix,
-    access: describeAccess(t, teamNames),
+    access: `${describeAccess(t, teamNames)}${t.scopes.includes('write') ? ' · edits test cases' : ''}`,
     createdAt: formatRelative(t.createdAt),
     createdAtTitle: formatDateTime(t.createdAt),
     expiresAt: formatRelative(t.expiresAt, { now }),

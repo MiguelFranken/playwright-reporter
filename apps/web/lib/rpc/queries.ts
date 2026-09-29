@@ -87,3 +87,16 @@ export function runErrorsQuery(ref: RunRef) {
 export function runTabQueryKeys(ref: RunRef) {
   return [orpc.runs.rows.key({ input: ref }), orpc.runs.specs.key({ input: ref }), orpc.runs.errors.key({ input: ref })];
 }
+
+/**
+ * The Playwright tests a link or adopt picker offers, per search. The list
+ * moves with every run, so an answer is fresh for half a minute; the previous
+ * search stays on screen while the next loads.
+ */
+export function automatedTestsQuery(ref: ProjectRef, q: string, uncovered: boolean) {
+  return orpc.testCases.automatedTests.queryOptions({
+    input: { ...ref, q, uncovered },
+    staleTime: 30_000,
+    placeholderData: keepPreviousData,
+  });
+}

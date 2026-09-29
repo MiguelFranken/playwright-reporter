@@ -118,7 +118,7 @@ export const CreateFlow: Story = {
     await expect(generate).toBeDisabled();
     await userEvent.type(within(dialog).getByLabelText('Name'), 'Claude Code');
     await userEvent.click(generate);
-    await expect(args.onCreate).toHaveBeenCalledWith({ name: 'Claude Code', expiresInDays: 90, scope: 'all' });
+    await expect(args.onCreate).toHaveBeenCalledWith({ name: 'Claude Code', expiresInDays: 90, scope: 'all', write: false });
 
     // The first dialog animates out while this one animates in.
     const shown = await body.findByRole('dialog', { name: 'Token created' });
@@ -152,8 +152,12 @@ export const CreateDialogSuperadmin: DialogStory = {
     await userEvent.click(await body.findByRole('option', { name: 'Every team (superadmin)' }));
     await userEvent.click(within(dialog).getByRole('combobox', { name: 'Expires after' }));
     await userEvent.click(await body.findByRole('option', { name: '30 days' }));
+    // Read-only unless asked; the hint says what the choice allows.
+    await userEvent.click(within(dialog).getByRole('combobox', { name: 'Permissions' }));
+    await userEvent.click(await body.findByRole('option', { name: 'Read, and edit test cases' }));
+    await expect(within(dialog).getByText(/can also create and edit test cases/)).toBeVisible();
     await userEvent.click(within(dialog).getByRole('button', { name: 'Generate' }));
-    await expect(args.onSubmit).toHaveBeenCalledWith({ name: 'Release bot', expiresInDays: 30, scope: 'superadmin' });
+    await expect(args.onSubmit).toHaveBeenCalledWith({ name: 'Release bot', expiresInDays: 30, scope: 'superadmin', write: true });
   },
 };
 

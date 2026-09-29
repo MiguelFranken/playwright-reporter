@@ -15,6 +15,9 @@ const nextConfig: NextConfig = {
     // Action that revalidates clears this cache, and the live views (runs,
     // run pages) follow their event stream from the cursor they rendered at.
     staleTimes: { dynamic: 30 },
+    // Importing test cases posts the file to a Server Action. Vercel caps a
+    // request body at 4.5 MB, so 4 MB leaves room for the multipart framing.
+    serverActions: { bodySizeLimit: '4mb' },
   },
   async headers() {
     // Playwright's Trace Viewer, served from public/trace (lib/trace-viewer).

@@ -22,6 +22,7 @@ export const statements = {
   run: ['read', 'delete'],
   artifact: ['read'],
   audit: ['read'],
+  testCase: ['read', 'create', 'update', 'delete'],
 } as const;
 
 export const ac = createAccessControl(statements);
@@ -35,6 +36,7 @@ export const teamRoles = {
     run: ['read', 'delete'],
     artifact: ['read'],
     audit: ['read'],
+    testCase: ['read', 'create', 'update', 'delete'],
   }),
   member: ac.newRole({
     team: ['read'],
@@ -43,6 +45,7 @@ export const teamRoles = {
     token: ['read', 'create', 'revoke'],
     run: ['read', 'delete'],
     artifact: ['read'],
+    testCase: ['read', 'create', 'update', 'delete'],
   }),
   viewer: ac.newRole({
     team: ['read'],
@@ -50,6 +53,7 @@ export const teamRoles = {
     project: ['read'],
     run: ['read'],
     artifact: ['read'],
+    testCase: ['read'],
   }),
 } as const;
 

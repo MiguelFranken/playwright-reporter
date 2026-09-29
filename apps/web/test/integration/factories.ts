@@ -117,6 +117,9 @@ export interface ScenarioTest {
   title?: string;
   project?: string;
   tags?: string[];
+  annotations?: { type: string; description?: string }[];
+  /** `test.step`s the final attempt reports, top level. */
+  steps?: string[];
   durationMs?: number;
   /** Error message for the failing attempt; drives `error_signature`. */
   error?: string;
@@ -188,6 +191,7 @@ export async function playRun(project: TokenProject, scenario: Scenario) {
         titlePath: [file, title],
         project: pwProject,
         tags: spec.tags ?? [],
+        annotations: spec.annotations ?? [],
         startedAt: new Date(at).toISOString(),
         expectedStatus: spec.outcome === 'skipped' ? 'skipped' : 'passed',
       }),
@@ -238,6 +242,7 @@ export async function playRun(project: TokenProject, scenario: Scenario) {
           outcome: spec.outcome === 'passed' ? 'expected' : spec.outcome === 'skipped' ? 'skipped' : 'unexpected',
           isFinal: true,
           attachments: spec.attachments ?? [],
+          steps: (spec.steps ?? []).map((title) => ({ title, category: 'test.step', durationMs: 10, depth: 0, startedAt: new Date(at).toISOString() })),
         }),
       );
     }

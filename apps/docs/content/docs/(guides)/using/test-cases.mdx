@@ -1,0 +1,94 @@
+---
+title: Test cases
+description: Manage manual and automated test cases in one place, linked to the Playwright tests that cover them.
+---
+
+**Test Cases** is the project's test case library: what should be tested, written down, whether a person or a
+Playwright test does it. A case that a Playwright test covers takes its health from that test's runs, so nobody has to
+keep an "automated" or "flaky" flag up to date by hand.
+
+## Cases and suites
+
+A case has a key (`TC-12`), a title, a description, pre- and postconditions and steps. Steps come in two formats:
+**Classic** (action, test data, expected result) and **Gherkin** (Given, When, Then, And, But). Switching formats keeps
+the text of every step.
+
+Each case is classified by status (active, draft, deprecated), priority, severity, type and behavior, and carries
+tags. A project can add its own fields in **Settings → Custom fields**: text, long text, number, date, dropdown or
+checkbox, each optionally required.
+
+Suites group cases the way the product is built and nest up to six levels deep. The tree shows how many cases each
+suite and everything below it holds; a case without a suite is **Unassigned**. Inside a suite, move cases up and down
+to set their order. Deleting a suite deletes its sub-suites and cases.
+
+## Linking Playwright tests
+
+A link ties a case to the Playwright tests that cover it. The sturdy way is in the test's code, with a tag or an
+annotation naming the case:
+
+```ts
+test('logs in with a password', { tag: '@TC-12' }, async ({ page }) => {
+  // …
+});
+
+test('logs out', { annotation: { type: 'test-case', description: 'TC-13, TC-14' } }, async ({ page }) => {
+  // …
+});
+```
+
+The next run links the test to the case. Because the key lives in the code, a renamed or moved test is linked again by
+its next run; removing the tag removes the link with the next run. Links can also be made by hand from a case's page (**Link tests**), or by an
+[AI assistant](/docs/ai-assistants/tools).
+
+<Callout>
+A link sets the case to **Automated**. When its last link goes, the case goes back to **To be automated**. A case
+marked automated with no linked test shows as *unverified*: nothing proves it.
+</Callout>
+
+## What the runs say
+
+Every linked case gets a verdict from its tests' runs:
+
+| Verdict | Meaning |
+| --- | --- |
+| **Passing** | Every linked test passed its latest run. |
+| **Failing** | A linked test failed its latest run. |
+| **Flaky** | A linked test needed retries in the last 30 days. |
+| **Stale** | No linked test ran in the last 14 days. A green result from last month proves nothing today. |
+| **Not run yet** | The links exist, the runs do not. |
+
+The numbers at the top of the library add this up: how much is automated, how much is still to be automated, what is
+failing, what needs attention (flaky, stale or unverified), and how many Playwright tests no case covers yet.
+
+## Adopting tests
+
+**Adopt tests** turns Playwright tests that no case covers into cases that are already linked to them: the title is the
+test's, the steps are its `test.step()` calls from the latest run, and the suites follow its file and `describe`
+blocks (or go into one suite you pick). The same test in several browser projects becomes one case.
+
+## History
+
+Every saved change is a new version, with who made it and when; a change made by a test run (a link appearing or
+going) has no author. **History** compares any two versions field by field, and **Restore** saves an old version's
+content as a new version, so nothing is lost.
+
+## Bulk actions
+
+Tick cases in the list to edit them together: move them to a suite, set status, priority, severity, type, automation
+or muted, add or remove tags, deprecate or delete them — up to 200 at a time. Each changed case gets its own version.
+
+## Import and export
+
+**Export** downloads the library, or the suite on screen, as JSON or CSV. JSON keeps suites, steps, tags and custom
+fields and imports back with everything intact. CSV opens in a spreadsheet: one case per row, steps one per line
+(`action | test data | expected result`, or `Given …` for Gherkin), custom fields as `field:<key>` columns.
+
+**Import** reads either format, up to 4 MB, and CSV exports of other tools too: it recognises common column names such
+as TestRail's *Section Hierarchy*, *Steps (Step)* and *Priority*. When a case already exists — the same key in the
+project the file came from, or the same title in the same suite — it is kept, updated from the file, or imported as a
+copy, as you choose. Imported cases are never marked automated until a test is linked.
+
+## Who can do what
+
+Admins and members create, edit and delete test cases and suites; viewers read them. The same holds for AI assistants
+and the REST API, which act with the role of the token's owner.

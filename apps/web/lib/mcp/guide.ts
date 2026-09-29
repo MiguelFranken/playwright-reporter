@@ -9,6 +9,7 @@ How to work with it:
 - Projects are "team/project" (e.g. "acme/web"). If the connection has no default project, call whoami first.
 - A failing or flaky test: start with get_failure_context. A red run: start with summarize_failures. After a fix lands: verify_fix with the run the failure came from.
 - Browse with list_runs, list_run_results, find_tests, get_test_history; overview with project_health.
+- Test cases (manual and automated, keys like TC-12): list_test_cases, get_test_case, list_test_suites. With a write-scoped token also create_test_case, update_test_case, create_test_suite, link_test_case and adopt_tests. A Playwright test tagged @TC-12 links to that case on its next run.
 - Runs can be "#128", "latest" or "latest-failed" (scope with branch). Tests can be ids, URLs or title fragments (add file/browser if several match). Pasted app URLs work anywhere.
 - Verdicts are computed from stored attempts and describe behaviour, not cause. Respect the "ruled out" list.
 - Answers are trimmed to a budget; a trimmed answer says so and names the parameter (cursor, filters, maxChars) that gets the rest.
@@ -27,6 +28,8 @@ ${GUIDE_INSTRUCTIONS}
 | run | 128, "#128", run id, run URL, "latest", "latest-failed" (+ branch / environment) |
 | test | test id, test URL, result URL, title fragment (+ file / browser) |
 | result | result id, result URL |
+| test case | "TC-12", "12", case id |
+| suite | suite id, or its path of names "Checkout / Coupons" |
 | since / until | "90m", "24h", "7d", "4w", or an ISO date "2026-09-01" |
 
 ## Outcomes
@@ -38,6 +41,7 @@ History strips read newest first: ✓ passed, ✗ failed, ~ flaky, · skipped, !
 
 - Per result (attempts of one execution): deterministic (failed identically on every attempt), flaky (passed on retry), inconclusive (one attempt, or attempts failed differently).
 - Across runs (check_flakiness): flaky, consistently_failing, intermittent, stable, insufficient_data.
+- Per test case (its linked tests): passing, failing (a latest result failed), flaky (retried in 30 days), stale (nothing ran in 14 days), not_run, none (no linked test).
 - verify_fix: fixed, unstable (only passes with retries — not fixed), intermittent, still_failing, different_failure, no_runs_since, baseline_invalid.
 
 A verdict rules fixes out; it never claims to know the cause. "deterministic" rules out waits, longer timeouts and more retries. "flaky" rules out a wrong expected value.

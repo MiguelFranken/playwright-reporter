@@ -7,11 +7,13 @@ import { DefaultBranchForm } from '@/components/settings/default-branch-form';
 import { ReporterSetup } from '@miguelfranken/ui/views/settings/reporter-setup';
 import { StorageCard } from '@miguelfranken/ui/views/settings/storage-card';
 import { TokensCard, type TokenRow } from '@/components/settings/tokens-card';
+import { FieldSettingsCard } from '@/components/test-cases/field-settings-card';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@miguelfranken/ui/components/card';
 import { Skeleton } from '@miguelfranken/ui/components/skeleton';
 import { requireProject } from '@/lib/auth/access';
 import { s3ConfigFromEnv } from '@/lib/storage/s3-config';
 import { listTokens } from '@/lib/db/queries/projects';
+import { listFieldDefs } from '@/lib/db/queries/test-cases';
 import { defaultBranch } from '@/lib/db/queries/mcp';
 import { formatDateTime, formatRelative } from '@miguelfranken/ui/lib/format';
 import { baseUrl, storageDriver } from '@/lib/storage';
@@ -49,9 +51,10 @@ async function SettingsContent({ params }: { params: Params }) {
   const canDelete = access.can({ project: ['delete'] });
   const configuredBranch = typeof project.settings.defaultBranch === 'string' ? project.settings.defaultBranch : '';
   // Resolved with empty settings on purpose: the placeholder shows what an empty field falls back to.
-  const [tokens, fallbackBranch] = await Promise.all([
+  const [tokens, fallbackBranch, fieldDefs] = await Promise.all([
     canSeeTokens ? listTokens(project.id) : [],
     canUpdate ? defaultBranch(project.id, {}) : null,
+    listFieldDefs(project.id),
   ]);
 
   const rows: TokenRow[] = tokens.map((t) => ({
@@ -71,7 +74,7 @@ async function SettingsContent({ params }: { params: Params }) {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Settings" description="Project details, API tokens and reporter setup." />
+      <PageHeader title="Settings" description="Project details, API tokens, reporter setup and test case fields." />
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Card>
@@ -135,6 +138,8 @@ async function SettingsContent({ params }: { params: Params }) {
           </Card>
         </>
       ) : null}
+
+      <FieldSettingsCard teamSlug={team} projectSlug={project.slug} defs={fieldDefs} canEdit={access.can({ testCase: ['update'] })} />
 
       {canDelete ? <ProjectDangerZone teamSlug={team} projectSlug={project.slug} name={project.name} /> : null}
     </div>

@@ -55,6 +55,8 @@ export const projects = pgTable(
     slug: text('slug').notNull(),
     name: text('name').notNull(),
     runCounter: integer('run_counter').notNull().default(0),
+    /** The last test case number handed out (`TC-<n>`); allocated under a row lock like `run_counter`. */
+    caseCounter: integer('case_counter').notNull().default(0),
     settings: jsonb('settings').$type<Record<string, unknown>>().notNull().default({}),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

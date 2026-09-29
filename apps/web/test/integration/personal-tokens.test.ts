@@ -39,6 +39,16 @@ describe('createPersonalToken', () => {
     expect(JSON.stringify(log.target)).not.toContain(token);
   });
 
+  test('is read-only unless asked to edit test cases', async ({ db, tenant, actor }) => {
+    actor.signIn(tenant.adminUser);
+    const readOnly = await mint();
+    const writer = await mint({ write: true });
+    const scopes = async (token: string) =>
+      (await db.select({ scopes: personalAccessTokens.scopes }).from(personalAccessTokens).where(eq(personalAccessTokens.tokenHash, hashToken(token))))[0].scopes;
+    expect(await scopes(readOnly)).toEqual(['read']);
+    expect(await scopes(writer)).toEqual(['read', 'write']);
+  });
+
   test('restricts a token to a team or a project the user can see', async ({ db, tenant, actor }) => {
     actor.signIn(tenant.adminUser);
     await mint({ restriction: { kind: 'team', teamId: tenant.team.id } });
