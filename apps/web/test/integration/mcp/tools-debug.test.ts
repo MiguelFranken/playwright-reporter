@@ -248,7 +248,7 @@ describe.each(ERAS)('debug tools (%s)', (era) => {
     await regression(tenant);
     const client = await mcpClient({ token: (await createPat(tenant.adminUser)).token, era });
     const { prompts } = await client.listPrompts();
-    expect(prompts.map((p) => p.name)).toEqual(['triage_run', 'debug_test', 'investigate_flake', 'branch_check']);
+    expect(prompts.map((p) => p.name)).toEqual(['triage_run', 'debug_test', 'investigate_flake', 'branch_check', 'organize_tests']);
     const prompt = await client.getPrompt({ name: 'debug_test', arguments: { test: 'checkout works', run: '#3' } });
     expect((prompt.messages[0].content as { text: string }).text).toContain('get_failure_context');
 

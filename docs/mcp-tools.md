@@ -27,12 +27,13 @@ also accepts `project`, `format` (`markdown` | `json`) and `maxChars`. See the R
 | [`list_test_suites`](#list_test_suites) | core | The project's test case suites as a tree, with how many cases each holds. |
 | [`list_test_cases`](#list_test_cases) | core | Search and filter the manual and automated test cases of a project: by suite, status, priority, automation, tag, or what their linked Playwright tests say (failing, flaky, stale). |
 | [`get_test_case`](#get_test_case) | core | One test case in full: description, conditions, steps, classification, custom fields, and the Playwright tests linked to it with their latest result and last 30 days. |
+| [`list_uncovered_tests`](#list_uncovered_tests) | core | The Playwright tests no test case links to yet, one row per test with the ids of every browser it runs in, its file and describe blocks. |
 | [`create_test_case`](#create_test_case) | write | Create a manual or automated test case with steps, in a suite (its path is created if missing). |
 | [`update_test_case`](#update_test_case) | write | Change fields of a test case: title, steps, status, priority, suite, tags and the rest. |
 | [`create_test_suite`](#create_test_suite) | write | Create a suite, optionally under a parent suite, to group test cases the way the product is built. |
 | [`delete_test_suite`](#delete_test_suite) | write | Delete suites that hold no test cases, e.g. |
 | [`link_test_case`](#link_test_case) | write | Link Playwright tests (by test id from find_tests) to a test case, or unlink them. |
-| [`adopt_tests`](#adopt_tests) | write | Turn Playwright tests into test cases that are already linked to them: title from the test, steps from its test.step() calls, suites from its file and describe blocks. |
+| [`adopt_tests`](#adopt_tests) | write | Turn Playwright tests into test cases already linked to them: steps from their test.step() calls, one case per test across browsers. |
 | [`list_review_checkpoints`](#list_review_checkpoints) | core | A run's review checkpoints — the named screenshots its tests capture at their milestones, per variant (desktop, mobile) — in journey order, with each image's review status: changed against its approved baseline, new, approved or changes requested. |
 | [`get_review_checkpoint`](#get_review_checkpoint) | core | One review checkpoint image to look at, with its approved baseline (or the previous run’s capture) beside it, so you can say what changed. |
 | [`review_checkpoint`](#review_checkpoint) | write | Approve review checkpoint images, or ask for changes with a comment. |
@@ -416,6 +417,23 @@ One test case in full: description, conditions, steps, classification, custom fi
 
 Structured output fields: `key`, `title`, `suite`, `status`, `priority`, `severity`, `type`, `behavior`, `automation`, `muted`, `tags`, `description`, `preconditions`, `postconditions`, `stepsFormat`, `steps`, `customFields`, `verdict`, `version`, `linkedTests`, `url`, `truncated`.
 
+## list_uncovered_tests
+
+**List Playwright tests without a test case** · toolset `core`
+
+The Playwright tests no test case links to yet, one row per test with the ids of every browser it runs in, its file and describe blocks. The starting point for organizing tests into cases: link a row to an existing case with link_test_case, or turn it into a new case with adopt_tests.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+| `search` | string |  | Title, file or describe block. |
+| `limit` | integer (1–100) |  | Rows per page (1–100, default 20). |
+| `cursor` | string |  | Opaque cursor from a previous response, for the next page. Keep the other filters unchanged. |
+
+Structured output fields: `project`, `total`, `tests`, `nextCursor`, `truncated`.
+
 ## create_test_case
 
 **Create a test case** · toolset `write` · **writes**
@@ -534,15 +552,16 @@ Structured output fields: `key`, `linked`, `unlinked`, `message`, `url`, `trunca
 
 **Adopt Playwright tests as test cases** · toolset `write` · **writes**
 
-Turn Playwright tests into test cases that are already linked to them: title from the test, steps from its test.step() calls, suites from its file and describe blocks. A test that already backs a case is skipped; one test in several browsers becomes one case.
+Turn Playwright tests into test cases already linked to them: steps from their test.step() calls, one case per test across browsers. Give "tests" (one suite, or suites mirroring files and describe blocks), or "placements" to choose a suite and a title per test. A test that already backs a case is skipped.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
 | `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
 | `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
-| `tests` | string[] | yes | Test ids (from find_tests) to turn into test cases. |
-| `suite` | string |  | Put every new case in this suite (id or path; created if missing). Omit to mirror each test's file and describe blocks as suites. |
+| `tests` | string[] |  | Test ids (from list_uncovered_tests or find_tests) to turn into test cases. |
+| `suite` | string |  | With "tests": put every new case in this suite (id or path; created if missing). Omit to mirror each test's file and describe blocks as suites. |
+| `placements` | object[] |  | Instead of "tests": each group of tests with its own suite and title, to sort many tests into existing or new suites in one call. |
 
 Structured output fields: `created`, `skipped`, `message`, `truncated`.
 
@@ -659,6 +678,7 @@ Structured output fields: `project`, `reference`, `kept`, `url`, `truncated`.
 | `debug_test` | `project?`, `test`, `run?` | Find out why one test fails and what change fixes it, then how to confirm the fix. |
 | `investigate_flake` | `project?`, `test` | Decide whether a test is flaky or broken, classify the defect, and propose a stabilisation. |
 | `branch_check` | `project?`, `branch` | Compare a branch’s latest run with the base branch and get a go / no-go. |
+| `organize_tests` | `project?`, `search?` | Sort the Playwright tests no test case covers yet into existing or new cases and suites. |
 
 ## Resources
 

@@ -16,7 +16,7 @@ import {
   GHERKIN_KEYWORDS,
   STEP_FORMATS,
 } from '@miguelfranken/ui/lib/test-cases';
-import { caseNumberOf, getCaseDetail, getSuiteTree, listCases, listSuites, suitePaths } from '@/lib/db/queries/test-cases';
+import { caseNumberOf, getCaseDetail, getSuiteTree, listAutomatedTests, listCases, listSuites, suitePaths } from '@/lib/db/queries/test-cases';
 import { parseCaseKey } from '@/lib/test-cases/model';
 import {
   adoptTests,
@@ -24,7 +24,9 @@ import {
   createCase,
   createSuite,
   deleteEmptySuites,
+  describePath,
   ensureSuite,
+  fileLabel,
   linkTests,
   resolveCaseId,
   unlinkTest,
@@ -549,43 +551,166 @@ export const linkTestCase = defineTool({
   },
 });
 
+// ---------------------------------------------------------------- list_uncovered_tests
+
+const uncoveredInput = z.object({
+  ...commonParams,
+  search: z.string().optional().describe('Title, file or describe block.'),
+  limit: limitParam,
+  cursor: cursorParam,
+});
+const uncoveredOutput = output({
+  project: z.string(),
+  total: z.number(),
+  tests: z.array(
+    z.object({
+      testIds: z.array(z.string()),
+      title: z.string(),
+      file: z.string(),
+      describe: z.array(z.string()),
+      browsers: z.array(z.string()),
+      lastOutcome: z.string().nullable(),
+      mirrorSuite: z.string(),
+    }),
+  ),
+  nextCursor: z.string().nullable(),
+});
+
+export const listUncoveredTests = defineTool({
+  name: 'list_uncovered_tests',
+  title: 'List Playwright tests without a test case',
+  toolset: 'core',
+  description:
+    'The Playwright tests no test case links to yet, one row per test with the ids of every browser it runs in, its file and describe blocks. The starting point for organizing tests into cases: link a row to an existing case with link_test_case, or turn it into a new case with adopt_tests.',
+  input: uncoveredInput,
+  output: uncoveredOutput,
+  async handler(args, ctx) {
+    const project = await ctx.project(args.project, { testCase: ['read'] });
+    const filters = { q: args.search };
+    const page = readPage('list_uncovered_tests', filters, args);
+    const { rows } = await listAutomatedTests(project.project.id, { q: args.search, uncovered: true, limit: 100_000 });
+    // The same test in several Playwright projects (browsers) is one row, as adopt_tests makes it one case.
+    const groups = new Map<string, typeof rows>();
+    for (const r of rows) {
+      const key = `${r.file}\u0000${describePath(r.titlePath, r.file, r.pwProject).join('\u0000')}\u0000${r.title}`;
+      groups.set(key, [...(groups.get(key) ?? []), r]);
+    }
+    const all = [...groups.values()].sort((a, b) => a[0].file.localeCompare(b[0].file) || a[0].title.localeCompare(b[0].title));
+    return {
+      data: {
+        project: project.ref,
+        total: all.length,
+        tests: all.slice(page.offset, page.offset + page.limit).map((group) => {
+          const first = group[0];
+          const describe = describePath(first.titlePath, first.file, first.pwProject);
+          return {
+            testIds: group.map((g) => g.testId),
+            title: first.title,
+            file: first.file,
+            describe,
+            browsers: group.map((g) => g.pwProject),
+            lastOutcome: first.lastOutcome,
+            mirrorSuite: [fileLabel(first.file), ...describe].join(' / '),
+          };
+        }),
+        nextCursor: nextCursor('list_uncovered_tests', filters, page, all.length),
+      },
+      render(md, d) {
+        md.heading(`Playwright tests without a test case in ${d.project}`, 2);
+        if (d.tests.length === 0) {
+          md.line('Every Playwright test backs a test case.');
+          return;
+        }
+        const shown = md.table(
+          ['Test', 'File', 'Describe', 'Browsers', 'Last', 'Test ids'],
+          d.tests.map((t) => [t.title, t.file, t.describe.join(' › ') || null, t.browsers.join(', '), t.lastOutcome, t.testIds.join(', ')]),
+        );
+        md.notice(`Showing ${page.offset + 1}–${page.offset + shown} of ${d.total}.${d.nextCursor ? ` Next page: cursor "${d.nextCursor}".` : ''}`);
+      },
+    };
+  },
+});
+
 // ---------------------------------------------------------------- adopt_tests
+
+const placementSchema = z.object({
+  tests: z.array(z.string()).min(1).max(200).describe('Test ids, e.g. the testIds of one row of list_uncovered_tests.'),
+  suite: suiteParam.optional().describe('Suite for these cases (id or path; missing levels are created). Omit to mirror file and describe blocks.'),
+  title: z.string().optional().describe("Title for the case, instead of the test's own. Set it only when the tests are one test (in its browsers)."),
+});
 
 const adoptInput = z.object({
   ...commonParams,
-  tests: z.array(z.string()).min(1).max(200).describe('Test ids (from find_tests) to turn into test cases.'),
+  tests: z.array(z.string()).min(1).max(200).optional().describe('Test ids (from list_uncovered_tests or find_tests) to turn into test cases.'),
   suite: suiteParam
     .optional()
-    .describe('Put every new case in this suite (id or path; created if missing). Omit to mirror each test\'s file and describe blocks as suites.'),
+    .describe('With "tests": put every new case in this suite (id or path; created if missing). Omit to mirror each test\'s file and describe blocks as suites.'),
+  placements: z
+    .array(placementSchema)
+    .min(1)
+    .max(200)
+    .optional()
+    .describe('Instead of "tests": each group of tests with its own suite and title, to sort many tests into existing or new suites in one call.'),
 });
-const adoptOutput = output({ created: z.array(z.object({ key: z.string(), url: z.string() })), skipped: z.number(), message: z.string() });
+const adoptOutput = output({
+  created: z.array(z.object({ key: z.string(), suite: z.string().nullable(), url: z.string() })),
+  skipped: z.number(),
+  message: z.string(),
+});
 
 export const adoptTestsTool = defineTool({
   name: 'adopt_tests',
   title: 'Adopt Playwright tests as test cases',
   toolset: 'write',
   description:
-    'Turn Playwright tests into test cases that are already linked to them: title from the test, steps from its test.step() calls, suites from its file and describe blocks. A test that already backs a case is skipped; one test in several browsers becomes one case.',
+    'Turn Playwright tests into test cases already linked to them: steps from their test.step() calls, one case per test across browsers. Give "tests" (one suite, or suites mirroring files and describe blocks), or "placements" to choose a suite and a title per test. A test that already backs a case is skipped.',
   input: adoptInput,
   output: adoptOutput,
   annotations: WRITE,
   async handler(args, ctx) {
+    if (!args.tests?.length === !args.placements?.length) throw invalid('Pass either "tests" or "placements".');
+    if (args.placements && args.suite !== undefined) throw invalid('"suite" goes with "tests"; with "placements", give each placement its suite.');
+    const placements = args.placements ?? [{ tests: args.tests!, suite: args.suite, title: undefined }];
+    if (placements.reduce((n, p) => n + p.tests.length, 0) > 200) throw invalid('Adopt at most 200 tests per call.');
     const project = await ctx.project(args.project, { testCase: ['create'] });
-    const target = await suiteId(project, args.suite, true);
-    const result = await adoptTests(contextOf(project), {
-      testIds: args.tests,
-      mode: target === undefined ? 'mirror' : 'target',
-      suiteId: target ?? null,
-    }).catch(caseError);
-    const created = result.created.map((c) => ({ key: caseKey(c.number), url: project.links.testCase(c.number) }));
+    const c = contextOf(project);
+    const targets: (string | null | undefined)[] = [];
+    for (const p of placements) targets.push(await suiteId(project, p.suite, true));
+    const paths = suitePaths(await listSuites(project.project.id));
+    const created: { key: string; suite: string | null; url: string }[] = [];
+    let skipped = 0;
+    for (const [i, p] of placements.entries()) {
+      const target = targets[i];
+      const title = p.title?.trim();
+      const result = await adoptTests(c, {
+        testIds: p.tests,
+        mode: target === undefined ? 'mirror' : 'target',
+        suiteId: target ?? null,
+        titles: title ? Object.fromEntries(p.tests.map((id) => [id, title])) : {},
+      }).catch(caseError);
+      const suite = target === undefined ? 'mirrored from file' : target ? (paths.get(target) ?? []).join(' / ') : null;
+      created.push(...result.created.map((row) => ({ key: caseKey(row.number), suite, url: project.links.testCase(row.number) })));
+      skipped += result.skipped;
+    }
     return {
-      data: { created, skipped: result.skipped, message: `${created.length} test cases created, ${result.skipped} tests skipped.` },
+      data: { created, skipped, message: `${created.length} test cases created, ${skipped} tests skipped (already backing a case, or not in the project).` },
       render(md, d) {
         md.line(d.message);
-        if (d.created.length) md.list(d.created.map((c) => link(c.key, c.url)));
+        if (d.created.length) md.list(d.created.map((row) => `${link(row.key, row.url)}${row.suite ? ` in ${row.suite}` : ' (unassigned)'}`));
       },
     };
   },
 });
 
-export const TEST_CASE_TOOLS = [listTestSuites, listTestCases, getTestCase, createTestCase, updateTestCase, createTestSuite, deleteTestSuite, linkTestCase, adoptTestsTool];
+export const TEST_CASE_TOOLS = [
+  listTestSuites,
+  listTestCases,
+  getTestCase,
+  listUncoveredTests,
+  createTestCase,
+  updateTestCase,
+  createTestSuite,
+  deleteTestSuite,
+  linkTestCase,
+  adoptTestsTool,
+];

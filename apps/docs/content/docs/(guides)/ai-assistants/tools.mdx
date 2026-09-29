@@ -8,7 +8,7 @@ generated from the code: [`docs/mcp-tools.md`](https://github.com/MiguelFranken/
 
 | Toolset | Tools |
 | --- | --- |
-| `core` | `whoami`, `list_filters`, `list_runs`, `get_run`, `list_run_results`, `get_result`, `find_tests`, `get_test_history`, `project_health`, `list_test_cases`, `get_test_case`, `list_test_suites`, `list_review_checkpoints`, `get_review_checkpoint`, `list_library`, `get_library_flows` |
+| `core` | `whoami`, `list_filters`, `list_runs`, `get_run`, `list_run_results`, `get_result`, `find_tests`, `get_test_history`, `project_health`, `list_test_cases`, `get_test_case`, `list_test_suites`, `list_uncovered_tests`, `list_review_checkpoints`, `get_review_checkpoint`, `list_library`, `get_library_flows` |
 | `debug` | `get_failure_context` (start here for a failing test), `check_flakiness`, `summarize_failures`, `compare_runs`, `verify_fix`, `get_artifact`, `get_rerun_command` |
 | `write` | `create_test_case`, `update_test_case`, `create_test_suite`, `delete_test_suite`, `link_test_case`, `adopt_tests`, `review_checkpoint`, `set_library_reference` |
 
@@ -18,6 +18,7 @@ change, so a viewer's token cannot write. Every edit is a new version in the cas
 
 Verdicts — flaky, deterministic, fixed — are computed from the stored attempts, not guessed by a model, and say which
 fixes the evidence rules out. Clients with slash commands also get the prompts `triage_run`, `debug_test`,
-`investigate_flake` and `branch_check`.
+`investigate_flake`, `branch_check` and `organize_tests` (sort the Playwright tests no case covers yet into existing or
+new cases and suites).
 
 The [REST API](/docs/api) answers from the same code: every reading tool but the prompts has a REST endpoint.

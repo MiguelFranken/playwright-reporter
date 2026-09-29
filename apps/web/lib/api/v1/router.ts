@@ -25,7 +25,7 @@ import { projectHealth } from '@/lib/mcp/tools/project-health';
 import { summarizeFailures } from '@/lib/mcp/tools/summarize-failures';
 import { verifyFixTool } from '@/lib/mcp/tools/verify-fix';
 import { whoami } from '@/lib/mcp/tools/whoami';
-import { getTestCase, listTestCases, listTestSuites } from '@/lib/mcp/tools/test-cases';
+import { getTestCase, listTestCases, listTestSuites, listUncoveredTests } from '@/lib/mcp/tools/test-cases';
 import { getReviewCheckpoint, listReviewCheckpoints } from '@/lib/mcp/tools/review';
 import { getLibraryFlows, listLibrary } from '@/lib/mcp/tools/library';
 import type { ToolDef } from '@/lib/mcp/registry';
@@ -232,6 +232,13 @@ export const router = {
       path: `${P}/test-suites`,
       summary: 'List test suites',
       description: 'The suite tree of the test cases, with each suite’s path, id and case counts.',
+      tags: ['Test cases'],
+    }),
+    uncovered: fromTool(tool(listUncoveredTests), {
+      path: `${P}/uncovered-tests`,
+      summary: 'List Playwright tests without a test case',
+      description:
+        'The Playwright tests no test case links to yet, one row per test with the ids of every browser it runs in, its file, describe blocks and the suite path adopting it would mirror.',
       tags: ['Test cases'],
     }),
   },
