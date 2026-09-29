@@ -144,6 +144,9 @@ export const FilteredWithoutScreenshots: Story = {
   play: async ({ canvasElement, args }) => {
     const trigger = within(canvasElement).getByRole('button', { name: /^filter/i });
     await expect(trigger).toHaveTextContent('2');
+    // The count badge is a circle, not a pill, for a single digit.
+    const badge = within(trigger).getByText('2').getBoundingClientRect();
+    await expect(badge.width).toBe(badge.height);
     await userEvent.click(trigger);
     const menu = within(await within(document.body).findByRole('menu'));
     await userEvent.click(menu.getByRole('menuitemcheckbox', { name: /^without screenshot/i }));

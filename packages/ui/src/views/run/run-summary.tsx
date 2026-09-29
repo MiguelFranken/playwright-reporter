@@ -302,7 +302,7 @@ function ResultFilterMenu({
         <ListFilter data-icon="inline-start" />
         Filter
         {activeCount > 0 ? (
-          <span className="inline-flex min-w-4 items-center justify-center rounded-full bg-accent-solid px-1 text-body-xs text-accent-on-solid tabular-nums">
+          <span className="inline-flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-accent-solid px-1 text-body-xs leading-none text-accent-on-solid tabular-nums">
             {activeCount}
           </span>
         ) : null}
