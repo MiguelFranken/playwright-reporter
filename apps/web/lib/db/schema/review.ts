@@ -1,5 +1,5 @@
-import { relations } from 'drizzle-orm';
-import { boolean, index, integer, jsonb, pgEnum, pgTable, real, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { relations, sql } from 'drizzle-orm';
+import { boolean, check, index, integer, jsonb, pgEnum, pgTable, real, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { REVIEW_DECISIONS } from '@miguelfranken/ui/lib/review';
 import { users } from './auth';
 import { attachments, projects, runs, testAttempts, testResults, tests } from './reporting';
@@ -133,6 +133,42 @@ export const reviewDecisions = pgTable(
   ],
 );
 
+/**
+ * A branch or pull request kept in the library: the visual documentation of
+ * the product as that line of work shows it. It follows its newest run, or is
+ * pinned to one run (`pinned_run_id`). One reference per project is the
+ * default the library opens on; without one it opens on the default branch.
+ */
+export const libraryReferences = pgTable(
+  'library_references',
+  {
+    id: uuid('id').primaryKey(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    /** `branch` or `pull_request`. */
+    kind: text('kind').$type<'branch' | 'pull_request'>().notNull(),
+    branch: text('branch'),
+    prNumber: integer('pr_number'),
+    /** Shown instead of the branch or request, for readers who do not know either: "Checkout redesign". */
+    title: text('title'),
+    description: text('description'),
+    /** The run shown; `null` follows the newest. A deleted run falls back to following. */
+    pinnedRunId: uuid('pinned_run_id').references(() => runs.id, { onDelete: 'set null' }),
+    isDefault: boolean('is_default').notNull().default(false),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('library_references_branch_idx').on(t.projectId, t.branch).where(sql`${t.kind} = 'branch'`),
+    uniqueIndex('library_references_pr_idx').on(t.projectId, t.prNumber).where(sql`${t.kind} = 'pull_request'`),
+    uniqueIndex('library_references_default_idx').on(t.projectId).where(sql`${t.isDefault}`),
+    index('library_references_pinned_idx').on(t.pinnedRunId),
+    check('library_references_target_check', sql`(${t.kind} = 'branch' and ${t.branch} is not null and ${t.prNumber} is null) or (${t.kind} = 'pull_request' and ${t.prNumber} is not null)`),
+  ],
+);
+
 export const reviewCheckpointsRelations = relations(reviewCheckpoints, ({ many, one }) => ({
   run: one(runs, { fields: [reviewCheckpoints.runId], references: [runs.id] }),
   captures: many(reviewCaptures),
@@ -145,3 +181,4 @@ export const reviewCapturesRelations = relations(reviewCaptures, ({ one }) => ({
 export type ReviewCheckpointRow = typeof reviewCheckpoints.$inferSelect;
 export type ReviewCaptureRow = typeof reviewCaptures.$inferSelect;
 export type ReviewDecisionRow = typeof reviewDecisions.$inferSelect;
+export type LibraryReferenceRow = typeof libraryReferences.$inferSelect;

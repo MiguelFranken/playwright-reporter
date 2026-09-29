@@ -260,7 +260,7 @@ export async function compareCaptures(
 }
 
 /** The checkpoints of some results' final attempts, in order, with their compared captures. */
-async function checkpointsWhere(where: SQL, context?: { runId: string; runStartedAt: Date }): Promise<CheckpointRecord[]> {
+export async function checkpointsWhere(where: SQL, context?: { runId: string; runStartedAt: Date }): Promise<CheckpointRecord[]> {
   const cps = await db
     .select({
       id: reviewCheckpoints.id,
@@ -313,6 +313,9 @@ export interface ReviewFlowRecord {
   line: number;
   project: string;
   outcome: string;
+  /** The run the result belongs to: one run for a run's review, several in the library. */
+  runNumber: number;
+  runStartedAt: Date;
   attemptId: string;
   /** The attempt's video and trace, and Playwright's failure screenshot. */
   video: AttachmentState | null;
@@ -331,6 +334,15 @@ export async function runReview(run: { id: string; startedAt: Date | string }, f
     ? and(eq(reviewCheckpoints.runId, run.id), eq(reviewCheckpoints.testResultId, filter.resultId))!
     : eq(reviewCheckpoints.runId, run.id);
   const checkpoints = await checkpointsWhere(where, { runId: run.id, runStartedAt: new Date(run.startedAt) });
+  return assembleFlows(checkpoints);
+}
+
+/**
+ * Checkpoints as flows: one per result, with the test, its outcome, the
+ * attempt's video, trace and failure screenshot, in the order the run
+ * summary lists them (file, then title path).
+ */
+export async function assembleFlows(checkpoints: readonly CheckpointRecord[]): Promise<ReviewFlowRecord[]> {
   if (checkpoints.length === 0) return [];
 
   const resultIds = [...new Set(checkpoints.map((c) => c.testResultId))];
@@ -346,9 +358,12 @@ export async function runReview(run: { id: string; startedAt: Date | string }, f
         line: testResults.line,
         project: tests.pwProject,
         outcome: testResults.outcome,
+        runNumber: runs.number,
+        runStartedAt: runs.startedAt,
       })
       .from(testResults)
       .innerJoin(tests, eq(tests.id, testResults.testId))
+      .innerJoin(runs, eq(runs.id, testResults.runId))
       .where(inArray(testResults.id, resultIds)),
     db
       .select({ id: attachments.id, status: attachments.status, attemptId: attachments.attemptId, kind: attachments.kind, name: attachments.name })
