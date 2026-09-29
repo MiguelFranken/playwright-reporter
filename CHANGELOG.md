@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.0.39](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.38...v0.0.39) (2026-09-29)
+
+### Features
+
+* **ui:** animate the counts bar as a live run's tally grows ([#44](https://github.com/MiguelFranken/playwright-reporter/issues/44)) ([bbe1a65](https://github.com/MiguelFranken/playwright-reporter/commit/bbe1a6585d4cb1ea4105581caf7cd145d2ff05b0))
+
+### Bug Fixes
+
+* **ui:** keep dialog content inside the dialog ([#43](https://github.com/MiguelFranken/playwright-reporter/issues/43)) ([e9b04ad](https://github.com/MiguelFranken/playwright-reporter/commit/e9b04ad8f035e34cf64a2173704a8870ddf8fb60))
+
 ## [0.0.38](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.37...v0.0.38) (2026-09-29)
 
 ### Features
