@@ -70,6 +70,43 @@ describe('test case tools', () => {
     await client.close();
   });
 
+  test('a write token sorts uncovered tests into suites with placements', async ({ tenant }) => {
+    await playRun(tenant.tokenProject, {
+      tests: [
+        { title: 'logs in', file: 'tests/login.spec.ts', outcome: 'passed' },
+        { title: 'adds to cart', file: 'tests/cart.spec.ts', outcome: 'passed' },
+        { title: 'applies a coupon', file: 'tests/cart.spec.ts', outcome: 'passed' },
+      ],
+    });
+    const { token } = await createPat(tenant.adminUser, { scopes: ['read', 'write'] });
+    const client = await mcpClient({ token });
+    const project = `${tenant.team.slug}/${tenant.project.slug}`;
+    await call(client, 'create_test_suite', { project, name: 'Checkout' });
+
+    const uncovered = await call(client, 'list_uncovered_tests', { project });
+    expect(uncovered.structuredContent).toMatchObject({ total: 3 });
+    const rows = uncovered.structuredContent!.tests as { title: string; testIds: string[]; mirrorSuite: string }[];
+    const row = (title: string) => rows.find((r) => r.title === title)!;
+    expect(row('adds to cart').mirrorSuite).toBe('cart');
+
+    expect((await call(client, 'adopt_tests', { project })).isError).toBe(true);
+    const adopted = await call(client, 'adopt_tests', {
+      project,
+      placements: [
+        { tests: row('adds to cart').testIds, suite: 'Checkout / Cart', title: 'Add a product to the cart' },
+        { tests: row('applies a coupon').testIds, suite: 'Checkout' },
+      ],
+    });
+    expect(adopted.isError).toBeFalsy();
+    expect(adopted.structuredContent).toMatchObject({ created: [{ suite: 'Checkout / Cart' }, { suite: 'Checkout' }], skipped: 0 });
+
+    const cases = await call(client, 'list_test_cases', { project, suite: 'Checkout' });
+    expect((cases.structuredContent!.cases as { title: string }[]).map((c) => c.title).sort()).toEqual(['Add a product to the cart', 'applies a coupon']);
+    const left = await call(client, 'list_uncovered_tests', { project });
+    expect(left.structuredContent).toMatchObject({ total: 1, tests: [{ title: 'logs in' }] });
+    await client.close();
+  });
+
   test('a write token deletes empty suites and refuses ones with cases', async ({ tenant }) => {
     const { token } = await createPat(tenant.adminUser, { scopes: ['read', 'write'] });
     const client = await mcpClient({ token });

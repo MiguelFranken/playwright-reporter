@@ -56,6 +56,17 @@ export const PROMPTS: PromptDef[] = [
     text: (a) =>
       `Compare the branch "${a.branch}"${scope(a)} against the base branch with the playwright-reporter tools: call compare_runs with branch "${a.branch}". Summarise new failures, new flakes, fixes and slowdowns, call get_failure_context for any new failure that is not obvious, and give a go / no-go with reasons.`,
   },
+  {
+    name: 'organize_tests',
+    title: 'Organize tests into test cases',
+    description: 'Sort the Playwright tests no test case covers yet into existing or new cases and suites.',
+    args: z.object({ project, search: z.string().optional().describe('Only tests whose title, file or describe block matches.') }),
+    text: (a) =>
+      `Organize the Playwright tests that no test case covers yet${scope(a)} with the playwright-reporter tools. Call list_uncovered_tests${a.search ? ` with search "${a.search}"` : ''} (follow nextCursor to the end), list_test_suites and list_test_cases. For each test, decide:
+1. It automates an existing case (usually a manual or planned one with the same intent): link its testIds with link_test_case.
+2. Otherwise it becomes a new case: choose an existing suite by what the product feature is, or a new suite path when none fits, and a clear title that says what the case verifies.
+Show me the plan as a table (test → existing case, or new case title and suite) and wait for my go. Then apply it: one adopt_tests call with "placements" (one placement per row, all of its testIds, its suite and title), and link_test_case for the matches. Finish with delete_test_suite allEmpty if suites were left empty, and give me the links to the created cases.`,
+  },
 ];
 
 /**

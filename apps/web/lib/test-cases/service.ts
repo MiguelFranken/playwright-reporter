@@ -615,6 +615,8 @@ export const adoptSchema = z.object({
   mode: z.enum(['target', 'mirror']).default('mirror'),
   suiteId: z.uuid().nullable().default(null),
   status: caseFieldsSchema.shape.status.default('active'),
+  /** Case titles by test id, instead of the test's own title; any test of a case's group may carry it. */
+  titles: z.record(z.string(), z.string().trim().min(1).max(LIMITS.title)).default({}),
 });
 
 /**
@@ -658,7 +660,7 @@ export async function adoptTests(ctx: CaseContext, input: z.input<typeof adoptSc
       const steps = await latestSteps(tx, group.map((g) => g.id));
       const fields: CaseFields = {
         ...CASE_DEFAULTS,
-        title: first.title.slice(0, LIMITS.title),
+        title: group.map((g) => opts.titles[g.id]).find(Boolean) ?? first.title.slice(0, LIMITS.title),
         suiteId,
         status: opts.status,
         automation: 'automated',
