@@ -1,11 +1,14 @@
 'use client';
 
+import { Images } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
+import { Button } from '@miguelfranken/ui/components/button';
 import { RunConfig, type RunConfigData } from '@miguelfranken/ui/views/run/run-config';
 import { RunTabs } from '@miguelfranken/ui/views/run/run-tabs';
 import type { RunCounts } from '@miguelfranken/ui/patterns/counts-bar';
 import { useShallowSearch } from '@/components/filters/url-filters';
 import { useLivePeek } from '@/components/live/live-store';
+import { PrefetchLink } from '@/components/prefetch-link';
 import type { RunRef } from '@/lib/rpc/client';
 import { runErrorsQuery, runRowsQuery, runSpecsQuery } from '@/lib/rpc/queries';
 import { parseRunTab, type RunTab } from './run-tab';
@@ -44,6 +47,7 @@ export function RunBody({
   counts,
   config,
   summaryHead,
+  review,
 }: {
   base: string;
   runNumber: number;
@@ -52,6 +56,8 @@ export function RunBody({
   config: RunConfigData;
   /** The summary's first paint, when the server rendered that tab. */
   summaryHead?: SummaryHead;
+  /** The run's visual review, when it captured review checkpoints. */
+  review?: { href: string; toReview: number; total: number };
 }) {
   const { params, set } = useShallowSearch();
   const tab = parseRunTab(params.get('tab') ?? undefined);
@@ -72,7 +78,20 @@ export function RunBody({
   };
 
   return (
-    <RunTabs value={tab} counts={{ summary: total }} onValueChange={select} onTabIntent={prefetch}>
+    <RunTabs
+      value={tab}
+      counts={{ summary: total }}
+      onValueChange={select}
+      onTabIntent={prefetch}
+      actions={
+        review ? (
+          <Button variant={review.toReview ? 'default' : 'outline'} size="sm" nativeButton={false} render={<PrefetchLink href={review.href} />}>
+            <Images /> Visual review
+            <span className="tabular-nums opacity-80">{review.toReview ? `${review.toReview} to review` : review.total}</span>
+          </Button>
+        ) : null
+      }
+    >
       {tab === 'specs' ? (
         <UrlRunSpecs base={base} runNumber={runNumber} runRef={runRef} />
       ) : tab === 'errors' ? (

@@ -23,6 +23,7 @@ import {
   UserCog,
   UserRound,
   Users,
+  Images,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useState } from 'react';
@@ -103,6 +104,7 @@ type NavItem = { title: string; href: string; icon: LucideIcon; exact?: boolean 
 const PROJECT_NAV = [
   { segment: 'dashboard', title: 'Dashboard', icon: LayoutDashboard },
   { segment: 'runs', title: 'Test Runs', icon: Play },
+  { segment: 'review', title: 'Visual Review', icon: Images },
   { segment: 'tests', title: 'Test Explorer', icon: ListChecks },
   { segment: 'cases', title: 'Test Cases', icon: ClipboardList },
   { segment: 'branches', title: 'Branches', icon: GitBranch },

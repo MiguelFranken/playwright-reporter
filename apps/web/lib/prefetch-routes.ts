@@ -23,9 +23,11 @@ export const PREFETCH_ROUTES: readonly RegExp[] = [
   // The team overview: its project cards.
   new RegExp(`^${TEAM}$`),
   // The project sections in the sidebar.
-  new RegExp(`^${PROJECT}/(dashboard|runs|tests|cases|branches|pull-requests)$`),
+  new RegExp(`^${PROJECT}/(dashboard|runs|tests|cases|branches|pull-requests|review)$`),
+  // The visual review's approved screens.
+  new RegExp(`^${PROJECT}/review/screens$`),
   // A run (its header; the tabs stream after the click), a result, a test.
-  new RegExp(`^${PROJECT}/runs/\\d+$`),
+  new RegExp(`^${PROJECT}/runs/\\d+(/review)?$`),
   new RegExp(`^${PROJECT}/runs/\\d+/tests/[^/]+$`),
   new RegExp(`^${PROJECT}/tests/[^/]+$`),
   // A test case and its history.

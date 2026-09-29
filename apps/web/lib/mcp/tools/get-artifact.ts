@@ -45,7 +45,7 @@ function pickVisual(list: { attachment: Attachment; retry: number; attemptStatus
   return [...pool].sort((a, b) => score(a.attachment) - score(b.attachment))[0];
 }
 
-async function readAll(stream: ReadableStream<Uint8Array>, max: number): Promise<{ bytes: Uint8Array; complete: boolean }> {
+export async function readAll(stream: ReadableStream<Uint8Array>, max: number): Promise<{ bytes: Uint8Array; complete: boolean }> {
   const reader = stream.getReader();
   const chunks: Uint8Array[] = [];
   let size = 0;

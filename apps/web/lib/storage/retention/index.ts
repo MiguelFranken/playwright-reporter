@@ -14,7 +14,7 @@
  */
 import { and, asc, desc, eq, gte, inArray, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import { db } from '@/lib/db/drizzle';
-import { artifactSweeps, attachments, instanceSettings, type ArtifactSweep } from '@/lib/db/schema';
+import { artifactSweeps, attachments, instanceSettings, reviewCaptures, reviewDecisions, type ArtifactSweep } from '@/lib/db/schema';
 import { getStorage, type StorageAdapter } from '@/lib/storage';
 import { INGEST_SWEEP_INTERVAL_MS, ingestSweepEnabled } from './config';
 import { cutoffs, environmentPolicy, normalizePolicy, type PolicySource, type RetentionPolicy } from './policy';
@@ -54,10 +54,27 @@ export async function saveRetentionPolicy(policy: RetentionPolicy, actorId: stri
     .onConflictDoUpdate({ target: instanceSettings.key, set: { value, updatedBy: actorId, updatedAt: sql`now()` } });
 }
 
-/** Live artifacts the policy says have expired, over Drizzle-qualified columns. */
+/**
+ * An image some review checkpoint is currently compared against: the capture
+ * of the newest approval of its checkpoint and variant. Retention keeps it,
+ * or every later run of that checkpoint would lose its baseline.
+ */
+const isReviewBaseline = sql`exists (
+  select 1 from ${reviewDecisions} d
+  join ${reviewCaptures} c on c.id = d.capture_id
+  where d.decision = 'approved'
+    and (c.attachment_id = ${attachments.id} or c.thumbnail_attachment_id = ${attachments.id})
+    and not exists (
+      select 1 from ${reviewDecisions} later
+      where later.test_id = d.test_id and later.checkpoint_name = d.checkpoint_name and later.variant = d.variant
+        and later.decision = 'approved' and later.created_at > d.created_at
+    )
+)`;
+
+/** Live artifacts the policy says have expired, over Drizzle-qualified columns. Review baselines are kept. */
 export function dueWhere(policy: RetentionPolicy, now: Date = new Date()): SQL {
   const groups = cutoffs(policy, now).map((c) => and(inArray(attachments.kind, c.kinds), lt(attachments.createdAt, c.before))!);
-  return and(isNull(attachments.expiredAt), or(...groups))!;
+  return and(isNull(attachments.expiredAt), or(...groups), sql`not ${isReviewBaseline}`)!;
 }
 
 // ---------------------------------------------------------------- stats

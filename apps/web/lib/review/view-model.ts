@@ -1,0 +1,169 @@
+/**
+ * Review records onto the storyboard's view model (`@miguelfranken/ui/lib/review`):
+ * artifact URLs, availability, and one row per journey.
+ *
+ * A suite that captures each checkpoint once per Playwright project (a
+ * desktop and a mobile device) records one test per project. Those rows are
+ * merged when their variants do not collide, so the storyboard shows the two
+ * devices side by side, as it does for resized variants of one test.
+ */
+import type { ReviewCaptureView, ReviewCheckpointView, ReviewFlowView, ReviewImage, ReviewStatus } from '@miguelfranken/ui/lib/review';
+import { traceViewerUrl } from '@/lib/trace-viewer/url';
+import type { AttachmentState, CaptureRecord, CheckpointRecord, ComparedCapture, ReviewFlowRecord, ScreenRecord } from './queries';
+
+export const artifactUrl = (id: string) => `/api/artifacts/${id}`;
+
+export function toReviewImage(capture: Pick<CaptureRecord, 'attachment' | 'thumbnail' | 'width' | 'height'>): ReviewImage {
+  const available = capture.attachment.status === 'uploaded';
+  return {
+    url: artifactUrl(capture.attachment.id),
+    thumbnailUrl: capture.thumbnail?.status === 'uploaded' ? artifactUrl(capture.thumbnail.id) : null,
+    width: capture.width,
+    height: capture.height,
+    available,
+    unavailableReason: available ? null : capture.attachment.status,
+  };
+}
+
+export function toCaptureView(c: ComparedCapture): ReviewCaptureView {
+  return {
+    id: c.id,
+    variant: c.variant,
+    status: c.status,
+    image: toReviewImage(c),
+    viewport: c.viewportWidth && c.viewportHeight ? { width: c.viewportWidth, height: c.viewportHeight } : null,
+    deviceScaleFactor: c.deviceScaleFactor,
+    isMobile: c.isMobile,
+    fullPage: c.fullPage,
+    decision: c.decision
+      ? { decision: c.decision.decision, by: c.decision.by, at: c.decision.createdAt.toISOString(), comment: c.decision.comment, runNumber: c.decision.runNumber }
+      : null,
+    baseline: c.baseline?.capture
+      ? {
+          captureId: c.baseline.capture.id,
+          image: toReviewImage(c.baseline.capture),
+          runNumber: c.baseline.decision.runNumber,
+          same: Boolean(c.sha256 && c.baseline.capture.sha256 === c.sha256),
+          approvedAt: c.baseline.decision.createdAt.toISOString(),
+          approvedBy: c.baseline.decision.by,
+        }
+      : null,
+    previous: c.previous
+      ? { captureId: c.previous.capture.id, image: toReviewImage(c.previous.capture), runNumber: c.previous.runNumber, same: Boolean(c.sha256 && c.previous.capture.sha256 === c.sha256) }
+      : null,
+  };
+}
+
+export function toCheckpointView(cp: CheckpointRecord): ReviewCheckpointView {
+  return {
+    id: cp.id,
+    name: cp.name,
+    title: cp.title,
+    description: cp.description,
+    sequence: cp.sequence,
+    kind: cp.kind,
+    stepPath: cp.stepPath,
+    url: cp.url,
+    pageTitle: cp.pageTitle,
+    offsetMs: cp.offsetMs,
+    tags: cp.tags,
+    captures: cp.captures.map(toCaptureView),
+  };
+}
+
+const media = (a: AttachmentState | null) => (a && a.status === 'uploaded' ? artifactUrl(a.id) : null);
+
+/** Failure first: a merged row is as bad as its worst device. */
+const OUTCOME_RANK = ['failed', 'timedout', 'interrupted', 'flaky', 'running', 'passed', 'skipped'];
+
+export function toFlowViews(records: readonly ReviewFlowRecord[], resultHref: (resultId: string) => string): ReviewFlowView[] {
+  const flows = records.map(
+    (r): ReviewFlowView => ({
+      resultId: r.resultId,
+      title: r.title,
+      titlePath: r.titlePath,
+      file: r.file,
+      line: r.line,
+      project: r.project || null,
+      outcome: r.outcome,
+      flow: r.checkpoints.find((c) => c.flow)?.flow ?? null,
+      resultHref: resultHref(r.resultId),
+      videoUrl: media(r.video),
+      traceUrl: r.trace?.status === 'uploaded' ? traceViewerUrl(artifactUrl(r.trace.id)) : null,
+      failureImage: r.failureScreenshot
+        ? { url: artifactUrl(r.failureScreenshot.id), available: r.failureScreenshot.status === 'uploaded', unavailableReason: r.failureScreenshot.status === 'uploaded' ? null : r.failureScreenshot.status }
+        : null,
+      checkpoints: r.checkpoints.map(toCheckpointView),
+    }),
+  );
+  return mergeProjects(flows);
+}
+
+/** Rows of the same test in several Playwright projects, as one row when their variants are distinct. */
+export function mergeProjects(flows: readonly ReviewFlowView[]): ReviewFlowView[] {
+  const out: ReviewFlowView[] = [];
+  const byKey = new Map<string, ReviewFlowView>();
+  for (const flow of flows) {
+    const key = `${flow.file}\u0000${flow.titlePath.join('\u0000')}`;
+    const existing = byKey.get(key);
+    const variants = (f: ReviewFlowView) => new Set(f.checkpoints.flatMap((c) => c.captures.map((cap) => cap.variant)));
+    if (existing && ![...variants(flow)].some((v) => variants(existing).has(v))) {
+      const merged: ReviewFlowView = {
+        ...existing,
+        project: [existing.project, flow.project].filter(Boolean).join(', ') || null,
+        outcome: OUTCOME_RANK.indexOf(flow.outcome) < OUTCOME_RANK.indexOf(existing.outcome) ? flow.outcome : existing.outcome,
+        failureImage: existing.failureImage ?? flow.failureImage,
+        videoUrl: existing.videoUrl ?? flow.videoUrl,
+        traceUrl: existing.traceUrl ?? flow.traceUrl,
+        checkpoints: mergeCheckpoints(existing.checkpoints, flow.checkpoints),
+      };
+      byKey.set(key, merged);
+      out[out.indexOf(existing)] = merged;
+      continue;
+    }
+    byKey.set(key, flow);
+    out.push(flow);
+  }
+  return out;
+}
+
+function mergeCheckpoints(a: readonly ReviewCheckpointView[], b: readonly ReviewCheckpointView[]): ReviewCheckpointView[] {
+  const merged = a.map((c) => ({ ...c, captures: [...c.captures] }));
+  for (const cp of b) {
+    const same = merged.find((m) => m.name === cp.name);
+    if (same) same.captures.push(...cp.captures);
+    else merged.push({ ...cp, sequence: merged.length });
+  }
+  return merged;
+}
+
+/** The catalogue's screens as storyboard rows: the approved image, or the default branch's newest. */
+export function screensToFlows(screens: readonly ScreenRecord[], testHref: (testId: string) => string): ReviewFlowView[] {
+  const byTest = new Map<string, ReviewFlowView>();
+  for (const s of screens) {
+    let flow = byTest.get(s.testId);
+    if (!flow) {
+      flow = { resultId: s.testId, title: s.title, titlePath: s.titlePath, file: s.file, project: s.project || null, outcome: 'passed', resultHref: testHref(s.testId), checkpoints: [] };
+      byTest.set(s.testId, flow);
+    }
+    let cp = flow.checkpoints.find((c) => c.name === s.checkpointName);
+    if (!cp) {
+      cp = { id: `${s.testId}:${s.checkpointName}`, name: s.checkpointName, title: s.checkpointTitle, sequence: s.sequence, stepPath: [], tags: [], captures: [] };
+      flow.checkpoints.push(cp);
+    }
+    const status: ReviewStatus = s.approved ? 'approved' : 'new';
+    cp.captures.push({
+      id: s.capture.id,
+      variant: s.variant,
+      status,
+      image: toReviewImage(s.capture),
+      viewport: s.capture.viewportWidth && s.capture.viewportHeight ? { width: s.capture.viewportWidth, height: s.capture.viewportHeight } : null,
+      deviceScaleFactor: s.capture.deviceScaleFactor,
+      isMobile: s.capture.isMobile,
+      fullPage: s.capture.fullPage,
+      decision: s.approved && s.approvedAt ? { decision: 'approved', by: s.approvedBy, at: s.approvedAt.toISOString(), runNumber: s.runNumber } : null,
+    });
+  }
+  const flows = [...byTest.values()].map((f) => ({ ...f, checkpoints: [...f.checkpoints].sort((a, b) => a.sequence - b.sequence).map((c, i) => ({ ...c, sequence: i })) }));
+  return mergeProjects(flows);
+}

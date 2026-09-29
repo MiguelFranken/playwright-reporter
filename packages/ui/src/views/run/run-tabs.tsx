@@ -32,6 +32,7 @@ export function RunTabs({
   counts,
   isPending,
   onTabIntent,
+  actions,
   children,
 }: {
   value: RunTab;
@@ -40,6 +41,8 @@ export function RunTabs({
   /** Appended to a tab's label when known, e.g. "Errors (3)". */
   counts?: Partial<Record<RunTab, number>>;
   isPending?: boolean;
+  /** Beside the tabs, at the end of the strip: a link to another page of the run. */
+  actions?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const label = (tab: RunTab) => {
@@ -48,22 +51,25 @@ export function RunTabs({
   };
   return (
     <Tabs value={value} onValueChange={(v) => onValueChange(String(v) as RunTab)} className="gap-4">
-      <TabsList variant="line">
-        {RUN_TABS.map((tab) => {
-          const Icon = ICONS[tab];
-          return (
-            <TabsTrigger
-              key={tab}
-              value={tab}
-              onPointerEnter={onTabIntent && (() => onTabIntent(tab))}
-              onFocus={onTabIntent && (() => onTabIntent(tab))}
-            >
-              <Icon aria-hidden />
-              {label(tab)}
-            </TabsTrigger>
-          );
-        })}
-      </TabsList>
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <TabsList variant="line">
+          {RUN_TABS.map((tab) => {
+            const Icon = ICONS[tab];
+            return (
+              <TabsTrigger
+                key={tab}
+                value={tab}
+                onPointerEnter={onTabIntent && (() => onTabIntent(tab))}
+                onFocus={onTabIntent && (() => onTabIntent(tab))}
+              >
+                <Icon aria-hidden />
+                {label(tab)}
+              </TabsTrigger>
+            );
+          })}
+        </TabsList>
+        {actions ? <div className="flex items-center gap-2 pb-1">{actions}</div> : null}
+      </div>
       <div className={isPending ? 'min-w-0 opacity-60 transition-opacity' : 'min-w-0 transition-opacity'}>{children}</div>
     </Tabs>
   );

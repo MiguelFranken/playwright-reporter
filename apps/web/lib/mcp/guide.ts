@@ -10,6 +10,7 @@ How to work with it:
 - A failing or flaky test: start with get_failure_context. A red run: start with summarize_failures. After a fix lands: verify_fix with the run the failure came from.
 - Browse with list_runs, list_run_results, find_tests, get_test_history; overview with project_health.
 - Test cases (manual and automated, keys like TC-12): list_test_cases, get_test_case, list_test_suites. With a write-scoped token also create_test_case, update_test_case, create_test_suite, delete_test_suite (empty suites only), link_test_case and adopt_tests. A Playwright test tagged @TC-12 links to that case on its next run.
+- Visual review (named screenshots tests capture at milestones, per variant): list_review_checkpoints shows a run's checkpoints and which images changed against their approved baseline; get_review_checkpoint attaches the image and its baseline. With a write-scoped token, review_checkpoint approves or asks for changes — an approval holds for the exact pixels, so only approve what you looked at.
 - Runs can be "#128", "latest" or "latest-failed" (scope with branch). Tests can be ids, URLs or title fragments (add file/browser if several match). Pasted app URLs work anywhere.
 - Verdicts are computed from stored attempts and describe behaviour, not cause. Respect the "ruled out" list.
 - Answers are trimmed to a budget; a trimmed answer says so and names the parameter (cursor, filters, maxChars) that gets the rest.

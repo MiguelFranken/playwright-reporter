@@ -21,7 +21,9 @@ import { projectHrefs } from '@/lib/view-models';
 import { baseUrl, getStorage } from '@/lib/storage';
 import { expiresAt, getRetentionPolicy } from '@/lib/storage/retention';
 import { traceViewerUrl } from '@/lib/trace-viewer/url';
-import { getResultDetail, testHistory } from '@/lib/page-data';
+import { getResultDetail, runReview, testHistory } from '@/lib/page-data';
+import { UrlReviewStoryboard } from '@/components/review/url-review-storyboard';
+import { toFlowViews } from '@/lib/review/view-model';
 
 type Props = { params: Promise<{ team: string; project: string; number: string; resultId: string }> };
 
@@ -61,12 +63,18 @@ async function ResultContent({ params }: Props) {
   const { team, project: projectSlug, number, resultId } = await params;
   const runNumber = Number(number);
   if (!Number.isInteger(runNumber)) notFound();
-  const { project } = await requireProject(team, projectSlug);
+  const access = await requireProject(team, projectSlug);
+  const { project } = access;
   const detail = await getResultDetail(project.id, runNumber, resultId);
   if (!detail) notFound();
   const { result, test, run, attempts, position } = detail;
-  const [history, { policy }] = await Promise.all([testHistory(test.id, { limit: 15 }), getRetentionPolicy()]);
+  const [history, { policy }, review] = await Promise.all([
+    testHistory(test.id, { limit: 15 }),
+    getRetentionPolicy(),
+    runReview({ id: run.id, startedAt: new Date(run.startedAt).toISOString() }, { resultId: result.id }),
+  ]);
   const base = `/teams/${team}/projects/${project.slug}`;
+  const reviewFlows = toFlowViews(review, (id) => `${base}/runs/${run.number}/tests/${id}`);
   const origin = baseUrl();
 
   const views: AttemptView[] = await Promise.all(
@@ -174,6 +182,20 @@ async function ResultContent({ params }: Props) {
           <AlertTitle>Attempt comparison</AlertTitle>
           <AlertDescription>{comparison}</AlertDescription>
         </Alert>
+      ) : null}
+
+      {reviewFlows.length ? (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base">Review checkpoints</CardTitle>
+            <Button variant="outline" size="sm" nativeButton={false} render={<Link href={`${runHref}/review`} />}>
+              Visual review of the run
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <UrlReviewStoryboard team={team} project={project.slug} flows={reviewFlows} canDecide={access.can({ review: ['decide'] })} toolbar={false} syncUrl={false} />
+          </CardContent>
+        </Card>
       ) : null}
 
       {views.length === 0 ? (

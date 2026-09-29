@@ -16,6 +16,7 @@ import { Skeleton } from '@miguelfranken/ui/components/skeleton';
 const SECTION_LABELS: Record<string, string> = {
   dashboard: 'Dashboard',
   runs: 'Test Runs',
+  review: 'Visual Review',
   tests: 'Test Explorer',
   cases: 'Test Cases',
   branches: 'Branches',
@@ -104,7 +105,10 @@ function buildCrumbs(pathname: string, teams: SidebarTeam[]): Crumb[] {
         if (rest[4]) crumbs.push({ label: titleCase(rest[4]) });
       }
     }
-    else if (rest[3]) crumbs.push({ label: rest[2] === 'runs' ? `Run #${rest[3]}` : titleCase(rest[3]) });
+    else if (rest[2] === 'runs' && rest[3] && rest[4] === 'review') {
+      crumbs.push({ label: `Run #${rest[3]}`, href: `${base}/runs/${rest[3]}` });
+      crumbs.push({ label: 'Visual review' });
+    } else if (rest[3]) crumbs.push({ label: rest[2] === 'runs' ? `Run #${rest[3]}` : titleCase(rest[3]) });
   } else if (rest[0] === 'settings') {
     crumbs.push({ label: 'Team settings', href: `${teamBase}/settings/members` });
     if (rest[1]) crumbs.push({ label: SECTION_LABELS[rest[1]] ?? titleCase(rest[1]) });

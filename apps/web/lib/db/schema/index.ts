@@ -6,3 +6,4 @@ export * from './maintenance';
 export * from './access';
 export * from './oauth';
 export * from './test-cases';
+export * from './review';

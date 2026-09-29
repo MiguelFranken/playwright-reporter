@@ -11,6 +11,7 @@ import type {
   TestStep,
 } from '@playwright/test/reporter';
 import type { AttachmentRef, AttemptEndEvent, IngestEvent, Step, TestBeginEvent, TestError } from '@miguelfranken/protocol';
+import { buildCheckpoints, isCheckpointRecord } from './checkpoints';
 import { IngestClient } from './client';
 import { collectCiInfo, collectGitInfo, collectPlaywrightInfo, collectSystemInfo, detectExecutor } from './metadata';
 import { isListMode, resolveOptions } from './options';
@@ -148,9 +149,12 @@ export default class PlaywrightReporterApp implements Reporter {
     const failed = result.status === 'failed' || result.status === 'timedOut';
     const willRetry = failed && result.retry < test.retries;
     const attachments: AttachmentRef[] = [];
+    const refs = new Map<TestResult['attachments'][number], AttachmentRef>();
     if (this.opts.artifacts) {
       for (const a of result.attachments) {
         if (!a.path && !a.body) continue;
+        // Checkpoint records travel as data on the event, not as files.
+        if (isCheckpointRecord(a)) continue;
         const ref: AttachmentRef = {
           id: randomUUID(),
           name: a.name,
@@ -158,9 +162,11 @@ export default class PlaywrightReporterApp implements Reporter {
           size: a.body?.byteLength,
         };
         attachments.push(ref);
+        refs.set(a, ref);
         this.uploads.push({ ref, source: { path: a.path, body: a.body } });
       }
     }
+    const checkpoints = refs.size ? buildCheckpoints(result, refs) : [];
     const ev: AttemptEndEvent = {
       seq: this.queue.nextSeq(),
       type: 'attempt.end',
@@ -180,6 +186,7 @@ export default class PlaywrightReporterApp implements Reporter {
         description: a.description,
       })),
       attachments,
+      ...(checkpoints.length ? { checkpoints } : {}),
       outcome: test.outcome(),
       isFinal: !willRetry,
     };

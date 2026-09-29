@@ -149,6 +149,40 @@ export declare const ingestContract: {
           contentType: z.ZodString;
           size: z.ZodOptional<z.ZodNumber>;
         }, z.core.$strip>>;
+        checkpoints: z.ZodOptional<z.ZodArray<z.ZodObject<{
+          name: z.ZodString;
+          title: z.ZodOptional<z.ZodString>;
+          description: z.ZodOptional<z.ZodString>;
+          sequence: z.ZodNumber;
+          capturedAt: z.ZodOptional<z.ZodString>;
+          stepPath: z.ZodOptional<z.ZodArray<z.ZodString>>;
+          url: z.ZodOptional<z.ZodString>;
+          pageTitle: z.ZodOptional<z.ZodString>;
+          kind: z.ZodOptional<z.ZodEnum<{
+            component: "component";
+            dialog: "dialog";
+            email: "email";
+            other: "other";
+            page: "page";
+          }>>;
+          flow: z.ZodOptional<z.ZodString>;
+          tags: z.ZodOptional<z.ZodArray<z.ZodString>>;
+          variants: z.ZodArray<z.ZodObject<{
+            variant: z.ZodString;
+            viewport: z.ZodOptional<z.ZodObject<{
+              width: z.ZodNumber;
+              height: z.ZodNumber;
+            }, z.core.$strip>>;
+            deviceScaleFactor: z.ZodOptional<z.ZodNumber>;
+            isMobile: z.ZodOptional<z.ZodBoolean>;
+            fullPage: z.ZodOptional<z.ZodBoolean>;
+            width: z.ZodOptional<z.ZodNumber>;
+            height: z.ZodOptional<z.ZodNumber>;
+            sha256: z.ZodOptional<z.ZodString>;
+            attachmentId: z.ZodString;
+            thumbnailAttachmentId: z.ZodOptional<z.ZodString>;
+          }, z.core.$strip>>;
+        }, z.core.$strip>>>;
         outcome: z.ZodEnum<{
           expected: "expected";
           flaky: "flaky";

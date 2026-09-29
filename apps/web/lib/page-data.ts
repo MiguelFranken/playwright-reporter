@@ -35,6 +35,8 @@ import * as pullRequests from '@/lib/db/queries/pull-requests';
 import * as runs from '@/lib/db/queries/runs';
 import * as teams from '@/lib/db/queries/teams';
 import * as testCases from '@/lib/db/queries/test-cases';
+import * as mcpQueries from '@/lib/db/queries/mcp';
+import * as review from '@/lib/review/queries';
 
 /**
  * Thirty seconds: the shortest lifetime Next.js still includes in a per-link
@@ -249,4 +251,36 @@ export async function listCaseTags(...args: Parameters<typeof testCases.listCase
   'use cache: private';
   cacheLife(PAGE_DATA);
   return testCases.listCaseTags(...args);
+}
+
+// ---------------------------------------------------------------- review checkpoints
+
+export async function runReview(...args: Parameters<typeof review.runReview>) {
+  'use cache: private';
+  cacheLife(PAGE_DATA);
+  return review.runReview(...args);
+}
+
+export async function runReviewCounts(...args: Parameters<typeof review.runReviewCounts>) {
+  'use cache: private';
+  cacheLife(PAGE_DATA);
+  return review.runReviewCounts(...args);
+}
+
+export async function reviewQueue(...args: Parameters<typeof review.reviewQueue>) {
+  'use cache: private';
+  cacheLife(PAGE_DATA);
+  return review.reviewQueue(...args);
+}
+
+export async function screenCatalogue(...args: Parameters<typeof review.screenCatalogue>) {
+  'use cache: private';
+  cacheLife(PAGE_DATA);
+  return review.screenCatalogue(...args);
+}
+
+export async function defaultBranch(...args: Parameters<typeof mcpQueries.defaultBranch>) {
+  'use cache: private';
+  cacheLife(PAGE_DATA);
+  return mcpQueries.defaultBranch(...args);
 }

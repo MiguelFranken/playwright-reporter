@@ -67,6 +67,86 @@ const attachmentRefSchema = zod.z.object({
 	contentType: zod.z.string(),
 	size: zod.z.number().int().nonnegative().optional()
 });
+/**
+* A review checkpoint is a named, human-review milestone of a test: the same
+* moment captured once per variant (a desktop and a mobile viewport, say).
+* The images travel as ordinary attachments; the checkpoint says what they
+* show, in which order, and how they were taken.
+*
+* The capture helper (`@miguelfranken/reporter/review`) attaches one
+* `CheckpointRecord` per checkpoint, as JSON with `CHECKPOINT_CONTENT_TYPE`,
+* naming its images by attachment name. The reporter resolves those names to
+* the attachment ids it sends and puts the result on `attempt.end` as
+* `checkpoints`. Older suites name their images `review:<name>:<variant>` and
+* nothing else; `legacyCheckpoints` reads that convention.
+*/
+const CHECKPOINT_CONTENT_TYPE = "application/vnd.pw-reporter.checkpoint+json";
+const REVIEW_ATTACHMENT_PREFIX = "review:";
+/** The variant name of a checkpoint captured once, without variants. */
+const DEFAULT_VARIANT = "default";
+const checkpointKindSchema = zod.z.enum([
+	"page",
+	"dialog",
+	"email",
+	"component",
+	"other"
+]);
+const viewportSchema = zod.z.object({
+	width: zod.z.number().int().positive(),
+	height: zod.z.number().int().positive()
+});
+const sha256Schema = zod.z.string().regex(/^[0-9a-f]{64}$/);
+/** How one variant of a checkpoint was taken; everything but the name is optional. */
+const variantFields = {
+	/** `desktop`, `mobile`, a Playwright project name… */
+	variant: zod.z.string().min(1).max(60),
+	viewport: viewportSchema.optional(),
+	deviceScaleFactor: zod.z.number().positive().max(10).optional(),
+	isMobile: zod.z.boolean().optional(),
+	fullPage: zod.z.boolean().optional(),
+	/** The image's size in pixels. */
+	width: zod.z.number().int().positive().optional(),
+	height: zod.z.number().int().positive().optional(),
+	/** Of the image bytes: equal hashes are identical pictures. */
+	sha256: sha256Schema.optional()
+};
+const checkpointFields = {
+	/** Stable within a test: identifies the checkpoint across runs. kebab-case by convention. */
+	name: zod.z.string().min(1).max(200),
+	title: zod.z.string().max(300).optional(),
+	description: zod.z.string().max(4e3).optional(),
+	/** Order within the attempt, from 0. */
+	sequence: zod.z.number().int().nonnegative(),
+	capturedAt: zod.z.string().optional(),
+	/** Titles of the `test.step`s the capture ran inside, outermost first. */
+	stepPath: zod.z.array(zod.z.string().max(500)).max(20).optional(),
+	url: zod.z.string().max(2e3).optional(),
+	pageTitle: zod.z.string().max(500).optional(),
+	kind: checkpointKindSchema.optional(),
+	/** Groups checkpoints of several tests into one journey; defaults to the test. */
+	flow: zod.z.string().max(200).optional(),
+	tags: zod.z.array(zod.z.string().max(100)).max(20).optional()
+};
+const checkpointVariantSchema = zod.z.object({
+	...variantFields,
+	attachmentId: zod.z.string().uuid(),
+	/** A small, above-the-fold preview of the image, for overviews. */
+	thumbnailAttachmentId: zod.z.string().uuid().optional()
+});
+const checkpointSchema = zod.z.object({
+	...checkpointFields,
+	variants: zod.z.array(checkpointVariantSchema).min(1).max(20)
+});
+/** What the capture helper attaches: variants name their images by attachment name. */
+const checkpointRecordSchema = zod.z.object({
+	v: zod.z.literal(1),
+	...checkpointFields,
+	variants: zod.z.array(zod.z.object({
+		...variantFields,
+		attachment: zod.z.string(),
+		thumbnail: zod.z.string().optional()
+	})).min(1).max(20)
+});
 const gitInfoSchema = zod.z.object({
 	branch: zod.z.string().optional(),
 	sha: zod.z.string().optional(),
@@ -169,6 +249,8 @@ const attemptEndEventSchema = zod.z.object({
 	stderr: zod.z.string(),
 	annotations: zod.z.array(annotationSchema),
 	attachments: zod.z.array(attachmentRefSchema),
+	/** Review checkpoints, in capture order. Absent from reporters that predate them. */
+	checkpoints: zod.z.array(checkpointSchema).max(500).optional(),
 	/** Playwright's outcome() for the test after this attempt. */
 	outcome: testOutcomeSchema,
 	/** True when no further retry will follow. */
@@ -251,14 +333,79 @@ function classifyAttachment(name, contentType) {
 	if (contentType.startsWith("text/") || contentType.includes("json") || contentType.includes("xml")) return "text";
 	return "other";
 }
+/**
+* Reads the `review:<name>:<variant>` naming convention; a trailing `:thumb`
+* marks the variant's preview. A name without a variant is the default one.
+*/
+function parseReviewAttachmentName(name) {
+	if (!name.startsWith("review:")) return null;
+	const parts = name.slice(7).split(":");
+	const thumbnail = parts.length > 2 && parts[parts.length - 1] === "thumb";
+	if (thumbnail) parts.pop();
+	if (parts.length === 1) return parts[0] ? {
+		name: parts[0],
+		variant: DEFAULT_VARIANT,
+		thumbnail
+	} : null;
+	const variant = parts.pop();
+	const base = parts.join(":");
+	return base && variant ? {
+		name: base,
+		variant,
+		thumbnail
+	} : null;
+}
+/**
+* Checkpoints from image attachments named `review:<name>:<variant>`, for
+* suites that attach review screenshots without a checkpoint record. Order is
+* the order the first image of each checkpoint was attached in.
+*/
+function legacyCheckpoints(attachments) {
+	const byName = /* @__PURE__ */ new Map();
+	const thumbs = /* @__PURE__ */ new Map();
+	for (const a of attachments) {
+		if (!a.contentType.startsWith("image/")) continue;
+		const parsed = parseReviewAttachmentName(a.name);
+		if (!parsed) continue;
+		if (parsed.thumbnail) {
+			thumbs.set(`${parsed.name}\u0000${parsed.variant}`, a.id);
+			continue;
+		}
+		let cp = byName.get(parsed.name);
+		if (!cp) {
+			cp = {
+				name: parsed.name.slice(0, 200),
+				sequence: byName.size,
+				variants: []
+			};
+			byName.set(parsed.name, cp);
+		}
+		if (cp.variants.length < 20 && !cp.variants.some((v) => v.variant === parsed.variant)) cp.variants.push({
+			variant: parsed.variant.slice(0, 60),
+			attachmentId: a.id
+		});
+	}
+	for (const [key, cp] of byName) for (const v of cp.variants) {
+		const thumb = thumbs.get(`${key}\u0000${v.variant}`);
+		if (thumb) v.thumbnailAttachmentId = thumb;
+	}
+	return [...byName.values()].slice(0, 500);
+}
 //#endregion
+exports.CHECKPOINT_CONTENT_TYPE = CHECKPOINT_CONTENT_TYPE;
+exports.DEFAULT_VARIANT = DEFAULT_VARIANT;
 exports.PROTOCOL_HEADER = PROTOCOL_HEADER;
 exports.PROTOCOL_VERSION = PROTOCOL_VERSION;
+exports.REVIEW_ATTACHMENT_PREFIX = REVIEW_ATTACHMENT_PREFIX;
 exports.annotationSchema = annotationSchema;
 exports.attachmentKindSchema = attachmentKindSchema;
 exports.attachmentRefSchema = attachmentRefSchema;
 exports.attemptEndEventSchema = attemptEndEventSchema;
 exports.attemptStatusSchema = attemptStatusSchema;
+exports.checkpointKindSchema = checkpointKindSchema;
+exports.checkpointRecordSchema = checkpointRecordSchema;
+exports.checkpointSchema = checkpointSchema;
+exports.checkpointVariantSchema = checkpointVariantSchema;
 exports.ciInfoSchema = ciInfoSchema;
 exports.classifyAttachment = classifyAttachment;
 exports.completeUploadRequestSchema = completeUploadRequestSchema;
@@ -268,7 +415,9 @@ exports.eventBatchSchema = eventBatchSchema;
 exports.executorSchema = executorSchema;
 exports.gitInfoSchema = gitInfoSchema;
 exports.ingestEventSchema = ingestEventSchema;
+exports.legacyCheckpoints = legacyCheckpoints;
 exports.locationSchema = locationSchema;
+exports.parseReviewAttachmentName = parseReviewAttachmentName;
 exports.playwrightInfoSchema = playwrightInfoSchema;
 exports.playwrightProjectInfoSchema = playwrightProjectInfoSchema;
 exports.runFinishResponseSchema = runFinishResponseSchema;
@@ -288,5 +437,6 @@ exports.testOutcomeSchema = testOutcomeSchema;
 exports.uploadInstructionSchema = uploadInstructionSchema;
 exports.uploadUrlsRequestSchema = uploadUrlsRequestSchema;
 exports.uploadUrlsResponseSchema = uploadUrlsResponseSchema;
+exports.viewportSchema = viewportSchema;
 
 //# sourceMappingURL=index.cjs.map

@@ -22,6 +22,10 @@ describe('isPrefetchRoute', () => {
     `${project}/cases?suite=unassigned`,
     `${project}/cases/12`,
     `${project}/cases/12/history`,
+    `${project}/review`,
+    `${project}/review/screens`,
+    `${project}/runs/128/review`,
+    `${project}/runs/128/review?status=all&cp=abc`,
   ])('prefetches the page behind %s on intent', (href) => {
     expect(isPrefetchRoute(href)).toBe(true);
   });

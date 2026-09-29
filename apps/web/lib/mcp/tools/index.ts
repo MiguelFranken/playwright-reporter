@@ -16,6 +16,7 @@ import { summarizeFailures } from './summarize-failures';
 import { verifyFixTool } from './verify-fix';
 import { whoami } from './whoami';
 import { TEST_CASE_TOOLS } from './test-cases';
+import { REVIEW_TOOLS } from './review';
 
 /** Every tool, in the order clients list them: find things first, then explain and verify. */
 export const TOOLS: ToolDef[] = [
@@ -36,4 +37,5 @@ export const TOOLS: ToolDef[] = [
   getArtifact,
   getRerunCommand,
   ...TEST_CASE_TOOLS,
+  ...REVIEW_TOOLS,
 ] as unknown as ToolDef[];

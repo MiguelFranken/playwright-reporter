@@ -17,7 +17,7 @@ import { branchHref, projectHrefs, pullRequestHref, toRunHeaderData } from '@/li
 import { listRunErrorGroupsWithCursor, listRunResults, listRunResultsWithCursor, listRunSpecsWithCursor } from '@/lib/db/queries/runs';
 import { makeServerQueryClient } from '@/lib/rpc/prefetch';
 import { runErrorsQuery, runRowsQuery, runSpecsQuery } from '@/lib/rpc/queries';
-import { getRunByNumber } from '@/lib/page-data';
+import { getRunByNumber, runReviewCounts } from '@/lib/page-data';
 
 type Params = Promise<{ team: string; project: string; number: string }>;
 type SearchParams = Promise<{
@@ -118,6 +118,7 @@ async function Body({ params, searchParams }: Props) {
   const { run: found, base, runRef } = await run(params);
   const { counts, shards: _shards, cursor, ...runRow } = found;
   const queries = makeServerQueryClient();
+  const reviewCounts = runReviewCounts([found.id]).then((all) => all[found.id]);
   let summaryHead: SummaryHead | undefined;
 
   const loadRows = () => listRunResultsWithCursor(found.id);
@@ -157,9 +158,26 @@ async function Body({ params, searchParams }: Props) {
     }
   }
 
+  const review = await reviewCounts;
   return (
     <HydrationBoundary state={dehydrate(queries)}>
-      <RunBody base={base} runNumber={found.number} runRef={runRef} counts={counts} config={runRow} summaryHead={summaryHead} />
+      <RunBody
+        base={base}
+        runNumber={found.number}
+        runRef={runRef}
+        counts={counts}
+        config={runRow}
+        summaryHead={summaryHead}
+        review={
+          review
+            ? {
+                href: `${base}/runs/${found.number}/review`,
+                toReview: review.changed + review.new,
+                total: review.approved + review.changes_requested + review.changed + review.new,
+              }
+            : undefined
+        }
+      />
     </HydrationBoundary>
   );
 }

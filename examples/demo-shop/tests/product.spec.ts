@@ -1,10 +1,11 @@
 import { expect, test } from './fixtures';
 
 test.describe('Product page', () => {
-  test('shows the price and the stock', async ({ shop, page }) => {
+  test('shows the price and the stock', async ({ shop, page, review }) => {
     await shop.open('#/product/rain-shell');
     await expect(page.getByText('$129.00')).toBeVisible();
     await expect(page.getByText('5 in stock')).toBeVisible();
+    await review('product-page', { title: 'Product page with price and stock' });
   });
 
   test('keeps the quantity within the stock', async ({ shop, page }) => {
@@ -19,9 +20,10 @@ test.describe('Product page', () => {
     await expect(page.getByLabel('Items in cart')).toHaveText('2');
   });
 
-  test('cannot add a sold-out product', async ({ shop, page }) => {
+  test('cannot add a sold-out product', async ({ shop, page, review }) => {
     await shop.open('#/product/down-vest');
     await expect(page.getByText('Out of stock')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Add to cart' })).toBeDisabled();
+    await review('sold-out-product', { title: 'Sold-out product cannot be added' });
   });
 });

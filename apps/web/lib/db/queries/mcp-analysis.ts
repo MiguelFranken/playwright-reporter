@@ -230,5 +230,5 @@ export async function attachmentsOfResult(resultId: string) {
     .from(attachments)
     .innerJoin(testAttempts, eq(testAttempts.id, attachments.attemptId))
     .where(eq(testAttempts.testResultId, resultId))
-    .orderBy(desc(testAttempts.retry), attachments.createdAt);
+    .orderBy(desc(testAttempts.retry), attachments.createdAt, sql`${attachments.ordinal} asc nulls last`, attachments.id);
 }

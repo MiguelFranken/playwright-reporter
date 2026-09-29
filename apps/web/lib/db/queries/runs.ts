@@ -375,7 +375,8 @@ export async function getResultDetail(projectId: string, runNumber: number, resu
         .select()
         .from(attachments)
         .where(sql`${attachments.attemptId} in ${sql`(${sql.join(attempts.map((a) => sql`${a.id}`), sql`, `)})`}`)
-        .orderBy(asc(attachments.createdAt))
+        // One transaction inserts an attempt's attachments, so they share `created_at`; the ordinal keeps Playwright's order.
+        .orderBy(asc(attachments.createdAt), sql`${attachments.ordinal} asc nulls last`, asc(attachments.id))
     : [];
   const attemptsWithAttachments: AttemptWithAttachments[] = attempts.map((a) => ({
     ...a,

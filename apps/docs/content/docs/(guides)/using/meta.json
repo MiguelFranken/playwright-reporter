@@ -4,6 +4,7 @@
   "defaultOpen": true,
   "pages": [
     "runs",
+    "visual-review",
     "tests",
     "test-cases",
     "branches-and-pull-requests",
