@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.40](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.39...v0.0.40) (2026-09-29)
+
+### Features
+
+* **ui:** replace the bare file input with a drop zone ([#45](https://github.com/MiguelFranken/playwright-reporter/issues/45)) ([de34380](https://github.com/MiguelFranken/playwright-reporter/commit/de343809b9ffeffca1494cd2604e7c08e7b87873))
+
 ## [0.0.39](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.38...v0.0.39) (2026-09-29)
 
 ### Features
