@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache';
 import { actionError, denied, projectForAction } from '@/lib/auth/access';
 import { audit } from '@/lib/auth/audit';
 import { db } from '@/lib/db/drizzle';
+import { isUuid } from '@/lib/db/queries/shared';
 import { apiTokens, projects } from '@/lib/db/schema';
 import { generateToken, hashToken } from '@/lib/tokens';
 
@@ -104,6 +105,7 @@ export async function createToken(teamSlug: string, projectSlug: string, rawName
 export async function revokeToken(teamSlug: string, projectSlug: string, tokenId: string): Promise<{ ok: boolean; message?: string }> {
   const access = await projectForAction(teamSlug, projectSlug, { token: ['revoke'] });
   if (denied(access)) return access;
+  if (!isUuid(tokenId)) return actionError('Token not found.');
 
   const [row] = await db
     .update(apiTokens)
