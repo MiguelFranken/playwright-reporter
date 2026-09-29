@@ -16,6 +16,7 @@
  */
 import 'server-only';
 import { ORPCError, os } from '@orpc/server';
+import { revalidatePath } from 'next/cache';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { getCurrentUser, resolveProject } from '@/lib/auth/access';
@@ -39,7 +40,11 @@ import { toRunHeaderData, toRunListItem } from '@/lib/view-models';
 import { requestComparison } from '@/lib/review/diff/compare';
 import { diffsEnabled, requestCaptureDiff } from '@/lib/review/diff/dispatch';
 import { needsPlanning } from '@/lib/review/diff/store';
-import { captureInProject } from '@/lib/review/queries';
+import { REVIEW_DECISIONS } from '@miguelfranken/ui/lib/review';
+import { afterCapturesShown } from '@/lib/review/diff/dispatch';
+import { casesOfTests } from '@/lib/review/cases';
+import { captureInProject, decide, MAX_DECISION_CAPTURES, ReviewError, runReview } from '@/lib/review/queries';
+import { toRunReviewData } from '@/lib/review/run-flows';
 import { pendingDiff, toDiffView } from '@/lib/review/view-model';
 
 /** How many runs or result rows one call may ask for; the live views ask in batches of these sizes. */
@@ -179,6 +184,54 @@ export const appRouter = {
   },
 
   review: {
+    /**
+     * A run's review as its storyboard shows it. The page renders the same
+     * answer into the cache (`runReviewQuery`); the browser asks for it again
+     * only when that is gone or after a decision failed.
+     */
+    run: authed.input(project.extend({ runNumber: z.number().int().positive() })).handler(async ({ input }) => {
+      const projectId = await readableProjectId(input.team, input.project);
+      const [found] = await db
+        .select({ id: runs.id, number: runs.number, startedAt: runs.startedAt })
+        .from(runs)
+        .where(and(eq(runs.projectId, projectId), eq(runs.number, input.runNumber)))
+        .limit(1);
+      if (!found) throw new ORPCError('NOT_FOUND');
+      const records = await runReview({ id: found.id, startedAt: found.startedAt });
+      afterCapturesShown(found.id, records.flatMap((r) => r.checkpoints.flatMap((c) => c.captures)));
+      const byTest = await casesOfTests(projectId, records.map((r) => r.testId));
+      return toRunReviewData(records, byTest, `/teams/${input.team}/projects/${input.project}`, found.number);
+    }),
+
+    /**
+     * Approves images or asks for changes, from the storyboard. The storyboard
+     * shows the decision in its cache at once and gets back who made it; the
+     * page is not rendered again for it, so a reviewer approving one image
+     * after another never waits for the whole run to be read again.
+     */
+    decide: authed
+      .input(
+        project.extend({
+          captureIds: z.array(z.string()).min(1).max(MAX_DECISION_CAPTURES),
+          decision: z.enum(REVIEW_DECISIONS),
+          comment: z.string().max(4000).optional(),
+        }),
+      )
+      .handler(async ({ input }) => {
+        const access = await resolveProject(input.team, input.project);
+        if (!access?.can({ run: ['read'] })) throw new ORPCError('NOT_FOUND');
+        if (!access.can({ review: ['decide'] })) throw new ORPCError('FORBIDDEN', { message: 'You do not have permission to do that.' });
+        try {
+          const { decided } = await decide({ projectId: access.project.id, captureIds: input.captureIds, decision: input.decision, comment: input.comment, userId: access.user.id });
+          // The pages that show a status elsewhere (the queue, a run's badge) read it again on their next visit.
+          revalidatePath(`/teams/${input.team}/projects/${input.project}`, 'layout');
+          return { decided, by: access.user.name ?? null };
+        } catch (error) {
+          if (error instanceof ReviewError) throw new ORPCError('BAD_REQUEST', { message: error.message });
+          throw error;
+        }
+      }),
+
     /**
      * The measured comparison of one capture with its reference, for the
      * viewer while it waits: a capture nobody measured yet is planned and

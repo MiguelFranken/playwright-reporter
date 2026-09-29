@@ -1,7 +1,8 @@
 'use client';
 
 import { ArrowDownWideNarrow, Check, ChevronRight, CircleAlert, ClipboardList, Film, Folder, Images, Route, Search, ZoomIn, ZoomOut } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { defaultRangeExtractor, useWindowVirtualizer, type Range } from '@tanstack/react-virtual';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '../../components/badge';
 import { Button } from '../../components/button';
 import { Input } from '../../components/input';
@@ -35,6 +36,7 @@ import {
   type ReviewFilter,
   type ReviewFlowView,
   type ReviewCaptureView,
+  type ReviewFolder,
   type ReviewGrouping,
   type ReviewSort,
   type StoryboardMode,
@@ -59,24 +61,31 @@ function useControlled<T>(value: T | undefined, onChange: ((v: T) => void) | und
   return value === undefined ? [own, (v) => (setOwn(v), onChange?.(v))] : [value, (v) => onChange?.(v)];
 }
 
-/** The flows and checkpoints the filters leave, each checkpoint keeping only the matching variants. */
+/**
+ * The flows and checkpoints the filters leave, each checkpoint keeping only the matching variants.
+ * What a filter leaves whole is returned as it came, so a row whose flow is untouched does not render again.
+ */
 export function filterFlows(flows: readonly ReviewFlowView[], filter: ReviewFilter, variant: string | null, query: string): ReviewFlowView[] {
   const q = query.trim().toLowerCase();
-  return flows
-    .filter(
-      (f) =>
-        !q ||
-        [...f.titlePath, f.file, ...(f.cases ?? []).flatMap((c) => [c.key, c.title]), ...f.checkpoints.flatMap((c) => [c.name, c.title ?? ''])].some((s) =>
-          s.toLowerCase().includes(q),
-        ),
+  const keep = (cap: ReviewCaptureView) => (!variant || cap.variant === variant) && matchesReviewFilter(cap.status, filter);
+  const out: ReviewFlowView[] = [];
+  for (const f of flows) {
+    if (
+      q &&
+      ![...f.titlePath, f.file, ...(f.cases ?? []).flatMap((c) => [c.key, c.title]), ...f.checkpoints.flatMap((c) => [c.name, c.title ?? ''])].some((s) => s.toLowerCase().includes(q))
     )
-    .map((f) => ({
-      ...f,
-      checkpoints: f.checkpoints
-        .map((c) => ({ ...c, captures: c.captures.filter((cap) => (!variant || cap.variant === variant) && matchesReviewFilter(cap.status, filter)) }))
-        .filter((c) => c.captures.length > 0),
-    }))
-    .filter((f) => f.checkpoints.length > 0);
+      continue;
+    let changed = false;
+    const checkpoints: ReviewCheckpointView[] = [];
+    for (const c of f.checkpoints) {
+      const captures = c.captures.filter(keep);
+      if (captures.length !== c.captures.length) changed = true;
+      if (captures.length === c.captures.length) checkpoints.push(c);
+      else if (captures.length > 0) checkpoints.push({ ...c, captures });
+    }
+    if (checkpoints.length > 0) out.push(changed ? { ...f, checkpoints } : f);
+  }
+  return out;
 }
 
 /** The most a flow changed: its most changed image's score (see `changeScore`). */
@@ -210,14 +219,28 @@ export function ReviewStoryboard({
   const counts = useMemo(() => countStatuses(flows, variant), [flows, variant]);
   const total = counts.approved + counts.changes_requested + counts.changed + counts.new;
   const searchedCounts = useMemo(() => countStatuses(searched), [searched]);
-  const pending = new Set(pendingIds);
+  const pending = useMemo(() => new Set(pendingIds), [pendingIds]);
   const ordered = useMemo(() => sections.flatMap((s) => s.flows), [sections]);
+  // Where the viewer was when it closed: the rows scroll there if it is out of view.
+  const [reveal, setReveal] = useState<{ checkpointId: string } | null>(null);
+  const lastSelection = useRef(selection);
+  useEffect(() => {
+    if (lastSelection.current && !selection) setReveal({ checkpointId: lastSelection.current.checkpointId });
+    lastSelection.current = selection;
+  }, [selection]);
 
   const setSelection = (next: ReviewSelection | null) => {
     if (next && !pinned) setPinned(new Set(ordered.flatMap((f) => f.checkpoints.map((c) => c.id))));
     if (!next) setPinned(null);
     setSelectionState(next);
   };
+  // The rows are memoised; they get callbacks that never change and call the current ones.
+  const latest = useRef({ setSelection, onDecide });
+  useLayoutEffect(() => {
+    latest.current = { setSelection, onDecide };
+  });
+  const onOpen = useCallback((checkpointId: string, v: string | null) => latest.current.setSelection({ checkpointId, variant: v }), []);
+  const onApproveFlow = useCallback((ids: string[]) => latest.current.onDecide?.({ captureIds: ids, decision: 'approved' }), []);
   const viewerFlows = useMemo(() => {
     if (!pinned) return ordered;
     const all = new Map(filterFlows(flows, 'all', variant, '').map((f) => [f.resultId, f]));
@@ -227,9 +250,7 @@ export function ReviewStoryboard({
       .filter((f) => f.checkpoints.length > 0);
   }, [pinned, ordered, flows, variant]);
 
-  const needsReviewIds = (list: readonly ReviewFlowView[]) =>
-    list.flatMap((f) => f.checkpoints.flatMap((c) => c.captures.filter((cap) => NEEDS_REVIEW.includes(cap.status)).map((cap) => cap.id)));
-  const shownToApprove = needsReviewIds(visible);
+  const shownToApprove = useMemo(() => needsReviewIds(visible), [visible]);
 
   if (flows.length === 0 || total === 0) {
     return (
@@ -262,40 +283,18 @@ export function ReviewStoryboard({
         ) : null}
       </EmptyState>
     ) : (
-      <div className="flex flex-col gap-6">
-        {sections.map((section) => (
-          <section key={section.id} aria-label={section.id}>
-            {tree || sections.length > 1 ? (
-              <h2 className="sticky top-0 z-10 -mx-1 mb-1 flex items-center gap-1.5 border-b border-separator bg-surface/95 px-1 py-2 text-label-m text-muted-foreground backdrop-blur">
-                <Folder className="size-4 shrink-0" />
-                {section.path.map((part, i) => (
-                  <span key={i} className="flex min-w-0 items-center gap-1.5">
-                    {i > 0 ? <ChevronRight aria-hidden className="size-3.5 shrink-0" /> : null}
-                    <span className={cn('truncate', i === section.path.length - 1 && 'text-foreground')}>{part}</span>
-                  </span>
-                ))}
-                <span className="ml-1 text-label-xs tabular-nums">· {section.flows.length}</span>
-              </h2>
-            ) : null}
-            <ol className="flex flex-col divide-y divide-separator" aria-label={`Tests in ${section.name}`}>
-              {section.flows.map((flow) => (
-                <FlowRow
-                  key={flow.resultId}
-                  flow={flow}
-                  size={size}
-                  canDecide={canDecide && Boolean(onDecide) && !library}
-                  library={library}
-                  pending={pending}
-                  onOpen={(checkpointId, v) => setSelection({ checkpointId, variant: v })}
-                  onApproveFlow={(ids) => onDecide?.({ captureIds: ids, decision: 'approved' })}
-                  needsReview={needsReviewIds([flow])}
-                  variantSelected={variant}
-                />
-              ))}
-            </ol>
-          </section>
-        ))}
-      </div>
+      <StoryboardRows
+        sections={sections}
+        headings={tree || sections.length > 1}
+        size={size}
+        canDecide={canDecide && Boolean(onDecide) && !library}
+        library={library}
+        pending={pending}
+        onOpen={onOpen}
+        onApproveFlow={onApproveFlow}
+        variantSelected={variant}
+        reveal={reveal}
+      />
     );
 
   return (
@@ -396,32 +395,201 @@ export function ReviewStoryboard({
   );
 }
 
-function FlowRow({
-  flow,
+const needsReviewIds = (list: readonly ReviewFlowView[]) =>
+  list.flatMap((f) => f.checkpoints.flatMap((c) => c.captures.filter((cap) => NEEDS_REVIEW.includes(cap.status)).map((cap) => cap.id)));
+
+type RowItem = { kind: 'heading'; key: string; section: ReviewFolder; first: boolean } | { kind: 'flow'; key: string; flow: ReviewFlowView; first: boolean };
+
+/** How far past the screen rows stay rendered, in rows: what a quick scroll reaches before the next frame. */
+const OVERSCAN = 4;
+/** The screen the server renders the first rows for, before the browser can say how large it is. */
+const INITIAL_RECT = { width: 1280, height: 1000 } as const;
+
+/**
+ * A row's height before it is measured, from the screens it holds: close
+ * enough that the scrollbar does not jump when the real row takes its place.
+ */
+function estimateRow(item: RowItem, size: number, library: boolean): number {
+  if (item.kind === 'heading') return (item.first ? 0 : 24) + 42;
+  const { flow } = item;
+  const tallest = Math.max(
+    24,
+    ...flow.checkpoints.map((c) => Math.max(0, ...c.captures.map((cap) => captureViewport(cap).height)) * size),
+    flow.failureImage && !library ? 720 * size : 0,
+  );
+  const described = library && flow.checkpoints.some((c) => c.description) ? 44 : 0;
+  // Padding, the title and file lines, the checkpoint label, the variant line.
+  return 40 + 48 + 16 + 32 + tallest + described + 30;
+}
+
+/**
+ * The rows, virtualised against the window: only the rows on screen and a
+ * few either side are in the document, so a run with hundreds of tests
+ * renders, scrolls and resizes as quickly as one with ten. Each row is
+ * measured as it renders (and again when the size slider resizes it), the
+ * heading of the section being scrolled through stays pinned at the top.
+ */
+function StoryboardRows({
+  sections,
+  headings,
   size,
   canDecide,
   library,
   pending,
   onOpen,
   onApproveFlow,
-  needsReview,
   variantSelected,
+  reveal,
 }: {
-  flow: ReviewFlowView;
+  sections: readonly ReviewFolder[];
+  headings: boolean;
   size: number;
   canDecide: boolean;
   library: boolean;
   pending: ReadonlySet<string>;
   onOpen: (checkpointId: string, variant: string | null) => void;
   onApproveFlow: (ids: string[]) => void;
-  needsReview: string[];
+  variantSelected: string | null;
+  reveal: { checkpointId: string } | null;
+}) {
+  const items = useMemo(() => {
+    const out: RowItem[] = [];
+    sections.forEach((section, i) => {
+      if (headings) out.push({ kind: 'heading', key: `folder:${section.id}`, section, first: i === 0 });
+      section.flows.forEach((flow, j) => out.push({ kind: 'flow', key: `${section.id}:${flow.resultId}`, flow, first: j === 0 }));
+    });
+    return out;
+  }, [sections, headings]);
+  const headingIndexes = useMemo(() => items.flatMap((item, i) => (item.kind === 'heading' ? [i] : [])), [items]);
+
+  // The window scrolls; the rows start where this list does on the page.
+  const listRef = useRef<HTMLDivElement>(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
+  useLayoutEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    const update = () => setScrollMargin(Math.round(el.getBoundingClientRect().top + window.scrollY));
+    update();
+    // Anything above the list that grows or wraps (the toolbar, a banner) moves it.
+    const observer = new ResizeObserver(update);
+    observer.observe(document.body);
+    return () => observer.disconnect();
+  }, []);
+
+  const activeHeading = useRef(-1);
+  const rangeExtractor = useCallback(
+    (range: Range) => {
+      activeHeading.current = headingIndexes.findLast((i) => i <= range.startIndex) ?? -1;
+      const shown = defaultRangeExtractor(range);
+      return activeHeading.current >= 0 && !shown.includes(activeHeading.current) ? [activeHeading.current, ...shown] : shown;
+    },
+    [headingIndexes],
+  );
+
+  const virtualizer = useWindowVirtualizer({
+    count: items.length,
+    estimateSize: (i) => estimateRow(items[i], size, library),
+    getItemKey: (i) => items[i].key,
+    overscan: OVERSCAN,
+    scrollMargin,
+    rangeExtractor,
+    initialRect: INITIAL_RECT,
+    // The same first rows on the server and in the browser's first render.
+    initialOffset: 0,
+    useFlushSync: false,
+  });
+
+  useEffect(() => {
+    if (!reveal) return;
+    const index = items.findIndex((item) => item.kind === 'flow' && item.flow.checkpoints.some((c) => c.id === reveal.checkpointId));
+    if (index < 0) return;
+    const shown = virtualizer.getVirtualItems().filter((v) => v.index !== activeHeading.current);
+    const [top, bottom] = [shown[0]?.index ?? -1, shown.at(-1)?.index ?? -1];
+    // Only when the row is out of the rendered range; a row already near the screen stays where the reviewer left it.
+    if (index > top + OVERSCAN && index < bottom - OVERSCAN) return;
+    virtualizer.scrollToIndex(index, { align: 'center' });
+    // Only a new close should move the page, not a change of the rows.
+  }, [reveal]);
+
+  const virtualItems = virtualizer.getVirtualItems();
+  return (
+    <div ref={listRef} className="relative" style={{ height: virtualizer.getTotalSize() }}>
+      {virtualItems.map((v) => {
+        const item = items[v.index];
+        const sticky = item.kind === 'heading' && v.index === activeHeading.current;
+        return (
+          <div
+            key={v.key}
+            ref={virtualizer.measureElement}
+            data-index={v.index}
+            className={cn('top-0 left-0 w-full', sticky ? 'sticky z-10' : 'absolute')}
+            style={sticky ? undefined : { transform: `translateY(${v.start - virtualizer.options.scrollMargin}px)` }}
+          >
+            {item.kind === 'heading' ? (
+              <SectionHeading section={item.section} first={item.first} />
+            ) : (
+              <FlowRow
+                flow={item.flow}
+                first={item.first}
+                size={size}
+                canDecide={canDecide}
+                library={library}
+                pending={pending}
+                onOpen={onOpen}
+                onApproveFlow={onApproveFlow}
+                variantSelected={variantSelected}
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function SectionHeading({ section, first }: { section: ReviewFolder; first: boolean }) {
+  return (
+    <div className={first ? undefined : 'pt-6'}>
+      <h2 className="-mx-1 mb-1 flex items-center gap-1.5 border-b border-separator bg-surface/95 px-1 py-2 text-label-m text-muted-foreground backdrop-blur">
+        <Folder className="size-4 shrink-0" />
+        {section.path.map((part, i) => (
+          <span key={i} className="flex min-w-0 items-center gap-1.5">
+            {i > 0 ? <ChevronRight aria-hidden className="size-3.5 shrink-0" /> : null}
+            <span className={cn('truncate', i === section.path.length - 1 && 'text-foreground')}>{part}</span>
+          </span>
+        ))}
+        <span className="ml-1 text-label-xs tabular-nums">· {section.flows.length}</span>
+      </h2>
+    </div>
+  );
+}
+
+const FlowRow = memo(function FlowRow({
+  flow,
+  first,
+  size,
+  canDecide,
+  library,
+  pending,
+  onOpen,
+  onApproveFlow,
+  variantSelected,
+}: {
+  flow: ReviewFlowView;
+  first: boolean;
+  size: number;
+  canDecide: boolean;
+  library: boolean;
+  pending: ReadonlySet<string>;
+  onOpen: (checkpointId: string, variant: string | null) => void;
+  onApproveFlow: (ids: string[]) => void;
   variantSelected: string | null;
 }) {
+  const needsReview = useMemo(() => needsReviewIds([flow]), [flow]);
   const failed = flow.outcome === 'failed' || flow.outcome === 'timedout' || flow.outcome === 'interrupted';
   const heading = flow.titlePath.length ? flow.titlePath.join(' › ') : flow.title;
   return (
-    // Rows out of view skip layout, which keeps resizing the screens cheap on a long review.
-    <li className="py-5 [contain-intrinsic-size:auto_20rem] [content-visibility:auto]">
+    <article className={cn('py-5', !first && 'border-t border-separator')} aria-label={flow.titlePath.length ? flow.titlePath.join(' › ') : flow.title}>
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div className="grid min-w-0 grid-cols-[1.25rem_minmax(0,1fr)] items-center gap-x-2 gap-y-1">
           {library ? <Route aria-hidden className="size-4 text-muted-foreground" /> : <StatusIcon status={flow.outcome} />}
@@ -479,9 +647,9 @@ function FlowRow({
           </li>
         ) : null}
       </ol>
-    </li>
+    </article>
   );
-}
+});
 
 /** The pointer's precision: far below a pixel of the track, so the thumb follows the pointer instead of snapping to steps. */
 const POINTER_STEP = 0.0001;

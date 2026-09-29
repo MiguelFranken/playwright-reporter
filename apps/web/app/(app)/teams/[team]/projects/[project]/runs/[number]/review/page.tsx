@@ -1,3 +1,4 @@
+import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { BackLink } from '@miguelfranken/ui/patterns/back-link';
@@ -7,11 +8,13 @@ import { GitBranch, GitPullRequest } from 'lucide-react';
 import type { LibraryRefKey } from '@miguelfranken/ui/lib/library';
 import { ConnectedRunLibraryActions } from '@/components/library/library-controls';
 import { PrefetchLink } from '@/components/prefetch-link';
-import { UrlReviewStoryboard } from '@/components/review/url-review-storyboard';
+import { RunReviewStoryboard } from '@/components/review/run-review-storyboard';
 import { requireProject } from '@/lib/auth/access';
 import { casesOfTests, defaultBranch, getLibraryReference, getRunByNumber, runReview } from '@/lib/page-data';
 import { afterCapturesShown } from '@/lib/review/diff/dispatch';
-import { caseHref, toFlowViews } from '@/lib/review/view-model';
+import { toRunReviewData } from '@/lib/review/run-flows';
+import { makeServerQueryClient } from '@/lib/rpc/prefetch';
+import { runReviewQuery } from '@/lib/rpc/queries';
 import { projectHrefs } from '@/lib/view-models';
 
 type Props = { params: Promise<{ team: string; project: string; number: string }> };
@@ -37,11 +40,6 @@ async function Content({ params }: Props) {
   if (!run) notFound();
   const base = `/teams/${team}/projects/${access.project.slug}`;
   const hrefs = projectHrefs(base);
-  const records = await runReview({ id: run.id, startedAt: new Date(run.startedAt).toISOString() });
-  // Comparisons nobody measured yet (a baseline approved since, a run the watchdog closed) are measured after the page is sent.
-  afterCapturesShown(run.id, records.flatMap((r) => r.checkpoints.flatMap((c) => c.captures)));
-  const byTest = await casesOfTests(access.project.id, records.map((r) => r.testId));
-  const flows = toFlowViews(records, (resultId) => hrefs.result(run.number, resultId), { byTest, href: caseHref(hrefs) });
   const commit = [run.gitBranch, run.gitShortSha].filter(Boolean).join(' @ ');
   // The run's line of work: its pull request, else its branch — what the library keeps and pins.
   const key: LibraryRefKey | null = run.prNumber ? { kind: 'pull_request', prNumber: run.prNumber } : run.gitBranch ? { kind: 'branch', branch: run.gitBranch } : null;
@@ -78,7 +76,50 @@ async function Content({ params }: Props) {
           </p>
         ) : null}
       </div>
-      <UrlReviewStoryboard team={team} project={access.project.slug} flows={flows} canDecide={access.can({ review: ['decide'] })} />
+      {/* The header paints first; the run's checkpoints, the heaviest read of the page, stream in behind it. */}
+      <Suspense fallback={<ReviewStoryboardSkeleton />}>
+        <Storyboard
+          team={team}
+          project={access.project.slug}
+          projectId={access.project.id}
+          run={{ id: run.id, number: run.number, startedAt: new Date(run.startedAt).toISOString() }}
+          base={base}
+          canDecide={access.can({ review: ['decide'] })}
+        />
+      </Suspense>
     </div>
+  );
+}
+
+/**
+ * The run's checkpoints, rendered into the query the storyboard reads: the
+ * first screen of rows is in the HTML, and the browser keeps the answer in
+ * its cache while decisions change it in place.
+ */
+async function Storyboard({
+  team,
+  project,
+  projectId,
+  run,
+  base,
+  canDecide,
+}: {
+  team: string;
+  project: string;
+  projectId: string;
+  run: { id: string; number: number; startedAt: string };
+  base: string;
+  canDecide: boolean;
+}) {
+  const records = await runReview({ id: run.id, startedAt: run.startedAt });
+  // Comparisons nobody measured yet (a baseline approved since, a run the watchdog closed) are measured after the page is sent.
+  afterCapturesShown(run.id, records.flatMap((r) => r.checkpoints.flatMap((c) => c.captures)));
+  const byTest = await casesOfTests(projectId, records.map((r) => r.testId));
+  const queries = makeServerQueryClient();
+  queries.setQueryData(runReviewQuery({ team, project, runNumber: run.number }).queryKey, toRunReviewData(records, byTest, base, run.number));
+  return (
+    <HydrationBoundary state={dehydrate(queries)}>
+      <RunReviewStoryboard team={team} project={project} runNumber={run.number} canDecide={canDecide} />
+    </HydrationBoundary>
   );
 }

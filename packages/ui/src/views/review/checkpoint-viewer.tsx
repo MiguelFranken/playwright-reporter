@@ -81,6 +81,41 @@ function referenceOf(capture: ReviewCaptureView, library: boolean): { image: Rev
   return null;
 }
 
+/** How many checkpoints either side of the open one have their images fetched ahead. */
+const PRELOAD_AROUND = 2;
+
+/**
+ * The images of the checkpoints next to the open one, and what they compare
+ * against, fetched while the reviewer looks at this one: the arrow keys and
+ * the step after an approval show the next screen at once.
+ */
+function usePreloadNeighbours(all: readonly Position[], at: number, library: boolean) {
+  const urls = useMemo(() => {
+    if (at < 0) return [];
+    const out = new Set<string>();
+    for (let i = Math.max(0, at - PRELOAD_AROUND); i <= Math.min(all.length - 1, at + PRELOAD_AROUND); i++) {
+      if (i === at) continue;
+      for (const c of all[i].checkpoint.captures) {
+        if (c.image.available) out.add(c.image.url);
+        const reference = referenceOf(c, library);
+        if (reference?.image.available && !reference.same) out.add(reference.image.url);
+      }
+    }
+    return [...out];
+  }, [all, at, library]);
+  useEffect(() => {
+    // The browser keeps what these fetch in its cache; the timer lets the open screen's own images go first.
+    const timer = setTimeout(() => {
+      for (const url of urls) {
+        const img = new Image();
+        img.decoding = 'async';
+        img.src = url;
+      }
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [urls]);
+}
+
 /**
  * The full-screen review of one checkpoint at a time: its image at full
  * resolution (or every variant side by side), a comparison with the approved
@@ -126,6 +161,7 @@ export function CheckpointViewer({
   const all = useMemo(() => positions(flows), [flows]);
   const at = selection ? all.findIndex((p) => p.checkpoint.id === selection.checkpointId) : -1;
   const pos = at >= 0 ? all[at] : null;
+  usePreloadNeighbours(all, at, library);
   const [stage, setStage] = useState<StageMode>('changes');
   const [activeRegion, setActiveRegion] = useState<number | null>(null);
   const [comment, setComment] = useState('');

@@ -1,7 +1,7 @@
 'use client';
 
 import { useQueries, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useOptimistic, useState, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useOptimistic, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import {
   DEFAULT_FRAME,
@@ -24,19 +24,8 @@ import type { IgnoreRect } from '@miguelfranken/ui/views/review/ignore-regions-e
 import { ReviewStoryboard, STORYBOARD_SIZE, type ReviewSelection } from '@miguelfranken/ui/views/review/review-storyboard';
 import { useShallowSearch } from '@/components/filters/url-filters';
 import { decideReview, saveIgnoreRegions } from '@/app/(app)/teams/[team]/projects/[project]/review/actions';
+import { applyDecision, patchCaptures } from '@/lib/review/patch-flows';
 import { captureDiffQuery } from '@/lib/rpc/queries';
-
-/** Marks the decided images at once; the revalidated page confirms it. */
-function applyDecision(flows: ReviewFlowView[], input: ReviewDecisionInput): ReviewFlowView[] {
-  const ids = new Set(input.captureIds);
-  return flows.map((f) => ({
-    ...f,
-    checkpoints: f.checkpoints.map((c) => ({
-      ...c,
-      captures: c.captures.map((cap) => (ids.has(cap.id) ? { ...cap, status: input.decision, decision: { decision: input.decision, at: new Date().toISOString(), comment: input.comment ?? null, by: 'You' } } : cap)),
-    })),
-  }));
-}
 
 /** A capture that differs from its reference and has no finished measurement: what the viewer waits for. */
 function awaitsDiff(c: ReviewCaptureView) {
@@ -66,28 +55,28 @@ function useLiveDiffs(ref: { team: string; project: string }, flows: readonly Re
       .map((c) => ({ id: c.id, compareId: c.compare?.captureId }))
       .slice(0, 4);
   }, [flows, selection, library]);
-  const results = useQueries({ queries: targets.map((t) => captureDiffQuery(ref, t.id, t.compareId)) });
-  const live = new Map<string, LiveCapture>();
-  results.forEach((r, i) => {
-    if (r.data) live.set(targets[i].id, r.data);
-  });
-  return live;
+  // One map per answer, not per render: the storyboard patches its flows only when a measurement arrives.
+  const combine = useCallback(
+    (results: { data?: LiveCapture }[]) => {
+      const live = new Map<string, LiveCapture>();
+      results.forEach((r, i) => {
+        if (r.data) live.set(targets[i].id, r.data);
+      });
+      return live;
+    },
+    [targets],
+  );
+  return useQueries({ queries: targets.map((t) => captureDiffQuery(ref, t.id, t.compareId)), combine });
 }
 
 function withLive(flows: ReviewFlowView[], live: ReadonlyMap<string, LiveCapture>): ReviewFlowView[] {
   if (live.size === 0) return flows;
-  return flows.map((f) => ({
-    ...f,
-    checkpoints: f.checkpoints.map((c) => ({
-      ...c,
-      captures: c.captures.map((cap) => {
-        const l = live.get(cap.id);
-        if (!l) return cap;
-        // A library comparison carries no review status of its own.
-        return cap.compare ? { ...cap, diff: l.diff ?? cap.diff } : { ...cap, diff: l.diff ?? cap.diff, status: l.status, decision: l.decision ?? cap.decision };
-      }),
-    })),
-  }));
+  return patchCaptures(flows, (cap) => {
+    const l = live.get(cap.id);
+    if (!l) return undefined;
+    // A library comparison carries no review status of its own.
+    return cap.compare ? { ...cap, diff: l.diff ?? cap.diff } : { ...cap, diff: l.diff ?? cap.diff, status: l.status, decision: l.decision ?? cap.decision };
+  });
 }
 
 const SETTINGS_KEY = 'pwr.review.view';
@@ -140,6 +129,7 @@ export function UrlReviewStoryboard({
   emptyDescription,
   defaultFilter,
   mode,
+  decide,
 }: {
   team: string;
   project: string;
@@ -156,6 +146,12 @@ export function UrlReviewStoryboard({
   defaultFilter?: ReviewFilter;
   /** `library`: documentation, nothing to decide. */
   mode?: StoryboardMode;
+  /**
+   * Records a decision; the server action by default, which renders the page
+   * again. A storyboard fed by a query passes its mutation, which changes the
+   * cache instead.
+   */
+  decide?: (input: ReviewDecisionInput) => Promise<{ ok: true; decided: number } | { ok: false; message: string }>;
 }) {
   const { params, set } = useShallowSearch();
   const [local, setLocal] = useState<ReviewSelection | null>(null);
@@ -170,11 +166,14 @@ export function UrlReviewStoryboard({
 
   const filter: ReviewFilter | undefined = syncUrl && params.get('status') ? parseReviewFilter(params.get('status')) : defaultFilter;
   const cp = params.get('cp');
-  const selection = syncUrl ? (cp ? { checkpointId: cp, variant: params.get('v') } : null) : local;
+  const v = params.get('v');
+  const urlSelection = useMemo(() => (cp ? { checkpointId: cp, variant: v } : null), [cp, v]);
+  const selection = syncUrl ? urlSelection : local;
   const sortParam = params.get('sort');
   const sort = (REVIEW_SORTS as readonly string[]).includes(sortParam ?? '') ? (sortParam as ReviewSort) : undefined;
   const live = useLiveDiffs({ team, project }, flows, selection, mode === 'library');
-  const [optimistic, addDecision] = useOptimistic(withLive(flows, live), applyDecision);
+  const withLiveFlows = useMemo(() => withLive(flows, live), [flows, live]);
+  const [optimistic, addDecision] = useOptimistic(withLiveFlows, (current: ReviewFlowView[], input: ReviewDecisionInput) => applyDecision(current, input));
 
   const onIgnoreRegionsChange = (input: { captureId: string; regions: IgnoreRect[] }) => {
     setIgnorePendingId(input.captureId);
@@ -195,7 +194,7 @@ export function UrlReviewStoryboard({
     setPendingIds((ids) => [...ids, ...input.captureIds]);
     startTransition(async () => {
       addDecision(input);
-      const res = await decideReview({ team, project }, input);
+      const res = await (decide ? decide(input) : decideReview({ team, project }, input));
       setPendingIds((ids) => ids.filter((id) => !input.captureIds.includes(id)));
       if (!res.ok) toast.error(res.message);
       else if (input.captureIds.length > 1) toast.success(`${res.decided} images ${input.decision === 'approved' ? 'approved' : 'marked for changes'}.`);
