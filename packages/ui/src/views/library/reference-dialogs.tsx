@@ -127,7 +127,7 @@ export function LibraryReferenceDialog({
               <Label htmlFor={`${id}-default`}>Default reference</Label>
               <p className="text-body-s text-muted-foreground">The library opens on it, and test case pages show its screens.</p>
             </div>
-            <Switch id={`${id}-default`} checked={values.isDefault} disabled={pending || (reference.isDefault && reference.kept)} onCheckedChange={(v) => setValues({ ...values, isDefault: v })} />
+            <Switch id={`${id}-default`} aria-label="Default reference" checked={values.isDefault} disabled={pending || (reference.isDefault && reference.kept)} onCheckedChange={(v) => setValues({ ...values, isDefault: v })} />
           </div>
           {error ? <p className="text-body-s text-danger-text">{error}</p> : null}
           <DialogFooter className="sm:justify-between">
@@ -228,7 +228,7 @@ export function AddLibraryReferenceDialog({
           </div>
           <div className="flex items-center justify-between gap-4">
             <Label htmlFor="library-add-default">Make it the default reference</Label>
-            <Switch id="library-add-default" checked={isDefault} disabled={pending} onCheckedChange={setIsDefault} />
+            <Switch id="library-add-default" aria-label="Make it the default reference" checked={isDefault} disabled={pending} onCheckedChange={setIsDefault} />
           </div>
           {error ? <p className="text-body-s text-danger-text">{error}</p> : null}
           <DialogFooter>

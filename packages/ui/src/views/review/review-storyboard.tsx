@@ -476,7 +476,7 @@ function CheckpointColumn({
           type="button"
           onClick={() => open(captures.length === 1 ? captures[0].variant : null)}
           aria-label={`Open ${checkpoint.sequence + 1}. ${label}`}
-          className="min-w-0 flex-1 truncate text-left text-label-m outline-none hover:underline focus-visible:underline"
+          className="min-w-0 truncate text-left text-label-m outline-none hover:underline focus-visible:underline"
           title={checkpoint.description ?? label}
         >
           {label}

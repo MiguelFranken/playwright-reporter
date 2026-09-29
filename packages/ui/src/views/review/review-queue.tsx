@@ -123,7 +123,9 @@ export function ReviewQueue({
                 <TableHead>Change</TableHead>
                 <TableHead>Newest run</TableHead>
                 <TableHead>Needs review</TableHead>
-                <TableHead className="sr-only">Open</TableHead>
+                <TableHead>
+                  <span className="sr-only">Open</span>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -166,11 +168,15 @@ export function ReviewQueue({
                         <span className="text-body-s text-muted-foreground" title={formatDateTime(r.startedAt)}>
                           {formatRelative(r.startedAt, now ? { now } : undefined)}
                         </span>
+                        {earlier ? (
+                          <span className="text-body-s text-muted-foreground" title="Earlier runs of this change: only the newest one needs review">
+                            · {earlier} earlier {earlier === 1 ? 'run' : 'runs'}
+                          </span>
+                        ) : null}
                       </div>
                       <p className="mt-0.5 truncate text-body-s text-muted-foreground" title={r.commitMessage ?? undefined}>
                         {r.commit ? <span className="text-code-s">{r.commit} </span> : null}
                         {r.commitMessage ?? ''}
-                        {earlier ? <span> · {earlier} earlier {earlier === 1 ? 'run' : 'runs'}</span> : null}
                       </p>
                     </TableCell>
                     <TableCell>
