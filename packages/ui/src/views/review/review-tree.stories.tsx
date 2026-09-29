@@ -22,10 +22,17 @@ export const BySuite: Story = {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: /Coupons/ }));
     await expect(args.onSelect).toHaveBeenCalledWith('Checkout / Coupons');
+    await userEvent.click(canvas.getByRole('button', { name: 'Collapse Checkout' }));
+    await expect(canvas.queryByRole('button', { name: /Coupons/ })).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: 'Expand all folders' }));
+    await expect(canvas.getByRole('button', { name: /Coupons/ })).toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: /Files/ }));
     await expect(args.onGroupingChange).toHaveBeenCalledWith('file');
   },
 };
+
+/** The library counts screens; nothing waits for a decision there. */
+export const InTheLibrary: Story = { args: { showNeedsReview: false, allLabel: 'All screens' } };
 
 export const ByFile: Story = { args: { folders: buildReviewTree(reviewFlows, 'file'), grouping: 'file' } };
 
