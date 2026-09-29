@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.0.49](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.48...v0.0.49) (2026-09-29)
+
+### Features
+
+* **review:** measure changed review images pixel by pixel ([#59](https://github.com/MiguelFranken/playwright-reporter/issues/59)) ([c963af7](https://github.com/MiguelFranken/playwright-reporter/commit/c963af735320251efe8227dd5a9ba9de9e2af2ad))
+
+### Performance Improvements
+
+* **ui:** a continuous screen-size slider that glides ([#58](https://github.com/MiguelFranken/playwright-reporter/issues/58)) ([c6870bd](https://github.com/MiguelFranken/playwright-reporter/commit/c6870bdf7bee9d5eca06c1f2a4adb057eb2d8de4))
+
 ## [0.0.48](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.47...v0.0.48) (2026-09-29)
 
 ### Bug Fixes
