@@ -1,10 +1,10 @@
 'use client';
 
-import { Check, ChevronLeft, ChevronRight, ExternalLink, Film, Keyboard, MessageSquareWarning, Route } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, ExternalLink, Film, Keyboard, MessageSquareWarning, Route, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '../../components/badge';
 import { Button } from '../../components/button';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../../components/dialog';
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '../../components/dialog';
 import { Kbd } from '../../components/kbd';
 import { Textarea } from '../../components/textarea';
 import { ToggleGroup, ToggleGroupItem } from '../../components/toggle-group';
@@ -217,13 +217,13 @@ export function CheckpointViewer({
   return (
     <Dialog open={Boolean(pos)} onOpenChange={(open) => !open && onSelectionChange(null)}>
       <DialogContent
-        showCloseButton
+        showCloseButton={false}
         initialFocus={stageRef}
         className="top-0 left-0 grid h-dvh w-screen max-w-none translate-x-0 translate-y-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-0 rounded-none border-0 p-0 sm:max-w-none"
       >
         {pos ? (
           <>
-            <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border px-4 py-3 pr-12">
+            <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border px-4 py-3">
               <div className="flex min-w-0 flex-1 items-center gap-2">
                 <StatusIcon status={pos.flow.outcome} />
                 <div className="min-w-0">
@@ -263,16 +263,22 @@ export function CheckpointViewer({
                   ))}
                 </ToggleGroup>
               ) : null}
-              <div className="flex items-center gap-1">
-                <Button variant="outline" size="icon-sm" aria-label="Previous checkpoint" disabled={at <= 0} onClick={() => move(-1)}>
-                  <ChevronLeft />
-                </Button>
-                <span className="w-16 text-center text-xs text-muted-foreground tabular-nums">
-                  {at + 1} / {all.length}
-                </span>
-                <Button variant="outline" size="icon-sm" aria-label="Next checkpoint" disabled={at >= all.length - 1} onClick={() => move(1)}>
-                  <ChevronRight />
-                </Button>
+              <div className="ml-auto flex items-center gap-3">
+                <div className="flex items-center gap-0.5">
+                  <Button variant="ghost" size="icon-sm" aria-label="Previous checkpoint" disabled={at <= 0} onClick={() => move(-1)}>
+                    <ChevronLeft />
+                  </Button>
+                  <span className="min-w-9 text-center text-xs text-muted-foreground tabular-nums">
+                    {at + 1} / {all.length}
+                  </span>
+                  <Button variant="ghost" size="icon-sm" aria-label="Next checkpoint" disabled={at >= all.length - 1} onClick={() => move(1)}>
+                    <ChevronRight />
+                  </Button>
+                </div>
+                <div className="h-5 w-px bg-border" aria-hidden />
+                <DialogClose render={<Button variant="ghost" size="icon-sm" aria-label="Close" />}>
+                  <X />
+                </DialogClose>
               </div>
             </header>
 
