@@ -4,6 +4,7 @@ import {
   codexPromptLink,
   cursorPromptLink,
   debugPrompt,
+  organizePrompt,
   PROMPT_HANDOFF_TARGETS,
   triagePrompt,
   vscodePromptLink,
@@ -78,5 +79,22 @@ describe('PROMPT_HANDOFF_TARGETS', () => {
   it('offers Claude Code, Codex, Cursor and VS Code, with unique ids', () => {
     expect(PROMPT_HANDOFF_TARGETS.map((target) => target.label)).toEqual(['Claude Code', 'Codex', 'Cursor', 'VS Code']);
     expect(new Set(PROMPT_HANDOFF_TARGETS.map((target) => target.id)).size).toBe(PROMPT_HANDOFF_TARGETS.length);
+  });
+});
+
+describe('organizePrompt', () => {
+  const CASES_URL = 'https://reporter.acme.test/teams/acme/projects/web/cases';
+
+  it('scopes to the project and walks the organizing tools', () => {
+    const prompt = organizePrompt({ casesUrl: CASES_URL });
+    expect(prompt).toContain(`in this project: ${CASES_URL}`);
+    for (const tool of ['list_uncovered_tests', 'list_test_suites', 'list_test_cases', 'link_test_case', 'adopt_tests', 'delete_test_suite']) expect(prompt).toContain(tool);
+    expect(prompt.match(/https?:\/\/\S+/g)).toEqual([CASES_URL]);
+  });
+
+  it('asks for the plan before changing anything, and fits a deep link', () => {
+    const prompt = organizePrompt({ casesUrl: CASES_URL });
+    expect(prompt).toMatch(/wait for my go/);
+    expect(encodeURIComponent(prompt).length).toBeLessThanOrEqual(5_000);
   });
 });

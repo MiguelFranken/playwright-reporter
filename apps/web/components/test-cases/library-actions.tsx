@@ -31,6 +31,7 @@ export function LibraryActions({
   canCreate,
   startAdopting = false,
   exportHref,
+  aiPrompt,
   extra,
 }: {
   /** The export route, already scoped to the suite on screen. */
@@ -41,6 +42,8 @@ export function LibraryActions({
   newCaseHref: string;
   canCreate: boolean;
   startAdopting?: boolean;
+  /** Offered in the adopt dialog, to let an assistant sort the tests into suites. */
+  aiPrompt?: string;
   extra?: React.ReactNode;
 }) {
   const router = useRouter();
@@ -107,6 +110,7 @@ export function LibraryActions({
         description="Each test becomes a test case that is already linked to it: its title, its test.step()s as steps, and suites named after its file and describe blocks. The same test in several browsers becomes one case."
         suites={suites}
         pending={pending}
+        aiPrompt={aiPrompt}
         onConfirm={({ testIds, placement }) =>
           startTransition(async () => {
             const res = await adoptTests(projectRef, testIds, placement);
