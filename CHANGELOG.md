@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.38](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.37...v0.0.38) (2026-09-29)
+
+### Features
+
+* **web:** manage manual and automated test cases in one place ([#42](https://github.com/MiguelFranken/playwright-reporter/issues/42)) ([507bf4f](https://github.com/MiguelFranken/playwright-reporter/commit/507bf4ff6e388f84872c677bb5ab13ada21b818c))
+
 ## [0.0.37](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.36...v0.0.37) (2026-09-29)
 
 ### Performance Improvements
