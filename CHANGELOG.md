@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.47](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.46...v0.0.47) (2026-09-29)
+
+### Bug Fixes
+
+* **ui:** let sideways scrolling over a checkpoint screenshot reach the storyboard strip ([483128f](https://github.com/MiguelFranken/playwright-reporter/commit/483128f66cf41fecfb40d0745689b403c66b4e9b))
+
 ## [0.0.46](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.45...v0.0.46) (2026-09-29)
 
 ### Features
