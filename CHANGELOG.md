@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.37](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.36...v0.0.37) (2026-09-29)
+
+### Performance Improvements
+
+* **web:** adopt Partial Prefetching fully: prefetch whole pages on intent ([#41](https://github.com/MiguelFranken/playwright-reporter/issues/41)) ([95cf395](https://github.com/MiguelFranken/playwright-reporter/commit/95cf395ff40289a61b1ac77a39a3982ce9bc6695))
+
 ## [0.0.36](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.35...v0.0.36) (2026-09-29)
 
 ### Bug Fixes
