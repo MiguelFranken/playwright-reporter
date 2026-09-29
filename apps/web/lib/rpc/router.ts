@@ -23,6 +23,7 @@ import { policyFromForm as dataPolicyFromForm } from '@/lib/data-retention';
 import { duePreview } from '@/lib/data-retention/stats';
 import { db } from '@/lib/db/drizzle';
 import { getTestOverview } from '@/lib/db/queries/explorer';
+import { listAutomatedTests } from '@/lib/db/queries/test-cases';
 import {
   getRunSummary,
   listRunErrorGroupsWithCursor,
@@ -156,6 +157,20 @@ export const appRouter = {
       if (!overview) throw new ORPCError('NOT_FOUND');
       return overview;
     }),
+  },
+
+  testCases: {
+    /**
+     * Playwright tests for the link and adopt pickers, searched as the user
+     * types. `uncovered` keeps the tests no case links to yet.
+     */
+    automatedTests: authed
+      .input(project.extend({ q: z.string().max(200).default(''), uncovered: z.boolean().default(false) }))
+      .handler(async ({ input }) => {
+        const access = await resolveProject(input.team, input.project);
+        if (!access?.can({ testCase: ['read'] })) throw new ORPCError('NOT_FOUND');
+        return listAutomatedTests(access.project.id, { q: input.q, uncovered: input.uncovered, limit: 100 });
+      }),
   },
 
   admin: {

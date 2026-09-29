@@ -34,6 +34,7 @@ import * as explorer from '@/lib/db/queries/explorer';
 import * as pullRequests from '@/lib/db/queries/pull-requests';
 import * as runs from '@/lib/db/queries/runs';
 import * as teams from '@/lib/db/queries/teams';
+import * as testCases from '@/lib/db/queries/test-cases';
 
 /**
  * Thirty seconds: the shortest lifetime Next.js still includes in a per-link
@@ -198,4 +199,54 @@ export async function getPullRequestOverview(...args: Parameters<typeof pullRequ
   'use cache: private';
   cacheLife(PAGE_DATA);
   return pullRequests.getPullRequestOverview(...args);
+}
+
+// ---------------------------------------------------------------- test cases
+
+export async function getSuiteTree(...args: Parameters<typeof testCases.getSuiteTree>) {
+  'use cache: private';
+  cacheLife(PAGE_DATA);
+  return testCases.getSuiteTree(...args);
+}
+
+export async function listCases(...args: Parameters<typeof testCases.listCases>) {
+  'use cache: private';
+  cacheLife(PAGE_DATA);
+  return testCases.listCases(...args);
+}
+
+export async function getCaseDetail(...args: Parameters<typeof testCases.getCaseDetail>) {
+  'use cache: private';
+  cacheLife(PAGE_DATA);
+  return testCases.getCaseDetail(...args);
+}
+
+export async function caseNeighbours(...args: Parameters<typeof testCases.caseNeighbours>) {
+  'use cache: private';
+  cacheLife(PAGE_DATA);
+  return testCases.caseNeighbours(...args);
+}
+
+export async function listCaseVersions(...args: Parameters<typeof testCases.listCaseVersions>) {
+  'use cache: private';
+  cacheLife(PAGE_DATA);
+  return testCases.listCaseVersions(...args);
+}
+
+export async function getCoverage(...args: Parameters<typeof testCases.getCoverage>) {
+  'use cache: private';
+  cacheLife(PAGE_DATA);
+  return testCases.getCoverage(...args);
+}
+
+export async function listFieldDefs(...args: Parameters<typeof testCases.listFieldDefs>) {
+  'use cache: private';
+  cacheLife(PAGE_DATA);
+  return testCases.listFieldDefs(...args);
+}
+
+export async function listCaseTags(...args: Parameters<typeof testCases.listCaseTags>) {
+  'use cache: private';
+  cacheLife(PAGE_DATA);
+  return testCases.listCaseTags(...args);
 }

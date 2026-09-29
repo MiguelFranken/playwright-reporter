@@ -200,6 +200,8 @@ export interface CaseFilters {
   muted?: boolean;
   /** Marked automated without a linked test. */
   unverified?: boolean;
+  /** Flaky, stale or unverified: the cases the coverage summary says need attention. */
+  attention?: boolean;
   sort?: CaseSort;
   dir?: 'asc' | 'desc';
   page?: number;
@@ -255,6 +257,9 @@ export async function listCases(projectId: string, f: CaseFilters = {}, now = ne
   let out = rows.map((r) => toRow(r, health.get(r.id) ?? [], paths, now));
   if (list(f.verdict)) out = out.filter((r) => f.verdict!.includes(r.verdict));
   if (f.unverified) out = out.filter((r) => r.automation === 'automated' && r.linkCount === 0);
+  if (f.attention) {
+    out = out.filter((r) => r.status !== 'deprecated' && (r.verdict === 'flaky' || r.verdict === 'stale' || (r.automation === 'automated' && r.linkCount === 0)));
+  }
 
   const dir = f.dir === 'desc' ? -1 : 1;
   const sort = f.sort ?? 'position';

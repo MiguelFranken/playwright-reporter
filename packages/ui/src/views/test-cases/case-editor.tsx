@@ -34,46 +34,12 @@ import {
   type CustomFieldValue,
   type StepFormat,
 } from '../../lib/test-cases';
+import { EMPTY_CASE, type CaseEditorValues } from '../../lib/test-case-editor';
 import { FieldSelect } from './field-select';
 import { StepsEditor } from './steps-editor';
 
-export interface CaseEditorValues {
-  title: string;
-  suiteId: string | null;
-  description: string;
-  preconditions: string;
-  postconditions: string;
-  stepsFormat: StepFormat;
-  steps: CaseStep[];
-  status: CaseStatus;
-  priority: CasePriority;
-  severity: CaseSeverity;
-  type: CaseType;
-  behavior: CaseBehavior;
-  automation: CaseAutomation;
-  muted: boolean;
-  tags: string[];
-  customFields: Record<string, CustomFieldValue>;
-}
-
-export const EMPTY_CASE: CaseEditorValues = {
-  title: '',
-  suiteId: null,
-  description: '',
-  preconditions: '',
-  postconditions: '',
-  stepsFormat: 'classic',
-  steps: [],
-  status: 'active',
-  priority: 'none',
-  severity: 'normal',
-  type: 'functional',
-  behavior: 'none',
-  automation: 'manual',
-  muted: false,
-  tags: [],
-  customFields: {},
-};
+export type { CaseEditorValues };
+export { EMPTY_CASE };
 
 export interface CaseEditorProps {
   initial: CaseEditorValues;

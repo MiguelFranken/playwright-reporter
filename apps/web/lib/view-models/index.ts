@@ -70,6 +70,7 @@ export function projectHrefs(base: string) {
     pullRequest: (number: number) => pullRequestHref(base, number),
     test: (testId: string) => `${base}/tests/${testId}`,
     result: (runNumber: number, resultId: string) => `${base}/runs/${runNumber}/tests/${resultId}`,
+    testCase: (number: number) => `${base}/cases/${number}`,
   };
 }
 

@@ -68,6 +68,13 @@ function parse<T extends z.ZodType>(schema: T, input: unknown): z.output<T> {
   return result.data;
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Ids arrive from clients; one that is not a UUID matches nothing rather than failing the query. */
+function uuids(ids: readonly string[]): string[] {
+  return [...new Set(ids.filter((id) => typeof id === 'string' && UUID.test(id)))];
+}
+
 async function record(ctx: CaseContext, action: Parameters<typeof audit>[0], target: Record<string, unknown>) {
   await audit(action, { actorId: ctx.actorId, teamId: ctx.teamId, projectId: ctx.projectId, target });
 }
@@ -94,6 +101,7 @@ function heightOf(suites: readonly TestSuite[], id: string): number {
 }
 
 async function requireSuite(tx: Db, projectId: string, id: string): Promise<TestSuite> {
+  if (!UUID.test(id)) throw new CaseError('That suite does not exist.', 'not_found');
   const [row] = await tx.select().from(testSuites).where(and(eq(testSuites.id, id), eq(testSuites.projectId, projectId)));
   if (!row) throw new CaseError('That suite does not exist.', 'not_found');
   return row;
@@ -203,6 +211,7 @@ async function swapNeighbour<T extends { id: string }>(ordered: T[], id: string,
 // ---------------------------------------------------------------- cases
 
 async function requireCase(tx: Db, projectId: string, id: string): Promise<TestCase> {
+  if (!UUID.test(id)) throw new CaseError('That test case does not exist.', 'not_found');
   const [row] = await tx.select().from(testCases).where(and(eq(testCases.id, id), eq(testCases.projectId, projectId))).for('update');
   if (!row) throw new CaseError('That test case does not exist.', 'not_found');
   return row;
@@ -354,12 +363,13 @@ export async function restoreVersion(ctx: CaseContext, id: string, version: numb
   return row;
 }
 
-export async function deleteCases(ctx: CaseContext, ids: readonly string[]): Promise<number> {
+export async function deleteCases(ctx: CaseContext, input: readonly string[]): Promise<number> {
+  const ids = uuids(input);
   if (ids.length === 0) return 0;
-  if (ids.length > MAX_BULK_CASES) throw new CaseError(`Select at most ${MAX_BULK_CASES} test cases at once.`);
+  if (input.length > MAX_BULK_CASES) throw new CaseError(`Select at most ${MAX_BULK_CASES} test cases at once.`);
   const deleted = await db
     .delete(testCases)
-    .where(and(eq(testCases.projectId, ctx.projectId), inArray(testCases.id, [...ids])))
+    .where(and(eq(testCases.projectId, ctx.projectId), inArray(testCases.id, ids)))
     .returning({ id: testCases.id, number: testCases.number });
   if (deleted.length) await record(ctx, 'test-case.delete', { keys: deleted.map((d) => caseKey(d.number)) });
   return deleted.length;
@@ -398,10 +408,11 @@ export type BulkPatch = z.input<typeof bulkPatchSchema>;
  * One edit applied to many cases in one transaction; each changed case gets
  * its own version. Tags are added to or removed from what each case has.
  */
-export async function bulkUpdate(ctx: CaseContext, ids: readonly string[], input: BulkPatch): Promise<{ updated: number }> {
-  const { addTags, removeTags, ...patch } = parse(bulkPatchSchema, input);
+export async function bulkUpdate(ctx: CaseContext, input: readonly string[], edit: BulkPatch): Promise<{ updated: number }> {
+  const { addTags, removeTags, ...patch } = parse(bulkPatchSchema, edit);
+  const ids = uuids(input);
   if (ids.length === 0) return { updated: 0 };
-  if (ids.length > MAX_BULK_CASES) throw new CaseError(`Select at most ${MAX_BULK_CASES} test cases at once.`);
+  if (input.length > MAX_BULK_CASES) throw new CaseError(`Select at most ${MAX_BULK_CASES} test cases at once.`);
   const results = await db.transaction(async (tx) => {
     const rows = await tx
       .select()
@@ -447,11 +458,13 @@ async function markAutomated(tx: Db, ctx: CaseContext, caseIds: readonly string[
 }
 
 /** Links Playwright tests to a case by hand. Already linked tests stay as they are. */
-export async function linkTests(ctx: CaseContext, caseId: string, testIds: readonly string[]): Promise<{ linked: number }> {
+export async function linkTests(ctx: CaseContext, caseId: string, input: readonly string[]): Promise<{ linked: number }> {
+  const testIds = uuids(input);
+  if (testIds.length !== new Set(input).size) throw new CaseError('Some of those tests do not belong to this project.', 'not_found');
   const result = await db.transaction(async (tx) => {
     const current = await requireCase(tx, ctx.projectId, caseId);
     const valid = await projectTests(tx, ctx.projectId, testIds);
-    if (valid.length !== new Set(testIds).size) throw new CaseError('Some of those tests do not belong to this project.', 'not_found');
+    if (valid.length !== testIds.length) throw new CaseError('Some of those tests do not belong to this project.', 'not_found');
     const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(testCaseLinks).where(eq(testCaseLinks.caseId, caseId));
     if (n + valid.length > LIMITS.linksPerCase) throw new CaseError(`A test case links at most ${LIMITS.linksPerCase} tests.`);
     const inserted = valid.length
@@ -473,6 +486,7 @@ export async function linkTests(ctx: CaseContext, caseId: string, testIds: reado
  * still names the case, which the caller should say.
  */
 export async function unlinkTest(ctx: CaseContext, caseId: string, testId: string): Promise<{ source: 'manual' | 'code' | null }> {
+  if (!UUID.test(testId)) return { source: null };
   const result = await db.transaction(async (tx) => {
     const current = await requireCase(tx, ctx.projectId, caseId);
     const [removed] = await tx

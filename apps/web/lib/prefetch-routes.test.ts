@@ -18,6 +18,10 @@ describe('isPrefetchRoute', () => {
     `${project}/tests/9269837e-9a1d-4bed-a7b4-05f0898f88d0`,
     `${project}/branches/feature/checkout`,
     `${project}/pull-requests/1524`,
+    `${project}/cases`,
+    `${project}/cases?suite=unassigned`,
+    `${project}/cases/12`,
+    `${project}/cases/12/history`,
   ])('prefetches the page behind %s on intent', (href) => {
     expect(isPrefetchRoute(href)).toBe(true);
   });
@@ -31,6 +35,8 @@ describe('isPrefetchRoute', () => {
     `${project}/settings`,
     `${project}/runs/not-a-number`,
     `${project}/pull-requests/abc`,
+    `${project}/cases/new`,
+    `${project}/cases/12/edit`,
     'https://example.com/teams/acme',
     '//example.com/teams/acme',
     '#top',
