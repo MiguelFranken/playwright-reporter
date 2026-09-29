@@ -56,6 +56,11 @@ test in `packages/ui` fails the build if it imports `next/*`, `drizzle-orm`,
 
 ## APIs in `apps/web`
 
+- **Pages read through `lib/page-data.ts`**, not `lib/db/queries` directly. Those wrappers (and the access checks in
+  `lib/auth/access.ts`) are `'use cache: private'`, which is what lets a hovered link prefetch the whole page with
+  Partial Prefetching (`components/prefetch-link.tsx`, routes listed in `lib/prefetch-routes.ts`). A new page wraps
+  its reads there and joins `PREFETCH_ROUTES`. Past those caches, a server-rendered clock read stops the prefetch:
+  pass `renderedAt()` as the view's `now`, or mark genuinely request-time work with `await connection()`.
 - **Data a client component loads after render** (a drawer, a live view catching up) is a procedure in
   `apps/web/lib/rpc/router.ts`, called through TanStack Query with the typed `orpc` utils from `lib/rpc/client.ts`.
   Don't add a JSON route handler for it. Pages still read the database on the server.
