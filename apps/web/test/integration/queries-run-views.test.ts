@@ -330,6 +330,12 @@ describe('getResultDetail', () => {
     expect(await getResultDetail(tenant.project.id, runNumber + 1, result.id)).toBeNull();
     expect(await getResultDetail(tenant.project.id, runNumber, result.id)).not.toBeNull();
   });
+
+  test('answers null for a result id that is not a uuid', async ({ tenant }) => {
+    const { runNumber } = await playRun(tenant.tokenProject, { tests: [{ outcome: 'passed' }] });
+
+    expect(await getResultDetail(tenant.project.id, runNumber, 'x')).toBeNull();
+  });
 });
 
 describe('facet lists', () => {

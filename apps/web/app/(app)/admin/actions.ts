@@ -20,6 +20,7 @@ import {
   type DataSweepCounts,
 } from '@/lib/data-retention';
 import { db } from '@/lib/db/drizzle';
+import { isUuid } from '@/lib/db/queries/shared';
 import { getUserById } from '@/lib/db/queries/teams';
 import { attachments, projects, runs, teamMembers, teams, users } from '@/lib/db/schema';
 import { getStorage } from '@/lib/storage';
@@ -71,6 +72,7 @@ export async function createTeam(name: string, slug: string): Promise<Ok<{ slug:
 export async function deleteTeam(teamId: string, confirmation: string): Promise<Ok | Denied> {
   const actor = await superadmin();
   if (denied(actor)) return actor;
+  if (!isUuid(teamId)) return actionError('Team not found.');
 
   const [team] = await db.select().from(teams).where(eq(teams.id, teamId));
   if (!team) return actionError('Team not found.');
@@ -149,6 +151,7 @@ export async function createUserAccount(email: string, name: string, rawRole: st
 export async function setInstanceRole(userId: string, rawRole: string): Promise<Ok | Denied> {
   const actor = await superadmin();
   if (denied(actor)) return actor;
+  if (!isUuid(userId)) return actionError('User not found.');
   const role = instanceRoleSchema.safeParse(rawRole);
   if (!role.success) return actionError('Pick a valid instance role.');
   if (userId === actor.actorId && role.data !== 'superadmin') return actionError('You cannot remove your own superadmin role.');
@@ -165,6 +168,7 @@ export async function setInstanceRole(userId: string, rawRole: string): Promise<
 export async function setBanned(userId: string, banned: boolean, reason?: string): Promise<Ok | Denied> {
   const actor = await superadmin();
   if (denied(actor)) return actor;
+  if (!isUuid(userId)) return actionError('User not found.');
   if (userId === actor.actorId) return actionError('You cannot ban yourself.');
 
   const user = await getUserById(userId);
@@ -191,6 +195,7 @@ export async function setBanned(userId: string, banned: boolean, reason?: string
 export async function setTemporaryPassword(userId: string): Promise<Ok<{ password: string }> | Denied> {
   const actor = await superadmin();
   if (denied(actor)) return actor;
+  if (!isUuid(userId)) return actionError('User not found.');
 
   const user = await getUserById(userId);
   if (!user) return actionError('User not found.');
@@ -210,6 +215,7 @@ export async function setTemporaryPassword(userId: string): Promise<Ok<{ passwor
 export async function deleteUserAccount(userId: string): Promise<Ok | Denied> {
   const actor = await superadmin();
   if (denied(actor)) return actor;
+  if (!isUuid(userId)) return actionError('User not found.');
   if (userId === actor.actorId) return actionError('You cannot delete your own account.');
 
   const user = await getUserById(userId);

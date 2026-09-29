@@ -11,6 +11,7 @@ import { generateInvitationToken, hashInvitationToken, invitationExpiry } from '
 import { validateSlug } from '@/lib/auth/slug';
 import { deleteAvatar, storeAvatar } from '@/lib/avatars/store';
 import { db } from '@/lib/db/drizzle';
+import { isUuid } from '@/lib/db/queries/shared';
 import { countTeamAdmins, getUserByEmail } from '@/lib/db/queries/teams';
 import { attachments, projects, teamInvitations, teamMembers, teams, type TeamRole } from '@/lib/db/schema';
 import { getStorage } from '@/lib/storage';
@@ -187,6 +188,7 @@ export async function inviteMember(teamSlug: string, rawEmail: string, rawRole: 
 export async function regenerateInvitation(teamSlug: string, invitationId: string): Promise<Ok<{ link: string }> | Denied> {
   const access = await teamForAction(teamSlug, { member: ['invite'] });
   if (denied(access)) return access;
+  if (!isUuid(invitationId)) return actionError('Invitation not found.');
 
   const token = generateInvitationToken();
   const [row] = await db
@@ -211,6 +213,7 @@ export async function regenerateInvitation(teamSlug: string, invitationId: strin
 export async function revokeInvitation(teamSlug: string, invitationId: string): Promise<Ok | Denied> {
   const access = await teamForAction(teamSlug, { member: ['invite'] });
   if (denied(access)) return access;
+  if (!isUuid(invitationId)) return actionError('Invitation not found.');
 
   const [row] = await db
     .update(teamInvitations)
@@ -252,6 +255,7 @@ export async function addExistingUser(teamSlug: string, rawEmail: string, rawRol
 export async function updateMemberRole(teamSlug: string, userId: string, rawRole: string): Promise<Ok | Denied> {
   const access = await teamForAction(teamSlug, { member: ['update-role'] });
   if (denied(access)) return access;
+  if (!isUuid(userId)) return actionError('That person is not a member of this team.');
 
   const role = roleSchema.safeParse(rawRole);
   if (!role.success) return actionError('Pick a valid role.');
@@ -278,6 +282,7 @@ export async function updateMemberRole(teamSlug: string, userId: string, rawRole
 export async function removeMember(teamSlug: string, userId: string): Promise<Ok | Denied> {
   const access = await teamForAction(teamSlug, { member: ['remove'] });
   if (denied(access)) return access;
+  if (!isUuid(userId)) return actionError('That person is not a member of this team.');
 
   const [member] = await db
     .select()

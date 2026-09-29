@@ -433,4 +433,8 @@ describe('getTestOverview', () => {
     expect(await getTestOverview(other.project.id, target.id, 30)).toBeNull();
     expect(await getTestOverview(tenant.project.id, '00000000-0000-4000-8000-000000000000', 30)).toBeNull();
   });
+
+  test('returns null for a test id that is not a uuid', async ({ tenant }) => {
+    expect(await getTestOverview(tenant.project.id, 'x', 30)).toBeNull();
+  });
 });

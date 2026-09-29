@@ -2,7 +2,7 @@ import { eq, sql, type SQL } from 'drizzle-orm';
 import { db } from '@/lib/db/drizzle';
 import { runs, testResults, tests } from '@/lib/db/schema';
 import { CHRONIC_FAILURE_RATE, CHRONIC_MIN_RUNS, CHRONIC_STREAK } from '@/lib/metrics/score';
-import { andAll, num, reliabilitySql, sinceDate } from './shared';
+import { andAll, isUuid, num, reliabilitySql, sinceDate } from './shared';
 import { testHistory, type HistoryRow } from './runs';
 
 /** Declared by the views that render them; see `@miguelfranken/ui/views/explorer`. */
@@ -169,6 +169,7 @@ export interface TestOverview {
 }
 
 export async function getTestOverview(projectId: string, testId: string, days: number): Promise<TestOverview | null> {
+  if (!isUuid(testId)) return null;
   const [test] = await db.select().from(tests).where(eq(tests.id, testId));
   if (!test || test.projectId !== projectId) return null;
   const since = sinceDate(days);
