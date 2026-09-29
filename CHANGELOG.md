@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.43](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.42...v0.0.43) (2026-09-29)
+
+### Features
+
+* browse the visual review by test case suite, on screens of the right shape ([#49](https://github.com/MiguelFranken/playwright-reporter/issues/49)) ([b30ed04](https://github.com/MiguelFranken/playwright-reporter/commit/b30ed04fa5d234c57be1f91da8c3d57768be72b1))
+
 ## [0.0.42](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.41...v0.0.42) (2026-09-29)
 
 ### Features
