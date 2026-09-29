@@ -51,6 +51,27 @@ export const ReadOnly: Story = {
   },
 };
 
+/** A new team: one call to action instead of an empty table. */
+export const Empty: Story = {
+  args: { projects: [] },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('No projects yet')).toBeVisible();
+    await expect(canvas.queryByRole('table')).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: 'New project' }));
+    await expect(args.onCreateOpenChange).toHaveBeenCalledWith(true);
+  },
+};
+
+export const EmptyReadOnly: Story = {
+  args: { projects: [], canCreate: false, canDelete: false },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText(/Ask a team admin/)).toBeVisible();
+    await expect(canvas.queryByRole('button')).toBeNull();
+  },
+};
+
 export const OneProject: Story = { args: { projects: TEAM_PROJECTS.slice(0, 1) } };
 
 /** The team page's create dialog prefixes the team's URL. */

@@ -1,9 +1,10 @@
 'use client';
 
-import { Plus, Trash2 } from 'lucide-react';
+import { FolderGit2, Plus, Trash2 } from 'lucide-react';
 import { Button } from '../../components/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/table';
 import { CreateWithSlugDialog } from '../../patterns/create-with-slug-dialog';
+import { EmptyState } from '../../patterns/empty-state';
 import { TypeToConfirmDialog } from '../../patterns/type-to-confirm-dialog';
 import { Link } from '../../provider';
 
@@ -45,56 +46,78 @@ export function TeamProjects({
 }: TeamProjectsProps) {
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">
-          {projects.length} {projects.length === 1 ? 'project' : 'projects'} in this team.
-        </p>
-        {canCreate ? (
-          <Button size="sm" onClick={() => onCreateOpenChange(true)}>
-            <Plus data-icon="inline-start" />
-            New project
-          </Button>
-        ) : null}
-      </div>
+      {projects.length === 0 ? (
+        <EmptyState
+          icon={FolderGit2}
+          title="No projects yet"
+          description={
+            canCreate
+              ? 'A project collects the runs of one Playwright test suite. Create one, then point the reporter at it.'
+              : 'A project collects the runs of one Playwright test suite. Ask a team admin to create one.'
+          }
+          className="py-10"
+        >
+          {canCreate ? (
+            <Button size="sm" onClick={() => onCreateOpenChange(true)}>
+              <Plus data-icon="inline-start" />
+              New project
+            </Button>
+          ) : null}
+        </EmptyState>
+      ) : (
+        <>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm text-muted-foreground">
+              {projects.length} {projects.length === 1 ? 'project' : 'projects'} in this team.
+            </p>
+            {canCreate ? (
+              <Button size="sm" onClick={() => onCreateOpenChange(true)}>
+                <Plus data-icon="inline-start" />
+                New project
+              </Button>
+            ) : null}
+          </div>
 
-      <div className="panel overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead>Name</TableHead>
-              <TableHead>Slug</TableHead>
-              <TableHead className="text-right">Runs</TableHead>
-              <TableHead>Created</TableHead>
-              {canDelete ? (
-                <TableHead className="w-10">
-                  <span className="sr-only">Actions</span>
-                </TableHead>
-              ) : null}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {projects.map((p) => (
-              <TableRow key={p.id}>
-                <TableCell className="font-medium">
-                  <Link href={projectHref(p)} className="hover:underline">
-                    {p.name}
-                  </Link>
-                </TableCell>
-                <TableCell className="text-code-s text-muted-foreground">{p.slug}</TableCell>
-                <TableCell className="text-right tabular-nums">{p.runCounter}</TableCell>
-                <TableCell className="text-muted-foreground tabular-nums">{p.createdAt}</TableCell>
-                {canDelete ? (
-                  <TableCell>
-                    <Button variant="ghost" size="icon-sm" aria-label={`Delete ${p.name}`} onClick={() => onDeleteRequest(p)}>
-                      <Trash2 className="size-3.5 text-destructive" />
-                    </Button>
-                  </TableCell>
-                ) : null}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+          <div className="panel overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Name</TableHead>
+                  <TableHead>Slug</TableHead>
+                  <TableHead className="text-right">Runs</TableHead>
+                  <TableHead>Created</TableHead>
+                  {canDelete ? (
+                    <TableHead className="w-10">
+                      <span className="sr-only">Actions</span>
+                    </TableHead>
+                  ) : null}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {projects.map((p) => (
+                  <TableRow key={p.id}>
+                    <TableCell className="font-medium">
+                      <Link href={projectHref(p)} className="hover:underline">
+                        {p.name}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-code-s text-muted-foreground">{p.slug}</TableCell>
+                    <TableCell className="text-right tabular-nums">{p.runCounter}</TableCell>
+                    <TableCell className="text-muted-foreground tabular-nums">{p.createdAt}</TableCell>
+                    {canDelete ? (
+                      <TableCell>
+                        <Button variant="ghost" size="icon-sm" aria-label={`Delete ${p.name}`} onClick={() => onDeleteRequest(p)}>
+                          <Trash2 className="size-3.5 text-destructive" />
+                        </Button>
+                      </TableCell>
+                    ) : null}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </>
+      )}
 
       <CreateWithSlugDialog
         open={createOpen}
