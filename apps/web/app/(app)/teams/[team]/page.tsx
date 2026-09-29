@@ -1,5 +1,5 @@
 import { FolderKanban, Plus } from 'lucide-react';
-import Link from 'next/link';
+import { PrefetchLink as Link } from '@/components/prefetch-link';
 import { Suspense } from 'react';
 import { EmptyState } from '@miguelfranken/ui/patterns/empty-state';
 import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
@@ -7,7 +7,7 @@ import { Button } from '@miguelfranken/ui/components/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@miguelfranken/ui/components/card';
 import { Skeleton } from '@miguelfranken/ui/components/skeleton';
 import { requireTeam } from '@/lib/auth/access';
-import { listTeamProjects } from '@/lib/db/queries/teams';
+import { listTeamProjects } from '@/lib/page-data';
 
 type Params = Promise<{ team: string }>;
 

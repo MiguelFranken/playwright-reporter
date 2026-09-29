@@ -9,10 +9,10 @@ import { LiveConnection, LiveStoreProvider } from '@/components/live/live-store'
 import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
 import { FilterSkeleton, TableRowsSkeleton } from '@miguelfranken/ui/patterns/skeletons';
 import { requireProject } from '@/lib/auth/access';
-import { listActiveRunsWithCursor, listBranches, listEnvironments, listPullRequests, listRuns } from '@/lib/db/queries/runs';
 import { parsePage, parseRange } from '@/lib/db/queries/shared';
 import { pullRequestRef } from '@miguelfranken/ui/lib/pull-request';
 import { toRunListItem } from '@/lib/view-models';
+import { listActiveRunsWithCursor, listBranches, listEnvironments, listPullRequests, listRuns } from '@/lib/page-data';
 
 type Params = Promise<{ team: string; project: string }>;
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;

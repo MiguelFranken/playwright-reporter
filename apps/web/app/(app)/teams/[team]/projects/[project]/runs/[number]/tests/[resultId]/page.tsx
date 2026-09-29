@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, History } from 'lucide-react';
-import Link from 'next/link';
+import { PrefetchLink as Link } from '@/components/prefetch-link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { BackLink } from '@miguelfranken/ui/patterns/back-link';
@@ -16,12 +16,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@miguelfranken/ui/comp
 import { Skeleton } from '@miguelfranken/ui/components/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@miguelfranken/ui/components/table';
 import { requireProject } from '@/lib/auth/access';
-import { getResultDetail, testHistory } from '@/lib/db/queries/runs';
 import { formatDateTime, formatDuration, formatRelative } from '@miguelfranken/ui/lib/format';
 import { projectHrefs } from '@/lib/view-models';
 import { baseUrl, getStorage } from '@/lib/storage';
 import { expiresAt, getRetentionPolicy } from '@/lib/storage/retention';
 import { traceViewerUrl } from '@/lib/trace-viewer/url';
+import { getResultDetail, testHistory } from '@/lib/page-data';
 
 type Props = { params: Promise<{ team: string; project: string; number: string; resultId: string }> };
 

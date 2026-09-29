@@ -5,9 +5,9 @@ import { RangeToggle, UrlSearch } from '@/components/filters/url-filters';
 import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
 import { TableRowsSkeleton } from '@miguelfranken/ui/patterns/skeletons';
 import { requireProject } from '@/lib/auth/access';
-import { pullRequestList } from '@/lib/db/queries/pull-requests';
 import { parsePage, parseRange } from '@/lib/db/queries/shared';
 import { projectHrefs } from '@/lib/view-models';
+import { pullRequestList, renderedAt } from '@/lib/page-data';
 
 type Params = Promise<{ team: string; project: string }>;
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -42,12 +42,13 @@ async function Results({ params, searchParams }: Props) {
   const { project } = await requireProject(team, projectSlug);
   const base = `/teams/${team}/projects/${project.slug}`;
   const q = first(sp.q);
-  const result = await pullRequestList(project.id, parseRange(first(sp.range)), { q, page: parsePage(first(sp.page)) });
+  const [result, now] = await Promise.all([pullRequestList(project.id, parseRange(first(sp.range)), { q, page: parsePage(first(sp.page)) }), renderedAt()]);
   return (
     <>
       <PullRequestsTable
         hrefs={projectHrefs(base)}
         rows={result.rows}
+        now={now}
         emptyTitle={q ? 'No pull requests match this search' : 'No pull requests in this range'}
         emptyDescription={
           q ? (

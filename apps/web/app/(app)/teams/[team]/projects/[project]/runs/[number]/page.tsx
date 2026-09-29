@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { connection } from 'next/server';
 import { cache, Suspense } from 'react';
 import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
 import { RunHeaderSkeleton } from '@miguelfranken/ui/views/run/run-header';
@@ -13,15 +14,10 @@ import { LiveStoreProvider } from '@/components/live/live-store';
 import { requireProject } from '@/lib/auth/access';
 import { baseUrl } from '@/lib/auth/config';
 import { branchHref, projectHrefs, pullRequestHref, toRunHeaderData } from '@/lib/view-models';
-import {
-  getRunByNumber,
-  listRunErrorGroupsWithCursor,
-  listRunResults,
-  listRunResultsWithCursor,
-  listRunSpecsWithCursor,
-} from '@/lib/db/queries/runs';
+import { listRunErrorGroupsWithCursor, listRunResults, listRunResultsWithCursor, listRunSpecsWithCursor } from '@/lib/db/queries/runs';
 import { makeServerQueryClient } from '@/lib/rpc/prefetch';
 import { runErrorsQuery, runRowsQuery, runSpecsQuery } from '@/lib/rpc/queries';
+import { getRunByNumber } from '@/lib/page-data';
 
 type Params = Promise<{ team: string; project: string; number: string }>;
 type SearchParams = Promise<{
@@ -111,6 +107,12 @@ const HEAD_OUTCOMES = new Set(['failed', 'flaky']);
  * (a passed outcome, a title search) waits for all rows.
  */
 async function Body({ params, searchParams }: Props) {
+  // The tabs' queries are the heaviest reads in the app and are started below
+  // without being awaited. A per-link prefetch renders only as far as the
+  // header (private-cached, `lib/page-data.ts`); this keeps it from also
+  // starting — and then discarding — the tab queries. The body streams after
+  // the click, behind its skeleton.
+  await connection();
   const sp = await searchParams;
   const tab = parseRunTab(sp.tab);
   const { run: found, base, runRef } = await run(params);

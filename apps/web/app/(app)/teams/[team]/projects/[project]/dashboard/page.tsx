@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { PrefetchLink as Link } from '@/components/prefetch-link';
 import { Activity, ArrowRight, Clock, FlaskConical, Gauge, GitBranch, ListChecks, Repeat, TrendingUp } from 'lucide-react';
 import { Suspense } from 'react';
 import { BranchSummaryTable } from '@miguelfranken/ui/views/dashboard/branch-summary-table';
@@ -13,11 +13,11 @@ import { Button } from '@miguelfranken/ui/components/button';
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@miguelfranken/ui/components/card';
 import { requireProject } from '@/lib/auth/access';
 import { projectHrefs } from '@/lib/view-models';
-import { branchSummary, chronicFailures, dashboardStats, mostFlakyTests, passFailTrend } from '@/lib/db/queries/dashboard';
 import { parseRange } from '@/lib/db/queries/shared';
 import { formatDuration, formatNumber, formatPercent } from '@miguelfranken/ui/lib/format';
 import { reliabilityLabel } from '@/lib/metrics/score';
 import { cn } from '@miguelfranken/ui/lib/cn';
+import { branchSummary, chronicFailures, dashboardStats, mostFlakyTests, passFailTrend, renderedAt } from '@/lib/page-data';
 
 type Params = Promise<{ team: string; project: string }>;
 type SearchParams = Promise<{ range?: string }>;
@@ -156,7 +156,8 @@ async function Trend({ params }: { params: Params }) {
 
 async function Branches(props: Props) {
   const { project, days, base } = await scope(props);
-  return <BranchSummaryTable hrefs={projectHrefs(base)} rows={await branchSummary(project.id, days)} />;
+  const [rows, now] = await Promise.all([branchSummary(project.id, days), renderedAt()]);
+  return <BranchSummaryTable hrefs={projectHrefs(base)} rows={rows} now={now} />;
 }
 
 async function AllBranchesLink(props: Props) {
