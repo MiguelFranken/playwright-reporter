@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.50](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.49...v0.0.50) (2026-09-29)
+
+### Bug Fixes
+
+* **retention:** continue a sweep that ran out of time in a fresh request ([#60](https://github.com/MiguelFranken/playwright-reporter/issues/60)) ([ac8b517](https://github.com/MiguelFranken/playwright-reporter/commit/ac8b517ba27501b3f0d7370ae5b6405dc0412a6f))
+
 ## [0.0.49](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.48...v0.0.49) (2026-09-29)
 
 ### Features
