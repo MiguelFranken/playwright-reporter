@@ -11,21 +11,43 @@ import {
 } from '@miguelfranken/ui/views/shell/app-sidebar';
 import { authClient } from '@/lib/auth/client';
 import { displayableAvatar } from '@/lib/avatars';
-import type { SidebarTeam, SidebarUser } from '@/components/nav-model';
+import { useLastWorkspace, type SidebarTeam, type SidebarUser, type Workspace } from '@/components/nav-model';
 
 export { AppSidebar, SidebarNavSkeleton, TeamSwitcherSkeleton, UserMenuSkeleton } from '@miguelfranken/ui/views/shell/app-sidebar';
-export type { SidebarProject, SidebarTeam, SidebarUser } from '@/components/nav-model';
+export type { SidebarProject, SidebarTeam, SidebarUser, Workspace } from '@/components/nav-model';
 
 /**
- * The connected halves of the sidebar: they read the URL, vet avatar URLs and
- * sign out through the auth client; the design system renders the rest.
+ * The connected halves of the sidebar: they read the URL, remember the last
+ * team and project, vet avatar URLs and sign out through the auth client; the
+ * design system renders the rest.
  */
-export function SidebarNav({ teams, isSuperadmin }: { teams: SidebarTeam[]; isSuperadmin: boolean }) {
-  return <SidebarNavView teams={teams} isSuperadmin={isSuperadmin} pathname={usePathname()} />;
+export function SidebarNav({
+  teams,
+  isSuperadmin,
+  lastWorkspace,
+}: {
+  teams: SidebarTeam[];
+  isSuperadmin: boolean;
+  lastWorkspace: Workspace | null;
+}) {
+  return (
+    <SidebarNavView
+      teams={teams}
+      isSuperadmin={isSuperadmin}
+      pathname={usePathname()}
+      lastWorkspace={useLastWorkspace(lastWorkspace)}
+    />
+  );
 }
 
-export function TeamSwitcher({ teams }: { teams: SidebarTeam[] }) {
-  return <TeamSwitcherView teams={teams.map((t) => ({ ...t, image: displayableAvatar(t.image) }))} pathname={usePathname()} />;
+export function TeamSwitcher({ teams, lastWorkspace }: { teams: SidebarTeam[]; lastWorkspace: Workspace | null }) {
+  return (
+    <TeamSwitcherView
+      teams={teams.map((t) => ({ ...t, image: displayableAvatar(t.image) }))}
+      pathname={usePathname()}
+      lastWorkspace={useLastWorkspace(lastWorkspace)}
+    />
+  );
 }
 
 export function UserMenu({ user }: { user: SidebarUser }) {

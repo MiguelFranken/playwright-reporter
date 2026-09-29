@@ -1,4 +1,5 @@
 import 'server-only';
+import { cookies } from 'next/headers';
 import { cache } from 'react';
 import { Suspense } from 'react';
 import { AppBreadcrumbs, BreadcrumbsSkeleton } from '@/components/app-breadcrumbs';
@@ -16,6 +17,8 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from '@miguelfranken/ui
 import { TooltipProvider } from '@miguelfranken/ui/components/tooltip';
 import { requireUser } from '@/lib/auth/access';
 import { roleCan } from '@/lib/auth/permissions';
+import { parseWorkspace } from '@miguelfranken/ui/lib/nav';
+import { WORKSPACE_COOKIE } from '@/lib/workspace-cookie';
 import { listAllTeams, listMyTeams, listProjectsForTeams } from '@/lib/db/queries/teams';
 
 /**
@@ -27,6 +30,11 @@ import { listAllTeams, listMyTeams, listProjectsForTeams } from '@/lib/db/querie
  * re-runs it; the nav and the breadcrumbs pick the active team out of this set
  * on the client, from `usePathname()`. That is what makes switching teams,
  * projects and sections instant instead of re-streaming the sidebar.
+ *
+ * Off team routes there is no slug in the URL, so the nav and the switcher keep
+ * the team and project last visited: tracked on the client while the shell is
+ * mounted, and seeded from a cookie (`lib/workspace-cookie.ts`) for a page
+ * loaded directly — so opening `/admin` never switches you to another team.
  *
  * Both queries are indexed lookups over a handful of rows — a self-hosted
  * instance has tens of teams, not thousands — so loading all of them beats a
@@ -56,7 +64,9 @@ const shellData = cache(async () => {
     projects: projects.filter((p) => p.teamId === t.id).map((p) => ({ slug: p.slug, name: p.name })),
   }));
 
-  return { user, teams };
+  const lastWorkspace = parseWorkspace((await cookies()).get(WORKSPACE_COOKIE)?.value);
+
+  return { user, teams, lastWorkspace };
 });
 
 /**
@@ -103,13 +113,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 }
 
 async function SwitcherSlot() {
-  const { teams } = await shellData();
-  return <TeamSwitcher teams={teams} />;
+  const { teams, lastWorkspace } = await shellData();
+  return <TeamSwitcher teams={teams} lastWorkspace={lastWorkspace} />;
 }
 
 async function NavSlot() {
-  const { teams, user } = await shellData();
-  return <SidebarNav teams={teams} isSuperadmin={user.isSuperadmin} />;
+  const { teams, user, lastWorkspace } = await shellData();
+  return <SidebarNav teams={teams} isSuperadmin={user.isSuperadmin} lastWorkspace={lastWorkspace} />;
 }
 
 async function AccountSlot() {

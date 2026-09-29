@@ -33,12 +33,12 @@ import {
 } from '../../components/sidebar';
 import { Skeleton } from '../../components/skeleton';
 import { cn } from '../../lib/cn';
-import { activeTeam, isActivePath, type SidebarTeam, type SidebarUser } from '../../lib/nav';
+import { activeTeam, currentWorkspace, isActivePath, workspaceFromPath, type SidebarTeam, type SidebarUser, type Workspace } from '../../lib/nav';
 import { ProfileAvatar } from '../../patterns/profile-avatar';
 import { ThemeMenuItem } from '../../patterns/theme-toggle';
 import { Link } from '../../provider';
 
-export type { SidebarProject, SidebarTeam, SidebarUser } from '../../lib/nav';
+export type { SidebarProject, SidebarTeam, SidebarUser, Workspace } from '../../lib/nav';
 
 /**
  * The sidebar frame. Everything here is static chrome, so it paints with the
@@ -103,10 +103,27 @@ const ADMIN_NAV: NavItem[] = [
  * One navigation tree for the whole product: projects, workspace and — for a
  * superadmin — the instance section, all as sibling groups. Administration
  * expands in place like a project rather than swapping the sidebar out.
+ *
+ * `lastWorkspace` is the team and project last visited. Off team routes
+ * (administration, account) the tree keeps showing them — the team's projects,
+ * the project still expanded — so a trip to administration leaves you where
+ * you were.
  */
-export function SidebarNav({ teams, isSuperadmin, pathname }: { teams: SidebarTeam[]; isSuperadmin: boolean; pathname: string }) {
-  const team = activeTeam(pathname, teams);
+export function SidebarNav({
+  teams,
+  isSuperadmin,
+  pathname,
+  lastWorkspace = null,
+}: {
+  teams: SidebarTeam[];
+  isSuperadmin: boolean;
+  pathname: string;
+  lastWorkspace?: Workspace | null;
+}) {
+  const team = activeTeam(pathname, teams, lastWorkspace);
   const teamBase = team ? `/teams/${team.slug}` : null;
+  const kept = workspaceFromPath(pathname) ? null : currentWorkspace(pathname, lastWorkspace);
+  const keptProject = kept && kept.team === team?.slug ? kept.project : undefined;
 
   return (
     <>
@@ -125,6 +142,7 @@ export function SidebarNav({ teams, isSuperadmin, pathname }: { teams: SidebarTe
                     title={p.name}
                     href={`${base}/dashboard`}
                     section={base}
+                    kept={p.slug === keptProject}
                     items={PROJECT_NAV.map((i) => ({ title: i.title, icon: i.icon, href: `${base}/${i.segment}` }))}
                   />
                 );
@@ -171,9 +189,10 @@ export function SidebarNav({ teams, isSuperadmin, pathname }: { teams: SidebarTe
 /**
  * A top-level entry that owns a sub-menu — a project, or Administration.
  *
- * The section it points at is open whenever the URL is inside it, and the
- * chevron toggles it by hand; a navigation into or out of the section wins over
- * a manual toggle, so the tree always reflects where you are.
+ * The section it points at is open whenever the URL is inside it — or it is
+ * `kept`, the project you left for a page outside any team — and the chevron
+ * toggles it by hand; a navigation into or out of the section wins over a
+ * manual toggle, so the tree always reflects where you are.
  */
 function NavSection({
   pathname,
@@ -181,6 +200,7 @@ function NavSection({
   title,
   href,
   section,
+  kept = false,
   items,
 }: {
   pathname: string;
@@ -188,16 +208,18 @@ function NavSection({
   title: string;
   href: string;
   section: string;
+  kept?: boolean;
   items: NavItem[];
 }) {
   const closeOnMobile = useCloseOnMobile();
   const inSection = isActivePath(pathname, section);
+  const expanded = inSection || kept;
 
-  const [open, setOpen] = useState(inSection);
-  const [lastInSection, setLastInSection] = useState(inSection);
-  if (lastInSection !== inSection) {
-    setLastInSection(inSection);
-    setOpen(inSection);
+  const [open, setOpen] = useState(expanded);
+  const [lastExpanded, setLastExpanded] = useState(expanded);
+  if (lastExpanded !== expanded) {
+    setLastExpanded(expanded);
+    setOpen(expanded);
   }
 
   const activeItem = items.find((i) => isActivePath(pathname, i.href, i.exact));
@@ -315,9 +337,17 @@ function BrandMark() {
   );
 }
 
-/** Team images arrive vetted by the host. */
-export function TeamSwitcher({ teams, pathname }: { teams: SidebarTeam[]; pathname: string }) {
-  const team = activeTeam(pathname, teams);
+/** Team images arrive vetted by the host. Off team routes it shows `lastWorkspace`'s team, as the nav does. */
+export function TeamSwitcher({
+  teams,
+  pathname,
+  lastWorkspace = null,
+}: {
+  teams: SidebarTeam[];
+  pathname: string;
+  lastWorkspace?: Workspace | null;
+}) {
+  const team = activeTeam(pathname, teams, lastWorkspace);
   const label = (
     <>
       {team?.image ? <ProfileAvatar name={team.name} image={team.image} shape="square" /> : <BrandMark />}

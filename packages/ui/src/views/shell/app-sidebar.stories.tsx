@@ -3,22 +3,32 @@ import { expect, fn, userEvent, within } from 'storybook/test';
 import { SidebarInset, SidebarProvider } from '../../components/sidebar';
 import { TooltipProvider } from '../../components/tooltip';
 import { SIDEBAR_TEAMS, SIDEBAR_USER } from '../../fixtures/teams';
-import { AppSidebar, SidebarNav, SidebarNavSkeleton, TeamSwitcher, TeamSwitcherSkeleton, UserMenu, UserMenuSkeleton } from './app-sidebar';
+import {
+  AppSidebar,
+  SidebarNav,
+  SidebarNavSkeleton,
+  TeamSwitcher,
+  TeamSwitcherSkeleton,
+  UserMenu,
+  UserMenuSkeleton,
+  type Workspace,
+} from './app-sidebar';
 
 interface ShellArgs {
   pathname: string;
+  lastWorkspace?: Workspace | null;
   isSuperadmin: boolean;
   teams: typeof SIDEBAR_TEAMS;
   onSignOut: () => void;
 }
 
-function Shell({ pathname, isSuperadmin, teams, onSignOut }: ShellArgs) {
+function Shell({ pathname, lastWorkspace, isSuperadmin, teams, onSignOut }: ShellArgs) {
   return (
     <TooltipProvider>
       <SidebarProvider>
         <AppSidebar
-          switcher={<TeamSwitcher teams={teams} pathname={pathname} />}
-          nav={<SidebarNav teams={teams} isSuperadmin={isSuperadmin} pathname={pathname} />}
+          switcher={<TeamSwitcher teams={teams} pathname={pathname} lastWorkspace={lastWorkspace} />}
+          nav={<SidebarNav teams={teams} isSuperadmin={isSuperadmin} pathname={pathname} lastWorkspace={lastWorkspace} />}
           account={<UserMenu user={{ ...SIDEBAR_USER, isSuperadmin }} onSignOut={onSignOut} />}
         />
         <SidebarInset>
@@ -55,6 +65,22 @@ export const InAdministration: Story = {
   args: { pathname: '/admin/users' },
   play: async ({ canvasElement }) => {
     await expect(within(canvasElement).getByRole('link', { name: 'Users' })).toHaveAttribute('data-active');
+  },
+};
+
+/**
+ * Opened from a project of the second team: the switcher, the team's projects
+ * and the open project stay as they were, and only Users is marked.
+ */
+export const InAdministrationFromAProject: Story = {
+  args: { pathname: '/admin/users', lastWorkspace: { team: 'platform', project: 'api' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('button', { name: /Platform/ })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'Collapse API' })).toBeVisible();
+    await expect(canvas.getByRole('link', { name: 'API' })).not.toHaveAttribute('data-active');
+    await expect(canvas.getByRole('link', { name: 'Users' })).toHaveAttribute('data-active');
+    await expect(canvas.queryByText('Web shop')).toBeNull();
   },
 };
 
