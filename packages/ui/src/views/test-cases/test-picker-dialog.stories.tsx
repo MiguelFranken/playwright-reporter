@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { NOW } from '../../fixtures/now';
+import { organizePrompt } from '../../lib/ai-handoff';
 import { automatedTests, suiteOptions } from '../../fixtures/test-cases';
 import { TestPickerDialog } from './test-picker-dialog';
 
@@ -46,6 +47,35 @@ export const Adopt: Story = {
     await userEvent.click(d.getByRole('checkbox', { name: 'Select every test shown' }));
     await userEvent.click(d.getByRole('button', { name: 'Adopt 2 tests' }));
     await expect(args.onConfirm).toHaveBeenCalledWith({ testIds: ['a1', 'a2'], placement: { mode: 'mirror' } });
+  },
+};
+
+/** Adopting offers to hand the sorting into existing or new suites to the user's AI assistant, through the MCP server. */
+export const AdoptWithAi: Story = {
+  args: {
+    mode: 'adopt',
+    title: 'Adopt Playwright tests',
+    description: 'Each test becomes a case, already linked.',
+    suites: suiteOptions,
+    aiPrompt: organizePrompt({ casesUrl: 'https://reporter.acme.test/teams/acme/projects/web/cases' }),
+  },
+  play: async () => {
+    const d = within(await within(document.body).findByRole('dialog'));
+    await userEvent.click(d.getByRole('button', { name: 'Organize with AI' }));
+    // The popup animates in, so wait for it rather than asserting mid-transition.
+    const body = within(document.body);
+    const copy = await body.findByRole('menuitem', { name: 'Copy prompt' });
+    await waitFor(() => expect(copy).toBeVisible());
+    await expect(body.getByRole('menuitem', { name: 'Open in Claude Code' })).toHaveAttribute('href', expect.stringContaining('list_uncovered_tests'));
+  },
+};
+
+/** Linking never offers it: there is nothing to sort. */
+export const LinkWithoutAi: Story = {
+  args: { aiPrompt: 'unused' },
+  play: async () => {
+    const d = within(await within(document.body).findByRole('dialog'));
+    await expect(d.queryByRole('button', { name: 'Organize with AI' })).toBeNull();
   },
 };
 

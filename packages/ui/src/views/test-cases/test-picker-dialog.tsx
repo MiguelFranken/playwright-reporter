@@ -6,6 +6,7 @@ import { Button } from '../../components/button';
 import { Checkbox } from '../../components/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../components/dialog';
 import { Skeleton } from '../../components/skeleton';
+import { DebugWithAiMenu } from '../../patterns/debug-with-ai-menu';
 import { SearchField } from '../../patterns/filter-controls';
 import { StatusIcon } from '../../patterns/status-badge';
 import { formatNumber, formatRelative } from '../../lib/format';
@@ -36,6 +37,10 @@ export interface TestPickerDialogProps {
   onConfirm: (result: TestPickerResult) => void;
   pending?: boolean;
   now?: Date;
+  /** Adopting: a prompt from `organizePrompt`, offered to hand the sorting to the user's AI assistant. */
+  aiPrompt?: string;
+  /** With `aiPrompt`: the page that explains how to connect an assistant. */
+  aiSetupHref?: string;
 }
 
 const MIRROR = '__mirror__';
@@ -61,6 +66,8 @@ export function TestPickerDialog({
   onConfirm,
   pending = false,
   now,
+  aiPrompt,
+  aiSetupHref = '/account/ai',
 }: TestPickerDialogProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [placement, setPlacement] = useState(MIRROR);
@@ -170,6 +177,11 @@ export function TestPickerDialog({
         </div>
 
         <DialogFooter>
+          {mode === 'adopt' && aiPrompt ? (
+            <div className="flex flex-col sm:mr-auto">
+              <DebugWithAiMenu prompt={aiPrompt} setupHref={aiSetupHref} label="Organize with AI" />
+            </div>
+          ) : null}
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={pending}>
             Cancel
           </Button>

@@ -18,6 +18,7 @@ export function ConnectedTestPicker({
   suites,
   onConfirm,
   pending,
+  aiPrompt,
 }: {
   projectRef: ProjectRef;
   open: boolean;
@@ -28,6 +29,7 @@ export function ConnectedTestPicker({
   suites?: SuiteOption[];
   onConfirm: (result: TestPickerResult) => void;
   pending: boolean;
+  aiPrompt?: string;
 }) {
   const [query, setQuery] = useState('');
   const tests = useQuery({ ...automatedTestsQuery(projectRef, query, mode === 'adopt'), enabled: open });
@@ -47,6 +49,7 @@ export function ConnectedTestPicker({
       suites={suites}
       onConfirm={onConfirm}
       pending={pending}
+      aiPrompt={aiPrompt}
     />
   );
 }

@@ -32,6 +32,24 @@ export function triagePrompt({ runUrl }: { runUrl: string }): string {
 }
 
 /**
+ * A prompt that asks the assistant to sort the Playwright tests no test case
+ * covers yet into existing or new cases and suites. Scoped by the project's
+ * test case library URL; it needs a token that may edit test cases.
+ */
+export function organizePrompt({ casesUrl }: { casesUrl: string }): string {
+  return (
+    `Use the ${MCP_SERVER_NAME} MCP server to organize the Playwright tests that no test case covers yet in this project: ${casesUrl}\n\n` +
+    'Call list_uncovered_tests (follow nextCursor to the end), list_test_suites and list_test_cases. For each test decide: ' +
+    'if it automates an existing case, link its testIds to that case with link_test_case instead of creating a duplicate; ' +
+    'otherwise it becomes a new case in the existing suite that matches its product feature, or in a new suite, nested where it belongs, ' +
+    'when nothing fits and the feature is clearly distinct. Give each new case a title that says what it verifies, in the style of the existing cases.\n\n' +
+    'Show me the plan as a table (test → existing case, or new case title and suite) and wait for my go. ' +
+    'Then apply it with one adopt_tests call using "placements" (one per test, with all of its testIds, its suite and its title) ' +
+    'and the link_test_case calls, remove suites left empty with delete_test_suite allEmpty, and give me the links to the new cases.'
+  );
+}
+
+/**
  * Opens a new Claude Code terminal session with the prompt pre-filled; the user still presses Enter.
  *
  * verify: Claude Code documents `claude-cli://open?q=…` (v2.1.91+, `q` up to 5,000 characters,

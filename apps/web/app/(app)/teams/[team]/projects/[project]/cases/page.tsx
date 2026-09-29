@@ -4,6 +4,7 @@ import { EmptyState } from '@miguelfranken/ui/patterns/empty-state';
 import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
 import { Skeleton } from '@miguelfranken/ui/components/skeleton';
 import { FilterSkeleton, MetricCardsSkeleton, TableRowsSkeleton } from '@miguelfranken/ui/patterns/skeletons';
+import { organizePrompt } from '@miguelfranken/ui/lib/ai-handoff';
 import { flattenSuites, type SuiteNode } from '@miguelfranken/ui/lib/test-case-models';
 import {
   CASE_AUTOMATION_LABELS,
@@ -24,6 +25,7 @@ import { CaseList } from '@/components/test-cases/case-list';
 import { LibraryActions } from '@/components/test-cases/library-actions';
 import { SuiteSidebar } from '@/components/test-cases/suite-sidebar';
 import { requireProject } from '@/lib/auth/access';
+import { baseUrl } from '@/lib/auth/config';
 import { getCoverage, getSuiteTree, listCases, listCaseTags, renderedAt } from '@/lib/page-data';
 import { listQuery, parseCaseFilters } from '@/lib/test-cases/filters';
 
@@ -96,6 +98,7 @@ async function HeaderActions({ params, searchParams }: Props) {
       startAdopting={first(sp.adopt) === '1'}
       newCaseHref={`${base}/cases/new${suite && suite !== 'unassigned' ? `?suite=${suite}` : ''}`}
       exportHref={`${base}/cases/export${suite ? `?suite=${suite}` : ''}`}
+      aiPrompt={organizePrompt({ casesUrl: `${baseUrl()}${base}/cases` })}
     />
   );
 }
