@@ -30,6 +30,7 @@ also accepts `project`, `format` (`markdown` | `json`) and `maxChars`. See the R
 | [`create_test_case`](#create_test_case) | write | Create a manual or automated test case with steps, in a suite (its path is created if missing). |
 | [`update_test_case`](#update_test_case) | write | Change fields of a test case: title, steps, status, priority, suite, tags and the rest. |
 | [`create_test_suite`](#create_test_suite) | write | Create a suite, optionally under a parent suite, to group test cases the way the product is built. |
+| [`delete_test_suite`](#delete_test_suite) | write | Delete suites that hold no test cases, e.g. |
 | [`link_test_case`](#link_test_case) | write | Link Playwright tests (by test id from find_tests) to a test case, or unlink them. |
 | [`adopt_tests`](#adopt_tests) | write | Turn Playwright tests into test cases that are already linked to them: title from the test, steps from its test.step() calls, suites from its file and describe blocks. |
 
@@ -489,6 +490,22 @@ Create a suite, optionally under a parent suite, to group test cases the way the
 | `description` | string |  |  |
 
 Structured output fields: `id`, `path`, `message`, `truncated`.
+
+## delete_test_suite
+
+**Delete empty test suites** · toolset `write` · **writes**
+
+Delete suites that hold no test cases, e.g. the ones left empty after moving cases elsewhere: the named suites, or every empty suite with allEmpty. Never deletes a case; a suite that still holds cases is refused.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+| `suites` | string[] |  | Suites to delete (id or path), with the suites below them. Refused if any of them still holds cases. |
+| `allEmpty` | boolean |  | Instead: delete every suite that holds no cases, itself or below it. |
+
+Structured output fields: `deleted`, `message`, `truncated`.
 
 ## link_test_case
 

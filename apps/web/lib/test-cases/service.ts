@@ -184,6 +184,42 @@ export async function deleteSuite(ctx: CaseContext, id: string): Promise<{ cases
   return { cases: result.cases };
 }
 
+/**
+ * Deletes suites that hold no cases, neither themselves nor below them: the
+ * given ones (refusing any that still hold cases), or with no ids every empty
+ * suite in the project. Never deletes a case. Answers the deleted suites, parents before children.
+ */
+export async function deleteEmptySuites(ctx: CaseContext, ids?: readonly string[]): Promise<TestSuite[]> {
+  const deleted = await db.transaction(async (tx) => {
+    if (ids) for (const id of ids) await requireSuite(tx, ctx.projectId, id);
+    const suites = await suitesOf(tx, ctx.projectId);
+    const counts = await tx
+      .select({ suiteId: testCases.suiteId, n: sql<number>`count(*)::int` })
+      .from(testCases)
+      .where(eq(testCases.projectId, ctx.projectId))
+      .groupBy(testCases.suiteId);
+    const own = new Map(counts.map((c) => [c.suiteId, c.n]));
+    const holds = (id: string) => subtree(suites, id).reduce((sum, s) => sum + (own.get(s) ?? 0), 0);
+    let targets: string[];
+    if (ids) {
+      const full = ids.find((id) => holds(id) > 0);
+      if (full) {
+        const name = suites.find((s) => s.id === full)!.name;
+        throw new CaseError(`Suite "${name}" still holds ${holds(full)} cases. Move them to another suite first.`);
+      }
+      targets = [...new Set(ids.flatMap((id) => subtree(suites, id)))];
+    } else {
+      targets = suites.filter((s) => holds(s.id) === 0).map((s) => s.id);
+    }
+    if (targets.length === 0) return [];
+    const rows = await tx.delete(testSuites).where(and(eq(testSuites.projectId, ctx.projectId), inArray(testSuites.id, targets))).returning();
+    const order = new Map(suites.map((s) => [s.id, depthOf(suites, s.id)]));
+    return rows.sort((a, b) => order.get(a.id)! - order.get(b.id)! || a.name.localeCompare(b.name));
+  });
+  for (const s of deleted) await record(ctx, 'test-suite.delete', { suiteId: s.id, name: s.name, cases: 0 });
+  return deleted;
+}
+
 function subtree(suites: readonly TestSuite[], id: string): string[] {
   const out = [id];
   for (let i = 0; i < out.length; i++) for (const s of suites) if (s.parentId === out[i]) out.push(s.id);

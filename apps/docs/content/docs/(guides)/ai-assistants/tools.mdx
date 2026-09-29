@@ -10,7 +10,7 @@ generated from the code: [`docs/mcp-tools.md`](https://github.com/MiguelFranken/
 | --- | --- |
 | `core` | `whoami`, `list_filters`, `list_runs`, `get_run`, `list_run_results`, `get_result`, `find_tests`, `get_test_history`, `project_health`, `list_test_cases`, `get_test_case`, `list_test_suites` |
 | `debug` | `get_failure_context` (start here for a failing test), `check_flakiness`, `summarize_failures`, `compare_runs`, `verify_fix`, `get_artifact`, `get_rerun_command` |
-| `write` | `create_test_case`, `update_test_case`, `create_test_suite`, `link_test_case`, `adopt_tests` |
+| `write` | `create_test_case`, `update_test_case`, `create_test_suite`, `delete_test_suite`, `link_test_case`, `adopt_tests` |
 
 `core` and `debug` only read. The `write` toolset edits [test cases](/docs/using/test-cases) and is offered only to a
 personal access token created with **Read, and edit test cases**; your role in the team still decides what a call may
