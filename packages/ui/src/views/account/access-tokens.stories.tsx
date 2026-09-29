@@ -152,8 +152,12 @@ export const CreateDialogSuperadmin: DialogStory = {
     await userEvent.click(await body.findByRole('option', { name: 'Every team (superadmin)' }));
     await userEvent.click(within(dialog).getByRole('combobox', { name: 'Expires after' }));
     await userEvent.click(await body.findByRole('option', { name: '30 days' }));
+    // Read-only unless asked; the hint says what the choice allows.
+    await userEvent.click(within(dialog).getByRole('combobox', { name: 'Permissions' }));
+    await userEvent.click(await body.findByRole('option', { name: 'Read, and edit test cases' }));
+    await expect(within(dialog).getByText(/can also create and edit test cases/)).toBeVisible();
     await userEvent.click(within(dialog).getByRole('button', { name: 'Generate' }));
-    await expect(args.onSubmit).toHaveBeenCalledWith({ name: 'Release bot', expiresInDays: 30, scope: 'superadmin' });
+    await expect(args.onSubmit).toHaveBeenCalledWith({ name: 'Release bot', expiresInDays: 30, scope: 'superadmin', write: true });
   },
 };
 

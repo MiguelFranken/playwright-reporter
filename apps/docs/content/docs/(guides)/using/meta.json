@@ -5,6 +5,7 @@
   "pages": [
     "runs",
     "tests",
+    "test-cases",
     "branches-and-pull-requests",
     "account"
   ]
