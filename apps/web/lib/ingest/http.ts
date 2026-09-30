@@ -1,6 +1,7 @@
 import { gunzipSync } from 'node:zlib';
 import { and, eq, isNull } from 'drizzle-orm';
 import { PROTOCOL_HEADER, PROTOCOL_VERSION } from '@miguelfranken/protocol';
+import { after } from 'next/server';
 import type { z } from 'zod';
 import { db } from '@/lib/db/drizzle';
 import { apiTokens, attachments, projects, runs, teams, type Attachment, type Project, type Run } from '@/lib/db/schema';
@@ -50,8 +51,14 @@ const tokenColumns = { project: projects, teamSlug: teams.slug, tokenId: apiToke
 
 function tokenProject(row: { project: Project; teamSlug: string; tokenId: string } | undefined): TokenProject {
   if (!row) throw new IngestError(401, 'invalid token');
-  // Fire-and-forget usage bookkeeping.
-  void db.update(apiTokens).set({ lastUsedAt: new Date() }).where(eq(apiTokens.id, row.tokenId)).catch(() => undefined);
+  // Usage bookkeeping after the response, so it neither delays the call nor is dropped when the function suspends.
+  const touch = () => db.update(apiTokens).set({ lastUsedAt: new Date() }).where(eq(apiTokens.id, row.tokenId)).catch(() => undefined);
+  try {
+    after(touch);
+  } catch {
+    // Outside a request scope (tests, scripts) there is no `after`.
+    void touch();
+  }
   return { ...row.project, teamSlug: row.teamSlug };
 }
 

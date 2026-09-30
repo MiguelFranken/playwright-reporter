@@ -15,6 +15,8 @@ describe('proxy matcher', () => {
     '/api/auth/get-session',
     '/_next/static/chunks/app.js',
     '/_next/image',
+    '/_vercel/speed-insights/script.js',
+    '/_vercel/speed-insights/vitals',
     '/.well-known/workflow/v1/flow',
     '/.well-known/oauth-protected-resource',
     '/.well-known/oauth-authorization-server/api/auth',

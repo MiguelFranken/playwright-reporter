@@ -551,16 +551,20 @@ export async function storeUpload(attachment: Attachment, body: ReadableStream<U
 /**
  * The reporter's word that a presigned upload landed. The store is asked
  * rather than believed: the size comes from the stored object, and a missing
- * one stays pending.
+ * one stays pending. Returns how long each round trip took, for the route's
+ * timing.
  */
-export async function completeUpload(attachment: Attachment, size?: number) {
+export async function completeUpload(attachment: Attachment, size?: number): Promise<{ headMs: number; updateMs: number }> {
   const storage = getStorage();
+  const start = performance.now();
   const stored = await storage.head(attachment.storageKey);
+  const headMs = performance.now() - start;
   if (!stored) throw new IngestError(409, 'upload not found in storage');
   await db
     .update(attachments)
     .set({ status: 'uploaded', sizeBytes: stored.size ?? size ?? null })
     .where(eq(attachments.id, attachment.id));
+  return { headMs, updateMs: performance.now() - start - headMs };
 }
 
 // ---------------------------------------------------------------- finish

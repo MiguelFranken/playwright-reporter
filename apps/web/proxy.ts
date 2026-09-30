@@ -41,11 +41,13 @@ export function proxy(request: NextRequest) {
  * - `.well-known/oauth-`: OAuth discovery for MCP clients, fetched by programs.
  * - `_next/`, `favicon*`, and `push-sw.js` (browsers fetch the push service
  *   worker without following redirects).
+ * - `_vercel/`: the platform's own endpoints, such as Speed Insights' script
+ *   and the vitals it reports from pages a visitor may not be signed in to.
  * - `trace/`: Playwright's Trace Viewer (lib/trace-viewer), static files and a
  *   service worker with no data of their own; /api/artifacts authorizes the trace.
  *
  * Must stay a literal: Next.js reads it statically at build time.
  */
 export const config = {
-  matcher: ['/((?!api/|_next/|\\.well-known/workflow/|\\.well-known/oauth-|favicon|push-sw\\.js$|trace/).*)'],
+  matcher: ['/((?!api/|_next/|_vercel/|\\.well-known/workflow/|\\.well-known/oauth-|favicon|push-sw\\.js$|trace/).*)'],
 };
