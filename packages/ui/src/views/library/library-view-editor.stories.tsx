@@ -19,7 +19,6 @@ const meta = {
     total: libraryFlows.length,
     onSubmit: fn(),
   },
-  tags: ['themed'],
 } satisfies Meta<typeof LibraryViewEditor>;
 
 export default meta;

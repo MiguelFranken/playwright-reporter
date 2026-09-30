@@ -83,6 +83,15 @@ export const WholeImageThread: Story = {
   },
 };
 
+/** A thread still being posted: its row stays readable and reports itself busy. */
+export const PostingThread: Story = {
+  args: { groups: [{ captureId: 'cap-desktop', variant: 'desktop', threads: [{ ...buttonThread, pending: true }] }] },
+  play: async ({ canvasElement }) => {
+    const row = within(canvasElement).getByRole('button', { name: /^Thread \d+: / }).closest('[aria-busy]');
+    await expect(row).toHaveAttribute('aria-busy', 'true');
+  },
+};
+
 /** No comments yet: how to start one, and a comment on the whole image. */
 export const Empty: Story = {
   args: { groups: [{ captureId: 'cap-desktop', variant: 'desktop', threads: [] }] },

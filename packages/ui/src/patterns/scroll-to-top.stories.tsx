@@ -16,7 +16,6 @@ const meta = {
       </div>
     ),
   ],
-  tags: ['themed'],
 } satisfies Meta<typeof ScrollToTop>;
 
 export default meta;

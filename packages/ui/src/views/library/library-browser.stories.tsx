@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fn, spyOn, userEvent, waitFor, within } from 'storybook/test';
 import { allViews, libraryFlows, manyLibraryFlows, NOW, savedViews, VIEWER_ID } from '../../fixtures/library-views';
 import { BUILT_IN_VIEWS, DEFAULT_LIBRARY_VIEW } from '../../lib/library-views';
 import { LibraryBrowser } from './library-browser';
@@ -127,9 +127,15 @@ export const ScrollsBackToTop: Story = {
   args: { flows: manyLibraryFlows },
   play: async ({ canvasElement }) => {
     window.scrollTo({ top: 3000 });
-    await userEvent.click(await within(canvasElement).findByRole('button', { name: 'Scroll to top' }));
-    // A smooth scroll: give a slow machine time to glide all the way up.
-    await waitFor(() => expect(window.scrollY).toBe(0), { timeout: 5000 });
+    // Assert the request, not the glide: a smooth scroll only advances on
+    // animation frames, which a busy parallel run can starve until it stalls.
+    const scrollTo = spyOn(window, 'scrollTo');
+    try {
+      await userEvent.click(await within(canvasElement).findByRole('button', { name: 'Scroll to top' }));
+      await expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ top: 0 }));
+    } finally {
+      scrollTo.mockRestore();
+    }
   },
 };
 

@@ -236,8 +236,9 @@ function ThreadRow({
       className={cn(
         'group/row relative flex gap-2.5 rounded-lg p-2 transition-colors duration-150',
         open ? 'bg-accent-subtle ring-1 ring-accent-border' : 'hover:bg-muted',
-        thread.pending && 'opacity-60',
+        thread.pending && 'pending overflow-hidden',
       )}
+      aria-busy={thread.pending || undefined}
       onMouseEnter={() => onHighlight?.(thread.id)}
       onMouseLeave={() => onHighlight?.(null)}
     >
