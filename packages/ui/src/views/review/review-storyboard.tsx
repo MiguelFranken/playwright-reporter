@@ -34,7 +34,7 @@ import {
 import { toneSolid } from '../../lib/tone';
 import { CheckpointViewer, type ReviewCommentsProps, type ReviewSelection } from './checkpoint-viewer';
 import type { IgnoreRect } from './ignore-regions-editor';
-import { ReviewTree } from './review-tree';
+import { approveFolderAction, ReviewTree } from './review-tree';
 import { SCREEN_ZOOM_VAR } from './screen-frame';
 import { SizeControl, STORYBOARD_SIZE } from './size-control';
 import { needsReviewIds, StoryboardRows } from './storyboard-rows';
@@ -361,6 +361,11 @@ export function ReviewStoryboard({
               total={searchedCounts.approved + searchedCounts.changes_requested + searchedCounts.changed + searchedCounts.new}
               needsReview={searchedCounts.changed + searchedCounts.new}
               showNeedsReview={!library}
+              folderActions={
+                canDecide && onDecide && !library
+                  ? (target) => [approveFolderAction(target, needsReviewIds(searched.filter((f) => inFolder(f, grouping, target.id))), (ids) => onDecide({ captureIds: ids, decision: 'approved' }), pending)]
+                  : undefined
+              }
             />
           </aside>
           <div className="min-w-0">{rows}</div>

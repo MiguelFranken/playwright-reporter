@@ -159,6 +159,26 @@ export const OpensTheInbox: Story = {
   },
 };
 
+/** A right-click on a suite approves what in it needs review, or shows its open comments. */
+export const FolderMenu: Story = {
+  args: { onDecide: fn() },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const body = within(document.body);
+    await userEvent.pointer({ keys: '[MouseRight]', target: canvas.getByRole('button', { name: /All suites/ }) });
+    const approve = await body.findByRole('menuitem', { name: /^Approve \d+ images?$/ });
+    await userEvent.click(approve);
+    const dialog = await body.findByRole('dialog', { name: /^Approve/ });
+    await userEvent.click(within(dialog).getByRole('button', { name: /^Approve/ }));
+    await waitFor(() => expect(args.onDecide).toHaveBeenCalledWith(expect.objectContaining({ decision: 'approved' })));
+
+    await userEvent.pointer({ keys: '[MouseRight]', target: canvas.getByRole('button', { name: /All suites/ }) });
+    await userEvent.click(await body.findByRole('menuitem', { name: 'Show 2 open comments' }));
+    const list = await body.findByRole('list', { name: 'Open comments' });
+    await waitFor(() => expect(within(list).getAllByRole('button')).toHaveLength(2));
+  },
+};
+
 /** Filters that match nothing say so, and clear in one click. */
 export const NothingMatches: Story = {
   args: { config: { ...DEFAULT_LIBRARY_VIEW, filters: { states: ['waiting'], priorities: ['low'] } } },

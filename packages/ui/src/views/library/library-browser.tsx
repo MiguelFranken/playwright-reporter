@@ -1,6 +1,6 @@
 'use client';
 
-import { Bookmark, Images, Layers, ListFilter, PanelLeft, Search, X } from 'lucide-react';
+import { Bookmark, CircleDashed, Images, Layers, ListFilter, MessageSquare, PanelLeft, Search, X } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '../../components/button';
 import { Input } from '../../components/input';
@@ -8,6 +8,7 @@ import { EmptyState } from '../../patterns/empty-state';
 import { ScrollToTop } from '../../patterns/scroll-to-top';
 import {
   BUILT_IN_VIEWS,
+  captureStates,
   describeViewConfig,
   feedbackCounts,
   groupLibraryFlows,
@@ -20,10 +21,10 @@ import {
   type LibraryViewConfig,
   type LibraryViewDef,
 } from '../../lib/library-views';
-import { buildReviewTree, DEFAULT_FRAME, folderId, folderPathOf, inFolder, variantsOf, type FrameSettings, type ReviewFlowView, type ReviewGrouping } from '../../lib/review';
+import { buildReviewTree, DEFAULT_FRAME, folderId, folderPathOf, inFolder, variantsOf, type FrameSettings, type ReviewDecisionInput, type ReviewFlowView, type ReviewGrouping } from '../../lib/review';
 import { CheckpointViewer, type ReviewCommentsProps, type ReviewSelection } from '../review/checkpoint-viewer';
 import { filterFlows } from '../review/review-storyboard';
-import { ReviewTree } from '../review/review-tree';
+import { approveFolderAction, ReviewTree, type FolderAction, type FolderMenuTarget } from '../review/review-tree';
 import { SCREEN_ZOOM_VAR } from '../review/screen-frame';
 import { SizeControl, STORYBOARD_SIZE } from '../review/size-control';
 import { StoryboardRows } from '../review/storyboard-rows';
@@ -83,8 +84,17 @@ export interface LibraryBrowserProps {
   frame?: FrameSettings;
   onFrameChange?: (next: FrameSettings) => void;
   comments?: ReviewCommentsProps;
+  /** Approving a folder's screens that need review, from its menu in the tree; absent for who may not decide. */
+  onDecide?: (input: ReviewDecisionInput) => void;
+  /** Screens being decided about. */
+  pendingIds?: readonly string[];
   emptyTitle?: string;
   emptyDescription?: React.ReactNode;
+}
+
+/** The screens of these flows that need review and have no open comment (those wait for their thread). */
+function needsReviewCaptureIds(flows: readonly ReviewFlowView[]): string[] {
+  return flows.flatMap((f) => f.checkpoints.flatMap((c) => c.captures.filter((cap) => captureStates(cap).has('needs-review')).map((cap) => cap.id)));
 }
 
 /**
@@ -120,6 +130,8 @@ export function LibraryBrowser({
   frame,
   onFrameChange,
   comments = {},
+  onDecide,
+  pendingIds,
   emptyTitle = 'No screens yet',
   emptyDescription,
 }: LibraryBrowserProps) {
@@ -196,6 +208,34 @@ export function LibraryBrowser({
   });
   const onOpen = useCallback((checkpointId: string, v: string | null) => latest.current.setSelection({ checkpointId, variant: v }), []);
   const noop = useCallback(() => undefined, []);
+  const pending = useMemo(() => (pendingIds?.length ? new Set(pendingIds) : NOTHING_PENDING), [pendingIds]);
+
+  const folderActions = (target: FolderMenuTarget): FolderAction[] => {
+    const below = searched.filter((f) => inFolder(f, treeGrouping, target.id));
+    const open = attention.get(target.id ?? '') ?? 0;
+    return [
+      ...(onDecide ? [approveFolderAction(target, needsReviewCaptureIds(below), (ids) => onDecide({ captureIds: ids, decision: 'approved' }), pending)] : []),
+      {
+        key: 'needs-review',
+        label: 'Show what needs review',
+        icon: CircleDashed,
+        onSelect: () => {
+          setFolder(target.id);
+          setConfig({ ...config, filters: { ...config.filters, states: ['needs-review'] } });
+        },
+      },
+      {
+        key: 'comments',
+        label: open ? `Show ${open} open ${open === 1 ? 'comment' : 'comments'}` : 'No open comments',
+        icon: MessageSquare,
+        disabled: open === 0,
+        onSelect: () => {
+          setFolder(target.id);
+          setInbox(true);
+        },
+      },
+    ];
+  };
 
   const openThread = (item: InboxItem) => {
     setInbox(false);
@@ -258,6 +298,7 @@ export function LibraryBrowser({
           needsReview={0}
           showNeedsReview={false}
           attention={attention}
+          folderActions={folderActions}
         />
       </aside>
 

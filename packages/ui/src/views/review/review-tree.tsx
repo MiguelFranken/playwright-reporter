@@ -1,8 +1,11 @@
 'use client';
 
-import { ChevronRight, ChevronsDownUp, ChevronsUpDown, FileCode2, Folder, FolderOpen, Layers, MessageSquare } from 'lucide-react';
+import { Check, ChevronRight, ChevronsDownUp, ChevronsUpDown, FileCode2, Filter, Folder, FolderOpen, Layers, MessageSquare, type LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '../../components/button';
+import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '../../components/context-menu';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../components/dialog';
+import { DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '../../components/dropdown-menu';
 import { ToggleGroup, ToggleGroupItem } from '../../components/toggle-group';
 import { cn } from '../../lib/cn';
 import { formatNumber } from '../../lib/format';
@@ -20,6 +23,41 @@ function initiallyOpen(folders: readonly ReviewFolder[], selected: string | null
     for (let i = 1; i <= parts.length; i++) open.add(parts.slice(0, i).join(' / '));
   }
   return open;
+}
+
+/** A folder of the tree, or everything (`id: null`), as its context menu is asked about it. */
+export interface FolderMenuTarget {
+  id: string | null;
+  name: string;
+}
+
+/** Something to do with every screen in a folder, offered when the folder is right-clicked. */
+export interface FolderAction {
+  key: string;
+  label: string;
+  icon?: LucideIcon;
+  onSelect: () => void;
+  disabled?: boolean;
+  /** Asked before `onSelect`: a bulk decision is not undone with a click. */
+  confirm?: { title: string; description: string; action: string };
+}
+
+/** Approving what in a folder still needs review, asked first; disabled while any of it is being decided. */
+export function approveFolderAction(target: FolderMenuTarget, ids: readonly string[], onApprove: (ids: string[]) => void, pending: ReadonlySet<string>): FolderAction {
+  const n = ids.length;
+  const images = `${n} ${n === 1 ? 'image' : 'images'}`;
+  return {
+    key: 'approve',
+    label: n ? `Approve ${images}` : 'Nothing to approve',
+    icon: Check,
+    disabled: n === 0 || ids.some((id) => pending.has(id)),
+    onSelect: () => onApprove([...ids]),
+    confirm: {
+      title: `Approve ${images}?`,
+      description: `${target.id === null ? 'Every image shown' : `Every image in “${target.name}”`} that still needs review becomes the approved baseline, as it is now.`,
+      action: `Approve ${images}`,
+    },
+  };
 }
 
 /**
@@ -42,6 +80,7 @@ export function ReviewTree({
   allLabel = 'All flows',
   title,
   attention,
+  folderActions,
   className,
 }: {
   folders: readonly ReviewFolder[];
@@ -60,6 +99,11 @@ export function ReviewTree({
   allLabel?: string;
   /** In the library: open comments below each folder by id (`''` for all), shown instead of the image count. */
   attention?: ReadonlyMap<string, number>;
+  /**
+   * What a right-click on a folder (or on everything) offers, besides showing
+   * it and opening or closing what is below it. Absent, the rows have no menu.
+   */
+  folderActions?: (target: FolderMenuTarget) => readonly FolderAction[];
   className?: string;
 }) {
   const [open, setOpen] = useState(() => initiallyOpen(folders, selected));
@@ -72,6 +116,27 @@ export function ReviewTree({
     });
   const expandable = allIds(folders);
   const allOpen = expandable.length > 0 && expandable.every((id) => open.has(id));
+  const [confirming, setConfirming] = useState<FolderAction | null>(null);
+  const menu: MenuFor | undefined = folderActions
+    ? (target, below) => (
+        <FolderMenu
+          target={target}
+          actions={folderActions(target)}
+          onShow={() => onSelect(target.id)}
+          below={below}
+          onOpenBelow={(openBelow) =>
+            setOpen((prev) => {
+              const next = new Set(prev);
+              for (const id of below) if (openBelow) next.add(id);
+              else next.delete(id);
+              return next;
+            })
+          }
+          allOpen={below.length > 0 && below.every((id) => open.has(id))}
+          onRun={(a) => (a.confirm ? setConfirming(a) : a.onSelect())}
+        />
+      )
+    : undefined;
 
   return (
     <nav aria-label="Folders" className={cn('flex min-w-0 flex-col gap-2', className)}>
@@ -112,17 +177,40 @@ export function ReviewTree({
       </div>
       <ul className="flex flex-col gap-px">
         <li>
-          <RowButton depth={0} active={selected === null} onClick={() => onSelect(null)} title={allLabel}>
-            <span className="size-6 shrink-0" />
-            <Layers className="size-4 shrink-0" />
-            <span className="min-w-0 flex-1 truncate">{allLabel}</span>
-            <Count total={total} needsReview={showNeedsReview ? needsReview : 0} comments={attention?.get('') ?? 0} />
-          </RowButton>
+          <WithMenu menu={menu?.({ id: null, name: allLabel }, expandable)}>
+            <RowButton depth={0} active={selected === null} onClick={() => onSelect(null)} title={allLabel}>
+              <span className="size-6 shrink-0" />
+              <Layers className="size-4 shrink-0" />
+              <span className="min-w-0 flex-1 truncate">{allLabel}</span>
+              <Count total={total} needsReview={showNeedsReview ? needsReview : 0} comments={attention?.get('') ?? 0} />
+            </RowButton>
+          </WithMenu>
         </li>
         {folders.map((f) => (
-          <Branch key={f.id} folder={f} depth={0} selected={selected} onSelect={onSelect} grouping={grouping} open={open} onToggle={toggle} showNeedsReview={showNeedsReview} attention={attention} />
+          <Branch key={f.id} folder={f} depth={0} selected={selected} onSelect={onSelect} grouping={grouping} open={open} onToggle={toggle} showNeedsReview={showNeedsReview} attention={attention} menu={menu} />
         ))}
       </ul>
+      <Dialog open={confirming !== null} onOpenChange={(o) => !o && setConfirming(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{confirming?.confirm?.title}</DialogTitle>
+            <DialogDescription>{confirming?.confirm?.description}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirming(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                confirming?.onSelect();
+                setConfirming(null);
+              }}
+            >
+              {confirming?.confirm?.action}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </nav>
   );
 }
@@ -137,6 +225,7 @@ function Branch({
   onToggle,
   showNeedsReview,
   attention,
+  menu,
 }: {
   folder: ReviewFolder;
   depth: number;
@@ -147,6 +236,7 @@ function Branch({
   onToggle: (id: string) => void;
   showNeedsReview: boolean;
   attention?: ReadonlyMap<string, number>;
+  menu?: MenuFor;
 }) {
   const active = selected === folder.id;
   const hasChildren = folder.children.length > 0;
@@ -156,10 +246,11 @@ function Branch({
   const muted = folder.name === UNLINKED_FOLDER;
   return (
     <li>
+      <WithMenu menu={menu?.({ id: folder.id, name: folder.name }, hasChildren ? [folder.id, ...allIds(folder.children)] : [])}>
       <div
         className={cn(
           'flex h-8 items-center gap-1 rounded-md pe-2 text-body-m transition-colors',
-          active ? 'bg-accent-subtle font-medium text-accent-text' : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+          active ? 'bg-accent-subtle font-medium text-accent-text' : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground in-data-popup-open:bg-muted/60 in-data-popup-open:text-foreground',
         )}
         style={{ paddingInlineStart: depth * 14 + 4 }}
       >
@@ -188,14 +279,67 @@ function Branch({
           <Count total={folder.total} needsReview={showNeedsReview ? folder.needsReview : 0} comments={attention?.get(folder.id) ?? 0} />
         </button>
       </div>
+      </WithMenu>
       {isOpen ? (
         <ul className="flex flex-col gap-px">
           {folder.children.map((c) => (
-            <Branch key={c.id} folder={c} depth={depth + 1} selected={selected} onSelect={onSelect} grouping={grouping} open={open} onToggle={onToggle} showNeedsReview={showNeedsReview} attention={attention} />
+            <Branch key={c.id} folder={c} depth={depth + 1} selected={selected} onSelect={onSelect} grouping={grouping} open={open} onToggle={onToggle} showNeedsReview={showNeedsReview} attention={attention} menu={menu} />
           ))}
         </ul>
       ) : null}
     </li>
+  );
+}
+
+/** The menu of a row, given the ids of the folders below it (with its own) that can open. */
+type MenuFor = (target: FolderMenuTarget, below: readonly string[]) => React.ReactNode;
+
+function WithMenu({ menu, children }: { menu: React.ReactNode; children: React.ReactNode }) {
+  if (!menu) return children;
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger className="rounded-md">{children}</ContextMenuTrigger>
+      {menu}
+    </ContextMenu>
+  );
+}
+
+function FolderMenu({
+  target,
+  actions,
+  onShow,
+  below,
+  allOpen,
+  onOpenBelow,
+  onRun,
+}: {
+  target: FolderMenuTarget;
+  actions: readonly FolderAction[];
+  onShow: () => void;
+  below: readonly string[];
+  allOpen: boolean;
+  onOpenBelow: (open: boolean) => void;
+  onRun: (action: FolderAction) => void;
+}) {
+  return (
+    <ContextMenuContent aria-label={`Actions for ${target.name}`}>
+      <DropdownMenuLabel className="max-w-64 truncate">{target.name}</DropdownMenuLabel>
+      {actions.map((a) => (
+        <DropdownMenuItem key={a.key} disabled={a.disabled} onClick={() => onRun(a)}>
+          {a.icon ? <a.icon /> : null}
+          {a.label}
+        </DropdownMenuItem>
+      ))}
+      {actions.length ? <DropdownMenuSeparator /> : null}
+      <DropdownMenuItem onClick={onShow}>
+        <Filter /> {target.id === null ? 'Show everything' : 'Show only this folder'}
+      </DropdownMenuItem>
+      {below.length ? (
+        <DropdownMenuItem onClick={() => onOpenBelow(!allOpen)}>
+          {allOpen ? <ChevronsDownUp /> : <ChevronsUpDown />} {allOpen ? 'Collapse everything below' : 'Expand everything below'}
+        </DropdownMenuItem>
+      ) : null}
+    </ContextMenuContent>
   );
 }
 

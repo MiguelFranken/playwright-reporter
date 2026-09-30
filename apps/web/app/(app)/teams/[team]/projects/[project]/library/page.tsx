@@ -21,7 +21,8 @@ type Props = {
  * The library: the product's screens and flows as the test suite captures
  * them, for a branch or pull request — the default reference unless `?ref=`
  * names another. Documentation for everyone, developer or not: nothing to
- * approve, nothing to set up, no booking to fake to reach a screen.
+ * set up, no booking to fake to reach a screen. Who may decide can approve a
+ * folder's screens from its menu in the tree.
  */
 export default function LibraryPage({ params, searchParams }: Props) {
   return (
@@ -109,6 +110,7 @@ async function Screens(props: Props) {
       savedViews={savedViews}
       canComment={access.can({ review: ['comment'] })}
       canModerate={access.can({ project: ['delete'] })}
+      canDecide={access.can({ review: ['decide'] })}
       viewerId={access.user.id}
       emptyTitle={`No screens for ${libraryRefShort(key)} yet`}
       emptyDescription={
