@@ -24,7 +24,9 @@ export const Slider: Story = {
     const canvas = within(canvasElement);
     const handle = canvas.getByRole('slider', { name: 'Split position' });
     await expect(handle).toHaveAttribute('aria-valuenow', '50');
+    // A keypress before the handle has focus goes nowhere: on a slow machine it would.
     handle.focus();
+    await waitFor(() => expect(handle).toHaveFocus());
     await userEvent.keyboard('{Home}');
     await waitFor(() => expect(handle).toHaveAttribute('aria-valuenow', '0'));
     await userEvent.keyboard('{Shift>}{ArrowRight}{/Shift}');
