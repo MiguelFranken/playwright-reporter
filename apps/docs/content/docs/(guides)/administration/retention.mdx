@@ -13,9 +13,12 @@ the run keeps every result, error and step, and the artifact's page says it expi
 
 Some review images are kept however old they are:
 
-- **Approved baselines**: the image each checkpoint is compared against. Always kept.
-- **Library screens**: what the [library](/docs/using/visual-review#the-library) shows for every branch or pull request
-  kept in it, and the runs pinned there.
+- **Approved baselines**: the image each checkpoint is compared against — the one a person approved last; an approval
+  the tolerance made does not replace it. Always kept.
+- **Library screens**: what the [library](/docs/using/visual-review#the-library) shows — for the default branch,
+  whether or not anybody kept it, and for every branch or pull request kept in it — with the capture before each
+  screen, which tells an updated screen from an unchanged one, and the runs pinned there. Screens waiting for review
+  count too: the library shows the newest capture, approved or not.
 - **Commented flows**: every image of a flow — one test's checkpoints in one run, every variant — on which a comment
   thread is still open. Once the thread is resolved, the flow ages out like any other.
 
@@ -31,7 +34,8 @@ the policy writes one lifecycle rule per kind.
 
 **Administration → Database** sets how long finished runs are kept, separately from artifacts. The page shows how full
 the database is, how fast it grows and what the saved policy would delete next. A sweep deletes finished runs older
-than the lifetime — except the newest few of every project — with their artifacts, then tests no run refers to, the
+than the lifetime — except the newest few of every project, and runs holding a baseline, a library screen or a
+commented flow — with their artifacts, then tests no run refers to, the
 live event log of finished runs, and expired sessions and tokens. **Purge history** deletes every finished run at once.
 
 ## When sweeps run

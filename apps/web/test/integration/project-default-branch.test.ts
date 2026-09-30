@@ -8,6 +8,8 @@ import { eq } from 'drizzle-orm';
 import { updateDefaultBranch } from '@/app/(app)/teams/[team]/projects/[project]/settings/actions';
 import { defaultBranch } from '@/lib/db/queries/mcp';
 import { auditLogs, projects } from '@/lib/db/schema';
+import { startRun } from '@/lib/ingest/service';
+import { runStart } from './factories';
 import { createMember, describe, expect, test, type Db } from './fixtures';
 
 function form(team: string, project: string, value: string) {
@@ -71,5 +73,24 @@ describe('updateDefaultBranch', () => {
     expect(result).toMatchObject({ ok: false });
     expect(await settingsOf(db, tenant.project.id)).toEqual({});
     expect(await db.select().from(auditLogs).where(eq(auditLogs.action, 'project.update'))).toHaveLength(0);
+  });
+});
+
+describe('defaultBranch fallback', () => {
+  const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString();
+
+  test('prefers main, then the busiest branch of the last 30 days, then the branch a quiet project last ran on', async ({ tenant }) => {
+    expect(await defaultBranch(tenant.project.id, {})).toBe('main');
+
+    // Quiet for longer than 30 days: the branch it was on, so its library does not go blank.
+    await startRun(tenant.tokenProject, runStart({ startedAt: daysAgo(60), git: { branch: 'feature/old' } }));
+    await startRun(tenant.tokenProject, runStart({ startedAt: daysAgo(40), git: { branch: 'feature/workshop-sessions' } }));
+    expect(await defaultBranch(tenant.project.id, {})).toBe('feature/workshop-sessions');
+
+    await startRun(tenant.tokenProject, runStart({ startedAt: daysAgo(2), git: { branch: 'develop' } }));
+    expect(await defaultBranch(tenant.project.id, {})).toBe('develop');
+
+    await startRun(tenant.tokenProject, runStart({ startedAt: daysAgo(1), git: { branch: 'main' } }));
+    expect(await defaultBranch(tenant.project.id, {})).toBe('main');
   });
 });

@@ -251,9 +251,11 @@ line of work. Useful to show a product owner what a pull request changes compare
 Admins and members can change the library; viewers browse it. Links to a reference (`/library?ref=pr:212`) work for
 references nobody kept, too.
 
-The approved image of each checkpoint is its baseline and is kept by the
-[artifact retention](/docs/administration/retention) policy, however old it is — as are the screens the library shows,
-and the runs pinned in it, unless an admin lets library screens expire.
+The image a person approved last for each checkpoint is its baseline and is kept by the
+[artifact retention](/docs/administration/retention) policy, however old it is — as are the screens the library shows
+(the default branch's too, whether or not anybody kept it, with the capture before each screen that tells an updated one
+from an unchanged one) and the runs pinned in it, unless an admin lets library screens expire. Data retention never
+deletes a run holding any of these.
 
 ## For AI assistants
 
