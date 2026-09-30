@@ -15,10 +15,11 @@
 import { and, asc, desc, eq, inArray, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import { db } from '@/lib/db/drizzle';
 import { RESIZABLE_KINDS, variantKeys } from '@/lib/artifacts/image-variants';
-import { artifactSweeps, attachments, instanceSettings, libraryReferences, reviewCaptures, reviewCheckpoints, reviewDecisions, reviewThreads, runs, type ArtifactSweep } from '@/lib/db/schema';
+import { artifactSweeps, attachments, instanceSettings, type ArtifactSweep } from '@/lib/db/schema';
 import { getStorage, type StorageAdapter } from '@/lib/storage';
 import { ingestSweepDue } from '@/lib/sweeps/continuation';
 import { INGEST_SWEEP_INTERVAL_MS, ingestSweepEnabled } from './config';
+import { isKeptAttachment } from './kept';
 import { cutoffs, environmentPolicy, normalizePolicy, type PolicySource, type RetentionPolicy } from './policy';
 
 export * from './config';
@@ -56,65 +57,6 @@ export async function saveRetentionPolicy(policy: RetentionPolicy, actorId: stri
     .onConflictDoUpdate({ target: instanceSettings.key, set: { value, updatedBy: actorId, updatedAt: sql`now()` } });
 }
 
-/**
- * An image some review checkpoint is currently compared against: the capture
- * of the newest approval of its checkpoint and variant. Retention keeps it,
- * or every later run of that checkpoint would lose its baseline.
- */
-const isReviewBaseline = sql`exists (
-  select 1 from ${reviewDecisions} d
-  join ${reviewCaptures} c on c.id = d.capture_id
-  where d.decision = 'approved'
-    and (c.attachment_id = ${attachments.id} or c.thumbnail_attachment_id = ${attachments.id})
-    and not exists (
-      select 1 from ${reviewDecisions} later
-      where later.test_id = d.test_id and later.checkpoint_name = d.checkpoint_name and later.variant = d.variant
-        and later.decision = 'approved' and later.created_at > d.created_at
-    )
-)`;
-
-/**
- * An image the library shows: a capture of a kept reference's pinned run, or
- * — for a reference that follows its newest run — the newest capture of its
- * checkpoint and variant on that branch or pull request. Documentation that
- * disappears after thirty days is no documentation.
- */
-const isLibraryScreen = sql`exists (
-  select 1 from ${reviewCaptures} c
-  join ${runs} r on r.id = c.run_id
-  join ${libraryReferences} lr on lr.project_id = c.project_id
-    and ((lr.kind = 'branch' and r.git_branch = lr.branch) or (lr.kind = 'pull_request' and r.pr_number = lr.pr_number))
-  where (c.attachment_id = ${attachments.id} or c.thumbnail_attachment_id = ${attachments.id})
-    and (
-      lr.pinned_run_id = c.run_id
-      or (lr.pinned_run_id is null and not exists (
-        select 1 from ${reviewCaptures} newer
-        join ${runs} nr on nr.id = newer.run_id
-        where newer.test_id = c.test_id and newer.checkpoint_name = c.checkpoint_name and newer.variant = c.variant
-          and nr.started_at > r.started_at
-          and ((lr.kind = 'branch' and nr.git_branch = lr.branch) or (lr.kind = 'pull_request' and nr.pr_number = lr.pr_number))
-      ))
-    )
-)`;
-
-/**
- * An image of a flow — one test's checkpoints in one run, every variant — on
- * which an open comment thread was placed. A change request points at a spot
- * on one image, but it is read against the steps around it; losing the flow
- * before the thread is resolved loses what it is about.
- */
-const isOpenThreadFlow = sql`exists (
-  select 1 from ${reviewCaptures} c
-  join ${reviewCheckpoints} cp on cp.id = c.checkpoint_id
-  where (c.attachment_id = ${attachments.id} or c.thumbnail_attachment_id = ${attachments.id})
-    and exists (
-      select 1 from ${reviewThreads} t
-      join ${reviewCaptures} oc on oc.id = t.origin_capture_id
-      join ${reviewCheckpoints} ocp on ocp.id = oc.checkpoint_id
-      where t.status = 'open' and ocp.run_id = cp.run_id and ocp.test_result_id = cp.test_result_id
-    )
-)`;
-
 /** Deletes the resized copies of the screenshots among `rows` (see `image-variants`). */
 async function deleteVariants(storage: StorageAdapter, rows: readonly { storageKey: string; kind: string }[]) {
   const keys = rows.filter((r) => RESIZABLE_KINDS.has(r.kind)).flatMap((r) => variantKeys(r.storageKey));
@@ -123,13 +65,13 @@ async function deleteVariants(storage: StorageAdapter, rows: readonly { storageK
 
 /**
  * Live artifacts the policy says have expired, over Drizzle-qualified columns.
- * Review baselines are always kept; library screens and flows with open
- * threads unless the policy lets visuals expire (`keepVisuals`).
+ * Review baselines are always kept; library screens (the default branch's
+ * too) and flows with open threads unless the policy lets visuals expire
+ * (`keepVisuals`). See `./kept`.
  */
 export function dueWhere(policy: RetentionPolicy, now: Date = new Date()): SQL {
   const groups = cutoffs(policy, now).map((c) => and(inArray(attachments.kind, c.kinds), lt(attachments.createdAt, c.before))!);
-  const kept = [sql`not ${isReviewBaseline}`, ...(policy.keepVisuals ? [sql`not ${isLibraryScreen}`, sql`not ${isOpenThreadFlow}`] : [])];
-  return and(isNull(attachments.expiredAt), or(...groups), ...kept)!;
+  return and(isNull(attachments.expiredAt), or(...groups), sql`not ${isKeptAttachment(attachments.id, policy.keepVisuals)}`)!;
 }
 
 // ---------------------------------------------------------------- stats

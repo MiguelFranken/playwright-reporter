@@ -10,7 +10,7 @@ import path from 'node:path';
 import { eq, sql } from 'drizzle-orm';
 import type { Checkpoint } from '@miguelfranken/protocol';
 import { getRunForProject, ingestEvents, startRun } from '@/lib/ingest/service';
-import { attachments, reviewCaptures, reviewComments, reviewDecisions, reviewThreads } from '@/lib/db/schema';
+import { attachments, projects, reviewCaptures, reviewComments, reviewDecisions, reviewThreads } from '@/lib/db/schema';
 import { dueWhere } from '@/lib/storage/retention';
 import { decide, runReview } from '@/lib/review/queries';
 import { createThread, deleteComment, editComment, replyToThread, setThreadStatus } from '@/lib/review/threads';
@@ -154,6 +154,8 @@ describe('retention', () => {
   const policy = { enabled: true, days: 1, overrides: {}, keepVisuals: true };
 
   test('keeps every image of a flow with an open thread, until it is resolved', async ({ db, tenant }) => {
+    // Off the library: the default branch's newest screens are kept for being in it.
+    await db.update(projects).set({ settings: { defaultBranch: 'release' } }).where(eq(projects.id, tenant.project.id));
     const { run, capture } = await runWith(tenant, sha('a'), minutesAgo(5), ['paid', 'confirmed']);
     const other = await runWith(tenant, sha('a'), minutesAgo(4), ['paid']);
     await db.update(attachments).set({ status: 'uploaded' });

@@ -2,12 +2,12 @@
  * The library end to end: the default branch is always there, a reference
  * follows each test's newest run on its branch or pull request or shows one
  * pinned run, one reference is the default, and retention keeps what the
- * library shows.
+ * library shows — the default branch's screens included, kept or not.
  */
 import { eq } from 'drizzle-orm';
 import type { Checkpoint } from '@miguelfranken/protocol';
 import { getRunForProject, ingestEvents, startRun } from '@/lib/ingest/service';
-import { attachments, auditLogs, libraryReferences, runs } from '@/lib/db/schema';
+import { attachments, auditLogs, libraryReferences, projects, runs } from '@/lib/db/schema';
 import { defaultLibraryRef, getLibraryReference, libraryCandidates, libraryFlows, listLibraryReferences, setLibraryReference } from '@/lib/review/library';
 import { runsDueWhere } from '@/lib/data-retention';
 import { dueWhere } from '@/lib/storage/retention';
@@ -16,7 +16,7 @@ import { listLibraryViews } from '@/lib/review/library-views';
 import { createThread, setThreadStatus } from '@/lib/review/threads';
 import { toThreadView } from '@/lib/review/view-model';
 import { attachmentRef, attemptEnd, eventBatch, runStart, testBegin } from './factories';
-import { createMember, describe, expect, test, type Tenant } from './fixtures';
+import { createMember, describe, expect, test, type Db, type Tenant } from './fixtures';
 
 const sha = (c: string) => c.repeat(64);
 
@@ -262,30 +262,96 @@ describe('feedback across runs', () => {
 });
 
 describe('retention', () => {
-  test('keeps what the library shows, and never deletes a pinned run', async ({ db, tenant }) => {
-    const old = await run(tenant, { startedAt: minutesAgo(60), hash: sha('a') });
-    const newer = await run(tenant, { startedAt: minutesAgo(30), hash: sha('b') });
+  const policy = { enabled: true, days: 1, overrides: {}, keepVisuals: true };
+  const dataPolicy = { enabled: true, runDays: 1, keepLatestRuns: 0, eventDays: 1, auditDays: null, housekeeping: false };
+  const later = () => new Date(Date.now() + 2 * 86_400_000);
+
+  async function dueRuns(db: Db, p = policy) {
+    const rows = await db.select({ runId: attachments.runId }).from(attachments).where(dueWhere(p, later()));
+    return [...new Set(rows.map((a) => a.runId))];
+  }
+  async function deletableRuns(db: Db) {
+    await db.update(runs).set({ status: 'passed' });
+    return (await db.select({ id: runs.id }).from(runs).where(runsDueWhere(dataPolicy, 'local', later()))).map((r) => r.id);
+  }
+
+  test('keeps what the default branch shows, though nobody kept it, and the capture before it', async ({ db, tenant }) => {
+    const oldest = await run(tenant, { startedAt: minutesAgo(90), hash: sha('a') });
+    const previous = await run(tenant, { startedAt: minutesAgo(60), hash: sha('b') });
+    const newest = await run(tenant, { startedAt: minutesAgo(30), hash: sha('c') });
+    const elsewhere = await run(tenant, { branch: 'other', startedAt: minutesAgo(10) });
     await db.update(attachments).set({ status: 'uploaded' });
-    const policy = { enabled: true, days: 1, overrides: {}, keepVisuals: true };
-    const later = new Date(Date.now() + 2 * 86_400_000);
-    const due = async () => (await db.select({ runId: attachments.runId }).from(attachments).where(dueWhere(policy, later))).map((a) => a.runId);
+    expect((await listLibraryReferences(tenant.project.id, 'main'))[0]).toMatchObject({ key: main, kept: false });
 
-    // Nobody kept main: its images age out like any other.
-    expect((await due()).sort()).toEqual([old.id, newer.id].sort());
+    // The newest screen, and the one it is compared against, stay; the rest ages out.
+    expect((await dueRuns(db)).sort()).toEqual([oldest.id, elsewhere.id].sort());
+    expect(await deletableRuns(db)).not.toContain(newest.id);
+    expect(await deletableRuns(db)).not.toContain(previous.id);
+    expect(await deletableRuns(db)).toContain(oldest.id);
 
-    // Kept, following: the newest capture stays.
-    await setLibraryReference({ projectId: tenant.project.id, key: main, patch: { keep: true }, userId: null });
-    expect(await due()).toEqual([old.id]);
+    // Unless the policy lets visuals expire.
+    expect((await dueRuns(db, { ...policy, keepVisuals: false })).sort()).toEqual([oldest.id, previous.id, newest.id, elsewhere.id].sort());
+  });
+
+  test('follows the default branch the project names', async ({ db, tenant }) => {
+    const onMain = await run(tenant, { startedAt: minutesAgo(30) });
+    const onRelease = await run(tenant, { branch: 'release', startedAt: minutesAgo(20) });
+    await db.update(projects).set({ settings: { defaultBranch: 'release' } }).where(eq(projects.id, tenant.project.id));
+    await db.update(attachments).set({ status: 'uploaded' });
+    expect(await dueRuns(db)).toEqual([onMain.id]);
+    expect(await deletableRuns(db)).not.toContain(onRelease.id);
+  });
+
+  test('a capture from an attempt that was retried does not replace the screen', async ({ db, tenant }) => {
+    const shown = await run(tenant, { startedAt: minutesAgo(60) });
+    // A newer run whose first attempt captured the checkpoint and whose retry, the final attempt, failed before it.
+    const startedAt = minutesAgo(30);
+    const started = await startRun(tenant.tokenProject, runStart({ startedAt: startedAt.toISOString(), git: { branch: 'main' } }));
+    const r = await getRunForProject(tenant.tokenProject, started.runId);
+    const key = 'tests/checkout.spec.ts::places an order';
+    const image = attachmentRef({ name: 'review:ready:desktop' });
+    await ingestEvents(
+      tenant.tokenProject,
+      r,
+      eventBatch([
+        testBegin({ seq: 0, testKey: key, title: 'places an order', file: 'tests/checkout.spec.ts' }),
+        attemptEnd({
+          seq: 1,
+          testKey: key,
+          retry: 0,
+          status: 'failed',
+          outcome: 'unexpected',
+          isFinal: false,
+          startedAt: startedAt.toISOString(),
+          attachments: [image],
+          checkpoints: [{ name: 'ready', title: 'Ready', sequence: 0, variants: [{ variant: 'desktop', attachmentId: image.id, sha256: sha('d') }] }],
+        }),
+        attemptEnd({ seq: 2, testKey: key, retry: 1, status: 'failed', outcome: 'unexpected', isFinal: true, startedAt: startedAt.toISOString() }),
+      ]),
+    );
+    await db.update(attachments).set({ status: 'uploaded' });
+    expect((await libraryFlows(tenant.project.id, main))[0].runNumber).toBe(shown.number);
+    expect(await dueRuns(db)).not.toContain(shown.id);
+  });
+
+  test('keeps a kept reference’s screens, and a pinned run instead', async ({ db, tenant }) => {
+    const old = await run(tenant, { branch: 'feat/checkout', prNumber: 212, startedAt: minutesAgo(90), hash: sha('a') });
+    const middle = await run(tenant, { branch: 'feat/checkout', prNumber: 212, startedAt: minutesAgo(60), hash: sha('b') });
+    const newer = await run(tenant, { branch: 'feat/checkout', prNumber: 212, startedAt: minutesAgo(30), hash: sha('c') });
+    await run(tenant, { startedAt: minutesAgo(10) });
+    await db.update(attachments).set({ status: 'uploaded' });
+
+    // Nobody kept the pull request: its images age out like any other.
+    expect((await dueRuns(db)).sort()).toEqual([old.id, middle.id, newer.id].sort());
+
+    // Kept, following: the newest capture and the one before it stay.
+    await setLibraryReference({ projectId: tenant.project.id, key: pr, patch: { keep: true }, userId: null });
+    expect(await dueRuns(db)).toEqual([old.id]);
 
     // Pinned to the old run: that one stays instead, and its run is not deleted.
-    await setLibraryReference({ projectId: tenant.project.id, key: main, patch: { pin: old.number }, userId: null });
-    expect(await due()).toEqual([newer.id]);
-    // Unless the policy lets visuals expire: then the library keeps nothing.
-    const expiring = async () => (await db.select({ runId: attachments.runId }).from(attachments).where(dueWhere({ ...policy, keepVisuals: false }, later))).map((a) => a.runId);
-    expect((await expiring()).sort()).toEqual([old.id, newer.id].sort());
-    const dataPolicy = { enabled: true, runDays: 1, keepLatestRuns: 0, eventDays: 1, auditDays: null, housekeeping: false };
-    const deletable = await db.select({ id: runs.id }).from(runs).where(runsDueWhere(dataPolicy, 'local', later));
-    expect(deletable.map((r) => r.id)).not.toContain(old.id);
+    await setLibraryReference({ projectId: tenant.project.id, key: pr, patch: { pin: old.number }, userId: null });
+    expect((await dueRuns(db)).sort()).toEqual([middle.id, newer.id].sort());
+    expect(await deletableRuns(db)).not.toContain(old.id);
   });
 });
 

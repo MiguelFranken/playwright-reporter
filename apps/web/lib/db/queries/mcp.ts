@@ -15,6 +15,7 @@ import { attachments, runs, testAttempts, testResults, tests, type Run } from '@
 import { effectiveRunColumns, effectiveStatusSql } from '@/lib/runs/staleness';
 import { CHRONIC_FAILURE_RATE, CHRONIC_MIN_RUNS, CHRONIC_STREAK } from '@/lib/metrics/score';
 import { andAll, num, reliabilitySql } from './shared';
+import { fallbackBranchSql } from './default-branch';
 import type { ArtifactFilter, ArtifactKind } from '@miguelfranken/ui/lib/result-filter';
 
 export type RunStatus = Run['status'];
@@ -122,18 +123,13 @@ export async function listFacets(projectId: string, since: Date) {
 
 /**
  * The branch comparisons measure against: `settings.defaultBranch` when set;
- * otherwise `main` or `master` if they have runs; otherwise the branch with the
- * most runs in 30 days; otherwise `main`.
+ * otherwise `main` or `master` if they have runs in 30 days; otherwise the
+ * branch with the most runs in 30 days; otherwise the branch a quiet project
+ * last ran on (see `fallbackBranchSql`); otherwise `main`.
  */
 export async function defaultBranch(projectId: string, settings: Record<string, unknown>): Promise<string> {
   if (typeof settings.defaultBranch === 'string' && settings.defaultBranch.trim()) return settings.defaultBranch.trim();
-  const [row] = await db
-    .select({ branch: runs.gitBranch })
-    .from(runs)
-    .where(and(eq(runs.projectId, projectId), sql`${runs.gitBranch} is not null`, gt(runs.startedAt, sql`now() - interval '30 days'`)))
-    .groupBy(runs.gitBranch)
-    .orderBy(desc(sql`${runs.gitBranch} in ('main', 'master')`), desc(sql`count(*)`), desc(sql`max(${runs.startedAt})`))
-    .limit(1);
+  const [row] = await db.execute<{ branch: string | null }>(sql`select ${fallbackBranchSql(projectId)} as branch`);
   return row?.branch ?? 'main';
 }
 

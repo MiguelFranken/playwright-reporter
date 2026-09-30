@@ -10,7 +10,7 @@ import path from 'node:path';
 import { eq, sql } from 'drizzle-orm';
 import type { Checkpoint } from '@miguelfranken/protocol';
 import { getRunForProject, ingestEvents, startRun } from '@/lib/ingest/service';
-import { attachments, reviewCaptures, reviewCheckpoints } from '@/lib/db/schema';
+import { attachments, projects, reviewCaptures, reviewCheckpoints, reviewDecisions } from '@/lib/db/schema';
 import { captureHistory, decide, reviewQueue, runReview, runReviewCounts } from '@/lib/review/queries';
 import { libraryFlows } from '@/lib/review/library';
 import { dueWhere } from '@/lib/storage/retention';
@@ -193,18 +193,51 @@ describe('statuses', () => {
 });
 
 describe('retention', () => {
+  const policy = { enabled: true, days: 1, overrides: {}, keepVisuals: true };
+  const later = () => new Date(Date.now() + 2 * 86_400_000);
+
+  // Off the library (not the default branch), so only the baseline rule keeps anything.
+  const offLibrary = (db: Db, tenant: Tenant) => db.update(projects).set({ settings: { defaultBranch: 'main' } }).where(eq(projects.id, tenant.project.id));
+
   test('keeps the newest approved image of a checkpoint', async ({ db, tenant }) => {
-    const { desktop, mobile, thumb } = await runWithCheckpoints(tenant, { hashes: [sha('a'), sha('b')] });
+    await offLibrary(db, tenant);
+    const { desktop, mobile, thumb } = await runWithCheckpoints(tenant, { hashes: [sha('a'), sha('b')], branch: 'feat/x' });
     const [desktopCapture] = await db.select().from(reviewCaptures).where(eq(reviewCaptures.attachmentId, desktop.id));
     await decide({ projectId: tenant.project.id, captureIds: [desktopCapture.id], decision: 'approved', userId: null });
     await markUploaded(db);
 
-    const policy = { enabled: true, days: 1, overrides: {}, keepVisuals: true };
-    const due = await db.select({ id: attachments.id }).from(attachments).where(dueWhere(policy, new Date(Date.now() + 2 * 86_400_000)));
+    const due = await db.select({ id: attachments.id }).from(attachments).where(dueWhere(policy, later()));
     const ids = due.map((d) => d.id);
     expect(ids).toContain(mobile.id);
     expect(ids).not.toContain(desktop.id);
     expect(ids).not.toContain(thumb.id);
+  });
+
+  test('an approval the tolerance made does not replace the baseline a person approved', async ({ db, tenant }) => {
+    await offLibrary(db, tenant);
+    const first = await runWithCheckpoints(tenant, { hashes: [sha('a'), sha('b')], branch: 'feat/x', startedAt: new Date(Date.now() - 60_000) });
+    const [baseline] = await db.select().from(reviewCaptures).where(eq(reviewCaptures.attachmentId, first.desktop.id));
+    await decide({ projectId: tenant.project.id, captureIds: [baseline.id], decision: 'approved', userId: null });
+    const second = await runWithCheckpoints(tenant, { hashes: [sha('c'), sha('b')], branch: 'feat/x' });
+    const [next] = await db.select().from(reviewCaptures).where(eq(reviewCaptures.attachmentId, second.desktop.id));
+    await db.insert(reviewDecisions).values({
+      id: randomUUID(),
+      projectId: tenant.project.id,
+      testId: next.testId,
+      checkpointName: next.checkpointName,
+      variant: next.variant,
+      sha256: next.sha256,
+      captureId: next.id,
+      runId: next.runId,
+      decision: 'approved',
+      source: 'tolerance',
+    });
+    await markUploaded(db);
+
+    const ids = (await db.select({ id: attachments.id }).from(attachments).where(dueWhere(policy, later()))).map((d) => d.id);
+    // The viewer still compares against the image a person approved.
+    expect(ids).not.toContain(first.desktop.id);
+    expect(ids).toContain(second.desktop.id);
   });
 });
 
