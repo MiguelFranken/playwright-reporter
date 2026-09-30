@@ -27,7 +27,8 @@ function initiallyOpen(folders: readonly ReviewFolder[], selected: string | null
  * tests are linked to, or their spec files. Folders open and close like the
  * Test Cases tree. In review, each folder says how many images below it still
  * need review, so the tree is also the to-do list; in the library it counts
- * the screens.
+ * the screens. Without `onGroupingChange` the grouping is fixed (the library's
+ * view decides it) and the tree names it instead of offering the switch.
  */
 export function ReviewTree({
   folders,
@@ -39,6 +40,7 @@ export function ReviewTree({
   needsReview,
   showNeedsReview = true,
   allLabel = 'All flows',
+  title,
   attention,
   className,
 }: {
@@ -47,7 +49,10 @@ export function ReviewTree({
   selected: string | null;
   onSelect: (id: string | null) => void;
   grouping: ReviewGrouping;
-  onGroupingChange: (next: ReviewGrouping) => void;
+  /** Absent when something else decides the grouping: the tree then shows `title`. */
+  onGroupingChange?: (next: ReviewGrouping) => void;
+  /** The heading shown instead of the switch. */
+  title?: string;
   total: number;
   needsReview: number;
   /** Off in the library, where nothing waits for a decision. */
@@ -71,28 +76,32 @@ export function ReviewTree({
   return (
     <nav aria-label="Folders" className={cn('flex min-w-0 flex-col gap-2', className)}>
       <div className="flex items-center gap-1">
-        <ToggleGroup
-          variant="segment"
-          size="sm"
-          value={[grouping]}
-          onValueChange={(v) => {
-            if (!v[0]) return;
-            onGroupingChange(v[0] as ReviewGrouping);
-            setOpen(new Set());
-          }}
-          aria-label="Group by"
-          className="min-w-0 flex-1"
-        >
-          {REVIEW_GROUPINGS.map((g) => (
-            <ToggleGroupItem key={g} value={g} className="flex-1" title={g === 'suite' ? 'Group by test case suite' : 'Group by spec file'}>
-              {REVIEW_GROUPING_LABELS[g]}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
+        {onGroupingChange ? (
+          <ToggleGroup
+            variant="segment"
+            size="sm"
+            value={[grouping]}
+            onValueChange={(v) => {
+              if (!v[0]) return;
+              onGroupingChange(v[0] as ReviewGrouping);
+              setOpen(new Set());
+            }}
+            aria-label="Group by"
+            className="min-w-0 flex-1"
+          >
+            {REVIEW_GROUPINGS.map((g) => (
+              <ToggleGroupItem key={g} value={g} className="flex-1" title={g === 'suite' ? 'Group by test case suite' : 'Group by spec file'}>
+                {REVIEW_GROUPING_LABELS[g]}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        ) : (
+          <h2 className="min-w-0 flex-1 truncate px-2 text-label-xs text-muted-foreground uppercase">{title ?? REVIEW_GROUPING_LABELS[grouping]}</h2>
+        )}
         {expandable.length ? (
           <Button
             variant="ghost"
-            size="icon-sm"
+            size={onGroupingChange ? 'icon-sm' : 'icon-xs'}
             aria-label={allOpen ? 'Collapse all folders' : 'Expand all folders'}
             title={allOpen ? 'Collapse all' : 'Expand all'}
             onClick={() => setOpen(allOpen ? new Set() : new Set(expandable))}

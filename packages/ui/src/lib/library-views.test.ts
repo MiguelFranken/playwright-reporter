@@ -157,13 +157,19 @@ describe('views in the URL', () => {
     expect(viewConfigFromParams(params({ variant: '-' }), { ...toFix, variant: 'mobile' }).variant).toBeNull();
     // Unknown values are dropped, known ones kept in display order.
     expect(viewConfigFromParams(params({ state: 'verify,bogus,waiting', priority: 'low,high', group: 'nope' })).filters).toEqual({ states: ['waiting', 'verify'], priorities: ['high', 'low'] });
-    expect(viewConfigFromParams(params({ group: 'nope' })).group).toBe('suite');
+    expect(viewConfigFromParams(params({ group: 'nope' })).group).toBe('folder');
+  });
+
+  test('reads a link from before views had folders of their own', () => {
+    expect(viewConfigFromParams(params({ group: 'file' }))).toEqual({ ...DEFAULT_LIBRARY_VIEW, group: 'folder', folders: 'file' });
+    expect(viewConfigFromParams(params({ folders: 'file', group: 'state' }))).toEqual({ ...DEFAULT_LIBRARY_VIEW, group: 'state', folders: 'file' });
+    expect(normalizeViewConfig({ group: 'file' })).toEqual({ ...DEFAULT_LIBRARY_VIEW, folders: 'file' });
   });
 
   test('writes only the difference, and round-trips', () => {
-    const config: LibraryViewConfig = { filters: { states: ['verify'], priorities: [] }, group: 'priority', sort: 'journey', variant: 'mobile' };
+    const config: LibraryViewConfig = { filters: { states: ['verify'], priorities: [] }, folders: 'file', group: 'priority', sort: 'journey', variant: 'mobile' };
     const written = viewConfigToParams(config);
-    expect(written).toEqual({ view: null, state: 'verify', priority: null, group: 'priority', sort: null, variant: 'mobile' });
+    expect(written).toEqual({ view: null, state: 'verify', priority: null, folders: 'file', group: 'priority', sort: null, variant: 'mobile' });
     expect(viewConfigFromParams(params(written))).toEqual(config);
     expect(Object.values(viewConfigToParams(DEFAULT_LIBRARY_VIEW)).every((v) => v === null)).toBe(true);
   });
@@ -171,6 +177,7 @@ describe('views in the URL', () => {
   test('a stored view is cleaned of anything unknown', () => {
     expect(normalizeViewConfig({ filters: { states: ['waiting', 3, 'x'], priorities: 'high' }, group: 'priority', sort: 'bogus', variant: '  mobile ' })).toEqual({
       filters: { states: ['waiting'], priorities: [] },
+      folders: 'suite',
       group: 'priority',
       sort: 'journey',
       variant: 'mobile',

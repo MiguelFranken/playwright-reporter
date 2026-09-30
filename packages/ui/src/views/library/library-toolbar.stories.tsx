@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useState } from 'react';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { libraryFlows } from '../../fixtures/library-views';
 import { DEFAULT_LIBRARY_VIEW, libraryCounts, type LibraryViewConfig } from '../../lib/library-views';
 import { LibraryDisplayMenu, LibraryFilterChips, LibraryFilterMenu, ViewSaveControls } from './library-toolbar';
@@ -18,7 +18,7 @@ function Toolbar({ initial, onChange }: { initial: LibraryViewConfig; onChange: 
     <div className="flex flex-wrap items-center gap-2">
       <LibraryFilterMenu config={config} onChange={change} counts={counts} />
       <LibraryFilterChips config={config} onChange={change} />
-      <LibraryDisplayMenu config={config} onChange={change} />
+      <LibraryDisplayMenu config={config} onChange={change} variants={['desktop', 'mobile']} />
     </div>
   );
 }
@@ -49,19 +49,29 @@ export const Filters: Story = {
   },
 };
 
-/** Grouping and order. */
+/** Folders, grouping, order and variant, in one panel. */
 export const Display: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
+    const body = within(document.body);
     await userEvent.click(canvas.getByRole('button', { name: /Display/ }));
-    // Priority is both a grouping and an order: the first is the grouping.
-    const [group] = await within(document.body).findAllByRole('menuitemradio', { name: 'Priority' });
-    await userEvent.click(group);
-    await expect(args.onChange).toHaveBeenLastCalledWith(expect.objectContaining({ group: 'priority' }));
+    const panel = within(await body.findByRole('dialog', { name: 'Display' }));
+    await userEvent.click(panel.getByRole('button', { name: 'Files' }));
+    await expect(args.onChange).toHaveBeenLastCalledWith(expect.objectContaining({ folders: 'file' }));
+    await userEvent.click(panel.getByRole('combobox', { name: 'Grouping' }));
+    await userEvent.click(await body.findByRole('option', { name: 'Priority' }));
+    await expect(args.onChange).toHaveBeenLastCalledWith(expect.objectContaining({ folders: 'file', group: 'priority' }));
+    await userEvent.click(panel.getByRole('button', { name: 'mobile' }));
+    await expect(args.onChange).toHaveBeenLastCalledWith(expect.objectContaining({ variant: 'mobile' }));
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(body.queryByRole('dialog', { name: 'Display' })).toBeNull());
   },
 };
 
 export const WithFilters: Story = { args: { initial: { ...DEFAULT_LIBRARY_VIEW, filters: { states: ['waiting', 'verify', 'needs-review'], priorities: ['critical', 'high', 'none'] }, group: 'state' } } };
+
+/** By spec file, grouped by state, one variant: the Display button marks that the layout differs from the default. */
+export const ChangedLayout: Story = { args: { initial: { ...DEFAULT_LIBRARY_VIEW, folders: 'file', group: 'state', variant: 'mobile' } } };
 
 /** Changed from a saved view: reset, save into it, or save as a new one. */
 export const SaveControls: Story = {

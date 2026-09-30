@@ -71,7 +71,8 @@ export interface StoryboardRowsProps {
  * renders, scrolls and resizes as quickly as one with ten. Each row is
  * measured as it renders (and again when the size slider resizes it), the
  * heading of the section being scrolled through stays pinned below the app's
- * sticky header (`--sticky-offset`).
+ * sticky header (`--sticky-offset`). A pinned heading's space above it tucks
+ * under that header, so nothing scrolls through the gap between the two.
  */
 export function StoryboardRows({ sections, headings, size, canDecide, library, pending, onOpen, onApproveFlow, variantSelected, reveal, matching }: StoryboardRowsProps) {
   const items = useMemo(() => {
@@ -139,12 +140,17 @@ export function StoryboardRows({ sections, headings, size, canDecide, library, p
       {virtualItems.map((v) => {
         const item = items[v.index];
         const sticky = item.kind === 'heading' && v.index === activeHeading.current;
+        const tucked = sticky && !item.first;
         return (
           <div
             key={v.key}
             ref={virtualizer.measureElement}
             data-index={v.index}
-            className={cn('left-0 w-full', sticky ? 'sticky top-[var(--sticky-offset,0px)] z-10' : 'absolute top-0')}
+            className={cn(
+              'left-0 w-full',
+              sticky ? 'sticky z-10' : 'absolute top-0',
+              sticky && (tucked ? 'top-[calc(var(--sticky-offset,0px)-1.5rem)]' : 'top-[var(--sticky-offset,0px)]'),
+            )}
             style={sticky ? undefined : { transform: `translateY(${v.start - virtualizer.options.scrollMargin}px)` }}
           >
             {item.kind === 'heading' ? (
@@ -173,7 +179,7 @@ export function StoryboardRows({ sections, headings, size, canDecide, library, p
 function SectionHeading({ section, first }: { section: RowSection; first: boolean }) {
   return (
     <div className={first ? undefined : 'pt-6'}>
-      <h2 className="-mx-1 mb-1 flex items-center gap-1.5 border-b border-separator bg-surface/95 px-1 py-2 text-label-m text-muted-foreground backdrop-blur">
+      <h2 className="-mx-1 mb-1 flex items-center gap-1.5 border-b border-separator bg-surface px-1 py-2 text-label-m text-muted-foreground">
         {section.state ? (
           <LibraryStateChip state={section.state} iconOnly />
         ) : section.priority ? (

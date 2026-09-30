@@ -1,6 +1,6 @@
 'use client';
 
-import { Bookmark, Layers, MessageSquareWarning, MoreHorizontal, Pencil, RefreshCw, ScanEye, Trash2, Wrench } from 'lucide-react';
+import { Bookmark, Copy, Layers, MessageSquareWarning, MoreHorizontal, Pencil, Plus, RefreshCw, ScanEye, SlidersHorizontal, Trash2, Wrench } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '../../components/button';
 import { Input } from '../../components/input';
@@ -9,7 +9,7 @@ import { cn } from '../../lib/cn';
 import { formatNumber } from '../../lib/format';
 import { describeViewConfig, LIBRARY_VIEW_NAME_MAX, type LibraryViewDef } from '../../lib/library-views';
 
-const BUILT_IN_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+export const BUILT_IN_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   all: Layers,
   feedback: MessageSquareWarning,
   'to-fix': Wrench,
@@ -20,8 +20,9 @@ const BUILT_IN_ICONS: Record<string, React.ComponentType<{ className?: string }>
 /**
  * The library's views, as Linear lists them: the built-in ones every member
  * has — one per step of the review loop — and the person's own, each with
- * how many flows it shows. The one on screen is marked; a saved one can be
- * renamed in place or deleted from its menu.
+ * how many flows it shows. The one on screen is marked. A saved one is
+ * edited in the view builder, renamed in place or deleted from its menu;
+ * any view can be duplicated into a new one.
  */
 export function LibraryViewList({
   views,
@@ -31,6 +32,9 @@ export function LibraryViewList({
   onSelect,
   onRename,
   onDelete,
+  onEdit,
+  onDuplicate,
+  onCreate,
   pendingId,
 }: {
   views: readonly LibraryViewDef[];
@@ -43,6 +47,12 @@ export function LibraryViewList({
   onSelect: (view: LibraryViewDef) => void;
   onRename?: (view: LibraryViewDef, name: string) => void;
   onDelete?: (view: LibraryViewDef) => void;
+  /** Opens the view builder on a saved view. */
+  onEdit?: (view: LibraryViewDef) => void;
+  /** Opens the view builder on a copy of any view. */
+  onDuplicate?: (view: LibraryViewDef) => void;
+  /** Opens the view builder on a new view. */
+  onCreate?: () => void;
   pendingId?: string | null;
 }) {
   const builtIn = views.filter((v) => v.builtIn);
@@ -77,6 +87,7 @@ export function LibraryViewList({
     }
     const Icon = v.builtIn ? (BUILT_IN_ICONS[v.id] ?? Layers) : Bookmark;
     const active = v.id === activeId;
+    const menu = v.builtIn ? Boolean(onDuplicate) : Boolean(onRename || onDelete || onEdit || onDuplicate);
     return (
       <li key={v.id} className="group/view relative">
         <button
@@ -88,15 +99,14 @@ export function LibraryViewList({
             'flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-body-m outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40',
             active ? 'bg-accent-subtle font-medium text-accent-text' : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
             pendingId === v.id && 'opacity-60',
-            !v.builtIn && (onRename || onDelete) && 'pe-8',
           )}
         >
           <Icon className="size-4 shrink-0" />
           <span className="min-w-0 flex-1 truncate">{v.name}</span>
           {active && modified ? <span className="size-1.5 shrink-0 rounded-full bg-accent-solid" title="Changed since it was saved" aria-label="changed" role="img" /> : null}
-          <span className="text-code-s tabular-nums">{formatNumber(counts[v.id] ?? 0)}</span>
+          <span className={cn('text-code-s tabular-nums', menu && 'transition-opacity group-focus-within/view:opacity-0 group-hover/view:opacity-0 pointer-coarse:opacity-0')}>{formatNumber(counts[v.id] ?? 0)}</span>
         </button>
-        {!v.builtIn && (onRename || onDelete) ? (
+        {menu ? (
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
@@ -111,12 +121,22 @@ export function LibraryViewList({
               <MoreHorizontal />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {onRename ? (
+              {onEdit && !v.builtIn ? (
+                <DropdownMenuItem onClick={() => onEdit(v)}>
+                  <SlidersHorizontal /> Edit view
+                </DropdownMenuItem>
+              ) : null}
+              {onDuplicate ? (
+                <DropdownMenuItem onClick={() => onDuplicate(v)}>
+                  <Copy /> Duplicate
+                </DropdownMenuItem>
+              ) : null}
+              {onRename && !v.builtIn ? (
                 <DropdownMenuItem onClick={() => setRenaming(v.id)}>
                   <Pencil /> Rename
                 </DropdownMenuItem>
               ) : null}
-              {onDelete ? (
+              {onDelete && !v.builtIn ? (
                 <DropdownMenuItem variant="destructive" onClick={() => onDelete(v)}>
                   <Trash2 /> Delete
                 </DropdownMenuItem>
@@ -134,11 +154,26 @@ export function LibraryViewList({
         <ul className="flex flex-col gap-px">{builtIn.map(row)}</ul>
       </div>
       <div className="flex flex-col gap-1">
-        <h2 className="px-2 text-label-xs text-muted-foreground uppercase">Your views</h2>
+        <div className="flex h-6 items-center justify-between gap-2">
+          <h2 className="px-2 text-label-xs text-muted-foreground uppercase">Your views</h2>
+          {onCreate ? (
+            <Button variant="ghost" size="icon-xs" aria-label="New view" title="New view" onClick={onCreate}>
+              <Plus />
+            </Button>
+          ) : null}
+        </div>
         {saved.length ? (
           <ul className="flex flex-col gap-px">{saved.map(row)}</ul>
+        ) : onCreate ? (
+          <button
+            type="button"
+            onClick={onCreate}
+            className="flex h-8 w-full items-center gap-2 rounded-md border border-dashed border-border px-2 text-left text-body-s text-muted-foreground outline-none transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
+          >
+            <Plus className="size-4 shrink-0" /> Create a view
+          </button>
         ) : (
-          <p className="px-2 text-label-xs text-pretty text-muted-foreground">Filter or regroup the flows, then save the result as a view of your own.</p>
+          <p className="px-2 text-label-xs text-pretty text-muted-foreground">No views of your own yet.</p>
         )}
       </div>
     </nav>

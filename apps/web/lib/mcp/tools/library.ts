@@ -11,6 +11,7 @@ import { libraryRefLabel, libraryRefParam, shownRun, type LibraryRefKey } from '
 import {
   BUILT_IN_VIEWS,
   captureStates,
+  DEFAULT_LIBRARY_VIEW,
   describeViewConfig,
   feedbackCounts,
   flowPriority,
@@ -230,7 +231,7 @@ export const getLibraryFlows = defineTool({
       .filter((f) => !q || [f.title, f.file, ...f.cases.flatMap((c) => [c.key, c.title])].some((s) => s.toLowerCase().includes(q)));
     const limit = args.limit ?? 50;
     const flows = all.slice(0, limit);
-    const described = filtered ? describeViewConfig({ filters, sort, group: 'suite', variant: null }) : null;
+    const described = filtered ? describeViewConfig({ ...DEFAULT_LIBRARY_VIEW, filters, sort }) : null;
     return {
       data: {
         project: project.ref,

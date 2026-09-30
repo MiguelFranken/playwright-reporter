@@ -1,16 +1,19 @@
 'use client';
 
-import { Images, ListFilter, PanelLeft, Search, X } from 'lucide-react';
+import { Bookmark, Images, Layers, ListFilter, PanelLeft, Search, X } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '../../components/button';
 import { Input } from '../../components/input';
 import { EmptyState } from '../../patterns/empty-state';
 import { LIBRARY_STATE_ICONS } from '../../patterns/library-state-chip';
+import { ScrollToTop } from '../../patterns/scroll-to-top';
 import { cn } from '../../lib/cn';
 import {
   BUILT_IN_VIEWS,
+  describeViewConfig,
   feedbackCounts,
   groupLibraryFlows,
+  LIBRARY_FOLDERS_LABELS,
   LIBRARY_STATE_HINTS,
   LIBRARY_STATE_LABELS,
   LIBRARY_STATE_TONES,
@@ -33,8 +36,9 @@ import { SCREEN_ZOOM_VAR } from '../review/screen-frame';
 import { SizeControl, STORYBOARD_SIZE } from '../review/size-control';
 import { StoryboardRows } from '../review/storyboard-rows';
 import { FeedbackInbox, FeedbackInboxButton, type InboxItem } from './feedback-inbox';
-import { LibraryViewList } from './library-rail';
-import { LibraryDisplayMenu, LibraryFilterChips, LibraryFilterMenu, LibraryVariantToggle, ViewSaveControls } from './library-toolbar';
+import { BUILT_IN_ICONS, LibraryViewList } from './library-rail';
+import { LibraryDisplayMenu, LibraryFilterChips, LibraryFilterMenu, ViewSaveControls } from './library-toolbar';
+import { LibraryViewEditor } from './library-view-editor';
 
 /** Uncontrolled unless the host passes the value: stories drive it, the app binds it to the URL. */
 function useControlled<T>(value: T | undefined, onChange: ((v: T) => void) | undefined, initial: T): [T, (v: T) => void] {
@@ -43,18 +47,21 @@ function useControlled<T>(value: T | undefined, onChange: ((v: T) => void) | und
 }
 
 const SUMMARY_STATES: LibraryState[] = ['waiting', 'verify', 'needs-review', 'updated'];
+/** The summary's short labels; the full one is the button's title. */
+const SUMMARY_LABELS: Partial<Record<LibraryState, string>> = { waiting: 'Waiting', verify: 'To verify', 'needs-review': 'Needs review', updated: 'Updated' };
 /** Nothing is being decided in the library. */
 const NOTHING_PENDING: ReadonlySet<string> = new Set();
 
 /**
- * Where the flows on screen stand, as four buttons that each filter the
- * library to one step of the review loop: what waits for changes, what is
- * ready to verify, what nobody reviewed, what changed since the last capture.
+ * Where the flows on screen stand, as one strip of four toggles that each
+ * filter the library to one step of the review loop: what waits for
+ * changes, what is ready to verify, what nobody reviewed, what changed since
+ * the last capture.
  */
 export function LibrarySummary({ counts, states, onToggle }: { counts: LibraryCounts; states: readonly LibraryState[]; onToggle: (state: LibraryState) => void }) {
   return (
-    <div className="grid grid-cols-2 gap-2 md:grid-cols-4" role="group" aria-label="Review state">
-      {SUMMARY_STATES.map((s) => {
+    <div className="inline-flex max-w-full shrink-0 overflow-x-auto rounded-lg border border-border bg-surface shadow-xs [scrollbar-width:none]" role="group" aria-label="Review state">
+      {SUMMARY_STATES.map((s, i) => {
         const Icon = LIBRARY_STATE_ICONS[s];
         const active = states.includes(s);
         const n = counts.states[s];
@@ -63,17 +70,21 @@ export function LibrarySummary({ counts, states, onToggle }: { counts: LibraryCo
             key={s}
             type="button"
             aria-pressed={active}
+            aria-label={`${LIBRARY_STATE_LABELS[s]} ${n}`}
             onClick={() => onToggle(s)}
             title={LIBRARY_STATE_HINTS[s]}
             className={cn(
-              'flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/25',
-              active ? 'border-accent-border bg-accent-subtle' : 'border-border bg-surface hover:bg-muted/60',
+              'flex h-8 shrink-0 items-center gap-1.5 px-2.5 text-label-s whitespace-nowrap outline-none transition-colors focus-visible:z-10 focus-visible:ring-[3px] focus-visible:ring-ring/25',
+              i > 0 && 'border-l border-border',
+              i === 0 && 'rounded-l-[7px]',
+              i === SUMMARY_STATES.length - 1 && 'rounded-r-[7px]',
+              active ? 'bg-accent-subtle text-accent-text' : 'hover:bg-muted/60',
               n === 0 && !active && 'text-muted-foreground',
             )}
           >
-            <Icon className={cn('size-4 shrink-0', n ? toneText[LIBRARY_STATE_TONES[s]] : 'text-muted-foreground')} />
-            <span className="min-w-0 flex-1 truncate text-label-s">{LIBRARY_STATE_LABELS[s]}</span>
-            <span className="text-title-s tabular-nums">{n}</span>
+            <Icon className={cn('size-3.5 shrink-0', active ? 'text-accent-text' : n ? toneText[LIBRARY_STATE_TONES[s]] : 'text-muted-foreground')} />
+            <span>{SUMMARY_LABELS[s]}</span>
+            <span className={cn('tabular-nums', active ? 'text-accent-text' : 'text-muted-foreground')}>{n}</span>
           </button>
         );
       })}
@@ -170,8 +181,8 @@ export function LibraryBrowser({
   const [folder, setFolder] = useControlled<string | null>(folderProp, onFolderChange, null);
   const [selection, setSelectionState] = useControlled<ReviewSelection | null>(selectionProp, onSelectionChange, null);
   const [size, setSize] = useControlled<number>(sizeProp, onSizeChange, STORYBOARD_SIZE.default);
-  const [ownTree, setOwnTree] = useState<ReviewGrouping>('suite');
   const [inbox, setInbox] = useState(false);
+  const [editor, setEditor] = useState<{ mode: 'create' | 'edit'; id?: string; name: string; config: LibraryViewConfig } | null>(null);
   // Below the wide layout the rail folds away, so the flows are not a screen of lists down.
   const [railOpen, setRailOpen] = useState(false);
   const modified = Boolean(activeView && !sameViewConfig(config, activeView.config));
@@ -185,8 +196,8 @@ export function LibraryBrowser({
     if (configProp === undefined) setConfig(view.config);
   };
 
-  // The tree groups like the sections when they are folders; grouped by state or priority, it keeps its own.
-  const treeGrouping: ReviewGrouping = config.group === 'file' || config.group === 'suite' ? config.group : ownTree;
+  // The view decides the folders: the tree and, grouped by folder, the sections.
+  const treeGrouping: ReviewGrouping = config.folders;
   const variants = useMemo(() => variantsOf(flows), [flows]);
   const variant = config.variant && variants.includes(config.variant) ? config.variant : null;
   const byVariant = useMemo(() => filterFlows(flows, 'all', variant, ''), [flows, variant]);
@@ -196,9 +207,17 @@ export function LibraryBrowser({
   const inScope = useMemo(() => searched.filter((f) => inFolder(f, treeGrouping, folder)), [searched, treeGrouping, folder]);
   const counts = useMemo(() => libraryCounts(inScope), [inScope]);
   const visible = useMemo(() => inScope.filter((f) => matchesLibraryFilters(f, config.filters)), [inScope, config.filters]);
-  const sections = useMemo(() => groupLibraryFlows(sortLibraryFlows(visible, config.sort), config.group), [visible, config.sort, config.group]);
+  const sections = useMemo(() => groupLibraryFlows(sortLibraryFlows(visible, config.sort), config.group, config.folders), [visible, config.sort, config.group, config.folders]);
   const ordered = useMemo(() => sections.flatMap((s) => s.flows), [sections]);
   const viewCounts = useMemo(() => Object.fromEntries(views.map((v) => [v.id, byVariant.filter((f) => matchesLibraryFilters(f, v.config.filters)).length])), [views, byVariant]);
+  /** What the view builder previews: the flows a view with these settings would show. */
+  const countFor = useCallback(
+    (c: LibraryViewConfig) => {
+      const v = c.variant && variants.includes(c.variant) ? c.variant : null;
+      return filterFlows(flows, 'all', v, '').filter((f) => matchesLibraryFilters(f, c.filters)).length;
+    },
+    [flows, variants],
+  );
   const matching = useCallback((flow: ReviewFlowView) => matchingCheckpointIds(flow, config.filters), [config.filters]);
   const total = flows.reduce((n, f) => n + f.checkpoints.length, 0);
 
@@ -247,6 +266,15 @@ export function LibraryBrowser({
   }
 
   const filtered = config.filters.states.length > 0 || config.filters.priorities.length > 0;
+  const ViewIcon = activeView ? (activeView.builtIn ? (BUILT_IN_ICONS[activeView.id] ?? Layers) : Bookmark) : Layers;
+  const savedActive = activeView && !activeView.builtIn ? activeView : null;
+  const canEdit = Boolean(onSaveView);
+  const submitEditor = (input: { name: string; config: LibraryViewConfig }) => {
+    if (!editor) return;
+    if (editor.mode === 'edit' && editor.id) onUpdateView?.({ id: editor.id, name: input.name, config: input.config });
+    else onSaveView?.(input);
+    setEditor(null);
+  };
   return (
     <div ref={rootRef} className="grid gap-6 lg:grid-cols-[15rem_minmax(0,1fr)]" style={{ [SCREEN_ZOOM_VAR]: size } as React.CSSProperties}>
       <Button variant="outline" size="sm" className="justify-self-start lg:hidden" aria-expanded={railOpen} aria-controls="library-rail" onClick={() => setRailOpen((o) => !o)}>
@@ -255,7 +283,7 @@ export function LibraryBrowser({
       <aside
         id="library-rail"
         aria-label="Views and folders"
-        className="hidden min-w-0 flex-col gap-6 data-open:flex lg:sticky lg:flex lg:top-[calc(var(--sticky-offset,0px)+1rem)] lg:max-h-[calc(100dvh-var(--sticky-offset,0px)-2rem)] lg:self-start lg:overflow-y-auto lg:overscroll-contain lg:pb-4"
+        className="hidden min-w-0 flex-col gap-5 data-open:flex lg:sticky lg:flex lg:top-[calc(var(--sticky-offset,0px)+1rem)] lg:max-h-[calc(100dvh-var(--sticky-offset,0px)-2rem)] lg:self-start lg:overflow-y-auto lg:overscroll-contain lg:pb-4"
         data-open={railOpen || undefined}
       >
         <LibraryViewList
@@ -266,18 +294,19 @@ export function LibraryBrowser({
           onSelect={selectView}
           onRename={onUpdateView ? (v, name) => onUpdateView({ id: v.id, name }) : undefined}
           onDelete={onDeleteView}
+          onEdit={onUpdateView ? (v) => setEditor({ mode: 'edit', id: v.id, name: v.name, config: v.id === activeViewId ? config : v.config }) : undefined}
+          onDuplicate={canEdit ? (v) => setEditor({ mode: 'create', name: `${v.name} (copy)`.slice(0, 60), config: v.config }) : undefined}
+          onCreate={canEdit ? () => setEditor({ mode: 'create', name: '', config }) : undefined}
           pendingId={viewPendingId}
         />
+        <div className="border-t border-separator" />
         <ReviewTree
           folders={folders}
           selected={folder}
           onSelect={setFolder}
           grouping={treeGrouping}
-          onGroupingChange={(g) => {
-            if (config.group === 'suite' || config.group === 'file') setConfig({ ...config, group: g });
-            else setOwnTree(g);
-            setFolder(null);
-          }}
+          title={LIBRARY_FOLDERS_LABELS[config.folders]}
+          allLabel={config.folders === 'suite' ? 'All suites' : 'All files'}
           total={searched.reduce((n, f) => n + f.checkpoints.flatMap((c) => c.captures).length, 0)}
           needsReview={0}
           showNeedsReview={false}
@@ -286,31 +315,45 @@ export function LibraryBrowser({
       </aside>
 
       <div className="flex min-w-0 flex-col gap-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <LibraryFilterMenu config={config} onChange={setConfig} counts={counts} />
-          <LibraryFilterChips config={config} onChange={setConfig} />
-          <ViewSaveControls
-            modified={modified}
-            savedViewName={activeView && !activeView.builtIn ? activeView.name : null}
-            canSave={Boolean(onSaveView)}
-            pending={Boolean(viewPendingId)}
-            onReset={() => activeView && setConfig(activeView.config)}
-            onSave={activeView && !activeView.builtIn && onUpdateView ? () => onUpdateView({ id: activeView.id, config }) : undefined}
-            onSaveAs={onSaveView ? (name) => onSaveView({ name, config }) : undefined}
-          />
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-            <LibraryVariantToggle variants={variants} value={variant} onChange={(v) => setConfig({ ...config, variant: v })} />
-            <LibraryDisplayMenu config={config} onChange={setConfig} />
-            <SizeControl size={size} onLive={setLiveSize} onCommit={setSize} />
-            <div className="relative">
-              <Search aria-hidden className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
-              <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find a test, case or checkpoint" aria-label="Find a test, case or checkpoint" className="h-8 w-56 pl-8" />
+        <header className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+              <div className="flex min-w-0 max-w-full items-center gap-2">
+                <ViewIcon aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+                <h2 className="min-w-0 truncate text-title-m" title={activeView?.description ?? describeViewConfig(config)}>
+                  {activeView?.name ?? 'All flows'}
+                </h2>
+                {modified ? <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-label-xs text-muted-foreground">Edited</span> : null}
+              </div>
+              <ViewSaveControls
+                modified={modified}
+                savedViewName={savedActive?.name ?? null}
+                canSave={canEdit}
+                pending={Boolean(viewPendingId)}
+                onReset={() => activeView && setConfig(activeView.config)}
+                onSave={savedActive && onUpdateView ? () => onUpdateView({ id: savedActive.id, config }) : undefined}
+                onSaveAs={canEdit ? () => setEditor({ mode: 'create', name: '', config }) : undefined}
+              />
             </div>
-            <FeedbackInboxButton flows={inScope} onClick={() => setInbox(true)} />
+            <div className="flex w-full items-center gap-2 sm:w-auto">
+              <div className="relative min-w-0 flex-1 sm:flex-none">
+                <Search aria-hidden className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find a test, case or checkpoint" aria-label="Find a test, case or checkpoint" className="h-8 w-full pl-8 sm:w-64" />
+              </div>
+              <FeedbackInboxButton flows={inScope} onClick={() => setInbox(true)} />
+            </div>
           </div>
-        </div>
-
-        <LibrarySummary counts={counts} states={config.filters.states} onToggle={toggleState} />
+          <div className="flex flex-wrap items-center gap-2">
+            <LibrarySummary counts={counts} states={config.filters.states} onToggle={toggleState} />
+            <LibraryFilterMenu config={config} onChange={setConfig} counts={counts} />
+            <LibraryFilterChips config={config} onChange={setConfig} />
+            <div className="ml-auto">
+              <LibraryDisplayMenu config={config} onChange={setConfig} variants={variants}>
+                <SizeControl size={size} onLive={setLiveSize} onCommit={setSize} />
+              </LibraryDisplayMenu>
+            </div>
+          </div>
+        </header>
 
         {visible.length === 0 ? (
           <EmptyState
@@ -352,6 +395,19 @@ export function LibraryBrowser({
         comments={comments}
       />
       <FeedbackInbox open={inbox} onOpenChange={setInbox} flows={inScope} now={comments.now} onOpenThread={openThread} />
+      <LibraryViewEditor
+        open={editor !== null}
+        onOpenChange={(open) => !open && setEditor(null)}
+        mode={editor?.mode ?? 'create'}
+        initialName={editor?.name ?? ''}
+        initialConfig={editor?.config ?? config}
+        variants={variants}
+        countFor={countFor}
+        total={flows.length}
+        onSubmit={submitEditor}
+        pending={Boolean(viewPendingId)}
+      />
+      <ScrollToTop />
     </div>
   );
 }
