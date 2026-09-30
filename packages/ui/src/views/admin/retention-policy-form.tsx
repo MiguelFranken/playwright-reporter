@@ -16,6 +16,8 @@ export interface RetentionPolicyValue {
   /** Lifetime in days for every kind without an override. */
   days: number;
   overrides: Partial<Record<ArtifactKind, number>>;
+  /** Keeps the screens the library shows and flows with open comment threads, however old. */
+  keepVisuals: boolean;
 }
 
 export interface RetentionPolicyFormProps {
@@ -23,7 +25,8 @@ export interface RetentionPolicyFormProps {
   kinds: readonly ArtifactKind[];
   /**
    * The form action — the app passes its `useActionState` dispatcher. Fields:
-   * `enabled` (`on` | `off`), `days`, and `days.<kind>` per override.
+   * `enabled` (`on` | `off`), `days`, `days.<kind>` per override, and
+   * `visuals` (`keep` | `expire`).
    */
   action: (formData: FormData) => void;
   pending?: boolean;
@@ -50,11 +53,13 @@ export function RetentionPolicyForm(props: RetentionPolicyFormProps) {
 function PolicyFields({ policy, kinds, action, pending = false, onFieldsChange, preview }: RetentionPolicyFormProps) {
   const [enabled, setEnabled] = useState(policy.enabled ? 'on' : 'off');
   const [days, setDays] = useState(String(policy.days));
-  const fields = useFormFields(onFieldsChange, [enabled]);
+  const [visuals, setVisuals] = useState(policy.keepVisuals ? 'keep' : 'expire');
+  const fields = useFormFields(onFieldsChange, [enabled, visuals]);
 
   return (
     <form action={action} ref={fields.ref} onChange={fields.onChange} className="flex flex-col gap-5">
       <input type="hidden" name="enabled" value={enabled} />
+      <input type="hidden" name="visuals" value={visuals} />
       <div className="flex flex-col gap-1.5">
         <Label id="retention-enabled-label">Delete expired artifacts</Label>
         <SegmentedControl
@@ -110,6 +115,26 @@ function PolicyFields({ policy, kinds, action, pending = false, onFieldsChange, 
         </div>
         <p className="text-xs text-muted-foreground">Videos and traces are the large ones: a shorter lifetime for them frees the most space.</p>
       </fieldset>
+
+      <div className="flex flex-col gap-1.5">
+        <Label id="retention-visuals-label">Library screens and commented flows</Label>
+        <SegmentedControl
+          aria-labelledby="retention-visuals-label"
+          aria-describedby="retention-visuals-hint"
+          value={visuals}
+          onValueChange={setVisuals}
+          items={[
+            { value: 'keep', label: 'Keep' },
+            { value: 'expire', label: 'Expire with their lifetime' },
+          ]}
+          className="self-start"
+        />
+        <p id="retention-visuals-hint" className="text-xs text-muted-foreground">
+          {visuals === 'keep'
+            ? 'The screens the library shows, and every screen of a flow with an unresolved comment, are kept however old they are.'
+            : 'The library and flows with unresolved comments lose their screens like any other artifact. Approved baselines are kept either way.'}
+        </p>
+      </div>
 
       {preview}
 

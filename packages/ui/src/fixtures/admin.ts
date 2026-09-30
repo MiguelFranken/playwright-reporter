@@ -7,7 +7,7 @@ import type { RetentionPolicyValue } from '../views/admin/retention-policy-form'
 
 const MB = 1024 ** 2;
 
-export const RETENTION_POLICY: RetentionPolicyValue = { enabled: true, days: 30, overrides: { video: 7, trace: 14 } };
+export const RETENTION_POLICY: RetentionPolicyValue = { enabled: true, days: 30, overrides: { video: 7, trace: 14 }, keepVisuals: true };
 
 export const STORAGE_USAGE: StorageUsageRow[] = [
   { kind: 'image', liveCount: 12, liveBytes: 3.1 * MB, dueCount: 0, dueBytes: 0, expiredCount: 0, expiredBytes: 0 },

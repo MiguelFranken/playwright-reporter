@@ -20,6 +20,13 @@ export interface RetentionPolicy {
   days: number;
   /** Per-kind lifetimes, e.g. videos and traces (the big ones) shorter than screenshots. */
   overrides: Partial<Record<AttachmentKind, number>>;
+  /**
+   * Keeps the review visuals people still use, however old: the screens the
+   * library shows, and every image of a flow (a test's checkpoints in one
+   * run) with an unresolved comment thread. Off lets them expire with their
+   * lifetime like any other artifact. Approved baselines are kept either way.
+   */
+  keepVisuals: boolean;
 }
 
 export type PolicySource = 'saved' | 'environment' | 'default';
@@ -41,11 +48,14 @@ function parseDays(value: unknown): number | undefined {
  */
 export function environmentPolicy(env: Record<string, string | undefined> = process.env): { policy: RetentionPolicy; source: PolicySource } {
   const days = parseDays(env.ARTIFACT_RETENTION_DAYS);
-  if (days === undefined) return { policy: { enabled: false, days: DEFAULT_RETENTION_DAYS, overrides: {} }, source: 'default' };
-  return { policy: { enabled: true, days, overrides: {} }, source: 'environment' };
+  if (days === undefined) return { policy: { enabled: false, days: DEFAULT_RETENTION_DAYS, overrides: {}, keepVisuals: true }, source: 'default' };
+  return { policy: { enabled: true, days, overrides: {}, keepVisuals: true }, source: 'environment' };
 }
 
-/** A stored or submitted value, made safe: unknown kinds and nonsense days are dropped. */
+/**
+ * A stored or submitted value, made safe: unknown kinds and nonsense days are
+ * dropped. A policy saved before `keepVisuals` existed keeps the visuals.
+ */
 export function normalizePolicy(value: unknown): RetentionPolicy | null {
   if (!value || typeof value !== 'object') return null;
   const v = value as Record<string, unknown>;
@@ -57,7 +67,7 @@ export function normalizePolicy(value: unknown): RetentionPolicy | null {
     const d = parseDays(raw[kind]);
     if (d !== undefined && d !== days) overrides[kind] = d;
   }
-  return { enabled: v.enabled === true, days, overrides };
+  return { enabled: v.enabled === true, days, overrides, keepVisuals: v.keepVisuals !== false };
 }
 
 export function daysFor(policy: RetentionPolicy, kind: AttachmentKind): number {
@@ -87,8 +97,8 @@ export function expiresAt(policy: RetentionPolicy, kind: AttachmentKind, created
 }
 
 /**
- * Reads a form's fields: `enabled` (checkbox), `days`, and `days.<kind>`
- * (blank inherits the default). Returns an error message for the user, or the
+ * Reads a form's fields: `enabled` (checkbox), `days`, `days.<kind>` (blank
+ * inherits the default) and `visuals` (`keep` | `expire`; missing keeps). Returns an error message for the user, or the
  * policy to save.
  */
 export function policyFromForm(form: { get(name: string): FormDataEntryValue | null }): RetentionPolicy | string {
@@ -109,5 +119,5 @@ export function policyFromForm(form: { get(name: string): FormDataEntryValue | n
     if (Number(d) !== Number(days)) overrides[kind] = Number(d);
   }
   const enabled = form.get('enabled');
-  return { enabled: enabled === 'on' || enabled === 'true', days: Number(days), overrides };
+  return { enabled: enabled === 'on' || enabled === 'true', days: Number(days), overrides, keepVisuals: text('visuals') !== 'expire' };
 }

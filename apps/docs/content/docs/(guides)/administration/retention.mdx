@@ -11,6 +11,19 @@ Both policies are **off** until a superadmin turns them on, so an upgrade never 
 upload, and optionally a shorter one per kind. A sweep deletes expired objects from the store and marks them expired;
 the run keeps every result, error and step, and the artifact's page says it expired.
 
+Some review images are kept however old they are:
+
+- **Approved baselines**: the image each checkpoint is compared against. Always kept.
+- **Library screens**: what the [library](/docs/using/visual-review#the-library) shows for every branch or pull request
+  kept in it, and the runs pinned there.
+- **Commented flows**: every image of a flow — one test's checkpoints in one run, every variant — on which a comment
+  thread is still open. Once the thread is resolved, the flow ages out like any other.
+
+**Library screens and commented flows** on the same page switches the last two off: *Expire with their lifetime*
+lets them go with the lifetime of their kind. The preview before saving shows what that would free.
+
+With `S3_RETENTION=lifecycle` the bucket expires objects by age alone, and none of these exceptions apply.
+
 On S3, `S3_RETENTION=lifecycle` lets the bucket expire objects itself: uploads are tagged with their kind, and saving
 the policy writes one lifecycle rule per kind.
 

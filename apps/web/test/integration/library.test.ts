@@ -121,7 +121,7 @@ describe('retention', () => {
     const old = await run(tenant, { startedAt: minutesAgo(60), hash: sha('a') });
     const newer = await run(tenant, { startedAt: minutesAgo(30), hash: sha('b') });
     await db.update(attachments).set({ status: 'uploaded' });
-    const policy = { enabled: true, days: 1, overrides: {} };
+    const policy = { enabled: true, days: 1, overrides: {}, keepVisuals: true };
     const later = new Date(Date.now() + 2 * 86_400_000);
     const due = async () => (await db.select({ runId: attachments.runId }).from(attachments).where(dueWhere(policy, later))).map((a) => a.runId);
 
@@ -135,6 +135,9 @@ describe('retention', () => {
     // Pinned to the old run: that one stays instead, and its run is not deleted.
     await setLibraryReference({ projectId: tenant.project.id, key: main, patch: { pin: old.number }, userId: null });
     expect(await due()).toEqual([newer.id]);
+    // Unless the policy lets visuals expire: then the library keeps nothing.
+    const expiring = async () => (await db.select({ runId: attachments.runId }).from(attachments).where(dueWhere({ ...policy, keepVisuals: false }, later))).map((a) => a.runId);
+    expect((await expiring()).sort()).toEqual([old.id, newer.id].sort());
     const dataPolicy = { enabled: true, runDays: 1, keepLatestRuns: 0, eventDays: 1, auditDays: null, housekeeping: false };
     const deletable = await db.select({ id: runs.id }).from(runs).where(runsDueWhere(dataPolicy, 'local', later));
     expect(deletable.map((r) => r.id)).not.toContain(old.id);

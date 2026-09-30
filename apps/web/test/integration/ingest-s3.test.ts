@@ -182,7 +182,7 @@ describeS3('ingest with STORAGE_DRIVER=s3', () => {
       .update(attachments)
       .set({ createdAt: new Date(Date.now() - 40 * DAY) })
       .where(eq(attachments.id, old.id));
-    await saveRetentionPolicy({ enabled: true, days: 30, overrides: {} }, tenant.adminUser.id);
+    await saveRetentionPolicy({ enabled: true, days: 30, overrides: {}, keepVisuals: true }, tenant.adminUser.id);
 
     expect(await sweepExpiredArtifacts({ trigger: 'manual' })).toMatchObject({ status: 'done', expiredCount: 1, error: null });
 

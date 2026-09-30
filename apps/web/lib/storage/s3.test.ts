@@ -47,7 +47,7 @@ function adapter(overrides: Partial<S3StorageConfig> = {}, handler: Handler = ()
 
 const sent = (send: ReturnType<typeof adapter>['send']) => send.mock.calls.map(([command]) => command as unknown as { input: Record<string, unknown> });
 
-const policy = (p: Partial<RetentionPolicy> = {}): RetentionPolicy => ({ enabled: true, days: 30, overrides: {}, ...p });
+const policy = (p: Partial<RetentionPolicy> = {}): RetentionPolicy => ({ enabled: true, days: 30, overrides: {}, keepVisuals: true, ...p });
 
 afterEach(() => {
   vi.useRealTimers();

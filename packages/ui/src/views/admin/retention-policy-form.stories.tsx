@@ -53,8 +53,25 @@ export const Submits: Story = {
     await expect(data.get('days')).toBe('30');
     await expect(data.get('days.screenshot')).toBe('10');
     await expect(data.get('days.video')).toBe('7');
+    await expect(data.get('visuals')).toBe('keep');
   },
 };
+
+/** Library screens and commented flows are kept unless the admin lets them expire; the hint says what that means. */
+export const LetsVisualsExpire: Story = {
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText(/kept however old they are/)).toBeVisible();
+    await userEvent.click(canvas.getByRole('radio', { name: 'Expire with their lifetime' }));
+    await expect(canvas.getByText(/Approved baselines are kept either way/)).toBeVisible();
+    await expect(args.onFieldsChange).toHaveBeenLastCalledWith(expect.objectContaining({ visuals: 'expire' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Save policy' }));
+    const data = (args.action as ReturnType<typeof fn>).mock.calls[0]![0] as FormData;
+    await expect(data.get('visuals')).toBe('expire');
+  },
+};
+
+export const VisualsExpire: Story = { args: { policy: { ...RETENTION_POLICY, keepVisuals: false } } };
 
 /** Every change reports the fields under their posted names, the segmented control's hidden input included. */
 export const ReportsFields: Story = {
@@ -113,7 +130,7 @@ export const WithPreview: Story = {
   },
 };
 
-export const KeepForever: Story = { args: { policy: { enabled: false, days: 90, overrides: {} } } };
+export const KeepForever: Story = { args: { policy: { enabled: false, days: 90, overrides: {}, keepVisuals: true } } };
 
 export const Saving: Story = {
   args: { pending: true },

@@ -16,7 +16,7 @@ const bucket = uniqueBucket();
 const store = bucketClient(bucket);
 
 const adapter = (overrides: Parameters<typeof s3TestConfig>[1] = {}) => new S3StorageAdapter(s3TestConfig(bucket, overrides));
-const policy = (p: Partial<RetentionPolicy> = {}): RetentionPolicy => ({ enabled: true, days: 30, overrides: {}, ...p });
+const policy = (p: Partial<RetentionPolicy> = {}): RetentionPolicy => ({ enabled: true, days: 30, overrides: {}, keepVisuals: true, ...p });
 
 /** What the reporter does with an upload instruction (`packages/reporter/src/client.ts`). */
 async function reporterUpload(instruction: { url: string; method: string; headers: Record<string, string> }, body: Uint8Array, contentType: string) {

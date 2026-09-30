@@ -20,22 +20,22 @@ import { describe, expect, test, type Tenant } from './fixtures';
 const KEY = 'tests/checkout.spec.ts::books a workshop';
 const sha = (c: string) => c.repeat(64);
 
-async function runWith(tenant: Tenant, hash: string, startedAt: Date) {
+/** A run of KEY capturing `ready` (and, with `steps`, the checkpoints after it) on desktop. */
+async function runWith(tenant: Tenant, hash: string, startedAt: Date, steps: string[] = []) {
   const started = await startRun(tenant.tokenProject, runStart({ startedAt: startedAt.toISOString() }));
   const run = await getRunForProject(tenant.tokenProject, started.runId);
-  const desktop = attachmentRef({ name: 'review:ready:desktop' });
-  const checkpoints: Checkpoint[] = [
-    {
-      name: 'ready',
-      sequence: 0,
-      stepPath: [],
-      variants: [{ variant: 'desktop', attachmentId: desktop.id, viewport: { width: 1280, height: 720 }, deviceScaleFactor: 2, width: 2560, height: 4000, sha256: hash }],
-    },
-  ];
+  const names = ['ready', ...steps];
+  const images = names.map((name) => attachmentRef({ name: `review:${name}:desktop` }));
+  const checkpoints: Checkpoint[] = names.map((name, i) => ({
+    name,
+    sequence: i,
+    stepPath: [],
+    variants: [{ variant: 'desktop', attachmentId: images[i].id, viewport: { width: 1280, height: 720 }, deviceScaleFactor: 2, width: 2560, height: 4000, sha256: i === 0 ? hash : sha(String(i)) }],
+  }));
   await ingestEvents(
     tenant.tokenProject,
     run,
-    eventBatch([testBegin({ seq: 0, testKey: KEY }), attemptEnd({ seq: 1, testKey: KEY, startedAt: startedAt.toISOString(), attachments: [desktop], checkpoints })]),
+    eventBatch([testBegin({ seq: 0, testKey: KEY }), attemptEnd({ seq: 1, testKey: KEY, startedAt: startedAt.toISOString(), attachments: images, checkpoints })]),
   );
   const [flow] = await runReview({ id: run.id, startedAt });
   return { run, capture: flow.checkpoints[0].captures[0] };
@@ -150,15 +150,32 @@ describe('threads', () => {
 });
 
 describe('retention', () => {
-  test('keeps the image an open thread was placed on, until it is resolved', async ({ db, tenant }) => {
-    const { capture } = await runWith(tenant, sha('a'), minutesAgo(5));
-    const [c] = await db.select().from(reviewCaptures).where(eq(reviewCaptures.id, capture.id));
+  const later = () => new Date(Date.now() + 2 * 86_400_000);
+  const policy = { enabled: true, days: 1, overrides: {}, keepVisuals: true };
+
+  test('keeps every image of a flow with an open thread, until it is resolved', async ({ db, tenant }) => {
+    const { run, capture } = await runWith(tenant, sha('a'), minutesAgo(5), ['paid', 'confirmed']);
+    const other = await runWith(tenant, sha('a'), minutesAgo(4), ['paid']);
     await db.update(attachments).set({ status: 'uploaded' });
+    const flow = (await db.select({ id: reviewCaptures.attachmentId }).from(reviewCaptures).where(eq(reviewCaptures.runId, run.id))).map((c) => c.id);
+    const elsewhere = (await db.select({ id: reviewCaptures.attachmentId }).from(reviewCaptures).where(eq(reviewCaptures.runId, other.run.id))).map((c) => c.id);
+    expect(flow).toHaveLength(3);
+    const due = async (p = policy) => (await db.select({ id: attachments.id }).from(attachments).where(dueWhere(p, later()))).map((d) => d.id);
+
+    // A thread on the first image keeps the whole flow of that run, not the other run's.
     const thread = await createThread({ projectId: tenant.project.id, captureId: capture.id, anchor: { kind: 'point', x: 0.5, y: 0.5 }, body: 'Here', author: { userId: null, source: 'app' } });
-    const due = async () => (await db.select({ id: attachments.id }).from(attachments).where(dueWhere({ enabled: true, days: 1, overrides: {} }, new Date(Date.now() + 2 * 86_400_000)))).map((d) => d.id);
-    expect(await due()).not.toContain(c.attachmentId);
+    const kept = await due();
+    for (const id of flow) expect(kept).not.toContain(id);
+    for (const id of elsewhere) expect(kept).toContain(id);
+
+    // Unless the policy lets visuals expire.
+    const expiring = await due({ ...policy, keepVisuals: false });
+    for (const id of flow) expect(expiring).toContain(id);
+
+    // Resolved, it ages out like any other.
     await setThreadStatus({ projectId: tenant.project.id, threadId: thread.id, status: 'resolved', author: { userId: null, source: 'app' } });
-    expect(await due()).toContain(c.attachmentId);
+    const resolved = await due();
+    for (const id of flow) expect(resolved).toContain(id);
   });
 });
 
