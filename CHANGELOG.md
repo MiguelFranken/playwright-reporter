@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.66](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.65...v0.0.66) (2026-09-30)
+
+### Features
+
+* **review:** scroll side-by-side screens together ([41ce758](https://github.com/MiguelFranken/playwright-reporter/commit/41ce758b1ab8f7c2b7d30032b70ebdc5e12b5a3b))
+
 ## [0.0.65](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.64...v0.0.65) (2026-09-30)
 
 ### Bug Fixes
