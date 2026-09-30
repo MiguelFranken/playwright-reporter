@@ -129,7 +129,8 @@ export const ScrollsBackToTop: Story = {
   play: async ({ canvasElement }) => {
     window.scrollTo({ top: 3000 });
     await userEvent.click(await within(canvasElement).findByRole('button', { name: 'Scroll to top' }));
-    await waitFor(() => expect(window.scrollY).toBe(0));
+    // A smooth scroll: give a slow machine time to glide all the way up.
+    await waitFor(() => expect(window.scrollY).toBe(0), { timeout: 5000 });
   },
 };
 

@@ -29,7 +29,8 @@ export const Default: Story = {
     await expect(canvas.queryByRole('button', { name: 'Scroll to top' })).toBeNull();
     window.scrollTo({ top: 600 });
     await userEvent.click(await canvas.findByRole('button', { name: 'Scroll to top' }));
-    await waitFor(() => expect(window.scrollY).toBe(0));
+    // A smooth scroll: give a slow machine time to glide all the way up.
+    await waitFor(() => expect(window.scrollY).toBe(0), { timeout: 5000 });
     await waitFor(() => expect(canvas.queryByRole('button', { name: 'Scroll to top' })).toBeNull());
   },
 };
