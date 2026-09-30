@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.62](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.61...v0.0.62) (2026-09-30)
+
+### Features
+
+* **review:** a right-click menu on the folder tree, with bulk approval ([54fa771](https://github.com/MiguelFranken/playwright-reporter/commit/54fa7718cf2355b153c01f2b80dda6b96ab8ba1d))
+
 ## [0.0.61](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.60...v0.0.61) (2026-09-30)
 
 ### Bug Fixes
