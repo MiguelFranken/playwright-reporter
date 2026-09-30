@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.59](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.58...v0.0.59) (2026-09-30)
+
+### Performance Improvements
+
+* **cases:** keep filters across suites and serve seen lists from the query cache ([#71](https://github.com/MiguelFranken/playwright-reporter/issues/71)) ([272f046](https://github.com/MiguelFranken/playwright-reporter/commit/272f046c6aec84a8037e78919cf22349901ecd55))
+
 ## [0.0.58](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.57...v0.0.58) (2026-09-30)
 
 ### Performance Improvements
