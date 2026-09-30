@@ -12,7 +12,7 @@
  * Plain data and functions, read by the views, the app's URL parsing and its
  * saved views, so no JSX and no directive (see AGENTS.md, trap 2).
  */
-import { buildReviewTree, compareVariants, flattenFolders, NEEDS_REVIEW, type ReviewCaptureView, type ReviewFlowView, type ReviewGrouping } from './review';
+import { buildReviewTree, compareVariants, flattenFolders, NEEDS_REVIEW, REVIEW_GROUPINGS, type ReviewCaptureView, type ReviewFlowView, type ReviewGrouping } from './review';
 import { CASE_PRIORITIES, CASE_PRIORITY_LABELS, type CasePriority } from './test-cases';
 import type { Tone } from './tone';
 
@@ -121,11 +121,18 @@ export interface LibraryFilters {
   priorities: CasePriority[];
 }
 
-export const LIBRARY_GROUPINGS = ['suite', 'file', 'state', 'priority', 'none'] as const;
+/** What the folders of a view are: the test case suites the flows' tests are linked to, or their spec files. */
+export const LIBRARY_FOLDERS = REVIEW_GROUPINGS;
+export type LibraryFolders = ReviewGrouping;
+export const LIBRARY_FOLDERS_LABELS: Record<LibraryFolders, string> = { suite: 'Test case suites', file: 'Spec files' };
+/** One folder, for a section heading's kind: `Suite`, `Spec file`. */
+export const LIBRARY_FOLDER_LABELS: Record<LibraryFolders, string> = { suite: 'Suite', file: 'Spec file' };
+
+/** How the flows are sectioned: by the view's folders, by review state, by priority, or not at all. */
+export const LIBRARY_GROUPINGS = ['folder', 'state', 'priority', 'none'] as const;
 export type LibraryGrouping = (typeof LIBRARY_GROUPINGS)[number];
 export const LIBRARY_GROUPING_LABELS: Record<LibraryGrouping, string> = {
-  suite: 'Test case suite',
-  file: 'Spec file',
+  folder: 'Folder',
   state: 'Review state',
   priority: 'Priority',
   none: 'No grouping',
@@ -141,16 +148,18 @@ export const LIBRARY_SORT_LABELS: Record<LibrarySort, string> = {
   comments: 'Most open comments',
 };
 
-/** What a view is: its filters, how it groups and orders the flows, and optionally one variant. */
+/** What a view is: its filters, its folders, how it groups and orders the flows, and optionally one variant. */
 export interface LibraryViewConfig {
   filters: LibraryFilters;
+  /** The folder tree beside the flows, and the sections when grouped by folder. */
+  folders: LibraryFolders;
   group: LibraryGrouping;
   sort: LibrarySort;
   /** One variant (`mobile`), or every variant side by side. */
   variant: string | null;
 }
 
-export const DEFAULT_LIBRARY_VIEW: LibraryViewConfig = { filters: { states: [], priorities: [] }, group: 'suite', sort: 'journey', variant: null };
+export const DEFAULT_LIBRARY_VIEW: LibraryViewConfig = { filters: { states: [], priorities: [] }, folders: 'suite', group: 'folder', sort: 'journey', variant: null };
 
 export const activeFilterCount = (f: LibraryFilters) => (f.states.length ? 1 : 0) + (f.priorities.length ? 1 : 0);
 
@@ -214,10 +223,10 @@ export interface LibrarySection {
 
 const STATE_SECTIONS: Exclude<LibraryState, 'updated'>[] = ['waiting', 'verify', 'needs-review', 'approved'];
 
-/** The flows as sections: folders (suite or file), states, priorities, or one list. Empty sections are left out. */
-export function groupLibraryFlows(flows: readonly ReviewFlowView[], group: LibraryGrouping): LibrarySection[] {
-  if (group === 'suite' || group === 'file') {
-    return flattenFolders(buildReviewTree(flows, group as ReviewGrouping)).map((f) => ({ id: f.id, name: f.name, path: f.path, flows: f.flows }));
+/** The flows as sections: folders (suites or files), states, priorities, or one list. Empty sections are left out. */
+export function groupLibraryFlows(flows: readonly ReviewFlowView[], group: LibraryGrouping, folders: LibraryFolders = 'suite'): LibrarySection[] {
+  if (group === 'folder') {
+    return flattenFolders(buildReviewTree(flows, folders)).map((f) => ({ id: f.id, name: f.name, path: f.path, flows: f.flows }));
   }
   if (group === 'none') return flows.length ? [{ id: 'all', name: 'All flows', path: ['All flows'], flows: [...flows] }] : [];
   if (group === 'state') {
@@ -254,13 +263,26 @@ export type LibraryCounts = ReturnType<typeof libraryCounts>;
 const EMPTY = '-';
 
 /** The search params a view is written to; `view` names the saved or built-in view it started from. */
-export const LIBRARY_VIEW_PARAMS = ['view', 'state', 'priority', 'group', 'sort', 'variant'] as const;
+export const LIBRARY_VIEW_PARAMS = ['view', 'state', 'priority', 'folders', 'group', 'sort', 'variant'] as const;
 
 const list = <T extends string>(allowed: readonly T[], raw: string | null | undefined): T[] =>
   raw
     ? [...new Set(raw.split(',').map((s) => s.trim()))].filter((s): s is T => (allowed as readonly string[]).includes(s)).sort((a, b) => allowed.indexOf(a) - allowed.indexOf(b))
     : [];
 const oneOf = <T extends string>(allowed: readonly T[], raw: string | null | undefined, fallback: T): T => ((allowed as readonly string[]).includes(raw ?? '') ? (raw as T) : fallback);
+
+/**
+ * Grouping and folders from what a link or a stored view says. Before views
+ * had their own folders, `group` was `suite` or `file`: that reads as grouping
+ * by folder, with those folders.
+ */
+function readLayout(group: string | null | undefined, folders: string | null | undefined, base: Pick<LibraryViewConfig, 'group' | 'folders'>): Pick<LibraryViewConfig, 'group' | 'folders'> {
+  const legacy = group === 'suite' || group === 'file' ? group : null;
+  return {
+    group: legacy ? 'folder' : oneOf(LIBRARY_GROUPINGS, group, base.group),
+    folders: oneOf(LIBRARY_FOLDERS, folders, legacy ?? base.folders),
+  };
+}
 
 /** A view's settings from the URL; what the URL does not say comes from `base` (the view it started from). */
 export function viewConfigFromParams(get: (name: string) => string | null, base: LibraryViewConfig = DEFAULT_LIBRARY_VIEW): LibraryViewConfig {
@@ -270,7 +292,7 @@ export function viewConfigFromParams(get: (name: string) => string | null, base:
       states: has('state') ? list(LIBRARY_STATES, get('state')) : base.filters.states,
       priorities: has('priority') ? list(CASE_PRIORITIES, get('priority')) : base.filters.priorities,
     },
-    group: oneOf(LIBRARY_GROUPINGS, get('group'), base.group),
+    ...readLayout(get('group'), get('folders'), base),
     sort: oneOf(LIBRARY_SORTS, get('sort'), base.sort),
     variant: has('variant') ? (get('variant') && get('variant') !== EMPTY ? get('variant') : null) : base.variant,
   };
@@ -287,6 +309,7 @@ export function viewConfigToParams(config: LibraryViewConfig, base: LibraryViewC
     view: null,
     state: same(config.filters.states, base.filters.states) ? null : config.filters.states.join(',') || EMPTY,
     priority: same(config.filters.priorities, base.filters.priorities) ? null : config.filters.priorities.join(',') || EMPTY,
+    folders: config.folders === base.folders ? null : config.folders,
     group: config.group === base.group ? null : config.group,
     sort: config.sort === base.sort ? null : config.sort,
     variant: config.variant === base.variant ? null : (config.variant ?? EMPTY),
@@ -304,7 +327,7 @@ export function normalizeViewConfig(raw: unknown): LibraryViewConfig {
   const strings = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string').join(',') : null);
   return {
     filters: { states: list(LIBRARY_STATES, strings(f.states)), priorities: list(CASE_PRIORITIES, strings(f.priorities)) },
-    group: oneOf(LIBRARY_GROUPINGS, typeof r.group === 'string' ? r.group : null, DEFAULT_LIBRARY_VIEW.group),
+    ...readLayout(typeof r.group === 'string' ? r.group : null, typeof r.folders === 'string' ? r.folders : null, DEFAULT_LIBRARY_VIEW),
     sort: oneOf(LIBRARY_SORTS, typeof r.sort === 'string' ? r.sort : null, DEFAULT_LIBRARY_VIEW.sort),
     variant: typeof r.variant === 'string' && r.variant.trim() ? r.variant.trim().slice(0, 64) : null,
   };
@@ -351,6 +374,7 @@ export function describeViewConfig(config: LibraryViewConfig): string {
   if (config.filters.states.length) parts.push(config.filters.states.map((s) => LIBRARY_STATE_LABELS[s]).join(' or '));
   if (config.filters.priorities.length) parts.push(`priority ${config.filters.priorities.map((p) => CASE_PRIORITY_LABELS[p]).join(' or ')}`);
   if (config.variant) parts.push(config.variant);
+  if (config.folders !== DEFAULT_LIBRARY_VIEW.folders) parts.push(`by ${LIBRARY_FOLDER_LABELS[config.folders].toLowerCase()}`);
   if (config.group !== DEFAULT_LIBRARY_VIEW.group) parts.push(`grouped by ${LIBRARY_GROUPING_LABELS[config.group].toLowerCase()}`);
   if (config.sort !== DEFAULT_LIBRARY_VIEW.sort) parts.push(`${LIBRARY_SORT_LABELS[config.sort].toLowerCase()}`);
   return parts.join(' · ') || 'Every flow';

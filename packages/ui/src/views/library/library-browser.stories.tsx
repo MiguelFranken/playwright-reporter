@@ -35,7 +35,7 @@ export const Default: Story = {
     await expect(canvas.getByRole('article', { name: /places an order/ })).toBeInTheDocument();
     await expect(canvas.getByRole('img', { name: 'Priority: Critical' })).toBeInTheDocument();
     // The views list their counts; a screen from an earlier run says which.
-    await expect(within(canvas.getByRole('navigation', { name: 'Views' })).getByRole('button', { name: /Open feedback/ })).toHaveTextContent('2');
+    await expect(within(canvas.getByRole('navigation', { name: 'Views' })).getByRole('button', { name: /^Open feedback/ })).toHaveTextContent('2');
     await expect(canvas.getAllByText('#483').length).toBeGreaterThan(0);
   },
 };
@@ -65,16 +65,19 @@ export const ToFix: Story = {
 /** Grouped by review state. */
 export const ByState: Story = { args: { config: { ...DEFAULT_LIBRARY_VIEW, group: 'state' } } };
 
-/** Changed settings can be reset or saved as a view of one's own. */
+/** Changed settings can be reset or saved as a view of one's own, in the view builder. */
 export const SavesAView: Story = {
   args: { config: { ...DEFAULT_LIBRARY_VIEW, group: 'priority' } },
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
+    await expect(canvas.getByText('Edited')).toBeInTheDocument();
     await userEvent.click(canvas.getByRole('button', { name: 'Save view' }));
-    const dialog = within(await within(document.body).findByRole('dialog', { name: 'Save these filters as a view' }));
-    await userEvent.type(dialog.getByRole('textbox'), 'By priority');
-    await userEvent.click(dialog.getByRole('button', { name: 'Save view' }));
-    await expect(args.onSaveView).toHaveBeenCalledWith({ name: 'By priority', config: expect.objectContaining({ group: 'priority' }) });
+    const dialog = within(await within(document.body).findByRole('dialog', { name: 'New view' }));
+    await userEvent.type(dialog.getByRole('textbox', { name: 'Name' }), 'By priority');
+    await userEvent.click(dialog.getByRole('button', { name: /Waiting for changes/ }));
+    await expect(dialog.getByText(/Shows/)).toHaveTextContent('Shows 1 of 4 flows');
+    await userEvent.click(dialog.getByRole('button', { name: 'Create view' }));
+    await expect(args.onSaveView).toHaveBeenCalledWith({ name: 'By priority', config: expect.objectContaining({ group: 'priority', filters: { states: ['waiting'], priorities: [] } }) });
     await waitFor(() => expect(within(document.body).queryByRole('dialog')).toBeNull());
     await waitFor(() => expect(document.querySelector('[data-base-ui-focus-guard]')).toBeNull());
   },
@@ -88,6 +91,45 @@ export const ChangedSavedView: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'Save to “Checkout fixes”' }));
     await expect(args.onUpdateView).toHaveBeenCalledWith({ id: savedViews[0].id, config: expect.objectContaining({ sort: 'recent' }) });
     await expect(canvas.getByRole('img', { name: 'changed' })).toBeInTheDocument();
+  },
+};
+
+/** By spec file: the tree and the sections follow the view's folders. */
+export const BySpecFile: Story = {
+  args: { config: { ...DEFAULT_LIBRARY_VIEW, folders: 'file' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const tree = within(canvas.getByRole('navigation', { name: 'Folders' }));
+    await expect(tree.getByRole('heading', { name: 'Spec files' })).toBeInTheDocument();
+    await expect(tree.getByRole('button', { name: /All files/ })).toBeInTheDocument();
+    await expect(tree.queryByRole('button', { name: 'Test Cases' })).toBeNull();
+  },
+};
+
+/** A saved view, edited in the builder: its name and its settings, saved together. */
+export const EditsASavedView: Story = {
+  args: { activeViewId: savedViews[0].id, config: savedViews[0].config },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const body = within(document.body);
+    await userEvent.click(canvas.getByRole('button', { name: 'Actions for the view Checkout fixes' }));
+    await userEvent.click(await body.findByRole('menuitem', { name: 'Edit view' }));
+    const dialog = within(await body.findByRole('dialog', { name: 'Edit view' }));
+    await expect(dialog.getByRole('textbox', { name: 'Name' })).toHaveValue('Checkout fixes');
+    await userEvent.click(dialog.getByRole('button', { name: 'Files' }));
+    await userEvent.click(dialog.getByRole('button', { name: 'Save view' }));
+    await expect(args.onUpdateView).toHaveBeenCalledWith({ id: savedViews[0].id, name: 'Checkout fixes', config: expect.objectContaining({ folders: 'file', group: 'priority' }) });
+    await waitFor(() => expect(body.queryByRole('dialog')).toBeNull());
+  },
+};
+
+/** Scrolled far down a long library, one click goes back to the top. */
+export const ScrollsBackToTop: Story = {
+  args: { flows: manyLibraryFlows },
+  play: async ({ canvasElement }) => {
+    window.scrollTo({ top: 3000 });
+    await userEvent.click(await within(canvasElement).findByRole('button', { name: 'Scroll to top' }));
+    await waitFor(() => expect(window.scrollY).toBe(0));
   },
 };
 

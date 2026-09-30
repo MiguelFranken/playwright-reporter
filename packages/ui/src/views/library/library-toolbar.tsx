@@ -1,7 +1,7 @@
 'use client';
 
-import { Check, ListFilter, RotateCcw, Save, SlidersHorizontal, X } from 'lucide-react';
-import { useState } from 'react';
+import { ListFilter, RotateCcw, Save, SlidersHorizontal, X } from 'lucide-react';
+import { useId } from 'react';
 import { Button } from '../../components/button';
 import {
   DropdownMenu,
@@ -10,18 +10,21 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../../components/dropdown-menu';
-import { Input } from '../../components/input';
-import { Popover, PopoverContent, PopoverTrigger } from '../../components/popover';
+import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from '../../components/popover';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/select';
+import { Separator } from '../../components/separator';
 import { ToggleGroup, ToggleGroupItem } from '../../components/toggle-group';
 import { LIBRARY_STATE_ICONS } from '../../patterns/library-state-chip';
 import { cn } from '../../lib/cn';
 import {
   activeFilterCount,
+  DEFAULT_LIBRARY_VIEW,
+  LIBRARY_FOLDER_LABELS,
+  LIBRARY_FOLDERS,
+  LIBRARY_FOLDERS_LABELS,
   LIBRARY_GROUPING_LABELS,
   LIBRARY_GROUPINGS,
   LIBRARY_SORT_LABELS,
@@ -29,8 +32,8 @@ import {
   LIBRARY_STATE_LABELS,
   LIBRARY_STATE_TONES,
   LIBRARY_STATES,
-  LIBRARY_VIEW_NAME_MAX,
   type LibraryCounts,
+  type LibraryFolders,
   type LibraryGrouping,
   type LibrarySort,
   type LibraryState,
@@ -94,9 +97,9 @@ export function LibraryFilterMenu({ config, onChange, counts }: { config: Librar
 export function LibraryFilterChips({ config, onChange }: { config: LibraryViewConfig; onChange: (next: LibraryViewConfig) => void }) {
   const set = (filters: Partial<LibraryViewConfig['filters']>) => onChange({ ...config, filters: { ...config.filters, ...filters } });
   const chip = (key: string, label: string, values: string, onRemove: () => void) => (
-    <span key={key} className="inline-flex h-7 items-center gap-1 rounded-lg border border-border bg-surface pl-2 text-label-s shadow-xs">
+    <span key={key} className="inline-flex h-8 min-w-0 items-center gap-1 rounded-lg border border-border bg-surface pl-2 text-label-s shadow-xs">
       <span className="text-muted-foreground">{label}</span>
-      <span className="max-w-72 truncate" title={values}>
+      <span className="min-w-0 max-w-64 truncate" title={values}>
         {values}
       </span>
       <button type="button" aria-label={`Remove the ${label.toLowerCase()} filter`} onClick={onRemove} className="ml-0.5 flex h-full items-center rounded-r-lg px-1.5 text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40">
@@ -114,44 +117,127 @@ export function LibraryFilterChips({ config, onChange }: { config: LibraryViewCo
   );
 }
 
-/** Grouping and order. */
-export function LibraryDisplayMenu({ config, onChange }: { config: LibraryViewConfig; onChange: (next: LibraryViewConfig) => void }) {
-  const changed = config.group !== 'suite' || config.sort !== 'journey';
+/** One setting of a view: its name on the left, its control on the right, as Linear's display options lay them out. */
+function SettingRow({ label, htmlFor, id, children }: { label: string; htmlFor?: string; id?: string; children: React.ReactNode }) {
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger render={<Button variant="outline" size="sm" aria-label={`Display: grouped by ${LIBRARY_GROUPING_LABELS[config.group].toLowerCase()}, ${LIBRARY_SORT_LABELS[config.sort].toLowerCase()}`} />}>
+    <div className="flex min-h-8 items-center justify-between gap-4">
+      {htmlFor ? (
+        <label htmlFor={htmlFor} id={id} className="text-label-s text-muted-foreground">
+          {label}
+        </label>
+      ) : (
+        <span id={id} className="text-label-s text-muted-foreground">
+          {label}
+        </span>
+      )}
+      {children}
+    </div>
+  );
+}
+
+function SettingSelect<T extends string>({ id, value, items, onChange }: { id: string; value: T; items: readonly { value: T; label: string }[]; onChange: (next: T) => void }) {
+  return (
+    <Select items={items as { value: T; label: string }[]} value={value} onValueChange={(v) => v && onChange(v as T)}>
+      <SelectTrigger id={id} size="sm" className="w-44 text-label-s">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent align="end">
+        {items.map((item) => (
+          <SelectItem key={item.value} value={item.value}>
+            {item.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+/**
+ * How a view lays its flows out: which folders it browses by (test case
+ * suites or spec files), how it sections and orders them, and which variant
+ * it shows. The Display panel and the view builder both edit these.
+ */
+export function ViewLayoutFields({ config, onChange, variants }: { config: LibraryViewConfig; onChange: (next: LibraryViewConfig) => void; variants: readonly string[] }) {
+  const id = useId();
+  const groupItems = LIBRARY_GROUPINGS.map((g) => ({ value: g, label: g === 'folder' ? `${LIBRARY_FOLDER_LABELS[config.folders]}` : LIBRARY_GROUPING_LABELS[g] }));
+  const sortItems = LIBRARY_SORTS.map((s) => ({ value: s, label: LIBRARY_SORT_LABELS[s] }));
+  return (
+    <div className="flex flex-col gap-2">
+      <SettingRow label="Folders" id={`${id}-folders`}>
+        <ToggleGroup
+          variant="segment"
+          size="sm"
+          value={[config.folders]}
+          onValueChange={(v) => v[0] && onChange({ ...config, folders: v[0] as LibraryFolders })}
+          aria-labelledby={`${id}-folders`}
+        >
+          {LIBRARY_FOLDERS.map((f) => (
+            <ToggleGroupItem key={f} value={f}>
+              {f === 'suite' ? 'Test cases' : 'Files'}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </SettingRow>
+      <SettingRow label="Grouping" htmlFor={`${id}-group`}>
+        <SettingSelect<LibraryGrouping> id={`${id}-group`} value={config.group} items={groupItems} onChange={(group) => onChange({ ...config, group })} />
+      </SettingRow>
+      <SettingRow label="Ordering" htmlFor={`${id}-sort`}>
+        <SettingSelect<LibrarySort> id={`${id}-sort`} value={config.sort} items={sortItems} onChange={(sort) => onChange({ ...config, sort })} />
+      </SettingRow>
+      {variants.length > 1 ? (
+        <SettingRow label="Variant" id={`${id}-variant`}>
+          <LibraryVariantToggle variants={variants} value={config.variant} onChange={(variant) => onChange({ ...config, variant })} labelledBy={`${id}-variant`} />
+        </SettingRow>
+      ) : null}
+    </div>
+  );
+}
+
+/** Whether a view lays its flows out differently from the library's default. */
+const layoutChanged = (c: LibraryViewConfig) => c.folders !== DEFAULT_LIBRARY_VIEW.folders || c.group !== DEFAULT_LIBRARY_VIEW.group || c.sort !== DEFAULT_LIBRARY_VIEW.sort || c.variant !== null;
+
+/**
+ * The Display panel: the view's folders, grouping, order and variant, and
+ * (as `children`) how large the screens are — everything about how the flows
+ * look, behind one button, so the toolbar stays one line.
+ */
+export function LibraryDisplayMenu({ config, onChange, variants = [], children }: { config: LibraryViewConfig; onChange: (next: LibraryViewConfig) => void; variants?: readonly string[]; children?: React.ReactNode }) {
+  const summary = [LIBRARY_FOLDERS_LABELS[config.folders], config.group === 'folder' ? null : `grouped by ${LIBRARY_GROUPING_LABELS[config.group]}`, LIBRARY_SORT_LABELS[config.sort], config.variant]
+    .filter(Boolean)
+    .join(', ')
+    .toLowerCase();
+  return (
+    <Popover>
+      <PopoverTrigger render={<Button variant="outline" size="sm" aria-label={`Display: ${summary}`} />}>
         <SlidersHorizontal /> Display
-        {changed ? <span aria-hidden className="size-1.5 rounded-full bg-accent-solid" /> : null}
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuRadioGroup value={config.group} onValueChange={(v) => onChange({ ...config, group: v as LibraryGrouping })}>
-          <DropdownMenuLabel>Group by</DropdownMenuLabel>
-          {LIBRARY_GROUPINGS.map((g) => (
-            <DropdownMenuRadioItem key={g} value={g} closeOnClick={false}>
-              {LIBRARY_GROUPING_LABELS[g]}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuRadioGroup value={config.sort} onValueChange={(v) => onChange({ ...config, sort: v as LibrarySort })}>
-          <DropdownMenuLabel>Order</DropdownMenuLabel>
-          {LIBRARY_SORTS.map((s) => (
-            <DropdownMenuRadioItem key={s} value={s} closeOnClick={false}>
-              {LIBRARY_SORT_LABELS[s]}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        {layoutChanged(config) ? <span aria-hidden className="size-1.5 rounded-full bg-accent-solid" /> : null}
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-[22rem] gap-3">
+        <PopoverTitle className="text-label-m">Display</PopoverTitle>
+        <ViewLayoutFields config={config} onChange={onChange} variants={variants} />
+        {children ? (
+          <>
+            <Separator />
+            <SettingRow label="Screen size">{children}</SettingRow>
+          </>
+        ) : null}
+      </PopoverContent>
+    </Popover>
   );
 }
 
 /** Every variant side by side, or one. */
-export function LibraryVariantToggle({ variants, value, onChange }: { variants: readonly string[]; value: string | null; onChange: (next: string | null) => void }) {
+export function LibraryVariantToggle({ variants, value, onChange, labelledBy }: { variants: readonly string[]; value: string | null; onChange: (next: string | null) => void; labelledBy?: string }) {
   if (variants.length < 2) return null;
   return (
-    <ToggleGroup variant="segment" size="sm" value={[value ?? 'all']} onValueChange={(v) => v[0] && onChange(v[0] === 'all' ? null : String(v[0]))} aria-label="Variant">
-      <ToggleGroupItem value="all">All variants</ToggleGroupItem>
+    <ToggleGroup
+      variant="segment"
+      size="sm"
+      value={[value ?? 'all']}
+      onValueChange={(v) => v[0] && onChange(v[0] === 'all' ? null : String(v[0]))}
+      {...(labelledBy ? { 'aria-labelledby': labelledBy } : { 'aria-label': 'Variant' })}
+    >
+      <ToggleGroupItem value="all">All</ToggleGroupItem>
       {variants.map((v) => (
         <ToggleGroupItem key={v} value={v} className="capitalize">
           {v}
@@ -161,68 +247,10 @@ export function LibraryVariantToggle({ variants, value, onChange }: { variants: 
   );
 }
 
-/** A name for a view, in a popover: saving a new view, or renaming one. */
-export function ViewNamePopover({
-  trigger,
-  title,
-  initial = '',
-  submitLabel,
-  pending = false,
-  error,
-  onSubmit,
-}: {
-  trigger: React.ReactElement;
-  title: string;
-  initial?: string;
-  submitLabel: string;
-  pending?: boolean;
-  error?: string | null;
-  onSubmit: (name: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState(initial);
-  return (
-    <Popover
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next);
-        if (next) setName(initial);
-      }}
-    >
-      <PopoverTrigger render={trigger} />
-      <PopoverContent align="end" className="w-72" aria-label={title}>
-        <form
-          className="flex flex-col gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!name.trim()) return;
-            onSubmit(name.trim());
-            setOpen(false);
-          }}
-        >
-          <label className="text-label-s" htmlFor="library-view-name">
-            {title}
-          </label>
-          <Input id="library-view-name" value={name} maxLength={LIBRARY_VIEW_NAME_MAX} autoFocus placeholder="High priority fixes" onChange={(e) => setName(e.target.value)} />
-          {error ? <p className="text-label-xs text-danger-text">{error}</p> : null}
-          <div className="flex justify-end gap-2">
-            <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" size="sm" disabled={!name.trim() || pending}>
-              <Check /> {submitLabel}
-            </Button>
-          </div>
-        </form>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
 /**
  * What can happen to the settings on screen: nothing when they are a view's
  * own; once changed, back to the view (Reset), into the saved view it came
- * from (Save) or into a new one.
+ * from (Save) or into a new one (which opens the view builder).
  */
 export function ViewSaveControls({
   modified,
@@ -240,7 +268,7 @@ export function ViewSaveControls({
   pending?: boolean;
   onReset: () => void;
   onSave?: () => void;
-  onSaveAs?: (name: string) => void;
+  onSaveAs?: () => void;
 }) {
   if (!modified) return null;
   return (
@@ -254,17 +282,9 @@ export function ViewSaveControls({
         </Button>
       ) : null}
       {canSave && onSaveAs ? (
-        <ViewNamePopover
-          trigger={
-            <Button variant={savedViewName ? 'ghost' : 'outline'} size="sm" disabled={pending}>
-              <Save /> {savedViewName ? 'Save as new' : 'Save view'}
-            </Button>
-          }
-          title="Save these filters as a view"
-          submitLabel="Save view"
-          pending={pending}
-          onSubmit={onSaveAs}
-        />
+        <Button variant={savedViewName ? 'ghost' : 'outline'} size="sm" disabled={pending} onClick={onSaveAs}>
+          <Save /> {savedViewName ? 'Save as new' : 'Save view'}
+        </Button>
       ) : null}
     </span>
   );
