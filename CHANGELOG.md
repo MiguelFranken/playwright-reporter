@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.65](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.64...v0.0.65) (2026-09-30)
+
+### Bug Fixes
+
+* **review:** keep the slider comparison's labels and handle in view while it scrolls ([f59b479](https://github.com/MiguelFranken/playwright-reporter/commit/f59b479887a9818503e9c88835be70646bcbec92))
+
 ## [0.0.64](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.63...v0.0.64) (2026-09-30)
 
 ### Features
