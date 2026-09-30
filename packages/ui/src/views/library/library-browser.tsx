@@ -1,6 +1,6 @@
 'use client';
 
-import { Images, ListFilter, Search, X } from 'lucide-react';
+import { Images, ListFilter, PanelLeft, Search, X } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '../../components/button';
 import { Input } from '../../components/input';
@@ -172,6 +172,8 @@ export function LibraryBrowser({
   const [size, setSize] = useControlled<number>(sizeProp, onSizeChange, STORYBOARD_SIZE.default);
   const [ownTree, setOwnTree] = useState<ReviewGrouping>('suite');
   const [inbox, setInbox] = useState(false);
+  // Below the wide layout the rail folds away, so the flows are not a screen of lists down.
+  const [railOpen, setRailOpen] = useState(false);
   const modified = Boolean(activeView && !sameViewConfig(config, activeView.config));
 
   const rootRef = useRef<HTMLDivElement>(null);
@@ -247,9 +249,14 @@ export function LibraryBrowser({
   const filtered = config.filters.states.length > 0 || config.filters.priorities.length > 0;
   return (
     <div ref={rootRef} className="grid gap-6 lg:grid-cols-[15rem_minmax(0,1fr)]" style={{ [SCREEN_ZOOM_VAR]: size } as React.CSSProperties}>
+      <Button variant="outline" size="sm" className="justify-self-start lg:hidden" aria-expanded={railOpen} aria-controls="library-rail" onClick={() => setRailOpen((o) => !o)}>
+        <PanelLeft /> {railOpen ? 'Hide views and folders' : `Views and folders · ${activeView?.name ?? 'All flows'}`}
+      </Button>
       <aside
+        id="library-rail"
         aria-label="Views and folders"
-        className="flex min-w-0 flex-col gap-6 lg:sticky lg:top-[calc(var(--sticky-offset,0px)+1rem)] lg:max-h-[calc(100dvh-var(--sticky-offset,0px)-2rem)] lg:self-start lg:overflow-y-auto lg:overscroll-contain lg:pb-4"
+        className="hidden min-w-0 flex-col gap-6 data-open:flex lg:sticky lg:flex lg:top-[calc(var(--sticky-offset,0px)+1rem)] lg:max-h-[calc(100dvh-var(--sticky-offset,0px)-2rem)] lg:self-start lg:overflow-y-auto lg:overscroll-contain lg:pb-4"
+        data-open={railOpen || undefined}
       >
         <LibraryViewList
           views={views}

@@ -124,3 +124,15 @@ export const ManyFlows: Story = { args: { flows: manyLibraryFlows } };
 
 /** Without saving: a viewer without write access still filters and groups. */
 export const WithoutSaving: Story = { args: { onSaveView: undefined, onUpdateView: undefined, onDeleteView: undefined, views: BUILT_IN_VIEWS, config: { ...DEFAULT_LIBRARY_VIEW, sort: 'priority' } } };
+
+/** On a phone the rail folds away behind one button, so the flows come first. */
+export const Phone: Story = {
+  globals: { viewport: { value: 'mobile1', isRotated: false } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const toggle = canvas.getByRole('button', { name: /Views and folders/ });
+    await userEvent.click(toggle);
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await expect(canvas.getByRole('navigation', { name: 'Views' })).toBeVisible();
+  },
+};
