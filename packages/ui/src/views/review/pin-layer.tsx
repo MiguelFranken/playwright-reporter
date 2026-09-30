@@ -46,6 +46,20 @@ export interface PinLayerProps extends ThreadActions {
   viewerId?: string | null;
   canComment?: boolean;
   canModerate?: boolean;
+  /**
+   * The threads are drawn on the image they were placed on (the version
+   * commented on, shown beside the screen now): their anchors are where they
+   * were placed, and their popovers say so.
+   */
+  onOrigin?: boolean;
+  /**
+   * Threads drawn for real on the other image beside this one: a faint,
+   * dashed marker here shows where they land on this image, without a
+   * second pin to click.
+   */
+  ghosts?: readonly ReviewThreadView[];
+  /** Tools in a thread's popover, beside resolve (an AI hand-off). */
+  renderActions?: (thread: ReviewThreadView) => React.ReactNode;
 }
 
 const KEY_STEP = 0.01;
@@ -78,6 +92,9 @@ export function PinLayer({
   viewerId,
   canComment = false,
   canModerate = false,
+  onOrigin = false,
+  ghosts = [],
+  renderActions,
   onCreateThread,
   onReply,
   onSetThreadStatus,
@@ -93,7 +110,8 @@ export function PinLayer({
   const pins = hidden ? [] : threads.filter((t) => t.anchor.kind !== 'image' && (showResolved || t.status === 'open' || t.id === openThreadId));
   const offscreen = useOffscreenPins(layerRef, pins);
   const ownDraft = draft && draft.captureId === captureId ? draft : null;
-  const threadProps = { now, viewerId, canComment, canModerate, captureId, onReply, onSetThreadStatus, onEditComment, onDeleteComment, onCompareThread };
+  const threadProps = { now, viewerId, canComment, canModerate, captureId, onOrigin, onReply, onSetThreadStatus, onEditComment, onDeleteComment, onCompareThread };
+  const shownGhosts = hidden ? [] : ghosts.filter((t) => t.anchor.kind !== 'image' && (showResolved || t.status === 'open'));
 
   // Leaving comment mode drops a half-placed pin.
   useEffect(() => {
@@ -187,8 +205,12 @@ export function PinLayer({
         }
       }}
     >
+      {shownGhosts.map((t) => (
+        <GhostPin key={`ghost-${t.id}`} thread={t} active={openThreadId === t.id} />
+      ))}
+
       {pins.map((t) => (
-        <ThreadPin key={t.id} thread={t} open={openThreadId === t.id} ping={ping?.threadId === t.id ? ping.nonce : null} onOpenThreadChange={onOpenThreadChange} {...threadProps} />
+        <ThreadPin key={t.id} thread={t} open={openThreadId === t.id} ping={ping?.threadId === t.id ? ping.nonce : null} onOpenThreadChange={onOpenThreadChange} actions={renderActions?.(t)} {...threadProps} />
       ))}
 
       {draftAnchor?.kind === 'area' ? (
@@ -262,6 +284,8 @@ function ThreadPin({
 } & Omit<React.ComponentProps<typeof ThreadView>, 'thread' | 'onClose'>) {
   const anchorRef = useRef<HTMLDivElement>(null);
   const first = openingComment(t);
+  // On the image it was placed on, a pin is where it was put: not outdated there.
+  const outdated = t.placement === 'outdated' && !threadProps.onOrigin;
   return (
     <div className="pointer-events-none absolute inset-0">
       {t.anchor.kind === 'area' && t.anchor.w != null && t.anchor.h != null ? (
@@ -270,7 +294,7 @@ function ThreadPin({
           className={cn(
             'absolute rounded-sm border-2 transition-[background-color,border-color] duration-150',
             t.status === 'resolved' ? 'border-muted-foreground/40' : 'border-accent-solid',
-            t.placement === 'outdated' && 'border-dashed',
+            outdated && 'border-dashed',
             open ? 'bg-accent-solid/15' : 'bg-accent-solid/5',
           )}
           style={{ left: pct(t.anchor.x), top: pct(t.anchor.y), width: pct(t.anchor.w), height: pct(t.anchor.h) }}
@@ -286,7 +310,7 @@ function ThreadPin({
             render={
               <CommentPin
                 number={t.number}
-                state={t.status === 'resolved' ? 'resolved' : t.placement === 'outdated' ? 'outdated' : 'open'}
+                state={t.status === 'resolved' ? 'resolved' : outdated ? 'outdated' : 'open'}
                 selected={open}
                 pending={t.pending}
                 aria-label={`Thread ${t.number}${t.status === 'resolved' ? ', resolved' : ''}${first ? `: ${first.author?.name ?? 'AI assistant'} — ${excerpt(first.body)}` : ''}`}
@@ -306,6 +330,30 @@ function ThreadPin({
             <ThreadView thread={t} {...threadProps} onClose={() => onOpenThreadChange?.(null, t.id)} />
           </PopoverContent>
         </Popover>
+      </div>
+    </div>
+  );
+}
+
+/** Where a thread drawn on the other image lands on this one: a marker, not a control. */
+function GhostPin({ thread: t, active }: { thread: ReviewThreadView; active: boolean }) {
+  return (
+    <div aria-hidden data-slot="ghost-pin" className="pointer-events-none absolute inset-0">
+      {t.anchor.kind === 'area' && t.anchor.w != null && t.anchor.h != null ? (
+        <div
+          className={cn('absolute rounded-sm border-2 border-dashed transition-colors duration-150', active ? 'border-accent-solid bg-accent-solid/10' : 'border-accent-solid/40')}
+          style={{ left: pct(t.anchor.x), top: pct(t.anchor.y), width: pct(t.anchor.w), height: pct(t.anchor.h) }}
+        />
+      ) : null}
+      <div className="absolute -translate-y-full" style={pinPosition(t.anchor)}>
+        <span
+          className={cn(
+            'inline-flex h-6 min-w-6 items-center justify-center rounded-full rounded-bl-[3px] bg-surface/80 px-1.5 text-label-xs text-accent-text tabular-nums outline-2 outline-dashed -outline-offset-2 backdrop-blur-sm transition-opacity duration-150',
+            active ? 'opacity-100 outline-accent-solid' : 'opacity-60 outline-accent-solid/60',
+          )}
+        >
+          {t.number}
+        </span>
       </div>
     </div>
   );

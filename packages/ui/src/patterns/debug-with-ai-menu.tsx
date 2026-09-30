@@ -27,20 +27,31 @@ export function DebugWithAiMenu({
   prompt,
   setupHref,
   label = 'Debug with AI',
+  size = 'sm',
+  iconOnly = false,
 }: {
   /** A scope-only prompt from `debugPrompt` / `triagePrompt` in `lib/ai-handoff`. */
   prompt: string;
   /** The page that explains how to connect an assistant to this instance. */
   setupHref: string;
   label?: string;
+  size?: 'sm' | 'xs';
+  /** Only the icon, named by `label`: in a crowded header. */
+  iconOnly?: boolean;
 }) {
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>
-        <Sparkles className="size-3.5" />
-        {label}
-        <ChevronDown className="size-3.5 text-muted-foreground" />
-      </DropdownMenuTrigger>
+      {iconOnly ? (
+        <DropdownMenuTrigger render={<Button variant="ghost" size={size === 'xs' ? 'icon-xs' : 'icon-sm'} aria-label={label} title={label} />}>
+          <Sparkles />
+        </DropdownMenuTrigger>
+      ) : (
+        <DropdownMenuTrigger render={<Button variant="outline" size={size} />}>
+          <Sparkles className="size-3.5" />
+          {label}
+          <ChevronDown className="size-3.5 text-muted-foreground" />
+        </DropdownMenuTrigger>
+      )}
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuItem
           onClick={async () => {

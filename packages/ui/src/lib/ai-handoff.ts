@@ -50,6 +50,26 @@ export function organizePrompt({ casesUrl }: { casesUrl: string }): string {
 }
 
 /**
+ * A prompt that asks the assistant to make the changes review comments ask
+ * for on one screenshot. Scoped by the capture (and the project, when the
+ * connection may have none by default) and the comments' numbers: the
+ * assistant reads the image, its pins and close-ups through the MCP server.
+ * It replies on each thread and leaves resolving to a person, who checks the
+ * next run's screenshot.
+ */
+export function fixCommentsPrompt({ captureId, threads, project, screen }: { captureId: string; threads: readonly number[]; project?: string | null; screen?: string | null }): string {
+  const which = threads.length === 1 ? `comment #${threads[0]}` : threads.length ? `comments ${threads.map((n) => `#${n}`).join(', ')}` : 'the open comments';
+  return (
+    `Use the ${MCP_SERVER_NAME} MCP server to make the changes asked for in ${which} on this screenshot${screen ? ` (${screen})` : ''}: ` +
+    `capture ${captureId}${project ? ` in project ${project}` : ''}.\n\n` +
+    `Call get_review_checkpoint with capture "${captureId}" to see the image with the open comments as numbered pins and a close-up of each. ` +
+    'For each comment, find the component or styles in this codebase that render that part of the screen and make the change it asks for — nothing beyond it. ' +
+    'Then tell me what you changed, per comment number, and reply on each thread with comment_on_review saying what changed. ' +
+    'Do not resolve the threads: a person resolves them after checking the next run’s screenshot.'
+  );
+}
+
+/**
  * Opens a new Claude Code terminal session with the prompt pre-filled; the user still presses Enter.
  *
  * verify: Claude Code documents `claude-cli://open?q=…` (v2.1.91+, `q` up to 5,000 characters,

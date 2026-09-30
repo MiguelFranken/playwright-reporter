@@ -70,3 +70,12 @@ export const CopiesThePrompt: Story = {
     await waitFor(() => expect(body.queryByRole('menu')).not.toBeInTheDocument());
   },
 };
+
+/** Only the icon, in a crowded header (a comment's popover): the label names it. */
+export const IconOnly: Story = {
+  args: { label: 'Fix comment 1 with AI', iconOnly: true, size: 'xs' },
+  play: async ({ canvasElement }) => {
+    await userEvent.click(within(canvasElement).getByRole('button', { name: 'Fix comment 1 with AI' }));
+    await expect(await within(document.body).findByRole('menuitem', { name: /copy prompt/i })).toBeInTheDocument();
+  },
+};
