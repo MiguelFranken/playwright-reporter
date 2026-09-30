@@ -21,6 +21,11 @@ const runStatusSchema = z.enum([
 	"interrupted"
 ]);
 const executorSchema = z.enum(["ci", "local"]);
+const executorSourceSchema = z.enum([
+	"provider",
+	"ci-env",
+	"option"
+]);
 const shardSchema = z.object({
 	current: z.number().int().min(1),
 	total: z.number().int().min(1)
@@ -156,13 +161,28 @@ const gitInfoSchema = z.object({
 	/** The pull or merge request the run belongs to: its number (GitLab's IID), link and title. */
 	prNumber: z.number().int().optional(),
 	prUrl: z.string().optional(),
-	prTitle: z.string().optional()
+	prTitle: z.string().optional(),
+	/**
+	* Whether the checkout had uncommitted changes to tracked files when the run
+	* started, so the results may not match `sha`. Absent when unknown (an older
+	* reporter, no checkout). Only the state and a count travel, never paths or contents.
+	*/
+	dirty: z.boolean().optional(),
+	/** How many tracked files had uncommitted changes. */
+	dirtyFiles: z.number().int().nonnegative().optional()
 });
 const ciInfoSchema = z.object({
 	provider: z.string().optional(),
 	buildUrl: z.string().optional(),
 	buildNumber: z.string().optional(),
-	job: z.string().optional()
+	job: z.string().optional(),
+	/**
+	* How the run's `executor` was decided: `provider` from a known CI
+	* provider's variables, `ci-env` from the bare `CI` variable alone (a local
+	* wrapper may set it), `option` from an explicit reporter option or
+	* `PW_REPORTER_EXECUTOR`. Absent when unknown.
+	*/
+	detectedBy: executorSourceSchema.optional()
 });
 const systemInfoSchema = z.object({
 	os: z.string().optional(),
@@ -382,4 +402,4 @@ function legacyCheckpoints(attachments) {
 //#endregion
 export { uploadUrlsRequestSchema as _, checkpointRecordSchema as a, eventBatchResponseSchema as c, runFinishResponseSchema as d, runFinishSchema as f, runStartSchema as g, runStartResponseSchema as h, REVIEW_ATTACHMENT_PREFIX as i, eventBatchSchema as l, runHeartbeatSchema as m, DEFAULT_VARIANT as n, completeUploadRequestSchema as o, runHeartbeatResponseSchema as p, PROTOCOL_HEADER as r, completeUploadResponseSchema as s, CHECKPOINT_CONTENT_TYPE as t, legacyCheckpoints as u, uploadUrlsResponseSchema as v };
 
-//# sourceMappingURL=dist-C_hxvOdh.mjs.map
+//# sourceMappingURL=dist-D7tL4Myv.mjs.map

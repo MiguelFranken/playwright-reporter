@@ -21,6 +21,11 @@ const runStatusSchema = zod.z.enum([
 	"interrupted"
 ]);
 const executorSchema = zod.z.enum(["ci", "local"]);
+const executorSourceSchema = zod.z.enum([
+	"provider",
+	"ci-env",
+	"option"
+]);
 const shardSchema = zod.z.object({
 	current: zod.z.number().int().min(1),
 	total: zod.z.number().int().min(1)
@@ -156,13 +161,28 @@ const gitInfoSchema = zod.z.object({
 	/** The pull or merge request the run belongs to: its number (GitLab's IID), link and title. */
 	prNumber: zod.z.number().int().optional(),
 	prUrl: zod.z.string().optional(),
-	prTitle: zod.z.string().optional()
+	prTitle: zod.z.string().optional(),
+	/**
+	* Whether the checkout had uncommitted changes to tracked files when the run
+	* started, so the results may not match `sha`. Absent when unknown (an older
+	* reporter, no checkout). Only the state and a count travel, never paths or contents.
+	*/
+	dirty: zod.z.boolean().optional(),
+	/** How many tracked files had uncommitted changes. */
+	dirtyFiles: zod.z.number().int().nonnegative().optional()
 });
 const ciInfoSchema = zod.z.object({
 	provider: zod.z.string().optional(),
 	buildUrl: zod.z.string().optional(),
 	buildNumber: zod.z.string().optional(),
-	job: zod.z.string().optional()
+	job: zod.z.string().optional(),
+	/**
+	* How the run's `executor` was decided: `provider` from a known CI
+	* provider's variables, `ci-env` from the bare `CI` variable alone (a local
+	* wrapper may set it), `option` from an explicit reporter option or
+	* `PW_REPORTER_EXECUTOR`. Absent when unknown.
+	*/
+	detectedBy: executorSourceSchema.optional()
 });
 const systemInfoSchema = zod.z.object({
 	os: zod.z.string().optional(),
@@ -489,4 +509,4 @@ Object.defineProperty(exports, "uploadUrlsResponseSchema", {
 	}
 });
 
-//# sourceMappingURL=dist-DdBwzinA.cjs.map
+//# sourceMappingURL=dist-CzpkBfkf.cjs.map

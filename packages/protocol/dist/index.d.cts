@@ -29,6 +29,12 @@ export declare const executorSchema: z.ZodEnum<{
   local: "local";
 }>;
 export type Executor = z.infer<typeof executorSchema>;
+export declare const executorSourceSchema: z.ZodEnum<{
+  "ci-env": "ci-env";
+  option: "option";
+  provider: "provider";
+}>;
+export type ExecutorSource = z.infer<typeof executorSourceSchema>;
 export declare const shardSchema: z.ZodObject<{
   current: z.ZodNumber;
   total: z.ZodNumber;
@@ -216,6 +222,8 @@ export declare const gitInfoSchema: z.ZodObject<{
   prNumber: z.ZodOptional<z.ZodNumber>;
   prUrl: z.ZodOptional<z.ZodString>;
   prTitle: z.ZodOptional<z.ZodString>;
+  dirty: z.ZodOptional<z.ZodBoolean>;
+  dirtyFiles: z.ZodOptional<z.ZodNumber>;
 }, z.core.$strip>;
 export type GitInfo = z.infer<typeof gitInfoSchema>;
 export declare const ciInfoSchema: z.ZodObject<{
@@ -223,6 +231,11 @@ export declare const ciInfoSchema: z.ZodObject<{
   buildUrl: z.ZodOptional<z.ZodString>;
   buildNumber: z.ZodOptional<z.ZodString>;
   job: z.ZodOptional<z.ZodString>;
+  detectedBy: z.ZodOptional<z.ZodEnum<{
+    "ci-env": "ci-env";
+    option: "option";
+    provider: "provider";
+  }>>;
 }, z.core.$strip>;
 export type CiInfo = z.infer<typeof ciInfoSchema>;
 export declare const systemInfoSchema: z.ZodObject<{
@@ -291,12 +304,19 @@ export declare const runStartSchema: z.ZodObject<{
     prNumber: z.ZodOptional<z.ZodNumber>;
     prUrl: z.ZodOptional<z.ZodString>;
     prTitle: z.ZodOptional<z.ZodString>;
+    dirty: z.ZodOptional<z.ZodBoolean>;
+    dirtyFiles: z.ZodOptional<z.ZodNumber>;
   }, z.core.$strip>;
   ci: z.ZodObject<{
     provider: z.ZodOptional<z.ZodString>;
     buildUrl: z.ZodOptional<z.ZodString>;
     buildNumber: z.ZodOptional<z.ZodString>;
     job: z.ZodOptional<z.ZodString>;
+    detectedBy: z.ZodOptional<z.ZodEnum<{
+      "ci-env": "ci-env";
+      option: "option";
+      provider: "provider";
+    }>>;
   }, z.core.$strip>;
   system: z.ZodObject<{
     os: z.ZodOptional<z.ZodString>;

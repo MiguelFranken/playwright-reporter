@@ -90,11 +90,11 @@ export default class PlaywrightReporterApp implements Reporter {
       shard: config.shard ? { current: config.shard.current, total: config.shard.total } : null,
       expectedTests: suite.allTests().length,
       startedAt: this.startedAt.toISOString(),
-      executor: detectExecutor(env),
+      executor: detectExecutor(env, opts.executor),
       environment: opts.environment,
       tags: opts.tags,
       git: collectGitInfo(config, env, opts.git),
-      ci: collectCiInfo(env, opts.ci),
+      ci: collectCiInfo(env, opts.ci, opts.executor),
       system: collectSystemInfo(),
       playwright: collectPlaywrightInfo(config),
     };

@@ -11,11 +11,12 @@
  */
 import { and, asc, desc, eq, getTableColumns, gt, ilike, inArray, lt, or, sql, type SQL } from 'drizzle-orm';
 import { db } from '@/lib/db/drizzle';
-import { attachments, runs, testAttempts, testResults, tests, type Run } from '@/lib/db/schema';
+import { attachments, reviewCaptures, runs, testAttempts, testResults, tests, type Run } from '@/lib/db/schema';
 import { effectiveRunColumns, effectiveStatusSql } from '@/lib/runs/staleness';
 import { CHRONIC_FAILURE_RATE, CHRONIC_MIN_RUNS, CHRONIC_STREAK } from '@/lib/metrics/score';
 import { andAll, num, reliabilitySql } from './shared';
 import type { ArtifactFilter, ArtifactKind } from '@miguelfranken/ui/lib/result-filter';
+import type { ArtifactCompleteness } from '@miguelfranken/ui/lib/provenance';
 
 export type RunStatus = Run['status'];
 export type Outcome = (typeof testResults.$inferSelect)['outcome'];
@@ -240,6 +241,28 @@ export async function runNeighbours(projectId: string, run: Pick<Run, 'startedAt
     db.select({ number: runs.number }).from(runs).where(and(eq(runs.projectId, projectId), branch, gt(runs.startedAt, run.startedAt))).orderBy(asc(runs.startedAt)).limit(1),
   ]);
   return { previous: prev[0]?.number ?? null, next: next[0]?.number ?? null };
+}
+
+/**
+ * A run's attachments by upload status, and how many review captures point at
+ * an image that is not stored: one grouped scan of the run's attachments, a
+ * capture joined in by its unique attachment id.
+ */
+export async function runArtifactCompleteness(runId: string): Promise<ArtifactCompleteness> {
+  const rows = await db
+    .select({ status: attachments.status, attachments: sql<number>`count(*)::int`, captures: sql<number>`count(${reviewCaptures.id})::int` })
+    .from(attachments)
+    .leftJoin(reviewCaptures, eq(reviewCaptures.attachmentId, attachments.id))
+    .where(eq(attachments.runId, runId))
+    .groupBy(attachments.status);
+  const out: ArtifactCompleteness = { total: 0, uploaded: 0, pending: 0, failed: 0, expired: 0, reviewCaptures: 0, reviewCapturesMissing: 0 };
+  for (const r of rows) {
+    out[r.status] = r.attachments;
+    out.total += r.attachments;
+    out.reviewCaptures += r.captures;
+    if (r.status !== 'uploaded') out.reviewCapturesMissing += r.captures;
+  }
+  return out;
 }
 
 // ------------------------------------------------------------------ results

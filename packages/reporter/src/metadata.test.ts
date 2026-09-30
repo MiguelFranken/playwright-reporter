@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { FullConfig } from '@playwright/test/reporter';
-import { collectCiInfo, collectGitInfo, collectPlaywrightInfo, collectSystemInfo, detectExecutor, normalizeRemote } from './metadata';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { collectCiInfo, collectGitInfo, collectPlaywrightInfo, collectSystemInfo, detectExecutor, normalizeRemote, workingTreeState } from './metadata';
 
 const config = (overrides: Partial<FullConfig> = {}) =>
   ({ rootDir: process.cwd(), projects: [], metadata: {}, ...overrides }) as FullConfig;
@@ -12,6 +16,23 @@ describe('detectExecutor', () => {
 
   it.each([{}, { CI: '' }, { CI: 'false' }, { CI: '0' }, { CI: 'FALSE' }])('is local for %p', (env) => {
     expect(detectExecutor(env)).toBe('local');
+  });
+});
+
+describe('an explicit executor', () => {
+  it('wins over the CI variable', () => {
+    expect(detectExecutor({ CI: 'true' }, 'local')).toBe('local');
+    expect(detectExecutor({}, 'ci')).toBe('ci');
+  });
+
+  it('as local, drops the build a wrapper’s CI flag made up, keeping explicit ci fields', () => {
+    expect(collectCiInfo({ CI: 'true' }, {}, 'local')).toEqual({ detectedBy: 'option' });
+    expect(collectCiInfo({ CI: 'true' }, { job: 'nightly' }, 'local')).toEqual({ job: 'nightly', detectedBy: 'option' });
+  });
+
+  it('as ci, keeps what the provider says and records the option', () => {
+    expect(collectCiInfo({ GITLAB_CI: 'true', CI_JOB_NAME: 'e2e' }, {}, 'ci')).toMatchObject({ provider: 'gitlab-ci', job: 'e2e', detectedBy: 'option' });
+    expect(collectCiInfo({}, {}, 'ci')).toEqual({ detectedBy: 'option' });
   });
 });
 
@@ -30,6 +51,7 @@ describe('collectCiInfo', () => {
       buildUrl: 'https://github.com/acme/app/actions/runs/42',
       buildNumber: '7',
       job: 'e2e',
+      detectedBy: 'provider',
     });
   });
 
@@ -65,11 +87,11 @@ describe('collectCiInfo', () => {
       expected: { provider: 'jenkins', buildUrl: 'https://jenkins.test/job/1', buildNumber: '1', job: 'e2e' },
     },
   ])('reads $name', ({ env, expected }) => {
-    expect(collectCiInfo(env)).toEqual(expected);
+    expect(collectCiInfo(env)).toEqual({ ...expected, detectedBy: 'provider' });
   });
 
-  it('falls back to an unknown provider when only CI is set', () => {
-    expect(collectCiInfo({ CI: '1' })).toEqual({ provider: 'unknown' });
+  it('falls back to an unknown provider when only CI is set, and says so', () => {
+    expect(collectCiInfo({ CI: '1' })).toEqual({ provider: 'unknown', detectedBy: 'ci-env' });
   });
 
   it('is empty outside CI', () => {
@@ -273,6 +295,54 @@ describe('git and CI overrides', () => {
   });
 
   it('leave detected CI fields alone that they do not set', () => {
-    expect(collectCiInfo({ CI: 'true' }, { buildUrl: 'https://logs.example/job/1' })).toEqual({ provider: 'unknown', buildUrl: 'https://logs.example/job/1' });
+    expect(collectCiInfo({ CI: 'true' }, { buildUrl: 'https://logs.example/job/1' })).toEqual({ provider: 'unknown', buildUrl: 'https://logs.example/job/1', detectedBy: 'ci-env' });
+  });
+});
+
+describe('workingTreeState', () => {
+  const run = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, stdio: 'ignore' });
+
+  const repo = () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'pw-reporter-git-'));
+    run(dir, 'init', '-q');
+    run(dir, '-c', 'user.name=t', '-c', 'user.email=t@example.test', 'commit', '-q', '--allow-empty', '-m', 'init');
+    writeFileSync(path.join(dir, 'a.txt'), 'a');
+    writeFileSync(path.join(dir, 'b.txt'), 'b');
+    run(dir, 'add', '.');
+    run(dir, '-c', 'user.name=t', '-c', 'user.email=t@example.test', 'commit', '-q', '-m', 'files');
+    return dir;
+  };
+
+  it('is clean in a committed checkout, ignoring untracked files', () => {
+    const cwd = repo();
+    writeFileSync(path.join(cwd, 'scratch.log'), 'x');
+    expect(workingTreeState(cwd)).toEqual({ dirty: false, dirtyFiles: 0 });
+    rmSync(cwd, { recursive: true, force: true });
+  });
+
+  it('counts changed tracked files, staged or not', () => {
+    const cwd = repo();
+    writeFileSync(path.join(cwd, 'a.txt'), 'changed');
+    writeFileSync(path.join(cwd, 'b.txt'), 'changed');
+    run(cwd, 'add', 'b.txt');
+    expect(workingTreeState(cwd)).toEqual({ dirty: true, dirtyFiles: 2 });
+    rmSync(cwd, { recursive: true, force: true });
+  });
+
+  it('is unknown outside a checkout', () => {
+    const cwd = mkdtempSync(path.join(tmpdir(), 'pw-reporter-nogit-'));
+    expect(workingTreeState(cwd)).toEqual({});
+    rmSync(cwd, { recursive: true, force: true });
+  });
+
+  it('is dropped when the commit is overridden to another one', () => {
+    const cwd = repo();
+    writeFileSync(path.join(cwd, 'a.txt'), 'changed');
+    const cfg = { metadata: {}, rootDir: cwd, projects: [] } as unknown as FullConfig;
+    expect(collectGitInfo(cfg, {})).toMatchObject({ dirty: true, dirtyFiles: 1 });
+    const other = collectGitInfo(cfg, {}, { sha: 'f'.repeat(40) });
+    expect(other.dirty).toBeUndefined();
+    expect(other.dirtyFiles).toBeUndefined();
+    rmSync(cwd, { recursive: true, force: true });
   });
 });

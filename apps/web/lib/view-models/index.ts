@@ -40,13 +40,26 @@ export function toRunListItem<T extends RunRowLike>(run: T): T & Pick<RunListIte
 }
 
 /**
- * Same, for the run header — which reads the identical git fields, and the
- * pull request's title, which only the stored git metadata has.
+ * Same, for the run header — which reads the identical git fields, and what only
+ * the stored git and CI metadata have: the pull request's title, whether the
+ * working tree was dirty, and how the executor was decided. A run from an older
+ * reporter has none of the latter, and they stay null rather than guessed.
  */
-export function toRunHeaderData<T extends RunRowLike & { git?: { prTitle?: string } | null }>(
+export function toRunHeaderData<
+  T extends RunRowLike & {
+    git?: { prTitle?: string; dirty?: boolean; dirtyFiles?: number } | null;
+    ci?: { detectedBy?: RunHeaderData['executorDetectedBy'] } | null;
+  },
+>(
   run: T,
-): T & Pick<RunHeaderData, 'gitCommitUrl' | 'gitShortSha' | 'prTitle'> {
-  return { ...toRunListItem(run), prTitle: run.git?.prTitle ?? null };
+): T & Pick<RunHeaderData, 'gitCommitUrl' | 'gitShortSha' | 'prTitle' | 'executorDetectedBy' | 'gitDirty' | 'gitDirtyFiles'> {
+  return {
+    ...toRunListItem(run),
+    prTitle: run.git?.prTitle ?? null,
+    executorDetectedBy: run.ci?.detectedBy ?? null,
+    gitDirty: run.git?.dirty ?? null,
+    gitDirtyFiles: run.git?.dirtyFiles ?? null,
+  };
 }
 
 /**

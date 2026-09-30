@@ -34,6 +34,11 @@ function defined<T extends object>(values: Record<string, string | undefined>): 
   return Object.fromEntries(Object.entries(values).map(([k, v]) => [k, v?.trim()]).filter(([, v]) => v)) as T;
 }
 
+function executor(v: string | undefined): 'ci' | 'local' | undefined {
+  const x = v?.trim().toLowerCase();
+  return x === 'ci' || x === 'local' ? x : undefined;
+}
+
 export function resolveOptions(
   opts: ReporterOptions = {},
   env: NodeJS.ProcessEnv = process.env,
@@ -80,6 +85,7 @@ export function resolveOptions(
       buildNumber: opts.ci?.buildNumber ?? env.PW_REPORTER_BUILD_NUMBER,
       job: opts.ci?.job ?? env.PW_REPORTER_CI_JOB,
     }),
+    executor: executor(opts.executor) ?? executor(env.PW_REPORTER_EXECUTOR),
   };
 }
 
