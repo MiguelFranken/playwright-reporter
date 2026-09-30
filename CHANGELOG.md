@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.0.56](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.55...v0.0.56) (2026-09-30)
+
+### Features
+
+* **library:** a calmer library with a view builder, per-view folders and scroll to top ([#67](https://github.com/MiguelFranken/playwright-reporter/issues/67)) ([64e174a](https://github.com/MiguelFranken/playwright-reporter/commit/64e174af2079317b1869ad1195a63e6d61d11e70))
+
+### Bug Fixes
+
+* **ui:** fix the accessibility defects the Storybook check was told to ignore ([#68](https://github.com/MiguelFranken/playwright-reporter/issues/68)) ([ed69a35](https://github.com/MiguelFranken/playwright-reporter/commit/ed69a35a3a5f3c861918b249ff31cd1f802b657d))
+
 ## [0.0.55](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.54...v0.0.55) (2026-09-30)
 
 ### Features
