@@ -32,6 +32,7 @@ describe('LazyS3StorageAdapter', () => {
     const storage = new LazyS3StorageAdapter(config('app'));
     expect(storage.name).toBe('s3');
     expect(storage.retention).toBe('app');
+    expect(storage.bucket).toBe('artifacts');
     expect(loaded).not.toHaveBeenCalled();
 
     expect(await storage.head('a.png')).toEqual({ size: 5, contentType: 'image/png' });

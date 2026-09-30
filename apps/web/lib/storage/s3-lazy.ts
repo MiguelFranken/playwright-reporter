@@ -14,9 +14,11 @@ export class LazyS3StorageAdapter implements StorageAdapter {
   readonly name = 's3' as const;
   readonly retention: RetentionOwner;
   readonly applyRetentionPolicy?: (policy: RetentionPolicy) => Promise<void>;
+  readonly bucket: string;
   private adapter?: Promise<S3StorageAdapter>;
 
   constructor(readonly config: S3StorageConfig) {
+    this.bucket = config.bucket;
     this.retention = config.retention;
     if (this.retention === 'provider') this.applyRetentionPolicy = async (policy) => (await this.load()).applyRetentionPolicy?.(policy);
   }
