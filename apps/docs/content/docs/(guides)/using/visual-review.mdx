@@ -267,7 +267,19 @@ numbered pins (and the areas they mark), attaches a close-up of each pin, and li
 so "#2: the totals lost their border" points at a place on the page. `list_review_threads` lists a run's open threads
 with their positions in pixels, percent and CSS pixels. With a write-scoped token, `comment_on_review` pins a thread or
 replies to one, and `resolve_review_thread` resolves it; comments an assistant writes say so. Ask it to fix the open
-comments of a run, and it can reply with what it changed for you to check.
+comments of a run, and it can reply with what it changed for you to check — when you tell it to; a write-scoped token
+alone does not make it post.
+
+To fix the product from its feedback, an assistant starts with `list_feedback_requests` for the branch you work on:
+every open request, one record each — comment threads and "changes requested" without a comment, including screens a
+partial run skipped — with the test that produces the image (id, full title, file, browser), the checkpoint key to
+search the spec for, the image now and the one the request was made on, and whether it still waits for a fix or changed
+since (to verify). Its `producers` are the tests a narrow re-run selects, no more; `get_rerun_command` gives anchored
+selectors and a `--list` preview to check the selection before running it. `get_review_checkpoint` compares with what
+you choose — `against: "origin"` (the image a request was made on), `"baseline"` or `"previous"` — and says which one
+it attached; with `images: "focus"` and a thread it sends only that spot, then and now, which stays readable on a tall
+page. `maxImages` bounds the images of one answer, and `attachedImages` says what each one shows. A passed test or a
+changed image is evidence, not approval: resolving and approving stay with you.
 
 `list_library` names the references in the library and the run each shows; `get_library_flows` lists a reference's
 flows and checkpoints, with capture ids to look at, each screen's state and open comments, and the link to hand a
@@ -277,7 +289,7 @@ and `placement: "outdated"` the ones made on an earlier version: with `placedOnC
 the version the comment was about. With a write-scoped token,
 `set_library_reference` keeps a pull request in the library, pins its run or makes it the default. The [REST API](/docs/api)
 has the same reads under `/runs/{run}/review-checkpoints`, `/review-captures/{capture}` (with `annotatedImageUrl`, the
-image with its pins drawn on it), `/review-threads`, `/library` and `/library/flows`, and — with a write-scoped token —
+image with its pins drawn on it), `/feedback-requests`, `/review-threads`, `/library` and `/library/flows`, and — with a write-scoped token —
 the same changes: `POST /review-captures/decisions` approves or asks for changes, `POST /review-threads` pins a comment
 or replies, `POST /review-threads/status` resolves or reopens one, and `POST /library/references` keeps, pins or names
 a reference.

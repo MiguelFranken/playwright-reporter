@@ -147,3 +147,39 @@ export const commentedFlows: ReviewFlowView[] = [flowWithThreads()];
 export const commentedCheckpointId = placeOrderFlow.checkpoints[1].id;
 
 export { NOW };
+
+/** Changes requested on the approved screen without a comment; this run changed it since. */
+export const uncommentedRequestFlows: ReviewFlowView[] = [
+  {
+    ...placeOrderFlow,
+    checkpoints: placeOrderFlow.checkpoints.map((cp, i) =>
+      i === 1
+        ? {
+            ...cp,
+            captures: cp.captures.map((c) =>
+              c.variant === 'desktop' ? { ...c, threads: [], request: { by: 'Grace Hopper', at: ago(60 * 20).toISOString(), runNumber: approvedCheckout.runNumber, captureId: approvedCheckout.captureId, onThisImage: false } } : { ...c, threads: [] },
+            ),
+          }
+        : cp,
+    ),
+  },
+];
+
+/** Changes requested on these very pixels, without a comment. */
+export const uncommentedRequestHereFlows: ReviewFlowView[] = [
+  {
+    ...placeOrderFlow,
+    checkpoints: placeOrderFlow.checkpoints.map((cp, i) =>
+      i === 1
+        ? {
+            ...cp,
+            captures: cp.captures.map((c) =>
+              c.variant === 'desktop'
+                ? { ...c, status: 'changes_requested' as const, threads: [], request: { by: 'Grace Hopper', at: ago(30).toISOString(), runNumber: 483, captureId: c.id, onThisImage: true } }
+                : { ...c, threads: [] },
+            ),
+          }
+        : cp,
+    ),
+  },
+];

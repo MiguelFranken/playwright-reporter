@@ -77,11 +77,12 @@ export function feedbackCounts(captures: readonly Pick<ReviewCaptureView, 'threa
 }
 
 /** Every state a screen is in; a screen can be waiting and ready to verify at once. */
-export function captureStates(cap: Pick<ReviewCaptureView, 'status' | 'threads' | 'previous'>): Set<LibraryState> {
+export function captureStates(cap: Pick<ReviewCaptureView, 'status' | 'threads' | 'previous' | 'request'>): Set<LibraryState> {
   const out = new Set<LibraryState>();
   const f = feedbackCounts([cap]);
   if (f.current > 0 || cap.status === 'changes_requested') out.add('waiting');
-  if (f.outdated > 0) out.add('verify');
+  // Changes asked for without a comment on an image this one replaced: no thread carries it over, the request does.
+  if (f.outdated > 0 || (cap.request && !cap.request.onThisImage)) out.add('verify');
   if (f.open === 0 && NEEDS_REVIEW.includes(cap.status)) out.add('needs-review');
   if (f.open === 0 && cap.status === 'approved') out.add('approved');
   if (cap.previous && !cap.previous.same) out.add('updated');

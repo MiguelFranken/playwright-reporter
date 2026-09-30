@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useState } from 'react';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
-import { commentedCheckpointId, commentedFlows, flowWithThreads, NOW, verifyFlows, VIEWER_ID } from '../../fixtures/review-threads';
+import { commentedCheckpointId, commentedFlows, flowWithThreads, NOW, uncommentedRequestFlows, uncommentedRequestHereFlows, verifyFlows, VIEWER_ID } from '../../fixtures/review-threads';
 import { CheckpointViewer, type ReviewSelection } from './checkpoint-viewer';
 
 const desktopCapture = commentedFlows[0].checkpoints[1].captures.find((c) => c.variant === 'desktop')!;
@@ -202,5 +202,29 @@ export const FixWithAi: Story = {
     await userEvent.click(list.getByRole('button', { name: 'Fix with AI' }));
     const item = await body.findByRole('menuitem', { name: 'Copy prompt' });
     await waitFor(() => expect(item).toBeVisible());
+  },
+};
+
+/** Changes were asked for without a comment on the approved screen, and this run changed it: compare with the version asked about. */
+export const UncommentedRequestChangedSince: Story = {
+  args: { flows: uncommentedRequestFlows },
+  play: async () => {
+    const body = within(document.body);
+    await body.findByRole('dialog');
+    await expect(body.getByRole('note')).toHaveTextContent(/asked for changes to an earlier version of this screen, without a comment/);
+    await userEvent.click(body.getByRole('button', { name: 'Compare with the version asked about' }));
+    await expect(body.getByRole('button', { name: 'Side by side' })).toHaveAttribute('aria-pressed', 'true');
+  },
+};
+
+/** Changes asked for on these pixels without saying what: pin what should change. */
+export const UncommentedRequestOnThisImage: Story = {
+  args: { flows: uncommentedRequestHereFlows },
+  play: async () => {
+    const body = within(document.body);
+    await body.findByRole('dialog');
+    await expect(body.getByRole('note')).toHaveTextContent(/asked for changes to this image without saying what/);
+    await userEvent.click(body.getByRole('button', { name: 'Pin what should change' }));
+    await expect(await body.findByRole('application', { name: /Place a comment on/ })).toBeInTheDocument();
   },
 };

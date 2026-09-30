@@ -19,6 +19,7 @@ import { TEST_CASE_TOOLS } from './test-cases';
 import { REVIEW_TOOLS } from './review';
 import { REVIEW_THREAD_TOOLS } from './review-threads';
 import { LIBRARY_TOOLS } from './library';
+import { FEEDBACK_TOOLS } from './feedback';
 
 /** Every tool, in the order clients list them: find things first, then explain and verify. */
 export const TOOLS: ToolDef[] = [
@@ -39,6 +40,7 @@ export const TOOLS: ToolDef[] = [
   getArtifact,
   getRerunCommand,
   ...TEST_CASE_TOOLS,
+  ...FEEDBACK_TOOLS,
   ...REVIEW_TOOLS,
   ...REVIEW_THREAD_TOOLS,
   ...LIBRARY_TOOLS,
