@@ -212,8 +212,9 @@ export function LibraryDisplayMenu({ config, onChange, variants = [], children }
         <SlidersHorizontal /> Display
         {layoutChanged(config) ? <span aria-hidden className="size-1.5 rounded-full bg-accent-solid" /> : null}
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-[22rem] gap-3">
-        <PopoverTitle className="text-label-m">Display</PopoverTitle>
+      <PopoverContent align="end" className="flex w-[22rem] flex-col gap-3">
+        {/* The Display button right beside the panel already names it. */}
+        <PopoverTitle className="sr-only">Display</PopoverTitle>
         <ViewLayoutFields config={config} onChange={onChange} variants={variants} />
         {children ? (
           <>
