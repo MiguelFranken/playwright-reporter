@@ -375,7 +375,7 @@ export function CheckpointViewer({
       if (target && (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT' || target.isContentEditable)) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       // Arrow keys inside a toggle group move between its options, and in the pin layer move its crosshair.
-      if (e.key.startsWith('Arrow') && target?.closest('[data-slot="toggle-group"], [data-slot="pin-layer"]')) return;
+      if (e.key.startsWith('Arrow') && target?.closest('[data-slot="toggle-group"], [data-slot="pin-layer"], [data-slot="compare-split"]')) return;
       // A popover or menu open over the viewer handles its own keys.
       if (target?.closest('[data-slot="popover-content"], [role="menu"]')) return;
       const key = e.key.toLowerCase();
@@ -610,7 +610,7 @@ export function CheckpointViewer({
                         ))}
                       </div>
                     ) : (
-                      <div role="region" aria-label={`${label}, comparison`} tabIndex={0} className="mx-auto overflow-x-hidden overflow-y-auto rounded-md ring-1 ring-border outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40" style={{ width: frames[0].width * zoom, height: frames[0].height * zoom + 40 }}>
+                      <div role="region" aria-label={`${label}, comparison`} tabIndex={0} className="mx-auto overflow-x-hidden overflow-y-auto rounded-md ring-1 ring-border outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40" style={{ width: frames[0].width * zoom, height: frames[0].height * zoom + (effectiveStage === 'slider' ? 0 : 40) }}>
                         <ImageCompare current={current.image} reference={reference.image} mode={effectiveStage as CompareMode} referenceLabel={reference.label} currentLabel={library ? (current.compare || !current.runNumber ? 'This one' : `Run #${current.runNumber}`) : 'This run'} alt={label} />
                       </div>
                     )

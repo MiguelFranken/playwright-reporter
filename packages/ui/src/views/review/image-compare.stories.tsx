@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 import { placeOrderFlow, unavailableFlow } from '../../fixtures/review';
 import { ImageCompare } from './image-compare';
 
@@ -17,14 +17,30 @@ type Story = StoryObj<typeof meta>;
 
 export const SideBySide: Story = {};
 
+/** The split is the line itself: drag it (or anywhere on the images), or move its handle with the keys. */
 export const Slider: Story = {
   args: { mode: 'slider' },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const range = canvas.getByRole('slider', { name: 'Split position' });
-    range.focus();
+    const handle = canvas.getByRole('slider', { name: 'Split position' });
+    await expect(handle).toHaveAttribute('aria-valuenow', '50');
+    handle.focus();
     await userEvent.keyboard('{Home}');
-    await expect(range).toHaveAttribute('aria-valuenow', '0');
+    await waitFor(() => expect(handle).toHaveAttribute('aria-valuenow', '0'));
+    await userEvent.keyboard('{Shift>}{ArrowRight}{/Shift}');
+    await waitFor(() => expect(handle).toHaveAttribute('aria-valuenow', '10'));
+
+    // Dragging from a quarter of the way to three quarters leaves the split there.
+    const surface = handle.parentElement!;
+    const r = surface.getBoundingClientRect();
+    const y = r.top + r.height / 2;
+    await userEvent.pointer([
+      { keys: '[MouseLeft>]', target: surface, coords: { clientX: r.left + r.width * 0.25, clientY: y } },
+      { target: surface, coords: { clientX: r.left + r.width * 0.75, clientY: y } },
+      { keys: '[/MouseLeft]', target: surface },
+    ]);
+    await waitFor(() => expect(handle).toHaveAttribute('aria-valuenow', '75'));
+    await expect(canvas.queryByRole('slider', { name: /opacity/i })).toBeNull();
   },
 };
 
