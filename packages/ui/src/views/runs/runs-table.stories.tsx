@@ -11,7 +11,6 @@ const meta = {
   component: RunsTable,
   args: { hrefs, runs },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta<typeof RunsTable>;
 
 export default meta;

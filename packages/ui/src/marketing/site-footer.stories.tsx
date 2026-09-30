@@ -6,7 +6,6 @@ const meta = {
   title: 'Marketing/Site chrome/SiteFooter',
   component: SiteFooter,
   parameters: { layout: 'fullscreen' },
-  tags: ['themed'],
   args: {
     siteName: SITE_NAME,
     columns: footerColumns,

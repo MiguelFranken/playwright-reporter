@@ -7,7 +7,6 @@ const meta = {
   title: 'Views/Teams/Members',
   component: TeamMembers,
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   args: {
     members: MEMBERS,
     invitations: INVITATIONS,

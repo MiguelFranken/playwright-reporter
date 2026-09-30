@@ -13,7 +13,6 @@ const meta = {
   title: 'Views/Account/AI/AI assistants',
   component: AiAssistants,
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   args: {
     baseUrl: 'https://reporter.acme.test',
     projects: PROJECTS,

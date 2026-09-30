@@ -15,7 +15,6 @@ const meta = {
   component: CountTabs,
   args: { items, value: 'all' },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta<typeof CountTabs>;
 
 export default meta;

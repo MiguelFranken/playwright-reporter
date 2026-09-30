@@ -45,7 +45,6 @@ const meta = {
     onTestIntent: fn(),
   },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta<typeof ExplorerTable>;
 
 export default meta;

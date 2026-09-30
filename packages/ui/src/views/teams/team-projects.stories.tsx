@@ -7,7 +7,6 @@ const meta = {
   title: 'Views/Teams/Projects',
   component: TeamProjects,
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   args: {
     teamSlug: 'acme',
     projects: TEAM_PROJECTS,

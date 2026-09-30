@@ -11,7 +11,6 @@ const meta = {
   component: LibraryViewList,
   args: { views: allViews, activeId: 'all', counts, onSelect: fn(), onRename: fn(), onDelete: fn(), onEdit: fn(), onDuplicate: fn(), onCreate: fn() },
   decorators: [(Story) => <div className="w-60 bg-surface p-3">{Story()}</div>],
-  tags: ['themed'],
 } satisfies Meta<typeof LibraryViewList>;
 
 export default meta;

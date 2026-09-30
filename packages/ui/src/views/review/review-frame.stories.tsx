@@ -9,7 +9,6 @@ const meta = {
   title: 'Views/Review/Screens/ReviewFrame',
   component: ReviewFrame,
   args: { image: desktop.image, viewport: desktop.viewport, alt: 'Your cart — desktop' },
-  tags: ['themed'],
 } satisfies Meta<typeof ReviewFrame>;
 
 export default meta;

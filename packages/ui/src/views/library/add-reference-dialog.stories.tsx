@@ -7,7 +7,6 @@ const meta = {
   title: 'Views/Library/Dialogs/AddLibraryReferenceDialog',
   component: AddLibraryReferenceDialog,
   args: { open: true, onOpenChange: fn(), ...libraryCandidates, kept: ['branch:main', 'pr:212'], onAdd: fn() },
-  tags: ['themed'],
 } satisfies Meta<typeof AddLibraryReferenceDialog>;
 
 export default meta;

@@ -7,7 +7,6 @@ const meta = {
   title: 'Views/Admin/MCP server switch',
   component: McpServerSwitch,
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   args: { checked: true, forcedOffByEnv: false, onCheckedChange: fn() },
   decorators: [
     (Story) => (

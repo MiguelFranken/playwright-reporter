@@ -8,7 +8,6 @@ const meta = {
   args: { onSubmit: fn(), onCancel: fn() },
   decorators: [(Story) => <div className="w-80">{Story()}</div>],
   parameters: { layout: 'centered' },
-  tags: ['themed'],
 } satisfies Meta<typeof CommentComposer>;
 
 export default meta;

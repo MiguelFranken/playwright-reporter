@@ -8,7 +8,6 @@ const meta = {
   title: 'Views/Admin/Database/Overview',
   component: DataRetentionSchedule,
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   args: { onVercel: false, cronSecretSet: true, ingestSweepHours: 12 },
   decorators: [
     (Story) => (

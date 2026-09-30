@@ -6,7 +6,6 @@ const meta = {
   title: 'Views/Account/Push notifications',
   component: PushNotifications,
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   args: {
     state: { kind: 'on', prefs: { notifyStarted: true, notifyFinished: true } },
     onEnable: fn(),

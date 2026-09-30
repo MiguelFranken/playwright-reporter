@@ -23,13 +23,11 @@ export default defineConfig({
         test: { browser: browser('storybook') },
       },
       {
-        // The same catalogue in dark mode, over the layers where theming is
-        // load-bearing. Tag a story `themed` to opt it in; no story is
-        // duplicated for it.
+        // The whole catalogue again in dark mode, so the accessibility check
+        // (contrast above all) covers both themes. No story is duplicated.
         plugins: [
           storybookTest({
             configDir: './.storybook',
-            tags: { include: ['themed'] },
             initialGlobals: { theme: 'dark' },
           }),
         ],

@@ -6,7 +6,6 @@ const meta = {
   title: 'Views/Auth/Invitation',
   component: CreateAccountForm,
   parameters: { layout: 'centered' },
-  tags: ['themed'],
   args: { email: 'margaret@acme.test', onSubmit: fn() },
   decorators: [
     (Story) => (

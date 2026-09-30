@@ -6,7 +6,6 @@ const meta = {
   title: 'Marketing/Sections/Section',
   component: Section,
   parameters: { layout: 'fullscreen' },
-  tags: ['themed'],
   args: {
     children: (
       <>

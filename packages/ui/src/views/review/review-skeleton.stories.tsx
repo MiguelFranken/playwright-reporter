@@ -5,7 +5,6 @@ const meta = {
   title: 'Views/Review/Storyboard/ReviewStoryboardSkeleton',
   component: ReviewStoryboardSkeleton,
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta<typeof ReviewStoryboardSkeleton>;
 
 export default meta;

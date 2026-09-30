@@ -6,7 +6,6 @@ const meta = {
   title: 'Views/Settings/General/Project name',
   component: ProjectRenameForm,
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   args: { name: 'Web shop', action: fn() },
 } satisfies Meta<typeof ProjectRenameForm>;
 

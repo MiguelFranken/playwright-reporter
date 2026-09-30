@@ -18,7 +18,6 @@ const meta = {
     ],
   },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   decorators: [(Story) => <div className="max-w-xs">{Story()}</div>],
 } satisfies Meta<typeof OutcomeCard>;
 

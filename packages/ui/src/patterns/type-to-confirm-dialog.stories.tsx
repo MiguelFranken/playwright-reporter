@@ -5,7 +5,6 @@ import { TypeToConfirmDialog } from './type-to-confirm-dialog';
 const meta = {
   title: 'Patterns/Dialogs/TypeToConfirmDialog',
   component: TypeToConfirmDialog,
-  tags: ['themed'],
   args: {
     open: true,
     onOpenChange: fn(),

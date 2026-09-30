@@ -8,7 +8,6 @@ const meta = {
   args: { number: 3, 'aria-label': 'Thread 3', onClick: fn() },
   argTypes: { state: { control: 'inline-radio', options: ['open', 'outdated', 'resolved', 'draft'] } },
   parameters: { layout: 'centered' },
-  tags: ['themed'],
 } satisfies Meta<typeof CommentPin>;
 
 export default meta;

@@ -17,7 +17,6 @@ import type { RunTab } from '../lib/run-tab';
 const meta = {
   title: 'Pages/Run',
   parameters: { layout: 'fullscreen' },
-  tags: ['themed'],
 } satisfies Meta;
 
 export default meta;

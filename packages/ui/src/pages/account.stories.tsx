@@ -14,7 +14,6 @@ import { PushNotifications } from '../views/account/push-notifications';
 const meta = {
   title: 'Pages/Account',
   parameters: { layout: 'fullscreen' },
-  tags: ['themed'],
 } satisfies Meta;
 
 export default meta;

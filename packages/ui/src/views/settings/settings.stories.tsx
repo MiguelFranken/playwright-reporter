@@ -7,7 +7,6 @@ import { StorageCard } from './storage-card';
 const meta = {
   title: 'Views/Settings/Integrations/Storage & reporter',
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta;
 
 export default meta;

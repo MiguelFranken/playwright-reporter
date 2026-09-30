@@ -9,7 +9,6 @@ const meta = {
   component: LibraryReferenceBar,
   args: { references: libraryReferences, current: mainReference, onReferenceChange: fn(), onSettings: fn(), onKeep: fn(), runHref: (n: number) => `#run-${n}`, now: NOW },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta<typeof LibraryReferenceBar>;
 
 export default meta;

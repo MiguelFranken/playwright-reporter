@@ -9,7 +9,6 @@ const meta = {
   args: { thread: buttonThread, captureId: 'cap-1', now: NOW, viewerId: VIEWER_ID, canComment: true, onReply: fn(), onSetThreadStatus: fn(), onEditComment: fn(), onDeleteComment: fn(), onClose: fn() },
   decorators: [(Story) => <div className="w-80 rounded-lg border border-border bg-popover p-3">{Story()}</div>],
   parameters: { layout: 'centered' },
-  tags: ['themed'],
 } satisfies Meta<typeof ThreadView>;
 
 export default meta;

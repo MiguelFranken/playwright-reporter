@@ -8,7 +8,6 @@ const meta = {
   component: LibraryStateChip,
   args: { state: 'verify' },
   parameters: { layout: 'centered' },
-  tags: ['themed'],
 } satisfies Meta<typeof LibraryStateChip>;
 
 export default meta;

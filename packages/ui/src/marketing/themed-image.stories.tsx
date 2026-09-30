@@ -6,7 +6,6 @@ const meta = {
   title: 'Marketing/Content/ThemedImage',
   component: ThemedImage,
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   args: { sources: screenshotPair },
 } satisfies Meta<typeof ThemedImage>;
 

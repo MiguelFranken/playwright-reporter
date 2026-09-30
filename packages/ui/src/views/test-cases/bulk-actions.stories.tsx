@@ -6,7 +6,6 @@ import { BulkBar, BulkEditDialog } from './bulk-actions';
 const meta = {
   title: 'Views/TestCases/Library/BulkActions',
   component: BulkBar,
-  tags: ['themed'],
   args: { count: 3, onClear: fn(), onEdit: fn(), onDeprecate: fn(), onDelete: fn() },
   parameters: { layout: 'padded' },
 } satisfies Meta<typeof BulkBar>;

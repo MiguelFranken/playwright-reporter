@@ -7,7 +7,6 @@ const meta = {
   component: RunTabError,
   args: { onRetry: fn() },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta<typeof RunTabError>;
 
 export default meta;

@@ -10,7 +10,6 @@ const meta = {
   component: RunResultGroups,
   args: { hrefs, rows: mixedResults },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta<typeof RunResultGroups>;
 
 export default meta;

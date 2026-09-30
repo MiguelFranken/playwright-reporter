@@ -8,7 +8,6 @@ const meta = {
   component: ErrorBlock,
   args: { message: ANSI_ERROR },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta<typeof ErrorBlock>;
 
 export default meta;

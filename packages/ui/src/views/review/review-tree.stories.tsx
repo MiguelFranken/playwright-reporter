@@ -10,7 +10,6 @@ const meta = {
   args: { folders: buildReviewTree(reviewFlows, 'suite'), selected: null, onSelect: fn(), grouping: 'suite', onGroupingChange: fn(), total: 15, needsReview: 8 },
   parameters: { layout: 'padded' },
   decorators: [(Story) => <div className="w-60">{Story()}</div>],
-  tags: ['themed'],
 } satisfies Meta<typeof ReviewTree>;
 
 export default meta;

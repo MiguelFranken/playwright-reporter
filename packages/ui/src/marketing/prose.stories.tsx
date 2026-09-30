@@ -5,7 +5,6 @@ const meta = {
   title: 'Marketing/Content/Prose',
   component: Prose,
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta<typeof Prose>;
 
 export default meta;

@@ -14,7 +14,6 @@ const meta = {
     children: <p className="text-body-s text-muted-foreground">The active tab&rsquo;s body renders here.</p>,
   },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta<typeof RunTabs>;
 
 export default meta;

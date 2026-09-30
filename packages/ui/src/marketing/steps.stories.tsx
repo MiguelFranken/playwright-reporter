@@ -7,7 +7,6 @@ const meta = {
   title: 'Marketing/Sections/Steps',
   component: Steps,
   parameters: { layout: 'fullscreen' },
-  tags: ['themed'],
   args: {
     header: { eyebrow: 'How it works', heading: 'Four moving parts, none of them yours to babysit' },
     steps: [

@@ -5,7 +5,6 @@ import { CreateWithSlugDialog } from './create-with-slug-dialog';
 const meta = {
   title: 'Patterns/Dialogs/CreateWithSlugDialog',
   component: CreateWithSlugDialog,
-  tags: ['themed'],
   args: {
     open: true,
     onOpenChange: fn(),

@@ -7,7 +7,6 @@ const meta = {
   title: 'Views/Account/Profile/Profile details',
   component: ProfileDetails,
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   args: { email: 'ada@acme.test', isSuperadmin: false, teams: PROFILE_TEAMS },
 } satisfies Meta<typeof ProfileDetails>;
 

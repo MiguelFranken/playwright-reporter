@@ -6,7 +6,6 @@ const meta = {
   title: 'Patterns/Dialogs/OneTimeSecret',
   component: OneTimeSecret,
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   args: {
     title: 'Invitation link for margaret@acme.test',
     description: 'This link is shown once. Send it to the person yourself — the app does not send email.',

@@ -116,7 +116,11 @@ export const PicksByKeyboard: Story = {
     const listbox = await within(document.body).findByRole('listbox', { name: 'Browser' });
     await waitFor(() => expect(within(listbox).getAllByRole('option').length).toBeGreaterThan(1));
 
-    await userEvent.keyboard('{ArrowDown}{Enter}');
+    // Wait for the highlight to move before committing: under load, an Enter
+    // sent with the ArrowDown can land before the list has taken the key.
+    await userEvent.keyboard('{ArrowDown}');
+    await waitFor(() => expect(listbox.querySelector('[role="option"][data-highlighted]')).not.toBeNull());
+    await userEvent.keyboard('{Enter}');
     await waitFor(() => expect(args.onValueChange).toHaveBeenCalled());
   },
 };

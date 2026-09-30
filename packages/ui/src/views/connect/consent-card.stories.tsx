@@ -7,7 +7,6 @@ const meta = {
   title: 'Views/Connect/Consent',
   component: ConsentCard,
   parameters: { layout: 'centered' },
-  tags: ['themed'],
   args: {
     clientName: 'Claude',
     verified: true,

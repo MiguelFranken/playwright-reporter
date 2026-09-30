@@ -21,7 +21,6 @@ const meta = {
   },
   parameters: { layout: 'fullscreen' },
   decorators: [(Story) => <div className="min-h-dvh bg-surface p-6">{Story()}</div>],
-  tags: ['themed'],
 } satisfies Meta<typeof LibraryBrowser>;
 
 export default meta;

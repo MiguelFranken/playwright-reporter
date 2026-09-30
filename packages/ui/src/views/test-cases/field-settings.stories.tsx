@@ -6,7 +6,6 @@ import { FieldSettings } from './field-settings';
 const meta = {
   title: 'Views/TestCases/FieldSettings',
   component: FieldSettings,
-  tags: ['themed'],
   args: { defs: fieldDefs.slice(0, 2), onSave: fn() },
   parameters: { layout: 'padded' },
 } satisfies Meta<typeof FieldSettings>;

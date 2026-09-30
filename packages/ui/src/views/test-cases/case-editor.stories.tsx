@@ -25,7 +25,6 @@ const editing: CaseEditorValues = {
 const meta = {
   title: 'Views/TestCases/Case/CaseEditor',
   component: CaseEditor,
-  tags: ['themed'],
   args: {
     initial: EMPTY_CASE,
     suites: suiteOptions,

@@ -6,7 +6,6 @@ const meta = {
   title: 'Views/Settings/Danger zone',
   component: ProjectDangerZone,
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   args: { name: 'Web shop', slug: 'web', open: false, onOpenChange: fn(), onDelete: fn() },
   decorators: [
     (Story) => (

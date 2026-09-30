@@ -12,7 +12,6 @@ const meta = {
   title: 'Marketing/Demos/LiveRunDemo',
   component: LiveRunDemo,
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta<typeof LiveRunDemo>;
 
 export default meta;

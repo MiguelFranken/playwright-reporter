@@ -12,7 +12,6 @@ const meta = {
     size: { control: 'inline-radio', options: ['sm', 'default', 'lg'] },
   },
   parameters: { layout: 'centered' },
-  tags: ['themed'],
 } satisfies Meta<typeof ProfileAvatar>;
 
 export default meta;

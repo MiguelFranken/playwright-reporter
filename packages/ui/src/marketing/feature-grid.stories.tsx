@@ -9,7 +9,6 @@ const meta = {
   title: 'Marketing/Sections/FeatureGrid',
   component: FeatureGrid,
   parameters: { layout: 'fullscreen' },
-  tags: ['themed'],
   args: {
     header: {
       eyebrow: 'What you get',

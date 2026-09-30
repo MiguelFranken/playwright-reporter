@@ -8,7 +8,6 @@ const meta = {
   title: 'Views/Account/Access/Access tokens',
   component: AccessTokens,
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   args: {
     tokens: PERSONAL_TOKENS,
     teams: SCOPE_TEAMS,

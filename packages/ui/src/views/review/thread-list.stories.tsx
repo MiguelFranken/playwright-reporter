@@ -43,7 +43,6 @@ const meta = {
   },
   decorators: [(Story) => <div className="w-80">{Story()}</div>],
   parameters: { layout: 'centered' },
-  tags: ['themed'],
 } satisfies Meta<typeof Hosted>;
 
 export default meta;

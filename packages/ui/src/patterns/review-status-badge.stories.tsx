@@ -6,7 +6,6 @@ const meta = {
   title: 'Patterns/Status/ReviewStatusBadge',
   component: ReviewStatusBadge,
   args: { status: 'changed' },
-  tags: ['themed'],
 } satisfies Meta<typeof ReviewStatusBadge>;
 
 export default meta;

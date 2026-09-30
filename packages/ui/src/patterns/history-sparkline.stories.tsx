@@ -10,7 +10,6 @@ const meta = {
   component: HistorySparkline,
   args: { history: MIXED },
   parameters: { layout: 'centered' },
-  tags: ['themed'],
 } satisfies Meta<typeof HistorySparkline>;
 
 export default meta;

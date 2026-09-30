@@ -15,7 +15,6 @@ const meta = {
     ],
   },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta<typeof StatGrid>;
 
 export default meta;

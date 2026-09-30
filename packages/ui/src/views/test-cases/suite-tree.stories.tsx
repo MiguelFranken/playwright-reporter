@@ -8,7 +8,6 @@ const hrefs = { all: '/cases', unassigned: '/cases?suite=unassigned', suite: (id
 const meta = {
   title: 'Views/TestCases/Library/SuiteTree',
   component: SuiteTree,
-  tags: ['themed'],
   args: {
     roots: suiteTree,
     total: 21,

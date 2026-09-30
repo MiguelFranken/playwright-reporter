@@ -12,7 +12,6 @@ const meta = {
   title: 'Patterns/Metrics & charts/ChartFrame',
   component: ChartFrame,
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   args: {
     label: 'Pass rate',
     icon: TrendingUp,

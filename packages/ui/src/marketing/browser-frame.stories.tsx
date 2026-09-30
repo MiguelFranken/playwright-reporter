@@ -7,7 +7,6 @@ const meta = {
   title: 'Marketing/Content/BrowserFrame',
   component: BrowserFrame,
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   args: {
     url: 'reports.example.com/acme/web/runs/481',
     children: <ThemedImage sources={screenshotPair} />,

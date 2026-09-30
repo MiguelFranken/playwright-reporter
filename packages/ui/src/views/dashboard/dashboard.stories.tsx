@@ -14,7 +14,6 @@ const hrefs = { run: (n: number) => `#run-${n}`, test: (id: string) => `#test-${
 const meta = {
   title: 'Views/Dashboard/Cards & Lists',
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta;
 
 export default meta;

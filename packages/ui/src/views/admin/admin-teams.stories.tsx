@@ -8,7 +8,6 @@ const meta = {
   title: 'Views/Admin/Directory/Teams',
   component: AdminTeams,
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   args: {
     teams: ADMIN_TEAMS,
     teamHref: (t) => `/teams/${t.slug}/settings/members`,

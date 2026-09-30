@@ -21,7 +21,6 @@ const meta = {
   component: RunHistory,
   args: { rows, now: NOW },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta<typeof RunHistory>;
 
 export default meta;

@@ -8,7 +8,6 @@ const meta = {
   args: { count: 3 },
   decorators: [(Story) => <div className="relative h-24 w-40 rounded-md bg-surface ring-1 ring-border">{Story()}</div>],
   parameters: { layout: 'centered' },
-  tags: ['themed'],
 } satisfies Meta<typeof CommentCountBadge>;
 
 export default meta;

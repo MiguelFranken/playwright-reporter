@@ -6,7 +6,6 @@ const meta = {
   title: 'Views/Settings/General/Visual comparison',
   component: VisualDiffForm,
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   args: { value: { threshold: 0.1, autoApprove: true, maxChangedPixels: 0, maxChangedPercent: 0 }, action: fn() },
   decorators: [
     (Story) => (

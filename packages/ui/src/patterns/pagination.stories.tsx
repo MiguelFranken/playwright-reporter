@@ -8,7 +8,6 @@ const meta = {
   component: Pagination,
   args: { page: 3, pageSize: 25, total: 240, onPageChange: fn() },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta<typeof Pagination>;
 
 export default meta;

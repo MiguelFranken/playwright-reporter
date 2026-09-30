@@ -9,7 +9,6 @@ const meta = {
   title: 'Views/Settings/Integrations/API tokens',
   component: ApiTokens,
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   args: {
     tokens: API_TOKENS,
     createOpen: false,

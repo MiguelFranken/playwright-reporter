@@ -310,7 +310,7 @@ export const Default: Story = {};
 - Views import fixtures from `src/fixtures`; never inline a large object.
 - Anything showing relative time takes the `NOW` fixture, or assertions drift by
   the day.
-- Tag Patterns and Views stories `['themed']` to have them run in dark mode too.
+- Every story runs twice, in light and in dark mode; there is nothing to opt into.
 - Recharts measures its container: give chart stories a real width and height.
 
 ### Accessibility
@@ -318,12 +318,14 @@ export const Default: Story = {};
 The a11y addon runs on every story at `test: 'error'`, so a violation fails the
 build. That is deliberate — it has already caught five real defects.
 
-**Fix the component, don't silence the check.** Two narrow exceptions exist, both
-commented where they are used:
+**Fix the component, don't silence the check.** One exception exists, set once
+in `apps/storybook/.storybook/preview.tsx`: Base UI's `aria-hidden`, tabbable
+focus guards (`[data-base-ui-focus-guard]`) around every open popup are left
+out of the scan. They are the library's focus trap and never hold focus. No
+story turns a rule off; if you reach for one, there is a real defect to fix.
+(The Foundations token tables are documentation and are not run as tests.)
 
-- `PENDING_STATE_A11Y` from `src/fixtures/a11y.ts`, for `isPending` stories: the
-  `opacity-60` dimming drops labels under the contrast floor, and the same
-  labels at full opacity are checked by every other story of the component.
-- Base UI's `aria-hidden`, tabbable focus guards around an open `Select`.
-
-If you reach for a third, it probably means there is a real defect to fix.
+- A Select's listbox takes its trigger's name, so name the trigger
+  (`aria-label`, `aria-labelledby` or a `<Label htmlFor>`) and the list follows.
+- Show a pending state with the `pending` utility plus `aria-busy`, never by
+  fading content with opacity: that drops text under the 4.5:1 floor.

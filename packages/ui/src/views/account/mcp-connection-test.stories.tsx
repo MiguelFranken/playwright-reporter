@@ -8,7 +8,6 @@ const meta = {
   title: 'Views/Account/AI/MCP connection test',
   component: McpConnectionTest,
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   args: { result: null, onTest: fn() },
   decorators: [
     (Story) => (

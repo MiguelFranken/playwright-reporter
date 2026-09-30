@@ -8,7 +8,6 @@ import { CaseDetailView } from './case-detail';
 const meta = {
   title: 'Views/TestCases/Case/CaseDetail',
   component: CaseDetailView,
-  tags: ['themed'],
   args: {
     detail: caseDetail,
     fieldDefs,

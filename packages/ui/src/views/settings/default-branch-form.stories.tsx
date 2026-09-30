@@ -6,7 +6,6 @@ const meta = {
   title: 'Views/Settings/General/Default branch',
   component: DefaultBranchForm,
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   args: { value: '', fallback: 'main', action: fn() },
   decorators: [
     (Story) => (

@@ -8,7 +8,6 @@ const meta = {
   component: AvatarPicker,
   args: { name: 'Ada Lovelace', image: USER_AVATAR, onFileSelect: fn(), onRemove: fn() },
   parameters: { layout: 'centered' },
-  tags: ['themed'],
 } satisfies Meta<typeof AvatarPicker>;
 
 export default meta;

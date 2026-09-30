@@ -46,7 +46,6 @@ import { Steps } from '../marketing/steps';
 const meta = {
   title: 'Pages/Marketing Home',
   parameters: { layout: 'fullscreen' },
-  tags: ['themed'],
 } satisfies Meta;
 
 export default meta;

@@ -43,7 +43,6 @@ const meta = {
   title: 'Views/Shell/Sidebar',
   component: Shell,
   parameters: { layout: 'fullscreen' },
-  tags: ['themed'],
   args: { pathname: '/teams/acme/projects/web/runs', isSuperadmin: true, teams: SIDEBAR_TEAMS, onSignOut: fn() },
 } satisfies Meta<typeof Shell>;
 

@@ -20,7 +20,6 @@ function Selectable(props: CaseTableProps) {
 const meta = {
   title: 'Views/TestCases/Library/CaseTable',
   component: CaseTable,
-  tags: ['themed'],
   args: {
     rows: caseRows,
     hrefs: { case: (n: number) => `/cases/${n}` },

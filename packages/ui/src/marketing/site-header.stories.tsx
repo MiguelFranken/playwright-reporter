@@ -7,7 +7,6 @@ const meta = {
   title: 'Marketing/Site chrome/SiteHeader',
   component: SiteHeader,
   parameters: { layout: 'fullscreen' },
-  tags: ['themed'],
   args: {
     siteName: SITE_NAME,
     nav,

@@ -13,7 +13,6 @@ const meta = {
   title: 'Marketing/Content/CodeTabs',
   component: CodeTabs,
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   args: {
     tabs: [
       { label: 'playwright.config.ts', code: reporterSnippet },

@@ -10,7 +10,6 @@ const meta = {
   component: ImageCompare,
   args: { current: changed.image, reference: changed.baseline!.image, mode: 'side-by-side', referenceLabel: 'Approved (#470)', alt: 'Checkout filled in' },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta<typeof ImageCompare>;
 
 export default meta;

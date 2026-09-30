@@ -24,7 +24,6 @@ const meta = {
   component: RangeToggle,
   args: { value: '30', onValueChange: fn() },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta<typeof RangeToggle>;
 
 export default meta;

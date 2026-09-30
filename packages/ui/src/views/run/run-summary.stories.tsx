@@ -21,7 +21,6 @@ const meta = {
     onFilterChange: fn(),
   },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta<typeof RunSummary>;
 
 export default meta;

@@ -15,7 +15,6 @@ import { TestOverview } from '../views/explorer/test-overview';
 const meta = {
   title: 'Pages/Explorer',
   parameters: { layout: 'fullscreen' },
-  tags: ['themed'],
 } satisfies Meta;
 
 export default meta;

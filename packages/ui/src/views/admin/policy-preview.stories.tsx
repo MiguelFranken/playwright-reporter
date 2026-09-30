@@ -9,7 +9,6 @@ const meta = {
   title: 'Views/Admin/Retention/Policy preview',
   component: PolicyPreview,
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   args: { status: 'ready', children: <DataRetentionDue due={DUE_PREVIEW} enabled caption={null} /> },
   decorators: [
     (Story) => (

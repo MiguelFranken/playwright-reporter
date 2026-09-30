@@ -8,7 +8,6 @@ const meta = {
   title: 'Views/Admin/Storage/Overview',
   component: StoreSchedule,
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   args: { driver: 'local', retention: 'app', onVercel: false, cronSecretSet: true, ingestSweepHours: 6 },
   decorators: [
     (Story) => (
