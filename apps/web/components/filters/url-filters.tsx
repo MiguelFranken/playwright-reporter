@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useState, useTransition } from 'react';
+import { pushPendingSearch, usePendingSearch } from './pending-search';
 import {
   FilterMultiSelect,
   FilterSelect,
@@ -16,11 +17,17 @@ import {
   type SearchFieldProps,
 } from '@miguelfranken/ui/patterns/filter-controls';
 
-/** Updates one or more search params on the current route (resetting `page`). */
+/**
+ * Updates one or more search params on the current route (resetting `page`).
+ *
+ * `params` is the query as the last change asked for it, not as the router has
+ * committed it (see `pending-search.ts`): a control shows its new value on the
+ * click, and a second change builds on the first even while it is in flight.
+ */
 export function useUrlParams() {
   const router = useRouter();
   const pathname = usePathname();
-  const params = useSearchParams();
+  const { params } = usePendingSearch();
   const [isPending, startTransition] = useTransition();
   const set = useCallback(
     (updates: Record<string, string | string[] | null | undefined>, opts: { keepPage?: boolean } = {}) => {
@@ -32,6 +39,7 @@ export function useUrlParams() {
       }
       if (!opts.keepPage) next.delete('page');
       const qs = next.toString();
+      pushPendingSearch(pathname, qs);
       startTransition(() => router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false }));
     },
     [params, pathname, router],
@@ -103,14 +111,13 @@ export function UrlRangeToggle(props: UrlRangeToggleProps) {
 }
 
 function UrlRangeToggleInner({ param = 'range', fallback = 30, ...rest }: UrlRangeToggleProps) {
-  const { params, set, isPending } = useUrlParams();
+  const { params, set } = useUrlParams();
   const current = params.get(param);
   const value = current ?? (rest.allowAll ? 'all' : String(fallback));
   return (
     <RangeToggle
       {...rest}
       value={value}
-      isPending={isPending}
       onValueChange={(next) => set({ [param]: next })}
     />
   );
@@ -127,12 +134,11 @@ export function UrlSelect(props: UrlSelectProps) {
 }
 
 function UrlSelectInner({ param, ...rest }: UrlSelectProps) {
-  const { params, set, isPending } = useUrlParams();
+  const { params, set } = useUrlParams();
   return (
     <FilterSelect
       {...rest}
       value={params.get(param) ?? 'all'}
-      isPending={isPending}
       onValueChange={(next) => set({ [param]: next })}
     />
   );
@@ -150,8 +156,8 @@ export function UrlMultiSelect(props: UrlMultiSelectProps) {
 }
 
 function UrlMultiSelectInner({ param, ...rest }: UrlMultiSelectProps) {
-  const { params, set, isPending } = useUrlParams();
-  return <FilterMultiSelect {...rest} value={params.getAll(param)} isPending={isPending} onValueChange={(next) => set({ [param]: next })} />;
+  const { params, set } = useUrlParams();
+  return <FilterMultiSelect {...rest} value={params.getAll(param)} onValueChange={(next) => set({ [param]: next })} />;
 }
 
 type UrlSearchProps = Omit<SearchFieldProps, 'value' | 'onValueChange' | 'isPending'> & { param?: string };
@@ -165,12 +171,11 @@ export function UrlSearch(props: UrlSearchProps) {
 }
 
 function UrlSearchInner({ param = 'q', ...rest }: UrlSearchProps) {
-  const { params, set, isPending } = useUrlParams();
+  const { params, set } = useUrlParams();
   return (
     <SearchField
       {...rest}
       value={params.get(param) ?? ''}
-      isPending={isPending}
       onValueChange={(next) => set({ [param]: next })}
     />
   );
