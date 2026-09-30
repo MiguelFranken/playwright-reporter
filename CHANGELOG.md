@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.58](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.57...v0.0.58) (2026-09-30)
+
+### Performance Improvements
+
+* **filters:** show filter changes on the click, with skeletons in the results ([#70](https://github.com/MiguelFranken/playwright-reporter/issues/70)) ([beb89ec](https://github.com/MiguelFranken/playwright-reporter/commit/beb89ec51400f70fef59fa958af7ca62bb39e714))
+
 ## [0.0.57](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.56...v0.0.57) (2026-09-30)
 
 ### Features
