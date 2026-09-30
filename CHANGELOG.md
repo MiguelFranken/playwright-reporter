@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.57](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.56...v0.0.57) (2026-09-30)
+
+### Features
+
+* **filters:** multi-select filters on test cases and additive library summary ([#69](https://github.com/MiguelFranken/playwright-reporter/issues/69)) ([d2d4768](https://github.com/MiguelFranken/playwright-reporter/commit/d2d476873c7e10add6176142b7f6e7369a2a0ac1))
+
 ## [0.0.56](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.55...v0.0.56) (2026-09-30)
 
 ### Features
