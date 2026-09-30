@@ -4,6 +4,11 @@ import { traceViewerHeaders } from './lib/trace-viewer/headers';
 
 const nextConfig: NextConfig = {
   cacheComponents: true,
+  env: {
+    // Vercel sets VERCEL=1 during its builds. Inlined so that a self-hosted
+    // build drops Vercel Speed Insights entirely (components/vercel-speed-insights).
+    VERCEL_SPEED_INSIGHTS: process.env.VERCEL ? '1' : '',
+  },
   // A <Link> prefetches one App Shell per route, shared by every link to it,
   // instead of one prefetch per link on screen: a run page lists hundreds of
   // result links to the same route. What depends on the URL streams in after

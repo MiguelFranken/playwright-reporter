@@ -207,6 +207,9 @@ importers:
       '@vercel/blob':
         specifier: ^2.8.0
         version: 2.8.0
+      '@vercel/speed-insights':
+        specifier: ^2.0.0
+        version: 2.0.0(@types/node@24.13.5)(next@16.3.5(@playwright/test@1.63.0)(react@19.3.0)(react-dom@19.3.0(react@19.3.0))(sass@1.77.4))(react@19.3.0)
       '@workflow/world-postgres':
         specifier: ^4.3.7
         version: 4.3.7(@types/pg@8.20.0)(gel@2.1.0)(kysely@0.29.6)(postgres@3.4.9)(typescript@7.0.2)
@@ -4299,6 +4302,38 @@ packages:
   '@vercel/queue@0.3.1':
     resolution: {integrity: sha512-6pjdXyNfdCQnj1nyeB1rPtll/XUhmciyeZJD0rpIUUwmcIfR+utDl6+iFvlHvsBdqAVT8UC6ydObT0v+xldfUQ==}
     engines: {node: '>=20.0.0'}
+
+  '@vercel/speed-insights@2.0.0':
+    resolution: {integrity: sha512-jwkNcrTeafWxjmWq4AHBaptSqZiJkYU5adLC9QBSqeim0GcqDMgN5Ievh8OG1rJ6W3A4l1oiP7qr9CWxGuzu3w==}
+    peerDependencies:
+      '@nuxt/kit': '*'
+      '@remix-run/react': '*'
+      '@sveltejs/kit': ^1 || ^2
+      next: '>= 13'
+      nuxt: '>= 3'
+      react: ^18 || ^19 || ^19.0.0-rc
+      svelte: '>= 4'
+      vue: ^3
+      vue-router: ^4
+    peerDependenciesMeta:
+      '@nuxt/kit':
+        optional: true
+      '@remix-run/react':
+        optional: true
+      '@sveltejs/kit':
+        optional: true
+      next:
+        optional: true
+      nuxt:
+        optional: true
+      react:
+        optional: true
+      svelte:
+        optional: true
+      vue:
+        optional: true
+      vue-router:
+        optional: true
 
   '@vitejs/plugin-react@6.1.1':
     resolution: {integrity: sha512-yxLaQV9gkhS8ezJqCM6+ndU7mDY6gqAg75NQ+0IjwEI8IYOmQCgkRwHKVSfWXW076DsqMo0Dk+0FK1U+M5RgFw==}
@@ -13555,6 +13590,11 @@ snapshots:
       minimatch: 10.2.6
       mixpart: 0.0.6
       picocolors: 1.1.1
+
+  '@vercel/speed-insights@2.0.0(@types/node@24.13.5)(next@16.3.5(@playwright/test@1.63.0)(react@19.3.0)(react-dom@19.3.0(react@19.3.0))(sass@1.77.4))(react@19.3.0)':
+    dependencies:
+      next: 16.3.5(@playwright/test@1.63.0)(@types/node@24.13.5)(react@19.3.0)(react-dom@19.3.0(react@19.3.0))(sass@1.77.4)
+      react: 19.3.0
 
   '@vitejs/plugin-react@6.1.1(vite@8.3.0(@types/node@24.13.5)(jiti@2.7.0)(sass@1.77.4)(tsx@4.23.13)(yaml@2.9.1))':
     dependencies:
