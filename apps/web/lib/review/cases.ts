@@ -19,7 +19,7 @@ export async function casesOfTests(projectId: string, testIds: readonly string[]
   if (ids.length === 0) return out;
   const [rows, suites] = await Promise.all([
     db
-      .select({ testId: testCaseLinks.testId, number: testCases.number, title: testCases.title, suiteId: testCases.suiteId, status: testCases.status })
+      .select({ testId: testCaseLinks.testId, number: testCases.number, title: testCases.title, suiteId: testCases.suiteId, status: testCases.status, priority: testCases.priority })
       .from(testCaseLinks)
       .innerJoin(testCases, eq(testCases.id, testCaseLinks.caseId))
       .where(and(eq(testCases.projectId, projectId), inArray(testCaseLinks.testId, ids)))
@@ -29,7 +29,7 @@ export async function casesOfTests(projectId: string, testIds: readonly string[]
   const paths = suitePaths(suites);
   const rank = (s: string) => (s === 'deprecated' ? 1 : 0);
   for (const r of [...rows].sort((a, b) => rank(a.status) - rank(b.status) || a.number - b.number)) {
-    (out[r.testId] ??= []).push({ key: caseKey(r.number), title: r.title, suitePath: r.suiteId ? (paths.get(r.suiteId) ?? []) : [] });
+    (out[r.testId] ??= []).push({ key: caseKey(r.number), title: r.title, suitePath: r.suiteId ? (paths.get(r.suiteId) ?? []) : [], priority: r.priority });
   }
   return out;
 }

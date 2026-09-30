@@ -8,7 +8,7 @@
  * devices side by side, as it does for resized variants of one test.
  */
 import type { ReviewCaseRef, ReviewCaptureView, ReviewCheckpointView, ReviewDiffView, ReviewFlowView, ReviewImage, ReviewStatus } from '@miguelfranken/ui/lib/review';
-import type { ReviewCommentView, ReviewThreadView } from '@miguelfranken/ui/lib/review-threads';
+import { projectAnchor, type ReviewCommentView, type ReviewThreadView } from '@miguelfranken/ui/lib/review-threads';
 import { displayableAvatar } from '@/lib/avatars';
 import type { DiffRecord } from './diff/lookup';
 import { traceViewerUrl } from '@/lib/trace-viewer/url';
@@ -43,6 +43,16 @@ export function toCommentView(c: CommentRecord): ReviewCommentView {
 }
 
 export function toThreadView(t: CaptureThread): ReviewThreadView {
+  // An outdated pin is compared with the image it was placed on, while that image is stored.
+  const origin =
+    t.placement === 'outdated' && t.originImage && t.originCaptureId
+      ? {
+          captureId: t.originCaptureId,
+          checkpointId: t.originImage.checkpointId,
+          image: toReviewImage({ attachment: t.originImage.attachment, thumbnail: null, width: t.origin.width > 1 ? t.origin.width : null, height: t.origin.height > 1 ? t.origin.height : null }),
+          anchor: projectAnchor(t.anchor, t.origin, t.origin),
+        }
+      : null;
   return {
     id: t.id,
     number: t.number,
@@ -50,6 +60,7 @@ export function toThreadView(t: CaptureThread): ReviewThreadView {
     anchor: t.position,
     placement: t.placement,
     originRunNumber: t.originRunNumber,
+    origin,
     createdAt: t.createdAt.toISOString(),
     resolvedAt: t.resolvedAt?.toISOString() ?? null,
     resolvedBy: t.resolvedBy,
@@ -114,6 +125,7 @@ export function toCaptureView(c: ComparedCapture): ReviewCaptureView {
     diff: c.diff && c.diffAgainst ? toDiffView(c.diff, c.diffAgainst, c.withinTolerance) : null,
     ignoreRegions: c.ignoreRegions.length ? c.ignoreRegions.map((r) => ({ ...r, pixels: 0 })) : undefined,
     threads: c.threads.map(toThreadView),
+    runNumber: c.runNumber ?? null,
   };
 }
 
@@ -152,6 +164,10 @@ const casesOf = (testId: string, links?: CaseLinks): ReviewCaseRef[] =>
   (links?.byTest[testId] ?? []).map((c) => ({ ...c, href: links!.href(c.key) }));
 
 export function toFlowViews(records: readonly ReviewFlowRecord[], resultHref: (resultId: string) => string, links?: CaseLinks): ReviewFlowView[] {
+  const originOf = (r: ReviewFlowRecord, cp: CheckpointRecord) => {
+    const o = cp.testResultId === r.resultId ? null : r.origins?.[cp.testResultId];
+    return o ? { runNumber: o.runNumber, resultHref: resultHref(cp.testResultId), videoUrl: media(o.video) } : null;
+  };
   const flows = records.map(
     (r): ReviewFlowView => ({
       resultId: r.resultId,
@@ -163,6 +179,7 @@ export function toFlowViews(records: readonly ReviewFlowRecord[], resultHref: (r
       line: r.line,
       project: r.project || null,
       outcome: r.outcome,
+      runNumber: r.runNumber,
       flow: r.checkpoints.find((c) => c.flow)?.flow ?? null,
       resultHref: resultHref(r.resultId),
       videoUrl: media(r.video),
@@ -170,7 +187,7 @@ export function toFlowViews(records: readonly ReviewFlowRecord[], resultHref: (r
       failureImage: r.failureScreenshot
         ? { url: artifactUrl(r.failureScreenshot.id), available: r.failureScreenshot.status === 'uploaded', unavailableReason: r.failureScreenshot.status === 'uploaded' ? null : r.failureScreenshot.status }
         : null,
-      checkpoints: r.checkpoints.map(toCheckpointView),
+      checkpoints: r.checkpoints.map((cp) => ({ ...toCheckpointView(cp), origin: originOf(r, cp) })),
     }),
   );
   return mergeProjects(flows);
@@ -192,6 +209,7 @@ export function mergeProjects(flows: readonly ReviewFlowView[]): ReviewFlowView[
         failureImage: existing.failureImage ?? flow.failureImage,
         videoUrl: existing.videoUrl ?? flow.videoUrl,
         traceUrl: existing.traceUrl ?? flow.traceUrl,
+        runNumber: Math.max(existing.runNumber ?? 0, flow.runNumber ?? 0) || null,
         checkpoints: mergeCheckpoints(existing.checkpoints, flow.checkpoints),
         cases: [...(existing.cases ?? []), ...(flow.cases ?? []).filter((c) => !existing.cases?.some((e) => e.key === c.key))],
       };
@@ -220,6 +238,6 @@ function mergeCheckpoints(a: readonly ReviewCheckpointView[], b: readonly Review
 
 /** Flows from several runs (the library's): each links to the result of its own run. */
 export function flowViewsAcrossRuns(records: readonly ReviewFlowRecord[], hrefs: { result: (runNumber: number, resultId: string) => string }, links?: CaseLinks): ReviewFlowView[] {
-  const runOf = new Map(records.map((r) => [r.resultId, r.runNumber]));
+  const runOf = new Map(records.flatMap((r) => [[r.resultId, r.runNumber] as const, ...Object.entries(r.origins ?? {}).map(([id, o]) => [id, o.runNumber] as const)]));
   return toFlowViews(records, (resultId) => hrefs.result(runOf.get(resultId)!, resultId), links);
 }

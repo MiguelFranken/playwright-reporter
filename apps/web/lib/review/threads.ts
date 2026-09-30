@@ -29,12 +29,14 @@ import {
   type ThreadStatus,
 } from '@miguelfranken/ui/lib/review-threads';
 import { db } from '@/lib/db/drizzle';
-import { reviewCaptures, reviewComments, reviewThreads, runs, users } from '@/lib/db/schema';
+import { attachments, reviewCaptures, reviewComments, reviewThreads, runs, users, type Attachment } from '@/lib/db/schema';
 
 export class ThreadError extends Error {}
 
 const resolvers = alias(users, 'resolvers');
 const originRuns = alias(runs, 'origin_runs');
+const originCaptures = alias(reviewCaptures, 'origin_captures');
+const originImages = alias(attachments, 'origin_images');
 
 export interface CommentRecord {
   id: string;
@@ -61,6 +63,8 @@ export interface ThreadRecord {
   origin: ImageSize & { scale: number | null };
   originCaptureId: string | null;
   originSha256: string | null;
+  /** The image the thread was placed on, while it is stored: what an outdated pin is compared with. */
+  originImage: { attachment: { id: string; status: Attachment['status'] }; checkpointId: string } | null;
   originRunNumber: number | null;
   originRunStartedAt: Date | null;
   resolvedAt: Date | null;
@@ -109,6 +113,9 @@ const threadColumns = {
   originScale: reviewThreads.originScale,
   originCaptureId: reviewThreads.originCaptureId,
   originSha256: reviewThreads.originSha256,
+  originImageId: originImages.id,
+  originImageStatus: originImages.status,
+  originCheckpointId: originCaptures.checkpointId,
   originRunNumber: originRuns.number,
   originRunStartedAt: originRuns.startedAt,
   resolvedAt: reviewThreads.resolvedAt,
@@ -135,6 +142,9 @@ function toThread(r: ThreadRow, comments: CommentRecord[]): ThreadRecord {
     origin: { width: r.originWidth as number, height: r.originHeight as number, scale: r.originScale as number | null },
     originCaptureId: r.originCaptureId as string | null,
     originSha256: r.originSha256 as string | null,
+    originImage: r.originImageId
+      ? { attachment: { id: r.originImageId as string, status: r.originImageStatus as Attachment['status'] }, checkpointId: r.originCheckpointId as string }
+      : null,
     originRunNumber: r.originRunNumber as number | null,
     originRunStartedAt: r.originRunStartedAt ? new Date(r.originRunStartedAt as Date) : null,
     resolvedAt: r.resolvedAt as Date | null,
@@ -180,6 +190,8 @@ async function selectThreads(where: ReturnType<typeof sql>): Promise<ThreadRecor
     .select(threadColumns)
     .from(reviewThreads)
     .leftJoin(originRuns, eq(originRuns.id, reviewThreads.originRunId))
+    .leftJoin(originCaptures, eq(originCaptures.id, reviewThreads.originCaptureId))
+    .leftJoin(originImages, eq(originImages.id, originCaptures.attachmentId))
     .leftJoin(resolvers, eq(resolvers.id, reviewThreads.resolvedBy))
     .where(where)
     .orderBy(asc(reviewThreads.number));

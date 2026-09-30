@@ -11,7 +11,10 @@ import { attachments, auditLogs, libraryReferences, runs } from '@/lib/db/schema
 import { defaultLibraryRef, getLibraryReference, libraryCandidates, libraryFlows, listLibraryReferences, setLibraryReference } from '@/lib/review/library';
 import { runsDueWhere } from '@/lib/data-retention';
 import { dueWhere } from '@/lib/storage/retention';
-import { updateLibraryReference } from '@/app/(app)/teams/[team]/projects/[project]/library/actions';
+import { deleteLibraryView, saveLibraryView, updateLibraryReference } from '@/app/(app)/teams/[team]/projects/[project]/library/actions';
+import { listLibraryViews } from '@/lib/review/library-views';
+import { createThread, setThreadStatus } from '@/lib/review/threads';
+import { toThreadView } from '@/lib/review/view-model';
 import { attachmentRef, attemptEnd, eventBatch, runStart, testBegin } from './factories';
 import { createMember, describe, expect, test, type Tenant } from './fixtures';
 
@@ -222,6 +225,42 @@ describe('a complete reference across full and partial runs', () => {
   });
 });
 
+describe('feedback across runs', () => {
+  test('a comment stays with unchanged pixels, and points at the version it was made on once they change', async ({ tenant }) => {
+    const shots = (hash: string): Shot[] => [
+      { name: 'cart', variants: { desktop: hash } },
+      { name: 'payment', variants: { desktop: 'p' } },
+    ];
+    const first = await capture(tenant, { startedAt: minutesAgo(90), tests: { checkout: { shots: shots('a') } } });
+    const cartOf = async () => (await libraryFlows(tenant.project.id, main))[0].checkpoints.find((c) => c.name === 'cart')!.captures[0];
+    const commented = await cartOf();
+    const author = { userId: tenant.adminUser.id, source: 'app' as const };
+    const thread = await createThread({ projectId: tenant.project.id, captureId: commented.id, anchor: { kind: 'point', x: 0.5, y: 0.25 }, imageSize: { width: 1280, height: 2000 }, body: 'Make the total bold', author });
+
+    // A full run uploads the same pixels again: the comment is on the screen as it is.
+    await capture(tenant, { startedAt: minutesAgo(60), tests: { checkout: { shots: shots('a') } } });
+    const again = await cartOf();
+    expect(again.id).not.toBe(commented.id);
+    expect(again.threads.map((t) => [t.number, t.status, t.placement])).toEqual([[1, 'open', 'exact']]);
+    expect(toThreadView(again.threads[0]).origin).toBeNull();
+
+    // A partial run with the fix: the comment is kept, open, and says which version it was about.
+    const fixed = await capture(tenant, { startedAt: minutesAgo(30), tests: { checkout: { shots: [shots('b')[0]] } } });
+    const latest = await cartOf();
+    expect(latest.runNumber).toBe(fixed.number);
+    const view = toThreadView(latest.threads[0]);
+    expect(view).toMatchObject({ id: thread.id, status: 'open', placement: 'outdated', originRunNumber: first.number });
+    expect(view.origin).toMatchObject({ captureId: commented.id, checkpointId: commented.checkpointId, anchor: { kind: 'point', x: 0.5, y: 0.25 } });
+    expect(view.origin!.image.url).toBe(`/api/artifacts/${commented.attachment.id}`);
+
+    // Resolving is explicit; until then the thread stays open on every later capture.
+    await capture(tenant, { startedAt: minutesAgo(10), tests: { checkout: { shots: [shots('c')[0]] } } });
+    expect((await cartOf()).threads.map((t) => t.status)).toEqual(['open']);
+    await setThreadStatus({ projectId: tenant.project.id, threadId: thread.id, status: 'resolved', captureId: (await cartOf()).id, author });
+    expect((await cartOf()).threads.map((t) => t.status)).toEqual(['resolved']);
+  });
+});
+
 describe('retention', () => {
   test('keeps what the library shows, and never deletes a pinned run', async ({ db, tenant }) => {
     const old = await run(tenant, { startedAt: minutesAgo(60), hash: sha('a') });
@@ -270,3 +309,32 @@ describe('action', () => {
     expect(await db.select().from(libraryReferences)).toHaveLength(1);
   });
 });
+
+describe('saved views', () => {
+  test('are personal: saved, renamed, changed and deleted by their owner only', async ({ db, tenant, actor }) => {
+    const ref = { team: tenant.team.slug, project: tenant.project.slug };
+    actor.signIn(tenant.adminUser);
+    const saved = await saveLibraryView(ref, { name: '  Checkout   fixes ', config: { filters: { states: ['waiting', 'bogus'], priorities: ['high'] }, group: 'priority' } });
+    expect(saved).toMatchObject({ ok: true, view: { name: 'Checkout fixes', config: { filters: { states: ['waiting'], priorities: ['high'] }, group: 'priority', sort: 'journey', variant: null } } });
+    const id = saved.ok ? saved.view.id : '';
+    expect(await saveLibraryView(ref, { name: 'CHECKOUT FIXES', config: {} })).toMatchObject({ ok: false, message: expect.stringContaining('already have a view') });
+    expect(await saveLibraryView(ref, { name: 'To fix', config: {} })).toMatchObject({ ok: false, message: expect.stringContaining('built-in') });
+    expect(await saveLibraryView(ref, { name: '   ', config: {} })).toMatchObject({ ok: false });
+    expect(await saveLibraryView(ref, { id, config: { filters: { states: ['verify'] } } })).toMatchObject({ ok: true, view: { name: 'Checkout fixes', config: { filters: { states: ['verify'], priorities: [] } } } });
+    expect((await listLibraryViews(tenant.project.id, tenant.adminUser.id)).map((v) => v.name)).toEqual(['Checkout fixes']);
+
+    // Another member neither sees nor changes it.
+    const other = await createMember(db, tenant.team.id, 'viewer');
+    actor.signIn(other);
+    expect(await listLibraryViews(tenant.project.id, other.id)).toEqual([]);
+    expect(await saveLibraryView(ref, { id, name: 'Mine now' })).toMatchObject({ ok: false });
+    expect(await deleteLibraryView(ref, id)).toMatchObject({ ok: false });
+    // A viewer keeps views of their own.
+    expect(await saveLibraryView(ref, { name: 'Checkout fixes', config: {} })).toMatchObject({ ok: true });
+
+    actor.signIn(tenant.adminUser);
+    expect(await deleteLibraryView(ref, id)).toEqual({ ok: true });
+    expect(await listLibraryViews(tenant.project.id, tenant.adminUser.id)).toEqual([]);
+  });
+});
+
