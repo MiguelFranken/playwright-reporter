@@ -5,6 +5,7 @@ import { ThemeProvider } from 'next-themes';
 import { Toaster } from '@miguelfranken/ui/components/sonner';
 import { QueryProvider } from '@/components/query-provider';
 import { AppUiProvider } from '@/components/ui-provider';
+import { VercelSpeedInsights } from '@/components/vercel-speed-insights';
 
 export const metadata: Metadata = {
   title: { default: 'Playwright Reporter', template: '%s · Playwright Reporter' },
@@ -31,6 +32,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </AppUiProvider>
           </QueryProvider>
         </ThemeProvider>
+        <VercelSpeedInsights />
       </body>
     </html>
   );

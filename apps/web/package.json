@@ -35,6 +35,7 @@
     "@orpc/zod": "2.0.0-beta.40",
     "@tanstack/react-query": "5.103.2",
     "@vercel/blob": "^2.8.0",
+    "@vercel/speed-insights": "^2.0.0",
     "@workflow/world-postgres": "^4.3.7",
     "better-auth": "1.7.5",
     "dotenv": "^17.4.2",
