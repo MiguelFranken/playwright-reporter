@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.54](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.53...v0.0.54) (2026-09-30)
+
+### Performance Improvements
+
+* **web:** load the AWS SDK only on S3 deployments, and time the upload completion ([#65](https://github.com/MiguelFranken/playwright-reporter/issues/65)) ([8ec329c](https://github.com/MiguelFranken/playwright-reporter/commit/8ec329c204773fb292f0943b71b5d887d4cdb627))
+
 ## [0.0.53](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.52...v0.0.53) (2026-09-30)
 
 ### Features
