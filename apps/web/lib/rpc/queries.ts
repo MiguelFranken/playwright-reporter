@@ -131,3 +131,20 @@ export type RunNumberRef = ProjectRef & { runNumber: number };
 export function runReviewQuery(ref: RunNumberRef) {
   return orpc.review.run.queryOptions({ input: ref, staleTime: 5 * 60_000, gcTime: 30 * 60_000 });
 }
+
+/**
+ * One page of the test case list, per query string (`caseListKey`). The cases
+ * page changes its filters, sort, page and suite in place, so each list it has
+ * shown stays here: going back to one — ticking an option off again — shows
+ * it at once, and a list older than half a minute refetches underneath. The
+ * page seeds the list it rendered, so the first one is never fetched twice;
+ * hovering a suite fetches that suite's list ahead of the click.
+ */
+export function caseListQuery(ref: ProjectRef, query: string) {
+  return orpc.testCases.list.queryOptions({ input: { ...ref, query }, staleTime: 30_000, gcTime: 10 * 60_000 });
+}
+
+/** Every cached case list of every project, e.g. to mark them stale after an edit. */
+export function caseListQueryKey() {
+  return orpc.testCases.list.key();
+}

@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useCallback, useEffect, useState, useTransition } from 'react';
+import { createContext, Suspense, useCallback, useContext, useEffect, useState, useTransition, type ReactNode } from 'react';
 import { pushPendingSearch, usePendingSearch } from './pending-search';
 import {
   FilterMultiSelect,
@@ -17,17 +17,33 @@ import {
   type SearchFieldProps,
 } from '@miguelfranken/ui/patterns/filter-controls';
 
+const ShallowContext = createContext(false);
+
+/**
+ * Makes every URL-bound control below it (filters, sort, pager) change the
+ * query *in place*, without asking the server to render the page again — for
+ * a page whose results a client query already reads from the same params, and
+ * caches per query (the test cases list). The address bar still carries the
+ * query, so a reload or a shared link renders the same list on the server.
+ */
+export function ShallowUrlParams({ children }: { children: ReactNode }) {
+  return <ShallowContext.Provider value>{children}</ShallowContext.Provider>;
+}
+
 /**
  * Updates one or more search params on the current route (resetting `page`).
  *
  * `params` is the query as the last change asked for it, not as the router has
  * committed it (see `pending-search.ts`): a control shows its new value on the
  * click, and a second change builds on the first even while it is in flight.
+ * Under `ShallowUrlParams` the change is a `history.replaceState` rather than
+ * a navigation.
  */
 export function useUrlParams() {
   const router = useRouter();
   const pathname = usePathname();
   const { params } = usePendingSearch();
+  const shallow = useContext(ShallowContext);
   const [isPending, startTransition] = useTransition();
   const set = useCallback(
     (updates: Record<string, string | string[] | null | undefined>, opts: { keepPage?: boolean } = {}) => {
@@ -39,10 +55,12 @@ export function useUrlParams() {
       }
       if (!opts.keepPage) next.delete('page');
       const qs = next.toString();
+      const url = qs ? `${pathname}?${qs}` : pathname;
       pushPendingSearch(pathname, qs);
-      startTransition(() => router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false }));
+      if (shallow) window.history.replaceState(null, '', url);
+      else startTransition(() => router.replace(url, { scroll: false }));
     },
-    [params, pathname, router],
+    [params, pathname, router, shallow],
   );
   return { params, set, isPending };
 }

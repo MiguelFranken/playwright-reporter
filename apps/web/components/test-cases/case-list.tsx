@@ -1,5 +1,6 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import type { CaseRow, SuiteOption } from '@miguelfranken/ui/lib/test-case-models';
@@ -9,6 +10,7 @@ import { CaseTable } from '@miguelfranken/ui/views/test-cases/case-table';
 import { bulkEditCases, deleteCases, reorderCase } from '@/app/(app)/teams/[team]/projects/[project]/cases/actions';
 import { useUrlParams } from '@/components/filters/url-filters';
 import type { ProjectRef } from '@/lib/rpc/client';
+import { caseListQueryKey } from '@/lib/rpc/queries';
 
 /**
  * The case list with its selection, bulk actions, sorting (in the URL) and,
@@ -43,6 +45,9 @@ export function CaseList({
   now: Date;
 }) {
   const { set, isPending } = useUrlParams();
+  const queryClient = useQueryClient();
+  // Every cached list may hold a case that just changed, not only this one.
+  const changed = () => void queryClient.invalidateQueries({ queryKey: caseListQueryKey() });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -59,6 +64,7 @@ export function CaseList({
         return;
       }
       toast.success(res.message);
+      changed();
       setSelected(new Set());
       done?.();
     });
@@ -82,6 +88,7 @@ export function CaseList({
               const res = await deleteCases(projectRef, chosen);
               if (res.ok) {
                 toast.success(res.message);
+                changed();
                 setSelected(new Set());
               } else toast.error(res.message);
             });
@@ -108,6 +115,7 @@ export function CaseList({
                 startTransition(async () => {
                   const res = await reorderCase(projectRef, row.id, direction);
                   if (!res.ok) toast.error(res.message);
+                  else changed();
                   setPendingId(null);
                 });
               }

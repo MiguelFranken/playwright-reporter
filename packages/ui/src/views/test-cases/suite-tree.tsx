@@ -35,7 +35,31 @@ export interface SuiteTreeProps {
   onEditSuite?: (suite: SuiteNode) => void;
   onDeleteSuite?: (suite: SuiteNode) => void;
   onMoveSuite?: (suite: SuiteNode, direction: 'up' | 'down') => void;
+  /**
+   * Takes a plain click on a row instead of following its link — for a host
+   * that switches the list in place. `null` is every case. A modified click
+   * (a new tab, a new window) still follows the link.
+   */
+  onSelect?: (selected: string | null) => void;
+  /** The pointer rests on a row, or it takes focus: a host can load that list ahead of the click. */
+  onIntent?: (selected: string | null) => void;
   className?: string;
+}
+
+type RowEvents = Pick<SuiteTreeProps, 'onSelect' | 'onIntent'>;
+
+function rowEvents(value: string | null, { onSelect, onIntent }: RowEvents) {
+  return {
+    onClick: onSelect
+      ? (event: React.MouseEvent<HTMLAnchorElement>) => {
+          if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+          event.preventDefault();
+          onSelect(value);
+        }
+      : undefined,
+    onPointerEnter: onIntent ? () => onIntent(value) : undefined,
+    onFocus: onIntent ? () => onIntent(value) : undefined,
+  };
 }
 
 function allIds(nodes: readonly SuiteNode[]): string[] {
@@ -73,8 +97,11 @@ export function SuiteTree({
   onEditSuite,
   onDeleteSuite,
   onMoveSuite,
+  onSelect,
+  onIntent,
   className,
 }: SuiteTreeProps) {
+  const events = { onSelect, onIntent };
   const [open, setOpen] = useState(() => initiallyOpen(roots, selected));
   const toggle = (id: string) =>
     setOpen((prev) => {
@@ -111,7 +138,7 @@ export function SuiteTree({
       </div>
 
       <ul className="flex flex-col gap-px">
-        <TreeLink href={hrefs.all} active={selected === null} icon={Layers} label="All test cases" count={total} depth={0} />
+        <TreeLink href={hrefs.all} active={selected === null} icon={Layers} label="All test cases" count={total} depth={0} {...rowEvents(null, events)} />
         {roots.map((node, i) => (
           <SuiteItem
             key={node.id}
@@ -127,9 +154,10 @@ export function SuiteTree({
             onEditSuite={onEditSuite}
             onDeleteSuite={onDeleteSuite}
             onMoveSuite={onMoveSuite}
+            events={events}
           />
         ))}
-        <TreeLink href={hrefs.unassigned} active={selected === 'unassigned'} icon={Inbox} label="Unassigned" count={unassigned} depth={0} />
+        <TreeLink href={hrefs.unassigned} active={selected === 'unassigned'} icon={Inbox} label="Unassigned" count={unassigned} depth={0} {...rowEvents('unassigned', events)} />
       </ul>
 
       {roots.length === 0 ? (
@@ -148,7 +176,8 @@ function TreeLink({
   label,
   count,
   depth,
-}: {
+  ...events
+}: ReturnType<typeof rowEvents> & {
   href: string;
   active: boolean;
   icon: React.ComponentType<{ className?: string }>;
@@ -160,6 +189,7 @@ function TreeLink({
     <li>
       <Link
         href={href}
+        {...events}
         aria-current={active ? 'page' : undefined}
         className={cn(
           'flex h-8 items-center gap-2 rounded-md pe-2 text-body-m text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground',
@@ -181,9 +211,10 @@ interface SuiteItemProps extends Pick<SuiteTreeProps, 'selected' | 'hrefs' | 'ca
   last: boolean;
   open: Set<string>;
   onToggle: (id: string) => void;
+  events: RowEvents;
 }
 
-function SuiteItem({ node, first, last, open, onToggle, selected, hrefs, canEdit, onNewSuite, onEditSuite, onDeleteSuite, onMoveSuite }: SuiteItemProps) {
+function SuiteItem({ node, first, last, open, onToggle, selected, hrefs, canEdit, onNewSuite, onEditSuite, onDeleteSuite, onMoveSuite, events }: SuiteItemProps) {
   const isOpen = open.has(node.id);
   const active = selected === node.id;
   const hasChildren = node.children.length > 0;
@@ -212,6 +243,7 @@ function SuiteItem({ node, first, last, open, onToggle, selected, hrefs, canEdit
         )}
         <Link
           href={hrefs.suite(node.id)}
+          {...rowEvents(node.id, events)}
           aria-current={active ? 'page' : undefined}
           title={node.description || node.name}
           className="flex h-full min-w-0 flex-1 items-center gap-2 rounded focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
@@ -289,6 +321,7 @@ function SuiteItem({ node, first, last, open, onToggle, selected, hrefs, canEdit
               onEditSuite={onEditSuite}
               onDeleteSuite={onDeleteSuite}
               onMoveSuite={onMoveSuite}
+              events={events}
             />
           ))}
         </ul>

@@ -1,7 +1,8 @@
 'use client';
 
 import { Download, FileJson, FileSpreadsheet, Plus, Upload, Wand2 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useActionState, useEffect, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { Button, buttonVariants } from '@miguelfranken/ui/components/button';
@@ -16,12 +17,15 @@ import type { SuiteOption } from '@miguelfranken/ui/lib/test-case-models';
 import { PrefetchLink } from '@/components/prefetch-link';
 import { adoptTests, importCasesAction } from '@/app/(app)/teams/[team]/projects/[project]/cases/actions';
 import type { ProjectRef } from '@/lib/rpc/client';
+import { caseListQueryKey } from '@/lib/rpc/queries';
 import { ConnectedTestPicker } from './test-picker';
 
 /**
  * The library's header actions: a new case, and adopting Playwright tests
  * as cases. `adopt` opens the picker straight away (the coverage summary
- * links there).
+ * links there). A new case goes into the suite on screen, and the export
+ * covers it; the suite is read from the URL, since the list switches suites
+ * in place.
  */
 export function LibraryActions({
   base,
@@ -34,7 +38,7 @@ export function LibraryActions({
   aiPrompt,
   extra,
 }: {
-  /** The export route, already scoped to the suite on screen. */
+  /** The export route; the suite on screen is added to it. */
   exportHref: string;
   base: string;
   projectRef: ProjectRef;
@@ -47,13 +51,20 @@ export function LibraryActions({
   extra?: React.ReactNode;
 }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const search = useSearchParams();
+  const suite = search.get('suite');
+  const exportUrl = suite ? `${exportHref}?suite=${encodeURIComponent(suite)}` : exportHref;
+  const newCaseUrl = suite && suite !== 'unassigned' ? `${newCaseHref}?suite=${encodeURIComponent(suite)}` : newCaseHref;
   const [adopting, setAdopting] = useState(startAdopting && canCreate);
   const [pending, startTransition] = useTransition();
   const [importing, setImporting] = useState(false);
   const [imported, importAction, importPending] = useActionState(importCasesAction, null);
   useEffect(() => {
-    if (imported?.ok) toast.success(imported.message);
-  }, [imported]);
+    if (!imported?.ok) return;
+    toast.success(imported.message);
+    void queryClient.invalidateQueries({ queryKey: caseListQueryKey() });
+  }, [imported, queryClient]);
   const exportMenu = (
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>
@@ -61,11 +72,11 @@ export function LibraryActions({
         Export
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuItem render={<a href={exportHref} download />}>
+        <DropdownMenuItem render={<a href={exportUrl} download />}>
           <FileJson />
           JSON (re-imports fully)
         </DropdownMenuItem>
-        <DropdownMenuItem render={<a href={`${exportHref}${exportHref.includes('?') ? '&' : '?'}format=csv`} download />}>
+        <DropdownMenuItem render={<a href={`${exportUrl}${exportUrl.includes('?') ? '&' : '?'}format=csv`} download />}>
           <FileSpreadsheet />
           CSV (spreadsheet)
         </DropdownMenuItem>
@@ -94,7 +105,7 @@ export function LibraryActions({
         <Wand2 className="size-3.5" />
         Adopt tests
       </Button>
-      <PrefetchLink href={newCaseHref} className={buttonVariants({ size: 'sm' })}>
+      <PrefetchLink href={newCaseUrl} className={buttonVariants({ size: 'sm' })}>
         <Plus className="size-3.5" />
         New test case
       </PrefetchLink>
@@ -103,7 +114,13 @@ export function LibraryActions({
         open={adopting}
         onOpenChange={(open) => {
           setAdopting(open);
-          if (!open && startAdopting) router.replace(`${base}/cases`, { scroll: false });
+          if (!open && startAdopting) {
+            // Closing drops `adopt` alone; the filters on screen stay.
+            const rest = new URLSearchParams(search.toString());
+            rest.delete('adopt');
+            const qs = rest.toString();
+            router.replace(qs ? `${base}/cases?${qs}` : `${base}/cases`, { scroll: false });
+          }
         }}
         mode="adopt"
         title="Adopt Playwright tests"
@@ -119,6 +136,7 @@ export function LibraryActions({
               return;
             }
             toast.success(res.message);
+            void queryClient.invalidateQueries({ queryKey: caseListQueryKey() });
             setAdopting(false);
           })
         }

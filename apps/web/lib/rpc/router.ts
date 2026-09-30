@@ -25,6 +25,7 @@ import { duePreview } from '@/lib/data-retention/stats';
 import { db } from '@/lib/db/drizzle';
 import { getTestOverview } from '@/lib/db/queries/explorer';
 import { listAutomatedTests } from '@/lib/db/queries/test-cases';
+import { caseListView } from '@/lib/test-cases/case-list-view';
 import {
   getRunSummary,
   listRunErrorGroupsWithCursor,
@@ -181,6 +182,18 @@ export const appRouter = {
         if (!access?.can({ testCase: ['read'] })) throw new ORPCError('NOT_FOUND');
         return listAutomatedTests(access.project.id, { q: input.q, uncovered: input.uncovered, limit: 100 });
       }),
+
+    /**
+     * One page of the case list for its query string (`caseListKey`). The
+     * list page renders the same answer into the cache (`caseListQuery`); the
+     * browser asks for it when a filter, the sort, the page or the suite
+     * changes to a list it has not seen lately.
+     */
+    list: authed.input(project.extend({ query: z.string().max(4000) })).handler(async ({ input }) => {
+      const access = await resolveProject(input.team, input.project);
+      if (!access?.can({ testCase: ['read'] })) throw new ORPCError('NOT_FOUND');
+      return caseListView(access.project.id, input.query, new Date());
+    }),
   },
 
   review: {
