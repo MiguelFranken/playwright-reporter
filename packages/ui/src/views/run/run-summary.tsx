@@ -224,7 +224,7 @@ export function RunSummary({
           </Button>
         </div>
 
-        <div className={isPending ? 'opacity-60 transition-opacity' : 'transition-opacity'}>
+        <div className={isPending ? 'pending' : undefined} aria-busy={isPending || undefined}>
           {loading ? (
             <ResultGroupsSkeleton />
           ) : (

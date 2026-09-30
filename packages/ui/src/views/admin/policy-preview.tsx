@@ -53,7 +53,9 @@ export function PolicyPreview({ status, message, children }: PolicyPreviewProps)
           Could not work out what this policy deletes. Saving still works.
         </p>
       ) : (
-        <div className={cn('transition-opacity duration-150', status === 'updating' && 'opacity-60')}>{children}</div>
+        <div className={cn(status === 'updating' && 'pending')} aria-busy={status === 'updating' || undefined}>
+          {children}
+        </div>
       )}
     </section>
   );

@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, fn, userEvent, within } from 'storybook/test';
-import { PENDING_STATE_A11Y } from '../fixtures/a11y';
 import { CommentPin } from './comment-pin';
 
 const meta = {
@@ -35,7 +34,6 @@ export const States: Story = {
     </div>
   ),
   // The saving pin is dimmed; the same pin at full strength is checked above.
-  parameters: PENDING_STATE_A11Y,
 };
 
 export const TwoDigits: Story = { args: { number: 128, 'aria-label': 'Thread 128' } };

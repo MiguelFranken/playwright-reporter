@@ -410,6 +410,17 @@
   /* A loading image: a soft band of light sweeping across its placeholder. */
   --animate-shimmer: shimmer 1.6s ease-in-out infinite;
 
+  /* The pending line: a short accent segment sweeping along an edge. */
+  --animate-pending-sweep: pending-sweep 1.1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+
+  @keyframes pending-sweep {
+    from {
+      background-position: -40% 0;
+    }
+    to {
+      background-position: 140% 0;
+    }
+  }
   @keyframes shimmer {
     from {
       background-position: 150% 0;
@@ -709,6 +720,36 @@
     );
     background-size: 200% 100%;
     background-repeat: no-repeat;
+  }
+
+  /* A region or control whose content a transition is replacing. The content
+     stays at full strength — fading it with opacity dropped every label under
+     the 4.5:1 contrast floor — and a thin accent line sweeps along the top
+     edge instead. Clips to the host's radius when the host clips overflow
+     (panels do; give a control `overflow-hidden`). Pair it with `aria-busy`. */
+  .pending {
+    position: relative;
+    cursor: progress;
+  }
+  .pending::after {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    height: 2px;
+    pointer-events: none;
+    background-image: linear-gradient(90deg, transparent, var(--accent-solid), transparent);
+    background-size: 40% 100%;
+    background-repeat: no-repeat;
+    animation: var(--animate-pending-sweep);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    /* A still line rather than a segment frozen at one end. */
+    .pending::after {
+      animation: none;
+      background-image: none;
+      background-color: var(--accent-solid);
+    }
   }
 
   /* A raised surface: structure from a hairline, depth from a shadow. */

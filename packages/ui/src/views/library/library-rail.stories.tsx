@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
-import { PENDING_STATE_A11Y } from '../../fixtures/a11y';
 import { allViews, savedViews } from '../../fixtures/library-views';
 import { BUILT_IN_VIEWS } from '../../lib/library-views';
 import { LibraryViewList } from './library-rail';
@@ -81,5 +80,4 @@ export const NoSavedViews: Story = {
 /** Without write access: the views list, nothing to create or change. */
 export const ReadOnly: Story = { args: { views: BUILT_IN_VIEWS, onRename: undefined, onDelete: undefined, onEdit: undefined, onDuplicate: undefined, onCreate: undefined } };
 
-// The dimmed row is the pending affordance (see PENDING_STATE_A11Y).
-export const Saving: Story = { args: { pendingId: savedViews[1].id }, parameters: PENDING_STATE_A11Y };
+export const Saving: Story = { args: { pendingId: savedViews[1].id } };

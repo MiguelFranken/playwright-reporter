@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, fn, userEvent, within } from 'storybook/test';
-import { PENDING_STATE_A11Y } from '../fixtures/a11y';
 import { CommentComposer } from './comment-composer';
 
 const meta = {
@@ -38,4 +37,4 @@ export const CancelWithEscape: Story = {
 /** A reply box: one line with the send button beside it. */
 export const Compact: Story = { args: { compact: true, label: 'Reply', submitLabel: 'Reply', placeholder: 'Reply…', onCancel: undefined } };
 
-export const Posting: Story = { args: { pending: true, initialValue: 'Primary button please' }, parameters: PENDING_STATE_A11Y };
+export const Posting: Story = { args: { pending: true, initialValue: 'Primary button please' } };

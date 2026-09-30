@@ -1,6 +1,6 @@
 'use client';
 
-import { Search, X } from 'lucide-react';
+import { Loader2, Search, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Button } from '../components/button';
 import { Input } from '../components/input';
@@ -44,7 +44,8 @@ export function RangeToggle({
   return (
     <SegmentedControl
       aria-label="Time range"
-      className={cn(isPending && 'opacity-60', className)}
+      aria-busy={isPending || undefined}
+      className={cn(isPending && 'pending overflow-hidden', className)}
       value={value}
       items={items}
       onValueChange={(next) => onValueChange(next === 'all' ? null : next)}
@@ -83,7 +84,11 @@ export function FilterSelect({
       value={value}
       onValueChange={(next) => onValueChange(next === 'all' || next === null ? null : String(next))}
     >
-      <SelectTrigger className={cn('min-w-40', isPending && 'opacity-60', className)} aria-label={placeholder}>
+      <SelectTrigger
+        className={cn('min-w-40', isPending && 'pending overflow-hidden', className)}
+        aria-label={placeholder}
+        aria-busy={isPending || undefined}
+      >
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent>
@@ -135,13 +140,18 @@ export function SearchField({
   useEffect(() => setDraft(value), [value]);
   return (
     <form
-      className={cn('relative flex items-center', isPending && 'opacity-60', className)}
+      className={cn('relative flex items-center', className)}
+      aria-busy={isPending || undefined}
       onSubmit={(e) => {
         e.preventDefault();
         onValueChange(draft.trim() || null);
       }}
     >
-      <Search className="pointer-events-none absolute start-3 size-4 text-muted-foreground" aria-hidden />
+      {isPending ? (
+        <Loader2 className="pointer-events-none absolute start-3 size-4 animate-spin text-muted-foreground" aria-hidden />
+      ) : (
+        <Search className="pointer-events-none absolute start-3 size-4 text-muted-foreground" aria-hidden />
+      )}
       <Input
         type="search"
         value={draft}
