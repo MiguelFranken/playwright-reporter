@@ -79,6 +79,14 @@ export interface ComparedCapture extends CaptureRecord {
   /** The newest approval a reviewer made; a tolerance approval never becomes the baseline. */
   baseline: { decision: DecisionRecord; capture: CaptureRecord | null } | null;
   previous: { capture: CaptureRecord; runNumber: number } | null;
+  /**
+   * A change request that still stands on the checkpoint and variant: the
+   * newest decision a person made about it asked for changes. It may be about
+   * these pixels (still waiting) or an earlier image (changed since: to
+   * verify). Kept here because a request without a comment has no thread, and
+   * would otherwise vanish once a new image replaces the one it was about.
+   */
+  request: DecisionRecord | null;
   /** The measured comparison with the reference the viewer shows (the baseline, else the run before). */
   diff: DiffRecord | null;
   diffAgainst: 'baseline' | 'previous' | null;
@@ -268,6 +276,8 @@ export async function compareCaptures(
     const exact = list.find((d) => (c.sha256 ? d.sha256 === c.sha256 : d.captureId === c.id)) ?? null;
     const approved = baselines.get(key) ?? null;
     const status: ReviewStatus = exact ? exact.decision : approved ? 'changed' : 'new';
+    const lastHuman = list.find((d) => d.source === 'human') ?? null;
+    const request = lastHuman?.decision === 'changes_requested' ? lastHuman : null;
     const baseline = approved ? { decision: approved, capture: approved.captureId ? (baselineById.get(approved.captureId) ?? null) : null } : null;
     const prev = previous.get(key) ?? null;
     // As the viewer compares: the approved image while it still exists, else the run before.
@@ -275,7 +285,7 @@ export async function compareCaptures(
     const ignoreRegions = ignores.get(key) ?? [];
     const pair = settings.has(c.projectId) ? pairOf(c, reference, settings.get(c.projectId)!, ignoreRegions) : null;
     return {
-      compared: { ...c, status, decision: exact, baseline, previous: prev, diff: null, diffAgainst: baseline?.capture ? 'baseline' : prev ? 'previous' : null, withinTolerance: false, ignoreRegions, threads: threads.get(c.id) ?? [] } as ComparedCapture,
+      compared: { ...c, status, decision: exact, baseline, previous: prev, request, diff: null, diffAgainst: baseline?.capture ? 'baseline' : prev ? 'previous' : null, withinTolerance: false, ignoreRegions, threads: threads.get(c.id) ?? [] } as ComparedCapture,
       pair,
     };
   });
@@ -588,6 +598,8 @@ export async function decide(input: {
   resolveThreads?: boolean;
   /** Where the change request's comment was written, for its thread. */
   commentSource?: CommentSource;
+  /** The AI agent deciding for `userId`, named on the comments it writes. */
+  agentName?: string | null;
 }): Promise<{ decided: number; resolvedThreads: number }> {
   const ids = [...new Set(input.captureIds)].filter((id) => /^[0-9a-f-]{36}$/i.test(id));
   if (ids.length === 0) throw new ReviewError('Nothing to decide about.');
@@ -620,7 +632,7 @@ export async function decide(input: {
       userId: input.userId,
     })),
   );
-  const author = { userId: input.userId, source: input.commentSource ?? 'app' };
+  const author = { userId: input.userId, source: input.commentSource ?? 'app', agentName: input.agentName ?? null };
   if (input.decision === 'changes_requested' && comment) {
     const seen = new Set<string>();
     for (const c of captures) {

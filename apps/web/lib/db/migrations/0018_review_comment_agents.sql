@@ -1,0 +1,1 @@
+ALTER TABLE "review_comments" ADD COLUMN "agent_name" text;

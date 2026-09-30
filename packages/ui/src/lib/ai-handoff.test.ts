@@ -4,6 +4,7 @@ import {
   codexPromptLink,
   cursorPromptLink,
   debugPrompt,
+  fixCommentsPrompt,
   organizePrompt,
   PROMPT_HANDOFF_TARGETS,
   triagePrompt,
@@ -96,5 +97,21 @@ describe('organizePrompt', () => {
     const prompt = organizePrompt({ casesUrl: CASES_URL });
     expect(prompt).toMatch(/wait for my go/);
     expect(encodeURIComponent(prompt).length).toBeLessThanOrEqual(5_000);
+  });
+});
+
+describe('fixCommentsPrompt', () => {
+  it('scopes to the capture and the comments, and leaves resolving to a person', () => {
+    const prompt = fixCommentsPrompt({ captureId: 'cap_1', threads: [1, 3], project: 'acme/web', screen: 'Checkout › Filled in (desktop)' });
+    expect(prompt).toContain('comments #1, #3 on this screenshot (Checkout › Filled in (desktop)): capture cap_1 in project acme/web.');
+    expect(prompt).toContain('get_review_checkpoint with capture "cap_1"');
+    expect(prompt).toContain('comment_on_review');
+    expect(prompt).toMatch(/Do not resolve the threads/);
+    expect(prompt.match(/https?:\/\/\S+/g)).toBeNull();
+  });
+
+  it('reads one comment, or every open one', () => {
+    expect(fixCommentsPrompt({ captureId: 'c', threads: [2] })).toContain('in comment #2 on this screenshot: capture c.');
+    expect(fixCommentsPrompt({ captureId: 'c', threads: [] })).toContain('in the open comments on');
   });
 });

@@ -131,6 +131,11 @@ export interface ReviewCommentView {
   editedAt?: string | null;
   /** Who wrote it, for telling the viewer's own comments (which they may edit and delete) apart. */
   authorId?: string | null;
+  /**
+   * An AI agent wrote it ("Codex", "Claude Code") for `author`, the person
+   * whose access it used: the agent is shown as the author, the person beside it.
+   */
+  agent?: { name: string } | null;
   /** Being saved. */
   pending?: boolean;
 }
@@ -216,6 +221,19 @@ export function sortThreads<T extends Pick<ReviewThreadView, 'number' | 'status'
   return [...threads].sort((a, b) => Number(a.status === 'resolved') - Number(b.status === 'resolved') || a.number - b.number);
 }
 
+/** The name for what an assistant writes without saying which one it is. */
+export const DEFAULT_AGENT_NAME = 'AI agent';
+
+/** Who a comment is by, as a list or a pin names it: the agent that wrote it, else the person. */
+export function commentAuthorName(comment: Pick<ReviewCommentView, 'author' | 'agent' | 'source'> | null | undefined): string {
+  if (!comment) return 'Someone';
+  if (comment.agent) return comment.agent.name;
+  return comment.author?.name ?? (comment.source === 'mcp' ? DEFAULT_AGENT_NAME : 'Someone');
+}
+
+/** A comment an AI agent wrote: named for the agent, or (older comments) written through MCP without a person. */
+export const isAgentComment = (comment: Pick<ReviewCommentView, 'author' | 'agent' | 'source'>) => Boolean(comment.agent) || (comment.source === 'mcp' && !comment.author);
+
 /** The thread's opening comment: what a pin's preview and a list row show. */
 export function openingComment(thread: Pick<ReviewThreadView, 'comments'>): ReviewCommentView | null {
   return thread.comments.find((c) => c.kind === 'comment') ?? null;
@@ -225,4 +243,49 @@ export function openingComment(thread: Pick<ReviewThreadView, 'comments'>): Revi
 export function replies(thread: Pick<ReviewThreadView, 'comments'>): ReviewCommentView[] {
   const first = openingComment(thread);
   return thread.comments.filter((c) => c.kind === 'comment' && c !== first);
+}
+
+/**
+ * Where an open thread stands in the loop a developer works it through:
+ * - `verify`: placed on an earlier version, and the screen changed since — look whether the change asked for was made.
+ * - `waiting`: still on the pixels it was made on — nothing changed yet, it waits for a fix.
+ * - `resolved`: done.
+ */
+export type ThreadStage = 'verify' | 'waiting' | 'resolved';
+
+export function threadStage(thread: Pick<ReviewThreadView, 'status' | 'placement'>): ThreadStage {
+  if (thread.status === 'resolved') return 'resolved';
+  return thread.placement === 'outdated' ? 'verify' : 'waiting';
+}
+
+export const THREAD_STAGE_LABELS: Record<ThreadStage, string> = { verify: 'To verify', waiting: 'Waiting for a fix', resolved: 'Resolved' };
+
+/** The rectangle of an image a close-up shows, in that image's pixels, and the scale it is drawn at. */
+export interface CloseUpWindow {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  scale: number;
+}
+
+/**
+ * The part of an image of `size` around `anchor` that a close-up of `box`
+ * CSS pixels shows: an area with room around it, a point with enough of the
+ * page around it to read what it points at (`reach` image pixels across).
+ * Kept inside the image; never magnified past `maxScale`.
+ */
+export function closeUpWindow(anchor: FractionAnchor, size: ImageSize, box: ImageSize, { reach = 520, maxScale = 1.5 }: { reach?: number; maxScale?: number } = {}): CloseUpWindow {
+  const areaW = anchor.kind === 'area' && anchor.w != null ? anchor.w * size.width : 0;
+  const areaH = anchor.kind === 'area' && anchor.h != null ? anchor.h * size.height : 0;
+  const cx = anchor.kind === 'area' ? (anchor.x * size.width + areaW / 2) : anchor.x * size.width;
+  const cy = anchor.kind === 'area' ? (anchor.y * size.height + areaH / 2) : anchor.y * size.height;
+  const aspect = box.width / box.height;
+  // What must fit: the area with a margin, or the reach around a point, in the box's shape.
+  let width = Math.max(anchor.kind === 'area' ? areaW * 1.4 + 48 : reach, (anchor.kind === 'area' ? areaH * 1.4 + 48 : 0) * aspect, box.width / maxScale);
+  width = Math.min(width, size.width, size.height * aspect);
+  const height = width / aspect;
+  const left = Math.min(Math.max(0, cx - width / 2), Math.max(0, size.width - width));
+  const top = Math.min(Math.max(0, cy - height / 2), Math.max(0, size.height - height));
+  return { left, top, width, height, scale: box.width / width };
 }

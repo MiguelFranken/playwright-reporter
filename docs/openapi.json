@@ -2027,13 +2027,98 @@
                         "nextOnBranch"
                       ],
                       "additionalProperties": false
+                    },
+                    "provenance": {
+                      "type": "object",
+                      "properties": {
+                        "executor": {
+                          "type": "string"
+                        },
+                        "executorDetectedBy": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "provider",
+                                "ci-env",
+                                "option"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "How the reporter decided the executor: a known CI provider, the bare CI variable (a local wrapper may set it), or an explicit option. Null when the reporter did not say."
+                        },
+                        "dirty": {
+                          "description": "Whether the working tree had uncommitted changes to tracked files; null when unknown (older reporter, no checkout).",
+                          "type": [
+                            "boolean",
+                            "null"
+                          ]
+                        },
+                        "dirtyFiles": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "executor",
+                        "executorDetectedBy",
+                        "dirty",
+                        "dirtyFiles"
+                      ],
+                      "additionalProperties": false,
+                      "description": "What the run actually exercised. A dirty run may not match its commit: two runs with one SHA can test different code."
+                    },
+                    "artifacts": {
+                      "type": "object",
+                      "properties": {
+                        "total": {
+                          "type": "number"
+                        },
+                        "uploaded": {
+                          "type": "number"
+                        },
+                        "pending": {
+                          "type": "number"
+                        },
+                        "failed": {
+                          "type": "number"
+                        },
+                        "expired": {
+                          "type": "number"
+                        },
+                        "reviewCaptures": {
+                          "type": "number"
+                        },
+                        "reviewCapturesMissing": {
+                          "type": "number",
+                          "description": "Review captures whose image is not stored (upload pending, failed or expired)."
+                        }
+                      },
+                      "required": [
+                        "total",
+                        "uploaded",
+                        "pending",
+                        "failed",
+                        "expired",
+                        "reviewCaptures",
+                        "reviewCapturesMissing"
+                      ],
+                      "additionalProperties": false,
+                      "description": "Attachment upload completeness. Failed or pending uploads mean the run cannot serve as complete visual evidence."
                     }
                   },
                   "required": [
                     "project",
                     "run",
                     "failureGroups",
-                    "neighbours"
+                    "neighbours",
+                    "provenance",
+                    "artifacts"
                   ],
                   "additionalProperties": false
                 }
@@ -4549,10 +4634,11 @@
             "in": "query",
             "name": "style",
             "schema": {
-              "description": "Select tests by file:line (default) or by --grep on titles.",
+              "description": "Select tests by file:line from the reported run (default), or by \"titles\": anchored file filters plus a --grep anchored on each test’s file and full title, which survives moved lines. \"grep\" is the same title selection. Titles are chosen automatically when a line is unknown.",
               "type": "string",
               "enum": [
                 "locations",
+                "titles",
                 "grep"
               ]
             },
@@ -4567,6 +4653,18 @@
               "type": "integer",
               "minimum": 2,
               "maximum": 100
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "launcher",
+            "schema": {
+              "description": "The command prefix your repository runs Playwright with, used instead of \"npx playwright test\", e.g. \"pnpm test:e2e --\". Printed as given.",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             },
             "allowEmptyValue": true,
             "allowReserved": true
@@ -4632,17 +4730,38 @@
                             "enum": [
                               "locations",
                               "grep"
-                            ]
+                            ],
+                            "description": "locations: by file:line. grep: by title (the \"titles\" and \"grep\" styles)."
+                          },
+                          "selection": {
+                            "type": "string",
+                            "enum": [
+                              "locations",
+                              "titles",
+                              "grep"
+                            ],
+                            "description": "The style that selected these tests."
                           },
                           "command": {
                             "type": "string"
+                          },
+                          "listCommand": {
+                            "type": "string",
+                            "description": "The same selection with --list: run it first and compare what it lists with `expected` and `tests`."
+                          },
+                          "expected": {
+                            "type": "number",
+                            "description": "How many tests the selection should list."
                           }
                         },
                         "required": [
                           "browser",
                           "tests",
                           "style",
-                          "command"
+                          "selection",
+                          "command",
+                          "listCommand",
+                          "expected"
                         ],
                         "additionalProperties": false
                       }
@@ -4666,6 +4785,42 @@
                           },
                           "outcome": {
                             "type": "string"
+                          },
+                          "testId": {
+                            "type": "string"
+                          },
+                          "titlePath": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "description": "The describe titles and the test title, outermost first."
+                          },
+                          "selector": {
+                            "type": "object",
+                            "properties": {
+                              "location": {
+                                "description": "file:line from the reported run; the line may have moved in a changed checkout.",
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "file": {
+                                "type": "string",
+                                "description": "Anchored file-filter regex (a positional argument to playwright test)."
+                              },
+                              "grep": {
+                                "type": "string",
+                                "description": "Anchored --grep regex that matches only this test in its file."
+                              }
+                            },
+                            "required": [
+                              "location",
+                              "file",
+                              "grep"
+                            ],
+                            "additionalProperties": false
                           }
                         },
                         "required": [
@@ -4673,7 +4828,10 @@
                           "file",
                           "line",
                           "browser",
-                          "outcome"
+                          "outcome",
+                          "testId",
+                          "titlePath",
+                          "selector"
                         ],
                         "additionalProperties": false
                       }
@@ -10814,9 +10972,35 @@
           },
           {
             "in": "query",
+            "name": "against",
+            "schema": {
+              "description": "What to compare with. origin: the image the focused thread (or a change request without a comment) was made on — what the request was about. baseline: the approved image. previous: the same checkpoint in the run before. auto (default): origin for a focused thread made on an earlier image, else the baseline, else the previous capture.",
+              "type": "string",
+              "enum": [
+                "auto",
+                "origin",
+                "baseline",
+                "previous"
+              ]
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "againstCapture",
+            "schema": {
+              "description": "Compare with this capture id instead (any capture of the project), e.g. an original from list_feedback_requests.",
+              "type": "string"
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
             "name": "changes",
             "schema": {
-              "description": "Attach close-ups of the measured changed regions (up to 3), this run’s crop then the reference’s. Default true.",
+              "description": "Attach close-ups of the measured changed regions (up to 3), this image’s crop then the reference’s. Default true.",
               "type": "boolean"
             },
             "allowEmptyValue": true,
@@ -10826,7 +11010,7 @@
             "in": "query",
             "name": "thread",
             "schema": {
-              "description": "Focus one comment thread by its number: its close-up is attached (and its pin drawn even if resolved).",
+              "description": "Focus one comment thread by its number: its close-up is attached — on this image and on the one compared with — and its pin drawn even if resolved.",
               "type": "integer",
               "exclusiveMinimum": 0,
               "maximum": 9007199254740991
@@ -10887,6 +11071,7 @@
                       ]
                     },
                     "reference": {
+                      "description": "What the image is compared with, in words.",
                       "type": [
                         "string",
                         "null"
@@ -10899,6 +11084,65 @@
                       "type": [
                         "string",
                         "null"
+                      ]
+                    },
+                    "comparison": {
+                      "description": "The image compared with — chosen by \"against\" — kept apart from what the pixel diff was measured against.",
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "role": {
+                              "type": "string",
+                              "enum": [
+                                "origin",
+                                "baseline",
+                                "previous",
+                                "capture"
+                              ],
+                              "description": "origin: the image a request was made on; baseline: the approved image; previous: the run before; capture: the one asked for."
+                            },
+                            "captureId": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "run": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "reason": {
+                              "type": "string",
+                              "description": "Why this one."
+                            },
+                            "available": {
+                              "type": "boolean",
+                              "description": "Its image is stored and could be read."
+                            },
+                            "identical": {
+                              "description": "Same pixels as this image.",
+                              "type": [
+                                "boolean",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "role",
+                            "captureId",
+                            "run",
+                            "reason",
+                            "available",
+                            "identical"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
                       ]
                     },
                     "diff": {
@@ -11051,8 +11295,53 @@
                       ]
                     },
                     "reviewUrl": {
-                      "description": "The checkpoint in the app’s viewer.",
+                      "description": "The checkpoint in the app’s viewer: a stable link to hand over (image links expire).",
                       "type": "string"
+                    },
+                    "request": {
+                      "description": "A change request without a comment standing on this checkpoint: look at the image to see what should change.",
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "by": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "at": {
+                              "type": "string"
+                            },
+                            "run": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "captureId": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "onThisImage": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "by",
+                            "at",
+                            "run",
+                            "captureId",
+                            "onThisImage"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     },
                     "threads": {
                       "description": "Comment threads on the image, by the numbers on its pins.",
@@ -11232,6 +11521,34 @@
                                     "null"
                                   ]
                                 },
+                                "agent": {
+                                  "description": "Set when an AI agent wrote the comment.",
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "name": {
+                                          "type": "string"
+                                        },
+                                        "for": {
+                                          "description": "The person whose access the agent used.",
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "name",
+                                        "for"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
                                 "via": {
                                   "type": "string"
                                 },
@@ -11275,6 +11592,117 @@
                     },
                     "attachments": {
                       "description": "What each attached image is, in order.",
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "attachedImages": {
+                      "description": "One record per attached image, in order: which image, which part of it, at what size.",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "index": {
+                            "type": "number",
+                            "description": "Position among the attached images, from 1."
+                          },
+                          "role": {
+                            "type": "string",
+                            "enum": [
+                              "image",
+                              "compared",
+                              "thread-close-up",
+                              "compared-thread-close-up",
+                              "change-close-up",
+                              "compared-change-close-up"
+                            ]
+                          },
+                          "captureId": {
+                            "type": "string"
+                          },
+                          "run": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "thread": {
+                            "description": "The thread a close-up is about.",
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "region": {
+                            "description": "The changed region a close-up is about, from 1, largest first.",
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "source": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "x": {
+                                    "type": "number"
+                                  },
+                                  "y": {
+                                    "type": "number"
+                                  },
+                                  "w": {
+                                    "type": "number"
+                                  },
+                                  "h": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "x",
+                                  "y",
+                                  "w",
+                                  "h"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "The rectangle shown, in that image’s pixels."
+                          },
+                          "width": {
+                            "description": "Attached size in pixels.",
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "height": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "index",
+                          "role",
+                          "captureId",
+                          "run",
+                          "thread",
+                          "region",
+                          "source",
+                          "width",
+                          "height"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "omittedImages": {
+                      "description": "Images left out by maxImages or images; ask again with images \"focus\", a thread, or a higher maxImages.",
                       "type": "array",
                       "items": {
                         "type": "string"
@@ -11471,6 +11899,12 @@
                   "resolveThreads": {
                     "description": "With approved: also resolve the images’ open threads (their changes are done).",
                     "type": "boolean"
+                  },
+                  "agent": {
+                    "description": "Your name as an agent, e.g. \"Codex\" or \"Claude Code\": your comments show as that agent, for the person whose access you use. Default: the connected app’s name.",
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 60
                   }
                 },
                 "required": [
@@ -11525,6 +11959,631 @@
                     "project",
                     "decided",
                     "decision"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters (`BAD_REQUEST`, `INVALID_ARGUMENT`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked token (`UNAUTHORIZED`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the required scope (`INSUFFICIENT_SCOPE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A test reference matches several tests (`AMBIGUOUS`; candidates in `details`), or an attachment is not available (`ARTIFACT_UNAVAILABLE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (`RATE_LIMITED`); see `Retry-After`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{team}/{project}/feedback-requests": {
+      "get": {
+        "operationId": "listFeedbackRequests",
+        "summary": "List open visual feedback requests",
+        "description": "Every open request for a visual change — comment threads and change requests without a comment — one record each, with the producing test, the checkpoint key, the image now and the one the request was made on, and whether it waits for a fix or changed since (`verify`). The library’s default reference without `branch`, `pullRequest` or `run`. Paged with `cursor`; `counts` cover every page.",
+        "tags": [
+          "Visual review"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "team",
+            "schema": {
+              "type": "string",
+              "description": "Team slug, as in the app URL (`/teams/<team>/…`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "project",
+            "schema": {
+              "type": "string",
+              "description": "Project slug, as in the app URL (`…/projects/<project>`)."
+            }
+          },
+          {
+            "in": "query",
+            "name": "branch",
+            "schema": {
+              "description": "The library reference: a branch, e.g. \"feature/workshop-sessions\". Pass the branch the work is on — do not rely on a default.",
+              "type": "string"
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "pullRequest",
+            "schema": {
+              "description": "The library reference: a pull (merge) request number, instead of a branch.",
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "run",
+            "schema": {
+              "description": "One run instead of the library (only its own captures: a partial run leaves screens out).",
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "stage",
+            "schema": {
+              "description": "waiting: the image is still the one the request was made on. verify: it changed since — check it. Default all.",
+              "type": "string",
+              "enum": [
+                "all",
+                "waiting",
+                "verify"
+              ]
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "test",
+            "schema": {
+              "description": "Part of a test title or file, to narrow the list.",
+              "type": "string"
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "variant",
+            "schema": {
+              "description": "Only this variant, e.g. \"desktop\" or \"mobile\".",
+              "type": "string"
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "description": "Requests per page (1–200, default 50).",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "description": "Opaque cursor from a previous response, for the next page. Keep the other filters unchanged.",
+              "type": "string"
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "project": {
+                      "type": "string"
+                    },
+                    "scope": {
+                      "type": "string",
+                      "description": "What was searched: \"library branch:main\", \"library pr:212\" or \"run #128\"."
+                    },
+                    "pinnedRun": {
+                      "description": "The library reference is pinned to this run: newer runs of it are not shown.",
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "latestRun": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "counts": {
+                      "type": "object",
+                      "properties": {
+                        "total": {
+                          "type": "number",
+                          "description": "Every open request in the scope and filters, across all pages."
+                        },
+                        "threads": {
+                          "type": "number"
+                        },
+                        "captureRequests": {
+                          "type": "number",
+                          "description": "Change requests without a comment (no thread)."
+                        },
+                        "waiting": {
+                          "type": "number"
+                        },
+                        "verify": {
+                          "type": "number"
+                        },
+                        "returned": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "total",
+                        "threads",
+                        "captureRequests",
+                        "waiting",
+                        "verify",
+                        "returned"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "requests": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "requestId": {
+                            "type": "string",
+                            "description": "Stable across runs: \"thread:<id>\" or \"capture:<decision id>\". Keep it in your work list; a request is done when a person resolves or approves it."
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "thread",
+                              "capture"
+                            ],
+                            "description": "thread: a comment thread (a pin, an area, or the whole image). capture: \"changes requested\" on the image without a comment — look at the image to see what."
+                          },
+                          "stage": {
+                            "type": "string",
+                            "enum": [
+                              "waiting",
+                              "verify"
+                            ]
+                          },
+                          "thread": {
+                            "description": "The number on the pin (threads).",
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "threadId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "test": {
+                            "type": "object",
+                            "properties": {
+                              "testId": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string",
+                                "description": "The full title path, joined with \" › \"."
+                              },
+                              "titlePath": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "file": {
+                                "type": "string"
+                              },
+                              "line": {
+                                "type": "number",
+                                "description": "Where the reported run found it: a clue in a changed checkout, not an exact selector."
+                              },
+                              "browser": {
+                                "type": "string",
+                                "description": "The Playwright project it ran in."
+                              }
+                            },
+                            "required": [
+                              "testId",
+                              "title",
+                              "titlePath",
+                              "file",
+                              "line",
+                              "browser"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "checkpoint": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string",
+                                "description": "The checkpoint name the test passes to its capture helper: search the spec for it."
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "order": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "title",
+                              "order"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "variant": {
+                            "type": "string"
+                          },
+                          "current": {
+                            "type": "object",
+                            "properties": {
+                              "captureId": {
+                                "type": "string"
+                              },
+                              "run": {
+                                "type": "number"
+                              },
+                              "status": {
+                                "type": "string"
+                              },
+                              "url": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "captureId",
+                              "run",
+                              "status",
+                              "url"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "original": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "captureId": {
+                                    "type": "string"
+                                  },
+                                  "run": {
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  },
+                                  "url": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "captureId",
+                                  "run",
+                                  "url"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "The image the request was made on, when the current one is newer: compare the two with get_review_checkpoint against \"origin\"."
+                          },
+                          "percent": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "x": {
+                                    "type": "number"
+                                  },
+                                  "y": {
+                                    "type": "number"
+                                  },
+                                  "w": {
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  },
+                                  "h": {
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "x",
+                                  "y",
+                                  "w",
+                                  "h"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "Where the pin points on the current image, in percent (threads with a pin)."
+                          },
+                          "position": {
+                            "description": "The pin’s position in words, pixels and CSS pixels.",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "conversation": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string"
+                                },
+                                "author": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "agent": {
+                                  "description": "Set when an AI agent wrote the comment.",
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "name": {
+                                          "type": "string"
+                                        },
+                                        "for": {
+                                          "description": "The person whose access the agent used.",
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "name",
+                                        "for"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "via": {
+                                  "type": "string"
+                                },
+                                "at": {
+                                  "type": "string"
+                                },
+                                "body": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "author",
+                                "via",
+                                "at",
+                                "body"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "description": "The whole thread, oldest first."
+                          },
+                          "requestedBy": {
+                            "description": "Who asked for changes (capture requests).",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "requestedAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "requestId",
+                          "kind",
+                          "stage",
+                          "thread",
+                          "threadId",
+                          "test",
+                          "checkpoint",
+                          "variant",
+                          "current",
+                          "original",
+                          "percent",
+                          "position",
+                          "conversation"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "producers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "testId": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "titlePath": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "file": {
+                            "type": "string"
+                          },
+                          "line": {
+                            "type": "number"
+                          },
+                          "browser": {
+                            "type": "string"
+                          },
+                          "requests": {
+                            "type": "number"
+                          },
+                          "checkpoints": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "testId",
+                          "title",
+                          "titlePath",
+                          "file",
+                          "line",
+                          "browser",
+                          "requests",
+                          "checkpoints"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "description": "The distinct tests that produce every request in the scope (all pages): the set a narrow re-run selects — no more."
+                    },
+                    "nextCursor": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "notes": {
+                      "description": "What the scope leaves out, or assumed.",
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "project",
+                    "scope",
+                    "counts",
+                    "requests",
+                    "producers",
+                    "nextCursor"
                   ],
                   "additionalProperties": false
                 }
@@ -11965,6 +13024,34 @@
                                           "null"
                                         ]
                                       },
+                                      "agent": {
+                                        "description": "Set when an AI agent wrote the comment.",
+                                        "anyOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "name": {
+                                                "type": "string"
+                                              },
+                                              "for": {
+                                                "description": "The person whose access the agent used.",
+                                                "type": [
+                                                  "string",
+                                                  "null"
+                                                ]
+                                              }
+                                            },
+                                            "required": [
+                                              "name",
+                                              "for"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ]
+                                      },
                                       "via": {
                                         "type": "string"
                                       },
@@ -12175,6 +13262,12 @@
                       "x",
                       "y"
                     ]
+                  },
+                  "agent": {
+                    "description": "Your name as an agent, e.g. \"Codex\" or \"Claude Code\": your comments show as that agent, for the person whose access you use. Default: the connected app’s name.",
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 60
                   }
                 },
                 "required": [
@@ -12349,6 +13442,12 @@
                     "description": "A closing note: what was done, or why it is reopened.",
                     "type": "string",
                     "maxLength": 4000
+                  },
+                  "agent": {
+                    "description": "Your name as an agent, e.g. \"Codex\" or \"Claude Code\": your comments show as that agent, for the person whose access you use. Default: the connected app’s name.",
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 60
                   }
                 },
                 "required": [

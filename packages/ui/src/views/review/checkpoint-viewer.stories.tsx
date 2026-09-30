@@ -128,9 +128,9 @@ export const InTheLibraryUnchanged: Story = {
 };
 
 /**
- * A comment made on an earlier version, in the library: the thread offers the
- * comparison; it shows the version commented on with its pin and the comment
- * beside the screen now, and resolves from there.
+ * A comment made on an earlier version, in the library: the thread offers to
+ * verify it — the spot as commented on beside the screen now, and "Fixed"
+ * resolves it; with nothing left, the walk says so.
  */
 export const ComparesACommentWithItsVersion: Story = {
   args: {
@@ -143,16 +143,17 @@ export const ComparesACommentWithItsVersion: Story = {
     const body = within(document.body);
     await body.findByRole('dialog');
     await expect(body.getByText('Ready to verify')).toBeInTheDocument();
-    await userEvent.click(body.getByRole('button', { name: 'Compare thread 1 with the version commented on' }));
-    const compare = await body.findByRole('group', { name: 'Comment 1: the version commented on and the screen now' });
-    await expect(within(compare).getByText(/Commented on · run #483/)).toBeInTheDocument();
-    await expect(within(compare).getByText(/The order button should use the primary style/)).toBeInTheDocument();
-    await userEvent.click(within(compare).getByRole('button', { name: 'Resolve' }));
+    await userEvent.click(body.getByRole('button', { name: 'Verify thread 1 against the version commented on' }));
+    const verify = await body.findByRole('group', { name: 'Verify comment 1' });
+    await expect(within(verify).getByText(/Commented on · run #483/)).toBeInTheDocument();
+    await expect(within(verify).getByText(/The order button should use the primary style/)).toBeInTheDocument();
+    await userEvent.click(within(verify).getByRole('button', { name: /Fixed — resolve/ }));
     await expect(args.comments!.onSetThreadStatus).toHaveBeenCalledWith(expect.objectContaining({ threadId: 'thread-verify', status: 'resolved' }));
-    await userEvent.click(within(compare).getByRole('button', { name: 'Close comparison' }));
-    await waitFor(() => expect(body.queryByRole('group', { name: /the version commented on/ })).toBeNull());
-    await userEvent.click(body.getByRole('button', { name: 'Compare thread 1 with the version commented on' }));
-    await expect(await body.findByRole('group', { name: /the version commented on/ })).toBeInTheDocument();
+    await expect(await body.findByText('Nothing left to verify')).toBeInTheDocument();
+    await userEvent.click(body.getByRole('button', { name: 'Back to the screen' }));
+    await waitFor(() => expect(body.queryByText('Nothing left to verify')).toBeNull());
+    await userEvent.click(body.getByRole('button', { name: 'Verify thread 1 against the version commented on' }));
+    await expect(await body.findByRole('group', { name: 'Verify comment 1' })).toBeInTheDocument();
   },
 };
 

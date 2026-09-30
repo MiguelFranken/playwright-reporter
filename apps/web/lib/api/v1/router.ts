@@ -42,6 +42,7 @@ import {
 import { getReviewCheckpoint, listReviewCheckpoints, reviewCheckpoint } from '@/lib/mcp/tools/review';
 import { commentOnReview, listReviewThreads, resolveReviewThread } from '@/lib/mcp/tools/review-threads';
 import { getLibraryFlows, listLibrary, setLibraryReferenceTool } from '@/lib/mcp/tools/library';
+import { listFeedbackRequests } from '@/lib/mcp/tools/feedback';
 import type { ToolDef } from '@/lib/mcp/registry';
 import { authed } from '../base';
 import { fromTool } from '../from-tool';
@@ -347,7 +348,9 @@ export const router = {
       description: 'One review checkpoint image: its status, viewport, whether it matches the approved baseline, and short-lived links to it and to the baseline.',
       tags: ['Visual review'],
       params: { capture: captureRef },
-      omit: ['compare', 'pins', 'pinCrops'],
+      omit: ['compare', 'pins', 'pinCrops', 'maxImages'],
+      // A JSON answer carries no inline images: none are read or encoded for it.
+      fixedArgs: { images: 'none' },
     }),
     decide: fromTool(tool(reviewCheckpoint), {
       method: 'POST',
@@ -355,6 +358,15 @@ export const router = {
       summary: 'Approve or reject review checkpoint images',
       description:
         'Approve review checkpoint images, or ask for changes with a comment. An approval holds for the exact pixels: later runs with the same image need no review. Only approve what you looked at. Needs the `write` scope.',
+      tags: ['Visual review'],
+    }),
+  },
+  feedbackRequests: {
+    list: fromTool(tool(listFeedbackRequests), {
+      path: `${P}/feedback-requests`,
+      summary: 'List open visual feedback requests',
+      description:
+        'Every open request for a visual change — comment threads and change requests without a comment — one record each, with the producing test, the checkpoint key, the image now and the one the request was made on, and whether it waits for a fix or changed since (`verify`). The library’s default reference without `branch`, `pullRequest` or `run`. Paged with `cursor`; `counts` cover every page.',
       tags: ['Visual review'],
     }),
   },

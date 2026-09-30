@@ -5,7 +5,7 @@
  * pixels, percentages of it, and the page's CSS pixels.
  */
 import { eq } from 'drizzle-orm';
-import { describeAnchor, toPixels, type ImageSize } from '@miguelfranken/ui/lib/review-threads';
+import { DEFAULT_AGENT_NAME, describeAnchor, toPixels, type ImageSize } from '@miguelfranken/ui/lib/review-threads';
 import { db } from '@/lib/db/drizzle';
 import { attachments } from '@/lib/db/schema';
 import { getStorage } from '@/lib/storage';
@@ -63,11 +63,12 @@ export function threadPosition(thread: CaptureThread, capture: Pick<CaptureRecor
   };
 }
 
-/** A thread's comments as a tool reports them: who (and whether through an assistant), when, what. */
+/** A thread's comments as a tool reports them: who (an agent, and for whom), when, what. */
 export function threadComments(thread: CaptureThread) {
   return thread.comments.map((c) => ({
     kind: c.kind,
-    author: c.authorName ?? (c.source === 'mcp' ? 'AI assistant' : null),
+    author: c.agentName ?? c.authorName ?? (c.source === 'mcp' ? DEFAULT_AGENT_NAME : null),
+    agent: c.agentName ? { name: c.agentName, for: c.authorName } : null,
     via: c.source,
     at: c.createdAt.toISOString(),
     body: c.body,

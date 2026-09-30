@@ -1,5 +1,5 @@
-import { a as checkpointRecordSchema, t as CHECKPOINT_CONTENT_TYPE, u as legacyCheckpoints } from "./dist-C_hxvOdh.mjs";
-import { n as IngestClient, t as HttpError } from "./client-D4XTXo1n.mjs";
+import { a as checkpointRecordSchema, t as CHECKPOINT_CONTENT_TYPE, u as legacyCheckpoints } from "./dist-D7tL4Myv.mjs";
+import { n as IngestClient, t as HttpError } from "./client-CncN1kb3.mjs";
 import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
 import { readFileSync, statSync } from "node:fs";
@@ -123,7 +123,8 @@ function buildCheckpoints(result, refs) {
 }
 //#endregion
 //#region src/metadata.ts
-function git(args, cwd) {
+/** A git command's output; `undefined` when it failed (no checkout, no git, too slow), `''` when it said nothing. */
+function gitOutput(args, cwd) {
 	try {
 		return execFileSync("git", args, {
 			cwd,
@@ -133,23 +134,70 @@ function git(args, cwd) {
 				"ignore"
 			],
 			timeout: 3e3
-		}).toString().trim() || void 0;
+		}).toString();
 	} catch {
 		return;
 	}
+}
+function git(args, cwd) {
+	return gitOutput(args, cwd)?.trim() || void 0;
+}
+/**
+* Whether the checkout has uncommitted changes to tracked files, and how many.
+* Untracked files are left out: build output and scratch files would make every
+* local run look dirty. Only the count leaves the machine, never a path.
+*/
+function workingTreeState(cwd) {
+	const out = gitOutput([
+		"status",
+		"--porcelain",
+		"--untracked-files=no"
+	], cwd);
+	if (out === void 0) return {};
+	const files = out.split("\n").filter((line) => line.trim()).length;
+	return {
+		dirty: files > 0,
+		dirtyFiles: files
+	};
 }
 function num(v) {
 	if (!v) return void 0;
 	const n = Number.parseInt(v, 10);
 	return Number.isFinite(n) ? n : void 0;
 }
-function detectExecutor(env) {
+/** `executor` (the reporter option or `PW_REPORTER_EXECUTOR`) wins over the `CI` variable. */
+function detectExecutor(env, executor) {
+	if (executor) return executor;
 	return env.CI && !["false", "0"].includes(env.CI.toLowerCase()) ? "ci" : "local";
 }
-/** Explicit overrides win over what was detected; see `ReporterOptions.git` / `.ci`. */
-function collectCiInfo(env, overrides = {}) {
+/**
+* Explicit overrides win over what was detected; see `ReporterOptions.git` / `.ci`.
+* `detectedBy` says how the executor was decided. An explicit `local` drops the
+* detected build: a wrapper that sets `CI` does not make the laptop a CI provider.
+*/
+function collectCiInfo(env, overrides = {}, executor) {
+	if (executor === "local") return {
+		...overrides,
+		detectedBy: "option"
+	};
+	const detected = detectCiInfo(env);
+	if (executor === "ci") return {
+		...detected,
+		...overrides,
+		detectedBy: "option"
+	};
+	if (detected.provider === "unknown") return {
+		...detected,
+		...overrides,
+		detectedBy: "ci-env"
+	};
+	if (detected.provider) return {
+		...detected,
+		...overrides,
+		detectedBy: "provider"
+	};
 	return {
-		...detectCiInfo(env),
+		...detected,
 		...overrides
 	};
 }
@@ -202,6 +250,10 @@ function collectGitInfo(config, env, overrides = {}) {
 		...overrides
 	};
 	if (overrides.sha) merged.shortSha = overrides.sha.slice(0, 7);
+	if (overrides.sha && overrides.sha !== info.sha) {
+		delete merged.dirty;
+		delete merged.dirtyFiles;
+	}
 	if (overrides.prNumber !== void 0 && overrides.prNumber !== info.prNumber) {
 		merged.prUrl = overrides.prUrl;
 		merged.prTitle = overrides.prTitle;
@@ -307,6 +359,7 @@ function detectGitInfo(config, env) {
 		], cwd);
 		if (remote) info.repoUrl = normalizeRemote(remote);
 	}
+	Object.assign(info, workingTreeState(cwd));
 	if (info.sha && !info.shortSha) info.shortSha = info.sha.slice(0, 7);
 	if (info.branch === "HEAD") info.branch = void 0;
 	return info;
@@ -384,6 +437,10 @@ function prNumber(v) {
 function defined(values) {
 	return Object.fromEntries(Object.entries(values).map(([k, v]) => [k, v?.trim()]).filter(([, v]) => v));
 }
+function executor(v) {
+	const x = v?.trim().toLowerCase();
+	return x === "ci" || x === "local" ? x : void 0;
+}
 function resolveOptions(opts = {}, env = process.env) {
 	const token = opts.token ?? env.PW_REPORTER_TOKEN;
 	const serverUrl = (opts.serverUrl ?? env.PW_REPORTER_URL)?.replace(/\/+$/, "");
@@ -416,7 +473,8 @@ function resolveOptions(opts = {}, env = process.env) {
 			buildUrl: opts.ci?.buildUrl ?? env.PW_REPORTER_BUILD_URL,
 			buildNumber: opts.ci?.buildNumber ?? env.PW_REPORTER_BUILD_NUMBER,
 			job: opts.ci?.job ?? env.PW_REPORTER_CI_JOB
-		})
+		}),
+		executor: executor(opts.executor) ?? executor(env.PW_REPORTER_EXECUTOR)
 	};
 }
 function withPrNumber(git, number) {
@@ -598,11 +656,11 @@ var PlaywrightReporterApp = class {
 			} : null,
 			expectedTests: suite.allTests().length,
 			startedAt: this.startedAt.toISOString(),
-			executor: detectExecutor(env),
+			executor: detectExecutor(env, opts.executor),
 			environment: opts.environment,
 			tags: opts.tags,
 			git: collectGitInfo(config, env, opts.git),
-			ci: collectCiInfo(env, opts.ci),
+			ci: collectCiInfo(env, opts.ci, opts.executor),
 			system: collectSystemInfo(),
 			playwright: collectPlaywrightInfo(config)
 		};

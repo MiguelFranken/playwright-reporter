@@ -36,6 +36,7 @@ export function toCommentView(c: CommentRecord): ReviewCommentView {
     body: c.body,
     author: c.authorName ? { name: c.authorName, image: displayableAvatar(c.authorImage) } : null,
     authorId: c.userId,
+    agent: c.agentName ? { name: c.agentName } : null,
     source: c.source,
     at: c.createdAt.toISOString(),
     editedAt: c.editedAt?.toISOString() ?? null,
@@ -122,6 +123,16 @@ export function toCaptureView(c: ComparedCapture): ReviewCaptureView {
     previous: c.previous
       ? { captureId: c.previous.capture.id, image: toReviewImage(c.previous.capture), runNumber: c.previous.runNumber, same: Boolean(c.sha256 && c.previous.capture.sha256 === c.sha256) }
       : null,
+    request:
+      c.request && !c.request.comment
+        ? {
+            by: c.request.by,
+            at: c.request.createdAt.toISOString(),
+            runNumber: c.request.runNumber,
+            captureId: c.request.captureId,
+            onThisImage: c.request.captureId === c.id || Boolean(c.request.sha256 && c.request.sha256 === c.sha256),
+          }
+        : null,
     diff: c.diff && c.diffAgainst ? toDiffView(c.diff, c.diffAgainst, c.withinTolerance) : null,
     ignoreRegions: c.ignoreRegions.length ? c.ignoreRegions.map((r) => ({ ...r, pixels: 0 })) : undefined,
     threads: c.threads.map(toThreadView),

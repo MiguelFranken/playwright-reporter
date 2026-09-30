@@ -17,7 +17,8 @@ import { defaultLibraryRef, libraryFlows } from '@/lib/review/library';
 import { captureInProject, runReview, type ComparedCapture, type ReviewFlowRecord } from '@/lib/review/queries';
 import { createThread, replyToThread, setThreadStatus, ThreadError } from '@/lib/review/threads';
 import { invalid, notFound } from '../errors';
-import { branchParam, commonParams, isUuid, runParam } from '../params';
+import { agentParam, branchParam, commonParams, isUuid, runParam } from '../params';
+import { agentNameFor } from '../agent';
 import { defineTool, output } from '../registry';
 import { link } from '../render/markdown';
 import { resolveRun } from '../resolve';
@@ -182,6 +183,7 @@ const commentInput = z.object({
   body: z.string().min(1).max(MAX_COMMENT_LENGTH).describe('The comment: what should change, or the answer to the thread.'),
   thread: threadNumber.optional().describe('Reply to this thread, by the number on its pin. Without it, a new thread.'),
   at: percentAnchor.optional().describe('Where a new thread points, in percent of the image: a spot, or an area with w and h. Without it, the whole image.'),
+  agent: agentParam,
 });
 
 const commentOutput = output({
@@ -198,14 +200,14 @@ export const commentOnReview = defineTool({
   title: 'Comment on a review image',
   toolset: 'write',
   description:
-    'Pin a comment thread on a review image — at a spot or an area (in percent of the image), or about the whole image — or reply to a thread by its number. Say what should change and where, as a reviewer would; after fixing one, reply with what you did. Shown to people in the review viewer.',
+    'Pin a comment thread on a review image — at a spot or an area (in percent of the image), or about the whole image — or reply to a thread by its number. Say what should change and where, as a reviewer would. Reply to report a fix only when the user asked you to — a write-scoped token is not that permission. Shown in the viewer as an AI agent’s comment (name yourself with agent), for the person whose access you use.',
   input: commentInput,
   output: commentOutput,
   annotations: WRITE,
   async handler(args, ctx) {
     const project = await ctx.project(args.project, { review: ['comment'] });
     const found = await captureOf(project.project.id, project.ref, args.capture);
-    const author = { userId: project.user.id, source: 'mcp' as const };
+    const author = { userId: project.user.id, source: 'mcp' as const, agentName: agentNameFor(args.agent, ctx) };
     let number: number;
     let threadId: string;
     let action: 'created' | 'replied';
@@ -237,6 +239,7 @@ const resolveInput = z.object({
   thread: threadNumber,
   status: z.enum(['resolved', 'open']).optional().describe('resolved (default), or open to reopen it.'),
   comment: z.string().max(MAX_COMMENT_LENGTH).optional().describe('A closing note: what was done, or why it is reopened.'),
+  agent: agentParam,
 });
 
 const resolveOutput = output({ project: z.string(), thread: z.number(), status: z.string(), changed: z.boolean(), url: z.string() });
@@ -262,7 +265,7 @@ export const resolveReviewThread = defineTool({
       status,
       captureId: found.capture.id,
       body: args.comment,
-      author: { userId: project.user.id, source: 'mcp' },
+      author: { userId: project.user.id, source: 'mcp', agentName: agentNameFor(args.agent, ctx) },
     }).catch(asInvalid);
     const url = reviewUrl(project.links, found.runNumber, found.capture, target.number);
     return {

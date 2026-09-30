@@ -28,12 +28,19 @@ export declare const ingestContract: {
         prNumber: z.ZodOptional<z.ZodNumber>;
         prUrl: z.ZodOptional<z.ZodString>;
         prTitle: z.ZodOptional<z.ZodString>;
+        dirty: z.ZodOptional<z.ZodBoolean>;
+        dirtyFiles: z.ZodOptional<z.ZodNumber>;
       }, z.core.$strip>;
       ci: z.ZodObject<{
         provider: z.ZodOptional<z.ZodString>;
         buildUrl: z.ZodOptional<z.ZodString>;
         buildNumber: z.ZodOptional<z.ZodString>;
         job: z.ZodOptional<z.ZodString>;
+        detectedBy: z.ZodOptional<z.ZodEnum<{
+          "ci-env": "ci-env";
+          option: "option";
+          provider: "provider";
+        }>>;
       }, z.core.$strip>;
       system: z.ZodObject<{
         os: z.ZodOptional<z.ZodString>;

@@ -28,7 +28,9 @@ import {
   type ReviewImage,
   type StoryboardMode,
 } from '../../lib/review';
-import { openThreadCount, sortThreads, type ThreadActions, type ThreadFilter } from '../../lib/review-threads';
+import { fixCommentsPrompt } from '../../lib/ai-handoff';
+import { openThreadCount, sortThreads, threadStage, type ReviewThreadView, type ThreadActions, type ThreadFilter } from '../../lib/review-threads';
+import { DebugWithAiMenu } from '../../patterns/debug-with-ai-menu';
 import { DiffHighlight, diffImageSize } from './diff-highlight';
 import { DiffSummary } from './diff-summary';
 import { COMPARE_MODE_LABELS, COMPARE_MODES, ImageCompare, type CompareMode } from './image-compare';
@@ -36,7 +38,7 @@ import { IgnoreRegionsEditor, type IgnoreRect } from './ignore-regions-editor';
 import { FrameToolbar } from './frame-toolbar';
 import { PinLayer, type PinFocusRequest, type ThreadDraft } from './pin-layer';
 import { ScreenFrame } from './screen-frame';
-import { ThreadCompare } from './thread-compare';
+import { ThreadVerify, VerifyDone } from './thread-verify';
 import { ThreadList } from './thread-list';
 import { LibraryStateChip } from '../../patterns/library-state-chip';
 import { captureStates, type LibraryState } from '../../lib/library-views';
@@ -60,6 +62,11 @@ export interface ReviewCommentsProps extends ThreadActions {
   openThread?: number | null;
   /** A thread was opened by a click, or closed: the host may put its number in the URL. */
   onOpenThreadChange?: (number: number | null) => void;
+  /**
+   * Hands comments to the user's AI assistant ("Fix with AI"): the page that
+   * explains connecting one, and the project the prompt names.
+   */
+  assistant?: { setupHref: string; project?: string | null } | null;
 }
 
 /** `changes`: this run's image with the measured changes marked; `ignore`: drawing the areas left out. */
@@ -95,11 +102,20 @@ function seconds(ms: number) {
  * before it — in the library as in a run's review, since a library screen is
  * the newest run's capture and is decided about like one.
  */
-function referenceOf(capture: ReviewCaptureView): { image: ReviewImage; label: string; same: boolean } | null {
-  if (capture.compare) return { image: capture.compare.image, label: capture.compare.label, same: capture.compare.same };
-  if (capture.baseline) return { image: capture.baseline.image, label: `Approved${capture.baseline.runNumber ? ` (#${capture.baseline.runNumber})` : ''}`, same: capture.baseline.same };
-  if (capture.previous) return { image: capture.previous.image, label: `Run #${capture.previous.runNumber}`, same: capture.previous.same };
+function referenceOf(capture: ReviewCaptureView): { captureId: string; image: ReviewImage; label: string; same: boolean } | null {
+  if (capture.compare) return { captureId: capture.compare.captureId, image: capture.compare.image, label: capture.compare.label, same: capture.compare.same };
+  if (capture.baseline)
+    return { captureId: capture.baseline.captureId, image: capture.baseline.image, label: `Approved${capture.baseline.runNumber ? ` (#${capture.baseline.runNumber})` : ''}`, same: capture.baseline.same };
+  if (capture.previous) return { captureId: capture.previous.captureId, image: capture.previous.image, label: `Run #${capture.previous.runNumber}`, same: capture.previous.same };
   return null;
+}
+
+/** The threads of a capture placed on `referenceId` (the image shown beside it), drawn there where they were placed. */
+function onReference(threads: readonly ReviewThreadView[], referenceId: string | undefined) {
+  const here: ReviewThreadView[] = [];
+  const rest: ReviewThreadView[] = [];
+  for (const t of threads) (referenceId && t.origin?.captureId === referenceId ? here : rest).push(t);
+  return { here: here.map((t) => ({ ...t, anchor: t.origin!.anchor })), ghosts: here, rest };
 }
 
 /** How many checkpoints either side of the open one have their images fetched ahead. */
@@ -198,8 +214,10 @@ export function CheckpointViewer({
   const [sideBySideEl, setSideBySideEl] = useState<HTMLDivElement | null>(null);
   const [focus, setFocus] = useState<PinFocusRequest | null>(null);
   const [confirmApprove, setConfirmApprove] = useState(false);
-  // An outdated thread shown beside the version it was made on.
-  const [comparingThreadId, setComparingThreadId] = useState<string | null>(null);
+  // Walking through the comments made on an earlier version: whether, which one, and how many were resolved on the way.
+  const [verifying, setVerifying] = useState(false);
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [verified, setVerified] = useState<ReadonlySet<string>>(() => new Set());
   const approveRef = useRef<HTMLButtonElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   // The dialog mounts its content in a portal after opening; state follows the element itself.
@@ -245,7 +263,11 @@ export function CheckpointViewer({
   const canComment = Boolean(comments.canComment && comments.onCreateThread);
   const threadGroups = shown.map((c) => ({ captureId: c.id, variant: c.variant, threads: c.threads ?? [] }));
   const shownThreads = threadGroups.flatMap((g) => g.threads);
-  const comparedThread = comparingThreadId ? (shownThreads.find((t) => t.id === comparingThreadId && t.origin) ?? null) : null;
+  // The comments to verify: open ones placed on an earlier version (and the one on show, once resolved).
+  const verifyQueue = sortThreads(shownThreads.filter((t) => threadStage(t) === 'verify' || (t.id === verifyingId && t.placement === 'outdated')));
+  // What is left to walk through: open and not resolved here yet, and the one on show.
+  const toWalk = verifyQueue.filter((t) => (t.status === 'open' && !verified.has(t.id)) || t.id === verifyingId);
+  const comparedThread = verifying && verifyingId ? (verifyQueue.find((t) => t.id === verifyingId) ?? null) : null;
   const comparedCapture = comparedThread ? (shown.find((c) => c.threads?.some((t) => t.id === comparedThread.id)) ?? null) : null;
   const threadComparing = Boolean(comparedThread && comparedCapture);
   const frames = (threadComparing ? [comparedCapture!] : comparing && current ? [current] : shown).map((c) => frameFor(frameSettings, c));
@@ -253,7 +275,8 @@ export function CheckpointViewer({
   // Room for the captions above the screens and the stage's padding.
   // Room for the captions above the screens (and, comparing a thread, its banner and comment) and the stage's padding.
   const fitHeight = stackedHeight == null ? stageSize.height - 48 : Math.max(240, stackedHeight * 0.75);
-  const zoom = frameSettings.zoom === 'fit' ? fitZoom(zoomFrames, { width: stageSize.width - 48, height: fitHeight - (threadComparing ? 190 : 28) }) : frameSettings.zoom;
+  const zoom = frameSettings.zoom === 'fit' ? fitZoom(zoomFrames, { width: stageSize.width - 48, height: fitHeight - (threadComparing ? 300 : 28) }) : frameSettings.zoom;
+  const closeUpWidth = Math.min(640, Math.max(240, (stageSize.width - 48 - 24) / 2));
   const pending = new Set(pendingIds);
   const busy = shown.some((c) => pending.has(c.id));
 
@@ -270,7 +293,9 @@ export function CheckpointViewer({
     setComposing(false);
     setConfirmApprove(false);
     setOpenThreadId(null);
-    setComparingThreadId(null);
+    setVerifying(false);
+    setVerifyingId(null);
+    setVerified(new Set());
   }, [selectionKey]);
 
   // A link to a thread (`thread=3`) opens it and brings its pin into view, once its checkpoint is shown.
@@ -290,13 +315,41 @@ export function CheckpointViewer({
     if (opts.focus && id) setFocus((f) => ({ threadId: id, nonce: (f?.nonce ?? 0) + 1, ping: true }));
     comments.onOpenThreadChange?.(id ? (shownThreads.find((t) => t.id === id)?.number ?? null) : null);
   };
-  /** Shows an outdated thread beside the version it was made on, or (the same one again) closes that. */
-  const compareThread = (id: string | null) => {
-    setComparingThreadId(id);
-    if (id) {
-      setPinsHidden(false);
-      openThread(id);
+  /** Walks through the comments to verify, from `id` or the first; `null` stops. */
+  const verify = (id?: string | null) => {
+    if (id === null) {
+      setVerifying(false);
+      setVerifyingId(null);
+      return;
     }
+    const start = id ? verifyQueue.find((t) => t.id === id) : verifyQueue.find((t) => t.status === 'open' && !verified.has(t.id));
+    setVerifying(true);
+    setVerifyingId(start?.id ?? null);
+    setCommenting(false);
+    setDraft(null);
+    setPinsHidden(false);
+    if (start) openThread(start.id);
+  };
+  const stepVerify = (delta: number) => {
+    if (!toWalk.length) return;
+    const i = toWalk.findIndex((t) => t.id === verifyingId);
+    const next = toWalk[(i + delta + toWalk.length) % toWalk.length];
+    setVerifyingId(next.id);
+    openThread(next.id);
+  };
+  /** The comment on show was fixed: resolve it and go on to the next one still open. */
+  const resolveVerified = () => {
+    if (!comparedThread || !comparedCapture || comparedThread.status !== 'open') return;
+    comments.onSetThreadStatus?.({ threadId: comparedThread.id, status: 'resolved', captureId: comparedCapture.id });
+    const done = new Set(verified).add(comparedThread.id);
+    setVerified(done);
+    // Resolved here, whether or not the host has caught up.
+    const rest = verifyQueue.filter((t) => t.status === 'open' && !done.has(t.id));
+    const i = verifyQueue.findIndex((t) => t.id === comparedThread.id);
+    const next = rest.find((t) => verifyQueue.indexOf(t) > i) ?? rest[0] ?? null;
+    setVerifyingId(next?.id ?? null);
+    if (next) openThread(next.id);
+    else openThread(null);
   };
   const stepThread = (delta: number) => {
     if (!listed.length) return;
@@ -388,7 +441,12 @@ export function CheckpointViewer({
         // Out of comment mode first; a second Escape closes the viewer.
         e.stopPropagation();
         toggleCommenting(false);
-      } else if (e.key === 'ArrowRight') move(1);
+      } else if (e.key === 'Escape' && verifying) {
+        e.stopPropagation();
+        verify(null);
+      } else if (verifying && (e.key === ']' || e.key === '[')) stepVerify(e.key === ']' ? 1 : -1);
+      else if (verifying && key === 'e' && canComment && comparedThread?.status === 'open') resolveVerified();
+      else if (e.key === 'ArrowRight') move(1);
       else if (e.key === 'ArrowLeft') move(-1);
       else if (e.key === 'ArrowDown') moveFlow(1);
       else if (e.key === 'ArrowUp') moveFlow(-1);
@@ -400,7 +458,7 @@ export function CheckpointViewer({
       else if (e.key === ']') stepThread(1);
       else if (e.key === '[') stepThread(-1);
       else if (key === 'h' && shownThreads.length) setPinsHidden((h) => !h);
-      else if (key === 'o' && (comparedThread || shownThreads.find((t) => t.id === openThreadId)?.origin)) compareThread(comparedThread ? null : openThreadId);
+      else if (key === 'o' && (verifying || verifyQueue.length)) verify(verifying ? null : (verifyQueue.find((t) => t.id === openThreadId)?.id ?? undefined));
       else if (key === 'e' && canComment && openThreadId && comments.onSetThreadStatus) {
         const t = shownThreads.find((x) => x.id === openThreadId);
         if (t) comments.onSetThreadStatus({ threadId: t.id, status: t.status === 'open' ? 'resolved' : 'open', captureId: threadGroups.find((g) => g.threads.includes(t))?.captureId });
@@ -417,14 +475,31 @@ export function CheckpointViewer({
 
   const label = pos ? checkpointLabel(pos.checkpoint.name, pos.checkpoint.title) : '';
 
-  /** The pins of one capture on its frame. */
-  const pinLayer = (capture: ReviewCaptureView, name: string) =>
+  const assistant = comments.assistant ?? null;
+  const screenName = pos ? `${pos.flow.titlePath.join(' › ')} › ${label}` : label;
+  /** "Fix with AI" for some comments of a capture. */
+  const aiMenu = (captureId: string, threads: readonly ReviewThreadView[], opts: { iconOnly?: boolean; label?: string } = {}) =>
+    assistant && threads.length ? (
+      <DebugWithAiMenu
+        prompt={fixCommentsPrompt({ captureId, threads: threads.map((t) => t.number), project: assistant.project, screen: `${screenName} (${shown.find((c) => c.id === captureId)?.variant ?? ''})` })}
+        setupHref={assistant.setupHref}
+        label={opts.label ?? 'Fix with AI'}
+        size="xs"
+        iconOnly={opts.iconOnly}
+      />
+    ) : null;
+
+  /** The pins of one capture on its frame; `on` draws only some of its threads (the rest are on the image beside it). */
+  const pinLayer = (capture: ReviewCaptureView, name: string, on?: { threads: readonly ReviewThreadView[]; ghosts?: readonly ReviewThreadView[]; origin?: boolean }) =>
     pinsOn && (canComment || capture.threads?.length) ? (
       <PinLayer
         captureId={capture.id}
-        threads={capture.threads ?? []}
+        threads={on?.threads ?? capture.threads ?? []}
+        ghosts={on?.ghosts}
+        onOrigin={on?.origin}
+        renderActions={(t) => (t.status === 'open' ? aiMenu(capture.id, [t], { iconOnly: true, label: `Fix comment ${t.number} with AI` }) : null)}
         label={name}
-        commenting={commenting && canComment}
+        commenting={commenting && canComment && !on?.origin}
         showResolved={threadFilter !== 'open'}
         hidden={pinsHidden}
         openThreadId={openThreadId}
@@ -433,7 +508,7 @@ export function CheckpointViewer({
           if (id === null && from && from !== openThreadId) return;
           openThread(id);
         }}
-        draft={draft}
+        draft={on?.origin ? null : draft}
         onDraftChange={setDraft}
         focus={focus}
         now={comments.now}
@@ -445,7 +520,7 @@ export function CheckpointViewer({
         onSetThreadStatus={comments.onSetThreadStatus}
         onEditComment={comments.onEditComment}
         onDeleteComment={comments.onDeleteComment}
-        onCompareThread={(id) => compareThread(id)}
+        onCompareThread={(id) => verify(id)}
       />
     ) : null;
 
@@ -489,7 +564,19 @@ export function CheckpointViewer({
                 {captures.length > 1 ? <ToggleGroupItem value="all">All</ToggleGroupItem> : null}
               </ToggleGroup>
               {current && reference ? (
-                <ToggleGroup variant="segment" size="sm" value={[effectiveStage]} onValueChange={(v) => v[0] && setStage(v[0] as StageMode)} aria-label="Comparison">
+                <ToggleGroup
+                  variant="segment"
+                  size="sm"
+                  value={verifying ? [] : [effectiveStage]}
+                  onValueChange={(v) => {
+                    // A comparison mode leaves the walk through the comments to verify.
+                    const next = v[0] ?? (verifying ? effectiveStage : null);
+                    if (!next) return;
+                    setVerifying(false);
+                    setStage(next as StageMode);
+                  }}
+                  aria-label="Comparison"
+                >
                   <ToggleGroupItem value="image">Image</ToggleGroupItem>
                   {hasChanges ? <ToggleGroupItem value="changes">Changes</ToggleGroupItem> : null}
                   {COMPARE_MODES.map((m) => (
@@ -566,19 +653,42 @@ export function CheckpointViewer({
                     commenting && 'shadow-[inset_0_0_0_2px_var(--accent-solid)]',
                   )}
                 >
-                  {comparedThread && comparedCapture ? (
-                    <ThreadCompare
+                  {verifying && comparedThread && comparedCapture ? (
+                    <ThreadVerify
                       thread={comparedThread}
+                      index={Math.max(0, toWalk.indexOf(comparedThread))}
+                      total={toWalk.length}
+                      captureId={comparedCapture.id}
                       image={comparedCapture.image}
                       frame={frames[0]}
                       zoom={zoom}
+                      closeUpWidth={closeUpWidth}
                       label={label}
-                      currentLabel={library ? `Now${comparedCapture.runNumber ? ` · run #${comparedCapture.runNumber}` : ''}` : 'This run'}
+                      currentLabel={`Now${comparedCapture.runNumber ? ` · run #${comparedCapture.runNumber}` : library ? '' : ' · this run'}`}
                       now={comments.now}
+                      viewerId={comments.viewerId}
+                      canComment={canComment}
+                      canModerate={comments.canModerate}
                       currentOverlay={pinLayer(comparedCapture, `${label}, now`)}
-                      canResolve={canComment && Boolean(comments.onSetThreadStatus)}
-                      onResolve={() => comments.onSetThreadStatus?.({ threadId: comparedThread.id, status: 'resolved', captureId: comparedCapture.id })}
-                      onClose={() => compareThread(null)}
+                      onResolve={comments.onSetThreadStatus ? resolveVerified : undefined}
+                      onStep={(d) => stepVerify(d)}
+                      onClose={() => verify(null)}
+                      actions={comparedThread.status === 'open' ? aiMenu(comparedCapture.id, [comparedThread], { iconOnly: true, label: `Fix comment ${comparedThread.number} with AI` }) : null}
+                      onReply={comments.onReply}
+                      onEditComment={comments.onEditComment}
+                      onDeleteComment={comments.onDeleteComment}
+                    />
+                  ) : verifying ? (
+                    <VerifyDone
+                      count={verified.size}
+                      onClose={() => verify(null)}
+                      next={
+                        deciding && shown.some((c) => NEEDS_REVIEW.includes(c.status)) ? (
+                          <Button size="sm" disabled={busy} onClick={approve}>
+                            <Check /> {shown.length > 1 ? `Approve ${shown.length} images` : 'Approve the screen'}
+                          </Button>
+                        ) : null
+                      }
                     />
                   ) : current && effectiveStage === 'changes' && diff ? (
                     <div className="flex min-w-max justify-center">
@@ -603,23 +713,38 @@ export function CheckpointViewer({
                     />
                   ) : current && reference && effectiveStage !== 'image' ? (
                     effectiveStage === 'side-by-side' ? (
-                      <div ref={setSideBySideEl} className="flex min-w-max items-start justify-center gap-6">
-                        {[
-                          { key: 'reference', title: reference.label, image: reference.image },
-                          { key: 'current', title: 'This run', image: current.image },
-                        ].map((side) => (
-                          <figure key={side.key} className="flex flex-col gap-1.5">
-                            <figcaption className="text-label-s text-muted-foreground">{side.title}</figcaption>
-                            <ScreenFrame
-                              image={side.image}
-                              frame={frames[0]}
-                              zoom={zoom}
-                              alt={`${label} — ${side.title}`}
-                              overlay={side.key === 'current' && pinLayer(current, `${label}, this run`) ? () => pinLayer(current, `${label}, this run`) : undefined}
-                            />
-                          </figure>
-                        ))}
-                      </div>
+                      (() => {
+                        // A comment placed on the image shown on the left is drawn there, where it was placed; the right shows where it lands now.
+                        const split = onReference(current.threads ?? [], reference.captureId);
+                        const currentTitle = library ? (current.compare || !current.runNumber ? 'This one' : `Run #${current.runNumber}`) : 'This run';
+                        const sides = [
+                          {
+                            key: 'reference',
+                            title: reference.label,
+                            note: split.here.length ? `${split.here.length} ${split.here.length === 1 ? 'comment' : 'comments'} made here` : null,
+                            image: reference.image,
+                            overlay: split.here.length ? pinLayer(current, `${label}, ${reference.label}`, { threads: split.here, origin: true }) : null,
+                          },
+                          { key: 'current', title: currentTitle, note: null, image: current.image, overlay: pinLayer(current, `${label}, ${currentTitle}`, { threads: split.rest, ghosts: split.ghosts }) },
+                        ];
+                        return (
+                          <div ref={setSideBySideEl} className="flex min-w-max items-start justify-center gap-6">
+                            {sides.map((side) => (
+                              <figure key={side.key} className="flex flex-col gap-1.5">
+                                <figcaption className="flex items-center gap-2 text-label-s text-muted-foreground">
+                                  {side.title}
+                                  {side.note ? (
+                                    <span className="inline-flex items-center gap-1 text-label-xs text-accent-text">
+                                      <History aria-hidden className="size-3" /> {side.note}
+                                    </span>
+                                  ) : null}
+                                </figcaption>
+                                <ScreenFrame image={side.image} frame={frames[0]} zoom={zoom} alt={`${label} — ${side.title}`} overlay={side.overlay ? () => side.overlay : undefined} />
+                              </figure>
+                            ))}
+                          </div>
+                        );
+                      })()
                     ) : (
                       <div role="region" aria-label={`${label}, comparison`} tabIndex={0} className="mx-auto overflow-x-hidden overflow-y-auto rounded-md ring-1 ring-border outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40" style={{ width: frames[0].width * zoom, height: frames[0].height * zoom + (effectiveStage === 'slider' ? 0 : 40) }}>
                         <ImageCompare current={current.image} reference={reference.image} mode={effectiveStage as CompareMode} referenceLabel={reference.label} currentLabel={library ? (current.compare || !current.runNumber ? 'This one' : `Run #${current.runNumber}`) : 'This run'} alt={label} />
@@ -668,6 +793,20 @@ export function CheckpointViewer({
                   ) : null}
                   {pos.checkpoint.description ? <p className="text-sm text-pretty">{pos.checkpoint.description}</p> : null}
                   {current?.decision ? <DecisionNote capture={current} /> : null}
+                  {current?.request ? (
+                    <ChangeRequestNote
+                      request={current.request}
+                      onPin={canComment ? () => toggleCommenting(true) : undefined}
+                      onCompare={
+                        !current.request.onThisImage && reference && reference.captureId === current.request.captureId
+                          ? () => {
+                              setVerifying(false);
+                              setStage('side-by-side');
+                            }
+                          : undefined
+                      }
+                    />
+                  ) : null}
                   {current && reference && diff && !reference.same ? (
                     <DiffSummary diff={diff} referenceLabel={reference.label} />
                   ) : current && reference ? (
@@ -743,7 +882,8 @@ export function CheckpointViewer({
                     onSetThreadStatus={comments.onSetThreadStatus}
                     onEditComment={comments.onEditComment}
                     onDeleteComment={comments.onDeleteComment}
-                    onCompareThread={(id) => compareThread(id)}
+                    onVerify={(id) => verify(id)}
+                    headerActions={current ? aiMenu(current.id, (current.threads ?? []).filter((t) => threadStage(t) === 'waiting')) : null}
                   />
                 ) : null}
 
@@ -892,7 +1032,7 @@ const SHORTCUTS: [string[], string][] = [
   [['[', ']'], 'Previous / next comment'],
   [['E'], 'Resolve or reopen the open comment'],
   [['H'], 'Hide or show the pins'],
-  [['O'], 'Compare the open comment with the version it was made on'],
+  [['O'], 'Verify the comments made on an earlier version'],
   [['L'], 'Side by side: scroll both screens together, or apart'],
   [['Esc'], 'Leave comment mode, then close'],
 ];
@@ -913,6 +1053,37 @@ function DecisionNote({ capture }: { capture: ReviewCaptureView }) {
       </p>
       {/* A change request's comment lives on as a thread below. */}
       {d.comment && d.decision === 'approved' ? <p className="mt-1 text-sm text-pretty whitespace-pre-wrap">{d.comment}</p> : null}
+    </div>
+  );
+}
+
+/**
+ * "Changes requested" without a comment: nobody said what, and no thread
+ * carries it — so it is spelled out here, on the image asked about (pin what
+ * should change) and on a newer one (compare it with the image asked about).
+ */
+function ChangeRequestNote({ request, onPin, onCompare }: { request: NonNullable<ReviewCaptureView['request']>; onPin?: () => void; onCompare?: () => void }) {
+  const who = `${request.by ?? 'Someone'}${request.runNumber ? ` (run #${request.runNumber})` : ''}`;
+  return (
+    <div role="note" className={cn('flex flex-col gap-2 rounded-md border p-2.5 text-xs', request.onThisImage ? 'border-danger-border bg-danger-subtle text-danger-text' : 'border-info-border bg-info-subtle text-info-text')}>
+      <p className="flex items-start gap-1.5">
+        {request.onThisImage ? <MessageSquareWarning aria-hidden className="mt-px size-3.5 shrink-0" /> : <History aria-hidden className="mt-px size-3.5 shrink-0" />}
+        <span>
+          {request.onThisImage
+            ? `${who} asked for changes to this image without saying what.`
+            : `${who} asked for changes to an earlier version of this screen, without a comment. It changed since: check whether it is what was asked.`}
+        </span>
+      </p>
+      {request.onThisImage && onPin ? (
+        <Button size="xs" variant="outline" className="self-start bg-surface" onClick={onPin}>
+          Pin what should change
+        </Button>
+      ) : null}
+      {!request.onThisImage && onCompare ? (
+        <Button size="xs" variant="outline" className="self-start bg-surface" onClick={onCompare}>
+          Compare with the version asked about
+        </Button>
+      ) : null}
     </div>
   );
 }

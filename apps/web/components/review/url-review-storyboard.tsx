@@ -276,6 +276,8 @@ export function useReviewActions({
     viewerId,
     openThread,
     onOpenThreadChange,
+    // "Fix with AI" hands open comments to the user's assistant, which reads them through the MCP server.
+    assistant: { setupHref: '/account/ai', project: `${team}/${project}` },
     onCreateThread: (input: NewThreadInput) => commentAction({ type: 'create', input, tempId: temp() }, () => createReviewThread(ref, input)),
     onReply: (input: ThreadReplyInput) => commentAction({ type: 'reply', input, tempId: temp() }, () => replyToReviewThread(ref, input)),
     onSetThreadStatus: (input: ThreadStatusInput) =>

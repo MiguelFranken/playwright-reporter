@@ -1,4 +1,4 @@
-import { Clock, ExternalLink, GitBranch, GitCommitHorizontal, GitPullRequest, Server, Tag, User } from 'lucide-react';
+import { Clock, ExternalLink, FilePen, GitBranch, GitCommitHorizontal, GitPullRequest, Server, Tag, User } from 'lucide-react';
 import { Link } from '../../provider';
 import { CountsBar } from '../../patterns/counts-bar';
 import { Skeleton } from '../../components/skeleton';
@@ -8,6 +8,7 @@ import type { RunCounts } from '../../patterns/counts-bar';
 import type { AnyStatus } from '../../lib/tone';
 import { formatDateTime, formatDuration, formatRelative } from '../../lib/format';
 import { pullRequestNoun, pullRequestRef } from '../../lib/pull-request';
+import { isCiFlagOnly, uncommittedLabel, type ExecutorSource } from '../../lib/provenance';
 
 /**
  * Exactly the fields the header reads — it used to take a whole database row
@@ -39,6 +40,11 @@ export interface RunHeaderData {
   prTitle?: string | null;
   /** When the reporter was last heard from; explains an abandoned run. */
   lastEventAt?: Date | null;
+  /** How the reporter decided `executor`; absent for runs from older reporters. */
+  executorDetectedBy?: ExecutorSource | null;
+  /** Whether the checkout had uncommitted changes to tracked files; null when unknown. */
+  gitDirty?: boolean | null;
+  gitDirtyFiles?: number | null;
 }
 
 export interface RunHeaderShard {
@@ -81,6 +87,15 @@ export function RunHeader({
   const shaHref = run.gitCommitUrl;
   const showShards = run.shardTotal > 1 || shards.length > 1;
   const duration = run.durationMs ?? (run.status === 'running' ? now.getTime() - run.startedAt.getTime() : null);
+  const provenance = {
+    executor: run.executor,
+    ciProvider: run.ciProvider,
+    executorDetectedBy: run.executorDetectedBy,
+    dirty: run.gitDirty,
+    dirtyFiles: run.gitDirtyFiles,
+  };
+  const uncommitted = uncommittedLabel(provenance);
+  const ciFlagOnly = isCiFlagOnly(provenance);
 
   return (
     <div className="flex flex-col gap-4">
@@ -148,6 +163,21 @@ export function RunHeader({
           <Badge variant="outline" className="uppercase">
             {run.executor}
           </Badge>
+          {ciFlagOnly ? (
+            <span title="The CI variable was set, but no known CI provider was detected: a local wrapper script may have set it.">
+              CI flag set · provider unknown
+            </span>
+          ) : null}
+          {uncommitted ? (
+            <Badge
+              variant="outline"
+              className="border-warning-border bg-warning-subtle text-warning-text"
+              title={`The working tree had uncommitted changes${sha ? ` on top of ${sha}` : ''}: the results may not match the commit.`}
+            >
+              <FilePen aria-hidden />
+              {uncommitted}
+            </Badge>
+          ) : null}
           {run.ciBuildUrl ? (
             <a href={run.ciBuildUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:text-foreground hover:underline">
               <Server className="size-3.5" />

@@ -73,6 +73,53 @@ export const WithMergeRequest: Story = {
   },
 };
 
+/**
+ * A local run with uncommitted fixes on top of its commit: two such runs share a
+ * SHA, so the badge is what tells them apart from the committed code.
+ */
+export const UncommittedChanges: Story = {
+  args: {
+    run: { ...runHeader, executor: 'local', ciProvider: null, ciBuildNumber: null, ciBuildUrl: null, executorDetectedBy: null, gitDirty: true, gitDirtyFiles: 3 },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('Uncommitted changes (3 files)')).toBeVisible();
+    await expect(canvas.queryByText(/CI flag set/)).toBeNull();
+  },
+};
+
+/** A local wrapper exported `CI=true`: labelled CI, but no provider stands behind it. */
+export const CiFlagOnly: Story = {
+  args: {
+    run: {
+      ...runHeader,
+      ciProvider: 'unknown',
+      ciBuildNumber: null,
+      ciBuildUrl: null,
+      executorDetectedBy: 'ci-env',
+      gitDirty: true,
+      gitDirtyFiles: 1,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('CI flag set · provider unknown')).toBeVisible();
+    await expect(canvas.getByText('Uncommitted changes (1 file)')).toBeVisible();
+  },
+};
+
+/** A committed CI run, and one from a reporter too old to say: neither shows a provenance warning. */
+export const CleanOrUnknownProvenance: Story = {
+  args: {
+    run: { ...runHeader, executorDetectedBy: 'provider', gitDirty: false, gitDirtyFiles: 0 },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.queryByText(/Uncommitted changes/)).toBeNull();
+    await expect(canvas.queryByText(/CI flag set/)).toBeNull();
+  },
+};
+
 export const Interrupted: Story = {
   args: {
     run: { ...runHeader, status: 'interrupted' },

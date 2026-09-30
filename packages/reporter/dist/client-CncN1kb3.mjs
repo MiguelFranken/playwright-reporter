@@ -1,7 +1,7 @@
-const require_dist = require("./dist-DdBwzinA.cjs");
-let zod = require("zod");
-let node_fs_promises = require("node:fs/promises");
-let node_zlib = require("node:zlib");
+import { _ as uploadUrlsRequestSchema, c as eventBatchResponseSchema, d as runFinishResponseSchema, f as runFinishSchema, g as runStartSchema, h as runStartResponseSchema, l as eventBatchSchema, m as runHeartbeatSchema, o as completeUploadRequestSchema, p as runHeartbeatResponseSchema, r as PROTOCOL_HEADER, s as completeUploadResponseSchema, v as uploadUrlsResponseSchema } from "./dist-D7tL4Myv.mjs";
+import { z } from "zod";
+import { readFile } from "node:fs/promises";
+import { gzipSync } from "node:zlib";
 //#region ../../node_modules/.store/@standard-server+shared@0.9.2/node_modules/@standard-server/shared/dist/index.mjs
 function toArray(value) {
 	return Array.isArray(value) ? value : value === void 0 || value === null ? [] : [value];
@@ -2268,7 +2268,7 @@ var OpenAPILink = class extends StandardLink {
 * Paths are relative to `/api/ingest` (`INGEST_PREFIX`).
 */
 const INGEST_PREFIX = "/api/ingest";
-const runId = { runId: zod.z.string().describe("The run id `POST /runs` answered with.") };
+const runId = { runId: z.string().describe("The run id `POST /runs` answered with.") };
 const ingestContract = {
 	runs: {
 		start: oc.meta(openapi({
@@ -2276,37 +2276,37 @@ const ingestContract = {
 			path: "/runs",
 			successStatus: 201,
 			summary: "Start a run, or join it as another shard"
-		})).input(require_dist.runStartSchema).output(require_dist.runStartResponseSchema),
+		})).input(runStartSchema).output(runStartResponseSchema),
 		events: oc.meta(openapi({
 			method: "POST",
 			path: "/runs/{runId}/events",
 			summary: "Send a batch of test events"
-		})).input(require_dist.eventBatchSchema.extend(runId)).output(require_dist.eventBatchResponseSchema),
+		})).input(eventBatchSchema.extend(runId)).output(eventBatchResponseSchema),
 		heartbeat: oc.meta(openapi({
 			method: "POST",
 			path: "/runs/{runId}/heartbeat",
 			summary: "Tell the server the run is alive"
-		})).input(require_dist.runHeartbeatSchema.extend(runId)).output(require_dist.runHeartbeatResponseSchema),
+		})).input(runHeartbeatSchema.extend(runId)).output(runHeartbeatResponseSchema),
 		finish: oc.meta(openapi({
 			method: "POST",
 			path: "/runs/{runId}/finish",
 			summary: "Finish a shard of the run"
-		})).input(require_dist.runFinishSchema.extend(runId)).output(require_dist.runFinishResponseSchema)
+		})).input(runFinishSchema.extend(runId)).output(runFinishResponseSchema)
 	},
 	attachments: {
 		uploadUrls: oc.meta(openapi({
 			method: "POST",
 			path: "/runs/{runId}/attachments/upload-urls",
 			summary: "Where to upload attachments"
-		})).input(require_dist.uploadUrlsRequestSchema.extend(runId)).output(require_dist.uploadUrlsResponseSchema),
+		})).input(uploadUrlsRequestSchema.extend(runId)).output(uploadUrlsResponseSchema),
 		complete: oc.meta(openapi({
 			method: "POST",
 			path: "/runs/{runId}/attachments/{attachmentId}/complete",
 			summary: "Confirm a presigned upload"
-		})).input(require_dist.completeUploadRequestSchema.extend({
+		})).input(completeUploadRequestSchema.extend({
 			...runId,
-			attachmentId: zod.z.string()
-		})).output(require_dist.completeUploadResponseSchema)
+			attachmentId: z.string()
+		})).output(completeUploadResponseSchema)
 	}
 };
 //#endregion
@@ -2343,7 +2343,7 @@ function gzipLargeBody(init) {
 	return {
 		...init,
 		headers,
-		body: new Blob([new Uint8Array((0, node_zlib.gzipSync)(init.body))])
+		body: new Blob([new Uint8Array(gzipSync(init.body))])
 	};
 }
 /**
@@ -2358,7 +2358,7 @@ function createIngestApi(opts, log = () => void 0) {
 		url: INGEST_PREFIX,
 		headers: {
 			authorization: `Bearer ${opts.token}`,
-			[require_dist.PROTOCOL_HEADER]: String(1)
+			[PROTOCOL_HEADER]: String(1)
 		},
 		fetch: (url, init) => globalThis.fetch(url, {
 			...gzipLargeBody(init),
@@ -2430,7 +2430,7 @@ var IngestClient = class {
 	* presigned storage URL, as the upload instruction says.
 	*/
 	async upload(instruction, source, contentType) {
-		const data = source.body ?? (source.path ? await (0, node_fs_promises.readFile)(source.path) : void 0);
+		const data = source.body ?? (source.path ? await readFile(source.path) : void 0);
 		if (!data) throw new Error("attachment has neither path nor body");
 		const headers = {
 			"content-type": contentType,
@@ -2452,23 +2452,6 @@ var IngestClient = class {
 	}
 };
 //#endregion
-Object.defineProperty(exports, "HttpError", {
-	enumerable: true,
-	get: function() {
-		return HttpError;
-	}
-});
-Object.defineProperty(exports, "IngestClient", {
-	enumerable: true,
-	get: function() {
-		return IngestClient;
-	}
-});
-Object.defineProperty(exports, "createIngestApi", {
-	enumerable: true,
-	get: function() {
-		return createIngestApi;
-	}
-});
+export { IngestClient as n, createIngestApi as r, HttpError as t };
 
-//# sourceMappingURL=client-B8xvHKi_.cjs.map
+//# sourceMappingURL=client-CncN1kb3.mjs.map

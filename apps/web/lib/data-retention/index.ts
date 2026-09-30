@@ -46,6 +46,7 @@ import {
   type DataSweep,
 } from '@/lib/db/schema';
 import { getStorage, type StorageAdapter } from '@/lib/storage';
+import { holdsKeptVisual } from '@/lib/storage/retention/kept';
 import { ingestSweepDue } from '@/lib/sweeps/continuation';
 import { EXPIRED_GRACE_DAYS, INGEST_SWEEP_INTERVAL_MS, RATE_LIMIT_MAX_AGE_MS, SWEEP_LOG_DAYS, ingestSweepEnabled } from './config';
 import { cutoffs, environmentPolicy, normalizePolicy, type DataRetentionPolicy, type PolicySource } from './policy';
@@ -107,10 +108,15 @@ function deletable(driver: string): SQL {
   )`;
 }
 
-/** Runs the policy says have run out, over Drizzle-qualified columns. */
+/**
+ * Runs the policy says have run out, over Drizzle-qualified columns. A run
+ * holding a review visual retention keeps — a baseline, a screen the library
+ * shows, a flow with an open thread (`lib/storage/retention/kept`) — is not
+ * due: deleting it would take those captures with it.
+ */
 export function runsDueWhere(policy: DataRetentionPolicy, driver: string, now: Date = new Date()): SQL {
   const { runs: before } = cutoffs(policy, now);
-  const due = and(deletable(driver), lt(runs.startedAt, before))!;
+  const due = and(deletable(driver), lt(runs.startedAt, before), sql`not ${holdsKeptVisual(runs.id, true)}`)!;
   if (policy.keepLatestRuns === 0) return due;
   // Older than the project's Nth newest run. A project with fewer runs than
   // that has no Nth, the comparison is null, and nothing of it is due.

@@ -1,19 +1,24 @@
 'use client';
 
-import { Check, Columns2, History, MessageSquare, MessageSquarePlus, RotateCcw } from 'lucide-react';
+import { ArrowRight, Bot, Check, Columns2, History, MessageSquare, MessageSquarePlus, RotateCcw } from 'lucide-react';
 import { Button } from '../../components/button';
 import { Kbd } from '../../components/kbd';
 import { SegmentedControl } from '../../components/segmented-control';
 import { cn } from '../../lib/cn';
 import { formatRelative } from '../../lib/format';
 import {
+  commentAuthorName,
+  isAgentComment,
   matchesThreadFilter,
   openingComment,
   replies,
   sortThreads,
   THREAD_FILTER_LABELS,
   THREAD_FILTERS,
+  THREAD_STAGE_LABELS,
+  threadStage,
   type ReviewThreadView,
+  type ThreadStage,
   type ThreadActions,
   type ThreadFilter,
 } from '../../lib/review-threads';
@@ -47,8 +52,18 @@ export interface ThreadListProps extends ThreadActions {
   viewerId?: string | null;
   canComment?: boolean;
   canModerate?: boolean;
+  /** Walk through the comments to verify, one by one; `threadId` starts at that one. */
+  onVerify?: (threadId?: string) => void;
+  /** Beside the heading: a hand-off of the open comments to an AI assistant. */
+  headerActions?: React.ReactNode;
   className?: string;
 }
+
+const STAGE_HINTS: Record<ThreadStage, string> = {
+  verify: 'The screen changed since these were made.',
+  waiting: 'Nothing changed where these point yet.',
+  resolved: '',
+};
 
 /**
  * Every thread of the images on screen, as a list: open ones first, by
@@ -79,6 +94,8 @@ export function ThreadList({
   onEditComment,
   onDeleteComment,
   onCompareThread,
+  onVerify,
+  headerActions,
   className,
 }: ThreadListProps) {
   const all = groups.flatMap((g) => g.threads);
@@ -87,6 +104,7 @@ export function ThreadList({
   const several = groups.length > 1;
   const threadProps = { now, viewerId, canComment, canModerate, onReply, onSetThreadStatus, onEditComment, onDeleteComment, onCompareThread };
   const target = groups.length === 1 ? groups[0] : null;
+  const toVerify = all.filter((t) => threadStage(t) === 'verify');
 
   return (
     <section className={cn('flex flex-col gap-3', className)} aria-labelledby="review-threads-heading">
@@ -94,15 +112,33 @@ export function ThreadList({
         <h2 id="review-threads-heading" className="text-label-m">
           Comments
         </h2>
-        {canComment && onCommentingChange ? (
-          <Button size="xs" variant={commenting ? 'default' : 'outline'} aria-pressed={commenting} aria-keyshortcuts="C" onClick={() => onCommentingChange(!commenting)}>
-            <MessageSquarePlus /> Comment
-            <Kbd aria-hidden className={cn('ml-0.5 h-4 min-w-4 text-[10px]', commenting && 'bg-primary-foreground/20 text-primary-foreground')}>
-              C
-            </Kbd>
-          </Button>
-        ) : null}
+        <div className="flex items-center gap-1.5">
+          {headerActions}
+          {canComment && onCommentingChange ? (
+            <Button size="xs" variant={commenting ? 'default' : 'outline'} aria-pressed={commenting} aria-keyshortcuts="C" onClick={() => onCommentingChange(!commenting)}>
+              <MessageSquarePlus /> Comment
+              <Kbd aria-hidden className={cn('ml-0.5 h-4 min-w-4 text-[10px]', commenting && 'bg-primary-foreground/20 text-primary-foreground')}>
+                C
+              </Kbd>
+            </Button>
+          ) : null}
+        </div>
       </header>
+
+      {toVerify.length > 0 && onVerify ? (
+        <div className="flex animate-rise-in items-center gap-2.5 rounded-lg border border-info-border bg-info-subtle p-2.5 text-info-text">
+          <History aria-hidden className="size-4 shrink-0" />
+          <p className="min-w-0 flex-1 text-label-xs">
+            <span className="block text-label-s">
+              {toVerify.length} {toVerify.length === 1 ? 'comment' : 'comments'} to verify
+            </span>
+            The screen changed since {toVerify.length === 1 ? 'it was' : 'they were'} made. Was {toVerify.length === 1 ? 'it' : 'each'} fixed?
+          </p>
+          <Button size="xs" onClick={() => onVerify()} aria-keyshortcuts="O">
+            Verify <ArrowRight />
+          </Button>
+        </div>
+      ) : null}
 
       {commenting ? (
         <p className="animate-rise-in rounded-md bg-accent-subtle px-2.5 py-2 text-label-xs text-accent-text">
@@ -135,31 +171,44 @@ export function ThreadList({
       {groups.map((g) => {
         const shown = sortThreads(g.threads.filter((t) => matchesThreadFilter(t, filter)));
         if (!shown.length && several) return null;
+        const stages = (['verify', 'waiting', 'resolved'] as const).map((stage) => ({ stage, threads: shown.filter((t) => threadStage(t) === stage) })).filter((s) => s.threads.length);
+        // Sections only when they tell threads apart.
+        const sectioned = stages.length > 1;
         return (
-          <div key={g.captureId} className="flex flex-col gap-1">
+          <div key={g.captureId} className="flex flex-col gap-2">
             {several ? <h3 className="text-label-xs text-muted-foreground capitalize">{g.variant}</h3> : null}
-            <ol className="flex flex-col gap-1">
-              {shown.map((t) => (
-                <li key={t.id}>
-                  <ThreadRow
-                    thread={t}
-                    captureId={g.captureId}
-                    now={now}
-                    open={openThreadId === t.id}
-                    canComment={canComment}
-                    onOpen={() => onOpenThreadChange?.(openThreadId === t.id ? null : t.id)}
-                    onHighlight={onHighlight}
-                    onSetThreadStatus={onSetThreadStatus}
-                    onCompare={onCompareThread}
-                  />
-                  {openThreadId === t.id && t.anchor.kind === 'image' ? (
-                    <div className="mt-1 animate-rise-in rounded-lg border border-border bg-surface p-3">
-                      <ThreadView thread={t} captureId={g.captureId} {...threadProps} autoFocusReply />
-                    </div>
-                  ) : null}
-                </li>
-              ))}
-            </ol>
+            {stages.map(({ stage, threads }) => (
+              <div key={stage} className="flex flex-col gap-1">
+                {sectioned ? (
+                  <p className="flex items-baseline gap-1.5 px-2 text-label-xs text-muted-foreground" title={STAGE_HINTS[stage] || undefined}>
+                    <span className="text-label-s text-foreground">{THREAD_STAGE_LABELS[stage]}</span>
+                    <span className="tabular-nums">{threads.length}</span>
+                  </p>
+                ) : null}
+                <ol className="flex flex-col gap-1" aria-label={sectioned ? THREAD_STAGE_LABELS[stage] : undefined}>
+                  {threads.map((t) => (
+                    <li key={t.id}>
+                      <ThreadRow
+                        thread={t}
+                        captureId={g.captureId}
+                        now={now}
+                        open={openThreadId === t.id}
+                        canComment={canComment}
+                        onOpen={() => onOpenThreadChange?.(openThreadId === t.id ? null : t.id)}
+                        onHighlight={onHighlight}
+                        onSetThreadStatus={onSetThreadStatus}
+                        onCompare={onVerify ?? onCompareThread}
+                      />
+                      {openThreadId === t.id && t.anchor.kind === 'image' ? (
+                        <div className="mt-1 animate-rise-in rounded-lg border border-border bg-surface p-3">
+                          <ThreadView thread={t} captureId={g.captureId} {...threadProps} autoFocusReply />
+                        </div>
+                      ) : null}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ))}
           </div>
         );
       })}
@@ -229,8 +278,12 @@ function ThreadRow({
   const first = openingComment(thread);
   const answers = replies(thread);
   const resolved = thread.status === 'resolved';
-  const people = [...new Map(answers.filter((c) => c.author).map((c) => [c.author!.name, c.author!])).values()].slice(0, 3);
-  const name = first?.author?.name ?? 'AI assistant';
+  // People who replied; an agent's reply is the agent's, said on its own below.
+  const people = [...new Map(answers.filter((c) => c.author && !isAgentComment(c)).map((c) => [c.author!.name, c.author!])).values()].slice(0, 3);
+  const name = commentAuthorName(first);
+  // The newest reply, when an agent wrote it: what it says it changed is what a reviewer checks next.
+  const last = answers.at(-1);
+  const agentReply = last && isAgentComment(last) ? last : null;
   return (
     <div
       className={cn(
@@ -265,10 +318,19 @@ function ThreadRow({
         </span>
         <span className="flex items-center gap-1.5 text-label-xs text-muted-foreground">
           <span className="truncate text-label-s text-foreground">{name}</span>
+          {first && isAgentComment(first) ? <span className="shrink-0">agent</span> : null}
           <span aria-hidden>·</span>
           <span className="shrink-0">{thread.pending ? 'Posting…' : formatRelative(first?.at ?? thread.createdAt, { now })}</span>
         </span>
         <span className="mt-0.5 line-clamp-2 text-sm text-pretty break-words">{first?.body ?? ''}</span>
+        {agentReply ? (
+          <span className="mt-1 flex items-start gap-1.5 rounded-md bg-accent-subtle/60 px-1.5 py-1 text-label-xs text-accent-text">
+            <Bot aria-hidden className="mt-px size-3 shrink-0" />
+            <span className="min-w-0 line-clamp-2">
+              <span className="text-label-xs">{commentAuthorName(agentReply)} replied:</span> {agentReply.body}
+            </span>
+          </span>
+        ) : null}
         {answers.length || thread.placement === 'outdated' || thread.anchor.kind === 'image' ? (
           <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-label-xs text-muted-foreground">
             {answers.length ? (
@@ -286,18 +348,18 @@ function ThreadRow({
             {thread.anchor.kind === 'image' ? <span>Whole image</span> : null}
             {thread.placement === 'outdated' ? (
               <span className="inline-flex items-center gap-1">
-                <History aria-hidden className="size-3" /> From {thread.originRunNumber ? `#${thread.originRunNumber}` : 'an earlier run'} · image changed
+                <History aria-hidden className="size-3" /> Made on {thread.originRunNumber ? `#${thread.originRunNumber}` : 'an earlier run'} · screen changed since
               </span>
             ) : null}
           </span>
         ) : null}
       </button>
-      {thread.origin && onCompare ? (
+      {thread.origin && onCompare && !resolved ? (
         <Button
           variant="ghost"
           size="icon-xs"
-          aria-label={`Compare thread ${thread.number} with the version commented on`}
-          title="Compare with the version commented on"
+          aria-label={`Verify thread ${thread.number} against the version commented on`}
+          title="Verify the fix"
           className="relative z-10 text-info-text"
           onClick={() => onCompare(thread.id)}
         >

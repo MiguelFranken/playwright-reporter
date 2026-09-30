@@ -174,6 +174,10 @@ describe.each(ERAS)('core tools (%s)', (era) => {
     expect(data.run.counts).toMatchObject({ failed: 1, flaky: 1 });
     expect(data.failureGroups.map((g) => g.category).sort()).toEqual(['assertion', 'timeout']);
     expect(data.specs.length).toBeGreaterThan(0);
+    // A run whose reporter did not say stays unknown rather than looking clean.
+    const extra = result.structuredContent as { provenance: { dirty: boolean | null; executorDetectedBy: string | null }; artifacts: { total: number; reviewCapturesMissing: number } };
+    expect(extra.provenance).toMatchObject({ dirty: null, executorDetectedBy: null });
+    expect(extra.artifacts.total).toBeGreaterThanOrEqual(0);
 
     const missing = await call(client, 'get_run', { run: '#99' });
     expect(missing.structuredContent?.error).toMatchObject({ code: 'NOT_FOUND' });

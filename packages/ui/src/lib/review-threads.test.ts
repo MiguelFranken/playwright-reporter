@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { anchorFromDrag, describeAnchor, isFractionAnchor, projectAnchor, sortThreads, toPixels } from './review-threads';
+import { anchorFromDrag, closeUpWindow, describeAnchor, isFractionAnchor, projectAnchor, sortThreads, threadStage, toPixels } from './review-threads';
 
 describe('projectAnchor', () => {
   it('turns pixels into fractions of the same image', () => {
@@ -66,4 +66,43 @@ it('describes anchors in words', () => {
 
 it('sorts open threads first, then by number', () => {
   expect(sortThreads([{ number: 1, status: 'resolved' as const }, { number: 3, status: 'open' as const }, { number: 2, status: 'open' as const }]).map((t) => t.number)).toEqual([2, 3, 1]);
+});
+
+describe('threadStage', () => {
+  it('asks to verify an open thread whose image changed, and waits on one that did not', () => {
+    expect(threadStage({ status: 'open', placement: 'outdated' })).toBe('verify');
+    expect(threadStage({ status: 'open', placement: 'exact' })).toBe('waiting');
+    expect(threadStage({ status: 'resolved', placement: 'outdated' })).toBe('resolved');
+  });
+});
+
+describe('closeUpWindow', () => {
+  const size = { width: 2560, height: 11274 };
+  const box = { width: 400, height: 250 };
+
+  it('centres a point with its reach around it, in the box’s shape', () => {
+    const w = closeUpWindow({ kind: 'point', x: 0.5, y: 0.5 }, size, box);
+    expect(w.width).toBe(520);
+    expect(w.height).toBeCloseTo(325);
+    expect(w.left + w.width / 2).toBeCloseTo(1280);
+    expect(w.top + w.height / 2).toBeCloseTo(5637);
+    expect(w.scale).toBeCloseTo(400 / 520);
+  });
+
+  it('stays inside the image at its corners', () => {
+    const w = closeUpWindow({ kind: 'point', x: 1, y: 0 }, size, box);
+    expect(w.left + w.width).toBeCloseTo(2560);
+    expect(w.top).toBe(0);
+  });
+
+  it('fits an area with a margin, however tall', () => {
+    const w = closeUpWindow({ kind: 'area', x: 0.1, y: 0.1, w: 0.1, h: 0.05 }, size, box);
+    expect(w.width).toBeGreaterThanOrEqual(0.1 * 2560);
+    expect(w.height).toBeGreaterThanOrEqual(0.05 * 11274);
+  });
+
+  it('never magnifies a small image past the limit', () => {
+    const w = closeUpWindow({ kind: 'point', x: 0.5, y: 0.5 }, { width: 300, height: 200 }, box);
+    expect(w.scale).toBeLessThanOrEqual(400 / 300 + 1e-9);
+  });
 });

@@ -37,6 +37,12 @@ export interface ReporterOptions {
    * PW_REPORTER_BUILD_URL, PW_REPORTER_BUILD_NUMBER, PW_REPORTER_CI_JOB
    */
   ci?: CiOverrides;
+  /**
+   * Whether the run is labelled a CI or a local run. By default the `CI`
+   * variable decides, but a local wrapper script may set it; this wins.
+   * Env: PW_REPORTER_EXECUTOR (`ci` or `local`)
+   */
+  executor?: 'ci' | 'local';
 }
 
 export interface GitOverrides {
@@ -73,6 +79,8 @@ export interface ResolvedOptions {
   maxRetries: number;
   git: ResolvedGitOverrides;
   ci: CiOverrides;
+  /** Unset: detected from the `CI` variable. */
+  executor?: 'ci' | 'local';
 }
 
 /** The overrides as sent: the pull request number parsed. */

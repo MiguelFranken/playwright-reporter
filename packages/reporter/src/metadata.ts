@@ -4,16 +4,29 @@ import { readFileSync } from 'node:fs';
 import type { FullConfig } from '@playwright/test/reporter';
 import type { CiInfo, Executor, GitInfo, PlaywrightInfo, SystemInfo } from '@miguelfranken/protocol';
 
-function git(args: string[], cwd: string): string | undefined {
+/** A git command's output; `undefined` when it failed (no checkout, no git, too slow), `''` when it said nothing. */
+function gitOutput(args: string[], cwd: string): string | undefined {
   try {
-    return (
-      execFileSync('git', args, { cwd, stdio: ['ignore', 'pipe', 'ignore'], timeout: 3000 })
-        .toString()
-        .trim() || undefined
-    );
+    return execFileSync('git', args, { cwd, stdio: ['ignore', 'pipe', 'ignore'], timeout: 3000 }).toString();
   } catch {
     return undefined;
   }
+}
+
+function git(args: string[], cwd: string): string | undefined {
+  return gitOutput(args, cwd)?.trim() || undefined;
+}
+
+/**
+ * Whether the checkout has uncommitted changes to tracked files, and how many.
+ * Untracked files are left out: build output and scratch files would make every
+ * local run look dirty. Only the count leaves the machine, never a path.
+ */
+export function workingTreeState(cwd: string): Pick<GitInfo, 'dirty' | 'dirtyFiles'> {
+  const out = gitOutput(['status', '--porcelain', '--untracked-files=no'], cwd);
+  if (out === undefined) return {};
+  const files = out.split('\n').filter((line) => line.trim()).length;
+  return { dirty: files > 0, dirtyFiles: files };
 }
 
 function num(v: string | undefined): number | undefined {
@@ -22,13 +35,24 @@ function num(v: string | undefined): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
-export function detectExecutor(env: NodeJS.ProcessEnv): Executor {
+/** `executor` (the reporter option or `PW_REPORTER_EXECUTOR`) wins over the `CI` variable. */
+export function detectExecutor(env: NodeJS.ProcessEnv, executor?: Executor): Executor {
+  if (executor) return executor;
   return env.CI && !['false', '0'].includes(env.CI.toLowerCase()) ? 'ci' : 'local';
 }
 
-/** Explicit overrides win over what was detected; see `ReporterOptions.git` / `.ci`. */
-export function collectCiInfo(env: NodeJS.ProcessEnv, overrides: Partial<CiInfo> = {}): CiInfo {
-  return { ...detectCiInfo(env), ...overrides };
+/**
+ * Explicit overrides win over what was detected; see `ReporterOptions.git` / `.ci`.
+ * `detectedBy` says how the executor was decided. An explicit `local` drops the
+ * detected build: a wrapper that sets `CI` does not make the laptop a CI provider.
+ */
+export function collectCiInfo(env: NodeJS.ProcessEnv, overrides: Partial<CiInfo> = {}, executor?: Executor): CiInfo {
+  if (executor === 'local') return { ...overrides, detectedBy: 'option' };
+  const detected = detectCiInfo(env);
+  if (executor === 'ci') return { ...detected, ...overrides, detectedBy: 'option' };
+  if (detected.provider === 'unknown') return { ...detected, ...overrides, detectedBy: 'ci-env' };
+  if (detected.provider) return { ...detected, ...overrides, detectedBy: 'provider' };
+  return { ...detected, ...overrides };
 }
 
 function detectCiInfo(env: NodeJS.ProcessEnv): CiInfo {
@@ -64,6 +88,11 @@ export function collectGitInfo(config: FullConfig, env: NodeJS.ProcessEnv, overr
   const merged = { ...info, ...overrides };
   // An overridden commit is a different commit: its short sha, not the checkout's.
   if (overrides.sha) merged.shortSha = overrides.sha.slice(0, 7);
+  // The checkout's working tree says nothing about another commit.
+  if (overrides.sha && overrides.sha !== info.sha) {
+    delete merged.dirty;
+    delete merged.dirtyFiles;
+  }
   // Likewise a different pull request: the detected one's link and title describe another.
   if (overrides.prNumber !== undefined && overrides.prNumber !== info.prNumber) {
     merged.prUrl = overrides.prUrl;
@@ -160,6 +189,7 @@ function detectGitInfo(config: FullConfig, env: NodeJS.ProcessEnv): GitInfo {
     const remote = git(['config', '--get', 'remote.origin.url'], cwd);
     if (remote) info.repoUrl = normalizeRemote(remote);
   }
+  Object.assign(info, workingTreeState(cwd));
   if (info.sha && !info.shortSha) info.shortSha = info.sha.slice(0, 7);
   if (info.branch === 'HEAD') info.branch = undefined;
   return info;
