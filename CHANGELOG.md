@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.55](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.54...v0.0.55) (2026-09-30)
+
+### Features
+
+* **library:** a complete visual library with feedback across runs, views and fast images ([#66](https://github.com/MiguelFranken/playwright-reporter/issues/66)) ([8a3304d](https://github.com/MiguelFranken/playwright-reporter/commit/8a3304d76a06984b9a9a4424d474225bd8cf349d))
+
 ## [0.0.54](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.53...v0.0.54) (2026-09-30)
 
 ### Performance Improvements
