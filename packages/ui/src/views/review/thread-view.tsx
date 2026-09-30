@@ -114,7 +114,13 @@ export function ThreadView({
         </div>
       ) : null}
 
-      <ol ref={listRef} className="flex max-h-80 flex-col gap-3 overflow-y-auto overscroll-contain">
+      {/* A long conversation scrolls: focusable, so the keyboard can scroll it too. */}
+      <ol
+        ref={listRef}
+        tabIndex={0}
+        aria-label={`Comments of thread ${thread.number}`}
+        className="-m-1 flex max-h-80 flex-col gap-3 overflow-y-auto overscroll-contain rounded-md p-1 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
+      >
         {thread.comments.map((c) => (
           <li key={c.id}>
             <CommentItem
