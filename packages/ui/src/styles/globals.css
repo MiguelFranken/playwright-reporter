@@ -407,7 +407,17 @@
   --animate-pin-breathe: pin-breathe 1.2s ease-in-out infinite;
   --animate-pin-ping: pin-ping 600ms cubic-bezier(0.2, 0, 0, 1) 1;
   --animate-rise-in: rise-in 150ms cubic-bezier(0.2, 0, 0, 1) both;
+  /* A loading image: a soft band of light sweeping across its placeholder. */
+  --animate-shimmer: shimmer 1.6s ease-in-out infinite;
 
+  @keyframes shimmer {
+    from {
+      background-position: 150% 0;
+    }
+    to {
+      background-position: -50% 0;
+    }
+  }
   @keyframes pin-drop {
     from {
       transform: scale(0.6);
@@ -687,6 +697,20 @@
 }
 
 @layer utilities {
+  /* The placeholder of an image that is still loading: the muted surface with
+     a band of light moving across it (animate-shimmer). */
+  .bg-shimmer {
+    background-color: var(--muted);
+    background-image: linear-gradient(
+      100deg,
+      transparent 20%,
+      color-mix(in oklch, var(--surface) 55%, transparent) 50%,
+      transparent 80%
+    );
+    background-size: 200% 100%;
+    background-repeat: no-repeat;
+  }
+
   /* A raised surface: structure from a hairline, depth from a shadow. */
   .surface-card {
     background-color: var(--surface);

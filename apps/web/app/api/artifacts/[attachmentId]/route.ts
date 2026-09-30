@@ -1,9 +1,4 @@
-import { eq } from 'drizzle-orm';
-import { resolveTeam } from '@/lib/auth/access';
-import { verifyArtifactSignature } from '@/lib/auth/artifact-url';
-import { db } from '@/lib/db/drizzle';
-import { isUuid } from '@/lib/db/queries/shared';
-import { attachments, projects, runs, teams } from '@/lib/db/schema';
+import { gone, readableArtifact } from '@/lib/artifacts/access';
 import { getStorage } from '@/lib/storage';
 import { markMissingExpired } from '@/lib/storage/retention';
 
@@ -11,33 +6,11 @@ const INLINE_MEDIA = new Set(['video', 'screenshot', 'image']);
 
 export async function GET(request: Request, { params }: { params: Promise<{ attachmentId: string }> }) {
   const { attachmentId } = await params;
-  if (!isUuid(attachmentId)) return new Response('not found', { status: 404 });
-
-  const [row] = await db
-    .select({
-      attachment: attachments,
-      teamSlug: teams.slug,
-      projectSlug: projects.slug,
-    })
-    .from(attachments)
-    .innerJoin(runs, eq(runs.id, attachments.runId))
-    .innerJoin(projects, eq(projects.id, runs.projectId))
-    .innerJoin(teams, eq(teams.id, projects.teamId))
-    .where(eq(attachments.id, attachmentId))
-    .limit(1);
-  if (!row) return new Response('not found', { status: 404 });
-
-  const url = new URL(request.url);
-  const signed = verifyArtifactSignature(attachmentId, url.searchParams.get('exp'), url.searchParams.get('sig'));
-  if (!signed && !(await hasSessionAccess(row.teamSlug))) {
-    // 404, not 403: an artifact id must not confirm that a run exists.
-    return new Response('not found', { status: 404 });
-  }
-
-  const { attachment } = row;
-  // Gone for good: the retention policy (or the store's lifecycle) took the
-  // bytes. 410 rather than 404, so a client can tell it from a bad link.
+  const readable = await readableArtifact(request, attachmentId);
+  if (readable instanceof Response) return readable;
+  const { attachment } = readable;
   if (attachment.status === 'expired') return gone();
+  const url = new URL(request.url);
   const storage = getStorage();
   const download = url.searchParams.get('download') !== null;
 
@@ -79,15 +52,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ atta
   }
   headers['content-length'] = String(obj.size);
   return new Response(obj.stream, { status: 200, headers });
-}
-
-function gone() {
-  return new Response('artifact expired', { status: 410, headers: { 'cache-control': 'private, max-age=3600' } });
-}
-
-async function hasSessionAccess(teamSlug: string) {
-  const access = await resolveTeam(teamSlug);
-  return Boolean(access?.can({ artifact: ['read'] }));
 }
 
 export async function HEAD(request: Request, ctx: { params: Promise<{ attachmentId: string }> }) {

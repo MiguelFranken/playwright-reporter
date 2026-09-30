@@ -1,5 +1,6 @@
 import type { NextConfig } from 'next';
 import { withWorkflow } from 'workflow/next';
+import { DEVICE_WIDTHS, IMAGE_WIDTHS_SMALL } from './lib/artifacts/image-variants';
 import { traceViewerHeaders } from './lib/trace-viewer/headers';
 
 const nextConfig: NextConfig = {
@@ -14,6 +15,11 @@ const nextConfig: NextConfig = {
   // result links to the same route. What depends on the URL streams in after
   // the click, behind the pages' Suspense boundaries, as it already did.
   partialPrefetching: true,
+  images: {
+    // The widths a screenshot is offered in (its `srcset`): exactly the copies the image route makes and keeps.
+    deviceSizes: [...DEVICE_WIDTHS],
+    imageSizes: [...IMAGE_WIDTHS_SMALL],
+  },
   experimental: {
     // Going back to a page seen in the last 30 seconds reuses its render
     // instead of asking the server again. Nothing is stale for long: a Server
