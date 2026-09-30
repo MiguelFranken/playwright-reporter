@@ -4,22 +4,6 @@ import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { ALL_PERSONAL_TOKENS, CREATED_TOKEN, PERSONAL_TOKENS, SCOPE_PROJECTS, SCOPE_TEAMS } from '../../fixtures/account';
 import { AccessTokens, CreateTokenDialog, PersonalTokensTable, TokenCreatedDialog, type CreatedToken } from './access-tokens';
 
-/**
- * Base UI's positioner inserts aria-hidden, tabbable focus guards around an
- * open listbox — the library's focus trap, not controls of ours. Same
- * exception as Primitives/Select, for the stories that open one.
- */
-const OPEN_SELECT_A11Y = {
-  a11y: {
-    config: {
-      rules: [
-        { id: 'aria-input-field-name', enabled: false },
-        { id: 'aria-hidden-focus', enabled: false },
-      ],
-    },
-  },
-} as const;
-
 const meta = {
   title: 'Views/Account/Access/Access tokens',
   component: AccessTokens,
@@ -132,7 +116,6 @@ type DialogStory = StoryObj<typeof CreateTokenDialog>;
 
 /** Superadmins may also mint a token that reaches every team. */
 export const CreateDialogSuperadmin: DialogStory = {
-  parameters: OPEN_SELECT_A11Y,
   render: (args) => <CreateTokenDialog {...args} />,
   args: {
     open: true,
@@ -163,7 +146,6 @@ export const CreateDialogSuperadmin: DialogStory = {
 
 /** A 30-day ceiling hides the longer lifetimes; an odd default still appears. */
 export const CreateDialogShortLifetimes: DialogStory = {
-  parameters: OPEN_SELECT_A11Y,
   render: (args) => <CreateTokenDialog {...args} />,
   args: { ...CreateDialogSuperadmin.args, isSuperadmin: false, defaultDays: 14, maxDays: 30 },
   play: async () => {

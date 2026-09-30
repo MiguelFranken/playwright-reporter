@@ -13,7 +13,16 @@ const preview: Preview = {
     layout: 'padded',
     // The theme decorator paints bg-background; a second backdrop would fight it.
     backgrounds: { disable: true },
-    a11y: { test: 'error' },
+    a11y: {
+      test: 'error',
+      // Base UI brackets every open popup (Select, Menu, Popover, Dialog) with
+      // visually hidden `aria-hidden` spans that take focus for an instant and
+      // hand it straight back into the popup — its focus trap. axe reads them
+      // as focusable hidden content. They are the library's, identical in the
+      // app, and never hold focus, so they alone leave the check; every rule
+      // still runs on everything else.
+      context: { exclude: ['[data-base-ui-focus-guard]'] },
+    },
     controls: { expanded: true, matchers: { date: /At$/ } },
     options: {
       // Layer, then group, then component. Groups are listed so the sidebar

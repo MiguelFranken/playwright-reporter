@@ -103,11 +103,6 @@ export const OneTeam: Story = {
 };
 
 export const SignsOut: Story = {
-  parameters: {
-    // Base UI's aria-hidden, tabbable focus guards around the open menu — the
-    // library's focus trap, not controls of ours. Same exception as Primitives/Select.
-    a11y: { config: { rules: [{ id: 'aria-hidden-focus', enabled: false }] } },
-  },
   play: async ({ canvasElement, args }) => {
     await userEvent.click(within(canvasElement).getByRole('button', { name: /ada@acme\.test/ }));
     await userEvent.click(await within(document.body).findByRole('menuitem', { name: 'Sign out' }));

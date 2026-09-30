@@ -6,18 +6,7 @@ import { ConnectBrand, ConnectNotice, ConsentCard } from './consent-card';
 const meta = {
   title: 'Views/Connect/Consent',
   component: ConsentCard,
-  parameters: {
-    layout: 'centered',
-    a11y: {
-      config: {
-        // Base UI's focus guards around the open access listbox. Same exception as Primitives/Select.
-        rules: [
-          { id: 'aria-input-field-name', enabled: false },
-          { id: 'aria-hidden-focus', enabled: false },
-        ],
-      },
-    },
-  },
+  parameters: { layout: 'centered' },
   tags: ['themed'],
   args: {
     clientName: 'Claude',

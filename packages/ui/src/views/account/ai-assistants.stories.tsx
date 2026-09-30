@@ -12,20 +12,7 @@ const PROJECTS = [
 const meta = {
   title: 'Views/Account/AI/AI assistants',
   component: AiAssistants,
-  parameters: {
-    layout: 'padded',
-    a11y: {
-      config: {
-        // Base UI's positioner inserts aria-hidden, tabbable focus guards
-        // around the open project listbox — the library's focus trap, not
-        // controls of ours. Same exception as Primitives/Select.
-        rules: [
-          { id: 'aria-input-field-name', enabled: false },
-          { id: 'aria-hidden-focus', enabled: false },
-        ],
-      },
-    },
-  },
+  parameters: { layout: 'padded' },
   tags: ['themed'],
   args: {
     baseUrl: 'https://reporter.acme.test',
