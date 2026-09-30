@@ -30,6 +30,7 @@ also accepts `project`, `format` (`markdown` | `json`) and `maxChars`. See the R
 | [`list_uncovered_tests`](#list_uncovered_tests) | core | The Playwright tests no test case links to yet, one row per test with the ids of every browser it runs in, its file and describe blocks. |
 | [`create_test_case`](#create_test_case) | write | Create a manual or automated test case with steps, in a suite (its path is created if missing). |
 | [`update_test_case`](#update_test_case) | write | Change fields of a test case: title, steps, status, priority, suite, tags and the rest. |
+| [`bulk_update_test_cases`](#bulk_update_test_cases) | write | Apply one change to many test cases at once, as ticking cases in the list does: set the priority, status, severity, type, behavior, automation or suite of each, mute them, or add and remove tags. |
 | [`create_test_suite`](#create_test_suite) | write | Create a suite, optionally under a parent suite, to group test cases the way the product is built. |
 | [`delete_test_suite`](#delete_test_suite) | write | Delete suites that hold no test cases, e.g. |
 | [`link_test_case`](#link_test_case) | write | Link Playwright tests (by test id from find_tests) to a test case, or unlink them. |
@@ -41,7 +42,7 @@ also accepts `project`, `format` (`markdown` | `json`) and `maxChars`. See the R
 | [`comment_on_review`](#comment_on_review) | write | Pin a comment thread on a review image — at a spot or an area (in percent of the image), or about the whole image — or reply to a thread by its number. |
 | [`resolve_review_thread`](#resolve_review_thread) | write | Mark a comment thread on a review image resolved — or open again — by the image and the number on its pin, with an optional closing note. |
 | [`list_library`](#list_library) | core | The visual documentation of the product: the branches and pull requests kept in the library (and the default branch), which run of each is shown — the newest, or a pinned one — and how many of the newest run’s images still wait for review. |
-| [`get_library_flows`](#get_library_flows) | core | The screens of a branch or pull request as the library shows them: each flow (test) with its test cases and its checkpoints in journey order, each with its variants’ capture ids. |
+| [`get_library_flows`](#get_library_flows) | core | The screens of a branch or pull request as the library shows them — every checkpoint as the newest run on it captured it, so partial runs never hide what they skipped: each flow (test) with its test cases and their priority, its checkpoints in journey order, and each variant’s capture id and review state (waiting for changes, ready to verify, needs review, updated, approved). |
 | [`set_library_reference`](#set_library_reference) | write | Keep a branch or pull request in the library (a long-lived pull request can stay browsable while it is open), pin the run that documents it, make it the default, name it — or take it out. |
 
 ## whoami
@@ -503,6 +504,31 @@ Change fields of a test case: title, steps, status, priority, suite, tags and th
 
 Structured output fields: `key`, `title`, `version`, `url`, `message`, `truncated`.
 
+## bulk_update_test_cases
+
+**Update many test cases** · toolset `write` · **writes**
+
+Apply one change to many test cases at once, as ticking cases in the list does: set the priority, status, severity, type, behavior, automation or suite of each, mute them, or add and remove tags. Each changed case gets a new version in its history.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+| `cases` | string[] | yes | The cases to change, by key ("TC-12") or id; at most 200. |
+| `suite` | string |  | Move them to this suite (id or path; missing levels are created). "unassigned" takes them out of their suite. |
+| `status` | `"active"` \| `"draft"` \| `"deprecated"` |  |  |
+| `priority` | `"critical"` \| `"high"` \| `"medium"` \| `"low"` \| `"none"` |  |  |
+| `severity` | `"blocker"` \| `"critical"` \| `"major"` \| `"normal"` \| `"minor"` \| `"trivial"` \| `"none"` |  |  |
+| `type` | `"functional"` \| `"smoke"` \| `"regression"` \| `"integration"` \| `"e2e"` \| `"api"` \| `"unit"` \| `"performance"` \| `"security"` \| `"accessibility"` \| `"usability"` \| `"compatibility"` \| `"acceptance"` \| `"exploratory"` \| `"other"` |  |  |
+| `behavior` | `"positive"` \| `"negative"` \| `"destructive"` \| `"none"` |  |  |
+| `automation` | `"manual"` \| `"planned"` \| `"automated"` |  |  |
+| `muted` | boolean |  |  |
+| `addTags` | string[] |  | Adds tags to each case, keeping the others. |
+| `removeTags` | string[] |  |  |
+
+Structured output fields: `updated`, `cases`, `message`, `truncated`.
+
 ## create_test_suite
 
 **Create a test suite** · toolset `write` · **writes**
@@ -633,20 +659,23 @@ Structured output fields: `project`, `decided`, `decision`, `pinned`, `resolvedT
 
 **List review comment threads** · toolset `core`
 
-The comment threads people (or assistants) pinned on a run’s review images — change requests at a spot or an area of a screenshot — per image, by the number on the pin, with where each points (pixels, percent, CSS pixels) and the conversation. Open ones by default. See one pinned on its image with get_review_checkpoint and thread.
+The comment threads people (or assistants) pinned on a run’s review images — change requests at a spot or an area of a screenshot — per image, by the number on the pin, with where each points (pixels, percent, CSS pixels) and the conversation. Open ones by default. With library, every screen of a branch or pull request as the library shows it, so feedback on screens a partial run skipped is included; placement "outdated" lists the feedback whose image changed since (ready to verify), "exact" what still waits for a change. See one pinned on its image with get_review_checkpoint and thread.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
 | `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
 | `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
-| `run` | integer (–9007199254740991) \| string |  | The run (default "latest"). Scope "latest" with branch. Ignored with capture. |
+| `run` | integer (–9007199254740991) \| string |  | The run (default "latest"). Scope "latest" with branch. Ignored with capture or library. |
 | `branch` | string |  | Git branch name, e.g. "main". |
+| `library` | boolean |  | The library’s screens instead of one run: every screen of branch (or pullRequest; default: the library’s default reference) as its newest run captured it, so feedback on screens a partial run skipped is included. |
+| `pullRequest` | integer (–9007199254740991) |  | With library: a pull (merge) request number instead of a branch. |
 | `capture` | string |  | Only this image’s threads. |
 | `status` | `"open"` \| `"resolved"` \| `"all"` |  | open (default), resolved or all. |
+| `placement` | `"exact"` \| `"outdated"` |  | exact: on the image as it is now (waiting for changes). outdated: placed on an earlier version that has changed since (ready to verify, then resolve). |
 | `test` | string |  | Part of a test title or file, to narrow the list. |
 
-Structured output fields: `project`, `run`, `counts`, `images`, `truncated`.
+Structured output fields: `project`, `run`, `reference`, `counts`, `images`, `truncated`.
 
 ## comment_on_review
 
@@ -702,7 +731,7 @@ Structured output fields: `project`, `defaultReference`, `url`, `references`, `t
 
 **Get library flows** · toolset `core`
 
-The screens of a branch or pull request as the library shows them: each flow (test) with its test cases and its checkpoints in journey order, each with its variants’ capture ids. Look at an image with get_review_checkpoint. Defaults to the library’s default reference.
+The screens of a branch or pull request as the library shows them — every checkpoint as the newest run on it captured it, so partial runs never hide what they skipped: each flow (test) with its test cases and their priority, its checkpoints in journey order, and each variant’s capture id and review state (waiting for changes, ready to verify, needs review, updated, approved). Filter by state, priority or a view (e.g. view "to-fix" for open feedback on the screens as they are now). Look at an image with get_review_checkpoint. Defaults to the library’s default reference.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -712,9 +741,13 @@ The screens of a branch or pull request as the library shows them: each flow (te
 | `branch` | string |  | A branch, e.g. "main". Leave both out for the library’s default reference. |
 | `pullRequest` | integer (–9007199254740991) |  | A pull (merge) request number, e.g. 212. |
 | `test` | string |  | Part of a test title, file or test case key (TC-12), to narrow the flows. |
+| `view` | string |  | A library view: a built-in one ("all", "feedback", "to-fix", "to-verify", "to-review") or one of your saved views, by name or id. Its filters and order apply; state and priority given here replace the view's. |
+| `state` | `"waiting"` \| `"verify"` \| `"needs-review"` \| `"updated"` \| `"approved"`[] |  | Only flows with a screen in any of these states: waiting (open comments or a change request on the screen as it is now), verify (commented on an earlier version, the screen changed since), needs-review, updated (changed since the capture before it), approved. |
+| `priority` | `"critical"` \| `"high"` \| `"medium"` \| `"low"` \| `"none"`[] |  | Only flows whose highest linked test case priority is one of these ("none": no case, or no priority). |
+| `sort` | `"journey"` \| `"priority"` \| `"urgency"` \| `"recent"` \| `"comments"` |  | journey (suite and file order, the default), priority, urgency, recent or comments. |
 | `limit` | integer (1–500) |  | At most this many flows (default 50). |
 
-Structured output fields: `project`, `reference`, `name`, `pinnedRun`, `url`, `total`, `more`, `flows`, `truncated`.
+Structured output fields: `project`, `reference`, `name`, `pinnedRun`, `url`, `view`, `total`, `more`, `flows`, `truncated`.
 
 ## set_library_reference
 

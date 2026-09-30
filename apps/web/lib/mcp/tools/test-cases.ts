@@ -14,12 +14,14 @@ import {
   CASE_VERDICTS,
   caseKey,
   GHERKIN_KEYWORDS,
+  MAX_BULK_CASES,
   STEP_FORMATS,
 } from '@miguelfranken/ui/lib/test-cases';
 import { caseNumberOf, getCaseDetail, getSuiteTree, listAutomatedTests, listCases, listSuites, suitePaths } from '@/lib/db/queries/test-cases';
 import { parseCaseKey } from '@/lib/test-cases/model';
 import {
   adoptTests,
+  bulkUpdate,
   CaseError,
   createCase,
   createSuite,
@@ -428,6 +430,60 @@ export const updateTestCase = defineTool({
   },
 });
 
+// ---------------------------------------------------------------- bulk_update_test_cases
+
+const bulkInput = z.object({
+  ...commonParams,
+  cases: z.array(caseParam).min(1).max(MAX_BULK_CASES).describe(`The cases to change, by key ("TC-12") or id; at most ${MAX_BULK_CASES}.`),
+  suite: suiteParam.optional().describe('Move them to this suite (id or path; missing levels are created). "unassigned" takes them out of their suite.'),
+  status: z.enum(CASE_STATUSES).optional(),
+  priority: z.enum(CASE_PRIORITIES).optional(),
+  severity: z.enum(CASE_SEVERITIES).optional(),
+  type: z.enum(CASE_TYPES).optional(),
+  behavior: z.enum(CASE_BEHAVIORS).optional(),
+  automation: z.enum(CASE_AUTOMATIONS).optional(),
+  muted: z.boolean().optional(),
+  addTags: z.array(z.string()).optional().describe('Adds tags to each case, keeping the others.'),
+  removeTags: z.array(z.string()).optional(),
+});
+
+const bulkOutput = output({ updated: z.number().describe('Cases that changed; a case that already had every value is left alone.'), cases: z.array(z.string()), message: z.string() });
+
+export const bulkUpdateTestCases = defineTool({
+  name: 'bulk_update_test_cases',
+  title: 'Update many test cases',
+  toolset: 'write',
+  description:
+    'Apply one change to many test cases at once, as ticking cases in the list does: set the priority, status, severity, type, behavior, automation or suite of each, mute them, or add and remove tags. Each changed case gets a new version in its history.',
+  input: bulkInput,
+  output: bulkOutput,
+  annotations: { ...WRITE, idempotentHint: true },
+  async handler(args, ctx) {
+    const project = await ctx.project(args.project, { testCase: ['update'] });
+    const { project: _p, format: _f, maxChars: _m, cases: refs, suite, addTags, removeTags, ...fields } = args;
+    const ids: string[] = [];
+    for (const ref of new Set(refs)) ids.push(await resolveCaseId(project.project.id, ref).catch(caseError));
+    const patch: Record<string, unknown> = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
+    const target = await suiteId(project, suite, true);
+    if (target !== undefined) patch.suiteId = target;
+    const clean = (tags?: string[]) => tags?.map((t) => t.replace(/^@/, ''));
+    if (addTags?.length) patch.addTags = clean(addTags);
+    if (removeTags?.length) patch.removeTags = clean(removeTags);
+    if (Object.keys(patch).length === 0) throw invalid('Nothing to change: pass at least one field.');
+    const { updated } = await bulkUpdate(contextOf(project), ids, patch).catch(caseError);
+    const keys = [...new Set(refs)].map((r) => {
+      const n = parseCaseKey(r);
+      return n ? caseKey(n) : r;
+    });
+    return {
+      data: { updated, cases: keys, message: `${updated} of ${ids.length} ${ids.length === 1 ? 'case' : 'cases'} changed.` },
+      render(md, d) {
+        md.line(`${d.message} ${d.cases.join(', ')}`);
+      },
+    };
+  },
+});
+
 // ---------------------------------------------------------------- create_test_suite
 
 const suiteInput = z.object({
@@ -709,6 +765,7 @@ export const TEST_CASE_TOOLS = [
   listUncoveredTests,
   createTestCase,
   updateTestCase,
+  bulkUpdateTestCases,
   createTestSuite,
   deleteTestSuite,
   linkTestCase,

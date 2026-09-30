@@ -10,7 +10,7 @@ generated from the code: [`docs/mcp-tools.md`](https://github.com/MiguelFranken/
 | --- | --- |
 | `core` | `whoami`, `list_filters`, `list_runs`, `get_run`, `list_run_results`, `get_result`, `find_tests`, `get_test_history`, `project_health`, `list_test_cases`, `get_test_case`, `list_test_suites`, `list_uncovered_tests`, `list_review_checkpoints`, `get_review_checkpoint`, `list_review_threads`, `list_library`, `get_library_flows` |
 | `debug` | `get_failure_context` (start here for a failing test), `check_flakiness`, `summarize_failures`, `compare_runs`, `verify_fix`, `get_artifact`, `get_rerun_command` |
-| `write` | `create_test_case`, `update_test_case`, `create_test_suite`, `delete_test_suite`, `link_test_case`, `adopt_tests`, `review_checkpoint`, `comment_on_review`, `resolve_review_thread`, `set_library_reference` |
+| `write` | `create_test_case`, `update_test_case`, `bulk_update_test_cases`, `create_test_suite`, `delete_test_suite`, `link_test_case`, `adopt_tests`, `review_checkpoint`, `comment_on_review`, `resolve_review_thread`, `set_library_reference` |
 
 `core` and `debug` only read. The `write` toolset edits [test cases](/docs/using/test-cases) and decides about and comments on [review checkpoints](/docs/using/visual-review) and what the [library](/docs/using/visual-review#the-library) keeps, and is offered only to a
 personal access token created with **Read, and edit test cases**; your role in the team still decides what a call may

@@ -80,6 +80,20 @@ describe('REST test case writes', () => {
     const stale = await send('PATCH', `${base}/test-cases/TC-1`, token, { title: 'Too late', expectedVersion: 1 });
     expect(stale.status).toBe(400);
 
+    // Priority, of one case and of many.
+    const critical = await send('PATCH', `${base}/test-cases/TC-1`, token, { priority: 'critical' });
+    expect(await json(critical)).toMatchObject({ key: 'TC-1', version: 3 });
+    expect(await json(await get(`${base}/test-cases/TC-1`, token))).toMatchObject({ priority: 'critical' });
+    expect((await send('PATCH', `${base}/test-cases/TC-1`, token, { priority: 'urgent' })).status).toBe(400);
+    await send('POST', `${base}/test-cases`, token, { title: 'Pay by invoice' });
+    const bulk = await send('POST', `${base}/test-cases/bulk`, token, { cases: ['TC-1', 'TC-2'], priority: 'low' });
+    expect(bulk.status).toBe(200);
+    expect(await json(bulk)).toMatchObject({ updated: 2, cases: ['TC-1', 'TC-2'] });
+    expect(await json(await get(`${base}/test-cases?priority=low`, token))).toMatchObject({ total: 2 });
+    expect((await send('POST', `${base}/test-cases/bulk`, token, { cases: [] })).status).toBe(400);
+    const readOnly = await createPat(tenant.adminUser);
+    expect((await send('POST', `${base}/test-cases/bulk`, readOnly.token, { cases: ['TC-1'], priority: 'high' })).status).toBe(403);
+
     const tests = await json<{ tests: { testId: string; title: string }[] }>(await get(`${base}/tests?search=pays`, token));
     const cardTest = tests.tests[0].testId;
     const linked = await send('POST', `${base}/test-cases/TC-1/links`, token, { link: [cardTest] });
@@ -89,7 +103,7 @@ describe('REST test case writes', () => {
     const loginTest = (await json<{ tests: { testId: string }[] }>(await get(`${base}/tests?search=logs`, token))).tests[0].testId;
     const adopted = await send('POST', `${base}/test-cases/adopt`, token, { tests: [loginTest, cardTest], suite: 'Accounts' });
     expect(adopted.status).toBe(201);
-    expect(await json(adopted)).toMatchObject({ created: [{ key: 'TC-2' }], skipped: 1 });
+    expect(await json(adopted)).toMatchObject({ created: [{ key: 'TC-3' }], skipped: 1 });
 
     const suite = await send('POST', `${base}/test-suites`, token, { name: 'Empty', parent: 'Checkout' });
     expect(suite.status).toBe(201);

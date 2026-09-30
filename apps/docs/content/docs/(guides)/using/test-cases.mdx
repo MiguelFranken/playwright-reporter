@@ -77,6 +77,16 @@ content as a new version, so nothing is lost.
 Tick cases in the list to edit them together: move them to a suite, set status, priority, severity, type, automation
 or muted, add or remove tags, deprecate or delete them — up to 200 at a time. Each changed case gets its own version.
 
+The same edits work without the app: an [AI assistant](/docs/ai-assistants/tools) sets one case's fields with
+`update_test_case` and many at once with `bulk_update_test_cases` ("make every checkout case high priority"), and the
+[REST API](/docs/api#changing-data) has `PATCH …/test-cases/{case}` and `POST …/test-cases/bulk`.
+
+## Priority in the library
+
+A flow in the [library](/docs/using/visual-review#the-library) takes the highest priority of the test cases its test is
+linked to. Filter or group the library by it — the built-in **To fix** view puts the critical and high-priority flows
+with open feedback first — so a case's priority also decides which screens get looked at first.
+
 ## Import and export
 
 **Export** downloads the library, or the suite on screen, as JSON or CSV. JSON keeps suites, steps, tags and custom
