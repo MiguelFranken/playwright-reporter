@@ -234,6 +234,9 @@ export function CheckpointViewer({
     onFrameChange?.(next);
   };
   const stageSize = useElementSize(stageEl);
+  // Narrower than the side panel needs, the viewer scrolls as one page: the stage grows with its screens, so fitting them
+  // follows the window's height rather than the stage's own.
+  const stackedHeight = useStackedHeight();
   const comparing = Boolean(current && effectiveStage !== 'image');
   const canComment = Boolean(comments.canComment && comments.onCreateThread);
   const threadGroups = shown.map((c) => ({ captureId: c.id, variant: c.variant, threads: c.threads ?? [] }));
@@ -245,7 +248,8 @@ export function CheckpointViewer({
   const zoomFrames = threadComparing || (comparing && effectiveStage === 'side-by-side') ? [frames[0], frames[0]] : frames;
   // Room for the captions above the screens and the stage's padding.
   // Room for the captions above the screens (and, comparing a thread, its banner and comment) and the stage's padding.
-  const zoom = frameSettings.zoom === 'fit' ? fitZoom(zoomFrames, { width: stageSize.width - 48, height: stageSize.height - 48 - (threadComparing ? 190 : 28) }) : frameSettings.zoom;
+  const fitHeight = stackedHeight == null ? stageSize.height - 48 : Math.max(240, stackedHeight * 0.75);
+  const zoom = frameSettings.zoom === 'fit' ? fitZoom(zoomFrames, { width: stageSize.width - 48, height: fitHeight - (threadComparing ? 190 : 28) }) : frameSettings.zoom;
   const pending = new Set(pendingIds);
   const busy = shown.some((c) => pending.has(c.id));
 
@@ -446,11 +450,11 @@ export function CheckpointViewer({
       <DialogContent
         showCloseButton={false}
         initialFocus={stageRef}
-        className="top-0 left-0 grid h-dvh w-screen max-w-none translate-x-0 translate-y-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-0 rounded-none border-0 p-0 sm:max-w-none"
+        className="top-0 left-0 flex h-dvh w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-y-auto rounded-none border-0 p-0 sm:max-w-none lg:grid lg:grid-rows-[auto_minmax(0,1fr)_auto] lg:overflow-hidden"
       >
         {pos ? (
           <>
-            <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border px-4 py-3">
+            <header className="sticky top-0 z-10 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border bg-popover px-4 py-3 lg:static">
               <div className="flex min-w-0 flex-1 items-center gap-2">
                 <StatusIcon status={pos.flow.outcome} />
                 <div className="min-w-0">
@@ -510,7 +514,7 @@ export function CheckpointViewer({
               </div>
             </header>
 
-            <div className="grid min-h-0 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_20rem]">
+            <div className="grid shrink-0 grow grid-cols-1 lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_20rem]">
               <section className="flex min-h-0 flex-col bg-surface" aria-label="Checkpoint image">
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-surface px-4 py-2">
                   <FrameToolbar value={frameSettings} onChange={setFrame} captured={current ? captureViewport(current) : null} />
@@ -908,6 +912,23 @@ function useElementSize(el: HTMLElement | null) {
     return () => observer.disconnect();
   }, [el]);
   return size;
+}
+
+/** The window's height while the viewer is stacked (below `lg`, where it scrolls as a page); null beside the side panel. */
+function useStackedHeight() {
+  const [height, setHeight] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const mql = window.matchMedia('(min-width: 64rem)');
+    const measure = () => setHeight(mql.matches ? null : window.innerHeight);
+    measure();
+    mql.addEventListener('change', measure);
+    window.addEventListener('resize', measure);
+    return () => {
+      mql.removeEventListener('change', measure);
+      window.removeEventListener('resize', measure);
+    };
+  }, []);
+  return height;
 }
 
 /** Where the screens on show stand in the review loop, in the library (which has no decisions to show). */
