@@ -1,8 +1,9 @@
 'use client';
 
-import { Check, ChevronLeft, ChevronRight, ExternalLink, Eye, EyeOff, Film, History, Keyboard, MessageSquareWarning, Route, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, ExternalLink, Eye, EyeOff, Film, History, Keyboard, Link2, Link2Off, MessageSquareWarning, Route, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '../../components/badge';
+import { useSyncedScroll } from '../../hooks/use-synced-scroll';
 import { Button } from '../../components/button';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '../../components/dialog';
 import { Kbd } from '../../components/kbd';
@@ -192,6 +193,9 @@ export function CheckpointViewer({
   const [threadFilter, setThreadFilter] = useState<ThreadFilter>('open');
   const [composing, setComposing] = useState(false);
   const [pinsHidden, setPinsHidden] = useState(false);
+  // Side by side, the two screens scroll together unless the reviewer unlinks them.
+  const [syncScroll, setSyncScroll] = useState(true);
+  const [sideBySideEl, setSideBySideEl] = useState<HTMLDivElement | null>(null);
   const [focus, setFocus] = useState<PinFocusRequest | null>(null);
   const [confirmApprove, setConfirmApprove] = useState(false);
   // An outdated thread shown beside the version it was made on.
@@ -226,6 +230,7 @@ export function CheckpointViewer({
         : reference && stage !== 'image'
           ? stage
           : 'image';
+  useSyncedScroll(sideBySideEl, '[data-slot="screen-frame"]', syncScroll && effectiveStage === 'side-by-side');
   const [ownFrame, setOwnFrame] = useState<FrameSettings>(DEFAULT_FRAME);
   const frameSettings = frameProp ?? ownFrame;
   const setFrame = (next: FrameSettings) => {
@@ -400,6 +405,7 @@ export function CheckpointViewer({
         const t = shownThreads.find((x) => x.id === openThreadId);
         if (t) comments.onSetThreadStatus({ threadId: t.id, status: t.status === 'open' ? 'resolved' : 'open', captureId: threadGroups.find((g) => g.threads.includes(t))?.captureId });
       } else if (key === 'r' && canComment && current) setComposing(true);
+      else if (key === 'l' && effectiveStage === 'side-by-side') setSyncScroll((on) => !on);
       else if (key === 'a' && deciding && !busy) approve();
       else return;
       e.preventDefault();
@@ -535,6 +541,11 @@ export function CheckpointViewer({
                         <EyeOff /> Leave out areas
                       </Button>
                     ) : null}
+                    {effectiveStage === 'side-by-side' ? (
+                      <Button variant={syncScroll ? 'secondary' : 'ghost'} size="xs" aria-pressed={syncScroll} title="Scroll both screens together (L)" onClick={() => setSyncScroll((on) => !on)}>
+                        {syncScroll ? <Link2 /> : <Link2Off />} Scroll together
+                      </Button>
+                    ) : null}
                     {shownThreads.some((t) => t.anchor.kind !== 'image') && pinsOn ? (
                       <Button variant="ghost" size="xs" aria-pressed={pinsHidden} onClick={() => setPinsHidden((h) => !h)}>
                         {pinsHidden ? <EyeOff /> : <Eye />} {pinsHidden ? 'Pins hidden' : 'Pins'}
@@ -592,7 +603,7 @@ export function CheckpointViewer({
                     />
                   ) : current && reference && effectiveStage !== 'image' ? (
                     effectiveStage === 'side-by-side' ? (
-                      <div className="flex min-w-max items-start justify-center gap-6">
+                      <div ref={setSideBySideEl} className="flex min-w-max items-start justify-center gap-6">
                         {[
                           { key: 'reference', title: reference.label, image: reference.image },
                           { key: 'current', title: 'This run', image: current.image },
@@ -882,6 +893,7 @@ const SHORTCUTS: [string[], string][] = [
   [['E'], 'Resolve or reopen the open comment'],
   [['H'], 'Hide or show the pins'],
   [['O'], 'Compare the open comment with the version it was made on'],
+  [['L'], 'Side by side: scroll both screens together, or apart'],
   [['Esc'], 'Leave comment mode, then close'],
 ];
 

@@ -172,6 +172,27 @@ export const MeasuredChanges: Story = {
   },
 };
 
+/** Side by side, the two screens scroll together; the toggle (or L) lets them go apart. */
+export const SideBySideScrollsTogether: Story = {
+  play: async () => {
+    const body = within(document.body);
+    await body.findByRole('dialog');
+    await userEvent.click(body.getByRole('button', { name: 'Side by side' }));
+    const [before, now] = await body.findAllByRole('region', { name: / — (Approved|This run)/ });
+    const toggle = body.getByRole('button', { name: 'Scroll together' });
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    before.scrollTop = 200;
+    await waitFor(() => expect(now.scrollTop).toBe(before.scrollTop));
+    const kept = before.scrollTop;
+
+    await userEvent.click(toggle);
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    now.scrollTop = 0;
+    await new Promise((r) => setTimeout(r, 100));
+    await expect(before.scrollTop).toBe(kept);
+  },
+};
+
 /** Leaving out an area: drawn in the viewer, saved through the host. */
 export const LeaveOutAreas: Story = {
   args: { initial: { checkpointId: changed.id, variant: 'mobile' } },
