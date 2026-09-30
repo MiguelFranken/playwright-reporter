@@ -27,7 +27,8 @@ import { captureInProject, capturesById, decide, MAX_DECISION_CAPTURES, ReviewEr
 import { toDiffView } from '@/lib/review/view-model';
 import { artifactUrlTtlSeconds, inlineImageMaxBytes } from '../config';
 import { invalid, notFound } from '../errors';
-import { branchParam, commonParams, isUuid, runParam } from '../params';
+import { agentParam, branchParam, commonParams, isUuid, runParam } from '../params';
+import { agentNameFor } from '../agent';
 import { defineTool, output } from '../registry';
 import { link } from '../render/markdown';
 import { resolveRun } from '../resolve';
@@ -40,6 +41,17 @@ const AUTO_CROPS = 6;
 // ---------------------------------------------------------------- threads, shared with review-threads.ts
 
 const box = z.object({ x: z.number(), y: z.number(), w: z.number().nullable(), h: z.number().nullable() });
+
+/** An AI agent wrote the comment, for a person: `author` is then the agent's name. */
+export const agentOut = z
+  .object({ name: z.string(), for: z.string().nullable().describe('The person whose access the agent used.') })
+  .nullable()
+  .optional()
+  .describe('Set when an AI agent wrote the comment.');
+
+/** Who a comment is by, in a line of text. */
+export const commentBy = (c: { author: string | null; agent?: { name: string; for: string | null } | null; via: string }) =>
+  c.agent ? `${c.agent.name} (AI agent${c.agent.for ? ` for ${c.agent.for}` : ''})` : `${c.author ?? 'Someone'}${c.via === 'mcp' ? ' (AI assistant)' : ''}`;
 
 export const threadOut = z.object({
   number: z.number().describe('The number on the pin: how the image, the text and people refer to the thread.'),
@@ -56,7 +68,7 @@ export const threadOut = z.object({
     .nullable()
     .optional()
     .describe('The capture the thread was placed on. For an outdated thread, get_review_checkpoint with it shows the version the comment was about.'),
-  comments: z.array(z.object({ kind: z.string(), author: z.string().nullable(), via: z.string(), at: z.string(), body: z.string() })),
+  comments: z.array(z.object({ kind: z.string(), author: z.string().nullable(), agent: agentOut, via: z.string(), at: z.string(), body: z.string() })),
   url: z.string().describe('The thread in the app, open at its pin.'),
 });
 
@@ -96,7 +108,7 @@ export function renderThread(md: { line(s: string): void }, t: z.infer<typeof th
   md.line(`**#${t.number}** · ${position} · ${flags}`);
   for (const c of t.comments) {
     if (c.kind !== 'comment') md.line(`  - _${c.author ?? 'Someone'} ${c.kind === 'resolved' ? 'resolved it' : 'reopened it'}_`);
-    else md.line(`  - ${c.author ?? 'Someone'}${c.via === 'mcp' ? ' (AI assistant)' : ''}: ${c.body.replace(/\s+/g, ' ')}`);
+    else md.line(`  - ${commentBy(c)}: ${c.body.replace(/\s+/g, ' ')}`);
   }
 }
 
@@ -674,6 +686,7 @@ const decideInput = z.object({
     .optional()
     .describe('With changes_requested on one capture: pin each change where it is, in percent of the image, as a numbered thread.'),
   resolveThreads: z.boolean().optional().describe('With approved: also resolve the images’ open threads (their changes are done).'),
+  agent: agentParam,
 });
 
 const decideOutput = output({
@@ -706,6 +719,7 @@ export const reviewCheckpoint = defineTool({
       userId: project.user.id,
       resolveThreads: args.resolveThreads,
       commentSource: 'mcp',
+      agentName: agentNameFor(args.agent, ctx),
     }).catch((error: unknown) => {
       if (error instanceof ReviewError) throw invalid(error.message);
       throw error;
@@ -714,7 +728,7 @@ export const reviewCheckpoint = defineTool({
     if (args.pins?.length) {
       const found = await captureInProject(project.project.id, ids[0]);
       for (const pin of args.pins) {
-        const thread = await createThread({ projectId: project.project.id, captureId: ids[0], anchor: fromPercent(pin), body: pin.comment, author: { userId: project.user.id, source: 'mcp' } }).catch((error: unknown) => {
+        const thread = await createThread({ projectId: project.project.id, captureId: ids[0], anchor: fromPercent(pin), body: pin.comment, author: { userId: project.user.id, source: 'mcp', agentName: agentNameFor(args.agent, ctx) } }).catch((error: unknown) => {
           if (error instanceof ThreadError) throw invalid(error.message);
           throw error;
         });

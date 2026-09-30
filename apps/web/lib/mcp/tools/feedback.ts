@@ -18,7 +18,7 @@ import { branchParam, commonParams, cursorParam, runParam } from '../params';
 import { defineTool, output } from '../registry';
 import { link } from '../render/markdown';
 import { resolveRun } from '../resolve';
-import { reviewUrl } from './review';
+import { agentOut, commentBy, reviewUrl } from './review';
 
 const MAX_LIMIT = 200;
 
@@ -59,7 +59,7 @@ const requestOut = z.object({
     .describe('The image the request was made on, when the current one is newer: compare the two with get_review_checkpoint against "origin".'),
   percent: box.nullable().describe('Where the pin points on the current image, in percent (threads with a pin).'),
   position: z.string().nullable().describe('The pin’s position in words, pixels and CSS pixels.'),
-  conversation: z.array(z.object({ kind: z.string(), author: z.string().nullable(), via: z.string(), at: z.string(), body: z.string() })).describe('The whole thread, oldest first.'),
+  conversation: z.array(z.object({ kind: z.string(), author: z.string().nullable(), agent: agentOut, via: z.string(), at: z.string(), body: z.string() })).describe('The whole thread, oldest first.'),
   requestedBy: z.string().nullable().optional().describe('Who asked for changes (capture requests).'),
   requestedAt: z.string().nullable().optional(),
 });
@@ -201,7 +201,7 @@ export const listFeedbackRequests = defineTool({
           const orig = r.original ? `; made on run #${r.original.run ?? '?'} (capture ${r.original.captureId})` : '';
           md.line(`- **${r.checkpoint.title}** (\`${r.checkpoint.key}\`, ${r.variant}) ${what} · ${r.stage === 'verify' ? 'changed since — verify' : 'waiting for a fix'} · now: run #${r.current.run}, capture ${r.current.captureId}${orig} · ${link('open', r.current.url)}`);
           if (r.position) md.line(`  - at ${r.position}`);
-          for (const c of r.conversation) if (c.kind === 'comment') md.line(`  - ${c.author ?? 'Someone'}${c.via === 'mcp' ? ' (AI assistant)' : ''}: ${c.body.replace(/\s+/g, ' ')}`);
+          for (const c of r.conversation) if (c.kind === 'comment') md.line(`  - ${commentBy(c)}: ${c.body.replace(/\s+/g, ' ')}`);
           if (r.kind === 'capture') md.line(`  - ${r.requestedBy ?? 'Someone'} asked for changes without saying what: look at the image${r.original ? ' as it was' : ''} with get_review_checkpoint.`);
         }
         md.heading('Producing tests (every page)', 3);

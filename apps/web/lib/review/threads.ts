@@ -45,6 +45,8 @@ export interface CommentRecord {
   body: string;
   source: CommentSource;
   userId: string | null;
+  /** The AI agent that wrote it for `userId`, if one did. */
+  agentName: string | null;
   authorName: string | null;
   authorImage: string | null;
   createdAt: Date;
@@ -168,6 +170,7 @@ async function commentsOf(threadIds: readonly string[]): Promise<Map<string, Com
       body: reviewComments.body,
       source: reviewComments.source,
       userId: reviewComments.userId,
+      agentName: reviewComments.agentName,
       authorName: users.name,
       authorImage: users.image,
       createdAt: reviewComments.createdAt,
@@ -272,6 +275,8 @@ async function captureOf(projectId: string, captureId: string) {
 export interface Author {
   userId: string | null;
   source: CommentSource;
+  /** An AI agent writing for `userId`: its name, shown as the author. */
+  agentName?: string | null;
 }
 
 /**
@@ -336,7 +341,7 @@ export async function createThread(input: {
       h: anchor.h ?? null,
       createdBy: input.author.userId,
     });
-    await tx.insert(reviewComments).values({ id: randomUUID(), threadId: id, projectId: input.projectId, userId: input.author.userId, kind: 'comment', body, source: input.author.source });
+    await tx.insert(reviewComments).values({ id: randomUUID(), threadId: id, projectId: input.projectId, userId: input.author.userId, kind: 'comment', body, source: input.author.source, agentName: input.author.agentName ?? null });
   });
   const [thread] = await selectThreads(sql`${reviewThreads.id} = ${id}`);
   return thread;
@@ -364,7 +369,7 @@ export async function replyToThread(input: { projectId: string; threadId: string
   if (!thread) throw new ThreadError('That thread is not in this project.');
   const id = randomUUID();
   await db.transaction(async (tx) => {
-    await tx.insert(reviewComments).values({ id, threadId: thread.id, projectId: input.projectId, userId: input.author.userId, kind: 'comment', body, source: input.author.source });
+    await tx.insert(reviewComments).values({ id, threadId: thread.id, projectId: input.projectId, userId: input.author.userId, kind: 'comment', body, source: input.author.source, agentName: input.author.agentName ?? null });
     await tx.update(reviewThreads).set({ lastActivityAt: sql`now()` }).where(eq(reviewThreads.id, thread.id));
   });
   const comments = await commentsOf([thread.id]);
@@ -390,7 +395,7 @@ export async function setThreadStatus(input: {
   const capture = input.captureId ? await captureOf(input.projectId, input.captureId) : null;
   const changed = thread.status !== input.status;
   await db.transaction(async (tx) => {
-    if (body) await tx.insert(reviewComments).values({ id: randomUUID(), threadId: thread.id, projectId: input.projectId, userId: input.author.userId, kind: 'comment', body, source: input.author.source });
+    if (body) await tx.insert(reviewComments).values({ id: randomUUID(), threadId: thread.id, projectId: input.projectId, userId: input.author.userId, kind: 'comment', body, source: input.author.source, agentName: input.author.agentName ?? null });
     if (!changed) return;
     await tx.insert(reviewComments).values({
       id: randomUUID(),
@@ -399,6 +404,7 @@ export async function setThreadStatus(input: {
       userId: input.author.userId,
       kind: input.status === 'resolved' ? 'resolved' : 'reopened',
       source: input.author.source,
+      agentName: input.author.agentName ?? null,
       // After the closing comment, however close the clock.
       createdAt: sql`now() + interval '1 millisecond'`,
     });

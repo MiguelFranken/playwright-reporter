@@ -268,7 +268,7 @@ Comments reach the assistant the way you placed them: `get_review_checkpoint` dr
 numbered pins (and the areas they mark), attaches a close-up of each pin, and lists the threads by the same numbers —
 so "#2: the totals lost their border" points at a place on the page. `list_review_threads` lists a run's open threads
 with their positions in pixels, percent and CSS pixels. With a write-scoped token, `comment_on_review` pins a thread or
-replies to one, and `resolve_review_thread` resolves it; comments an assistant writes say so. Ask it to fix the open
+replies to one, and `resolve_review_thread` resolves it. What an assistant writes shows as an AI agent's comment — its name (pass `agent`, e.g. "Codex"; an OAuth app's own name otherwise), a robot avatar and an **Agent** badge — for the person whose access it used, so a reported fix is never mistaken for a colleague's word. The comment list shows an agent's latest reply on the thread's row. Ask it to fix the open
 comments of a run, and it can reply with what it changed for you to check — when you tell it to; a write-scoped token
 alone does not make it post.
 

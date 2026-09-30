@@ -83,8 +83,17 @@ describe('review thread tools', () => {
     const forged = await annotatedImage(new Request(annotatedUrl.replace(/sig=[^&]+/, 'sig=nope')), { params: Promise.resolve({ captureId }) });
     expect(forged.status).toBe(404);
 
-    const replied = await call(writer, 'comment_on_review', { project, capture: captureId, thread: 1, body: 'Done in 9f2c1ab.' });
+    const replied = await call(writer, 'comment_on_review', { project, capture: captureId, thread: 1, body: 'Done in 9f2c1ab.', agent: 'Codex' });
     expect(replied.structuredContent).toMatchObject({ action: 'replied', thread: 1 });
+    // The reply is the agent's, written for the person whose token it used; unnamed, it is "AI agent".
+    const withReply = await call(writer, 'list_review_threads', { project, capture: captureId });
+    const reply = (withReply.structuredContent!.images as { threads: { number: number; comments: { body: string; author: string | null; agent?: { name: string; for: string | null } | null }[] }[] }[])[0].threads[0].comments.at(-1)!;
+    expect(reply).toMatchObject({ body: 'Done in 9f2c1ab.', author: 'Codex', agent: { name: 'Codex', for: tenant.adminUser.name } });
+    expect((withReply.content as { type: string; text?: string }[])[0].text).toContain('Codex (AI agent for');
+    const [stored] = await db.select().from(reviewComments).where(eq(reviewComments.body, 'Done in 9f2c1ab.'));
+    expect(stored).toMatchObject({ agentName: 'Codex', userId: tenant.adminUser.id, source: 'mcp' });
+    const [pinnedRow] = await db.select().from(reviewComments).where(eq(reviewComments.body, 'The order button should be primary.'));
+    expect(pinnedRow.agentName).toBe('AI agent');
     const resolved = await call(writer, 'resolve_review_thread', { project, capture: captureId, thread: 1, comment: 'Verified on the next run.' });
     expect(resolved.structuredContent).toMatchObject({ thread: 1, status: 'resolved', changed: true });
     const again = await call(writer, 'resolve_review_thread', { project, capture: captureId, thread: 1 });
