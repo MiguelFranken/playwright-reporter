@@ -1,11 +1,10 @@
-import { ClipboardList } from 'lucide-react';
+import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
 import { Suspense } from 'react';
-import { EmptyState } from '@miguelfranken/ui/patterns/empty-state';
 import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
 import { Skeleton } from '@miguelfranken/ui/components/skeleton';
-import { FilterSkeleton, MetricCardsSkeleton, TableRowsSkeleton } from '@miguelfranken/ui/patterns/skeletons';
+import { FilterSkeleton, MetricCardsSkeleton } from '@miguelfranken/ui/patterns/skeletons';
 import { organizePrompt } from '@miguelfranken/ui/lib/ai-handoff';
-import { flattenSuites, type SuiteNode } from '@miguelfranken/ui/lib/test-case-models';
+import { flattenSuites } from '@miguelfranken/ui/lib/test-case-models';
 import {
   CASE_AUTOMATION_LABELS,
   CASE_AUTOMATIONS,
@@ -18,16 +17,17 @@ import {
   labelItems,
 } from '@miguelfranken/ui/lib/test-cases';
 import { CoverageSummary } from '@miguelfranken/ui/views/test-cases/coverage-summary';
-import { Pagination } from '@/components/filters/pagination';
-import { ResultsBoundary } from '@/components/filters/results-boundary';
-import { UrlMultiSelect, UrlSearch } from '@/components/filters/url-filters';
-import { CaseList } from '@/components/test-cases/case-list';
+import { ShallowUrlParams, UrlMultiSelect, UrlSearch } from '@/components/filters/url-filters';
 import { LibraryActions } from '@/components/test-cases/library-actions';
 import { SuiteSidebar } from '@/components/test-cases/suite-sidebar';
+import { CASE_LIST_SKELETON, UrlCaseResults } from '@/components/test-cases/url-case-results';
 import { requireProject } from '@/lib/auth/access';
 import { baseUrl } from '@/lib/auth/config';
 import { getCoverage, getSuiteTree, listCases, listCaseTags, renderedAt } from '@/lib/page-data';
-import { listQuery, parseCaseFilters } from '@/lib/test-cases/filters';
+import { makeServerQueryClient } from '@/lib/rpc/prefetch';
+import { caseListQuery } from '@/lib/rpc/queries';
+import { caseListView } from '@/lib/test-cases/case-list-view';
+import { caseListKey } from '@/lib/test-cases/filters';
 
 type SearchParams = Record<string, string | string[] | undefined>;
 type Params = Promise<{ team: string; project: string }>;
@@ -41,6 +41,11 @@ function first(v: string | string[] | undefined) {
  * The test case library: coverage at the top, the suite tree beside the list.
  * The header, the search and the static filters render at once; the tree,
  * the numbers and the list each stream on their own.
+ *
+ * The suite, the filters, the sort and the page change in place
+ * (`ShallowUrlParams`): the list reads a cached query per combination, which
+ * this page seeds with the one it rendered, so nothing below renders on the
+ * server again for them.
  */
 export default function CasesPage({ params, searchParams }: Props) {
   return (
@@ -55,10 +60,11 @@ export default function CasesPage({ params, searchParams }: Props) {
         <Coverage params={params} />
       </Suspense>
 
+      <ShallowUrlParams>
       <div className="grid gap-6 lg:grid-cols-[15rem_minmax(0,1fr)] xl:grid-cols-[17rem_minmax(0,1fr)]">
         <aside className="min-w-0">
           <Suspense fallback={<Skeleton className="h-64 w-full" />}>
-            <Tree params={params} searchParams={searchParams} />
+            <Tree params={params} />
           </Suspense>
         </aside>
         <div className="flex min-w-0 flex-col gap-3">
@@ -74,11 +80,12 @@ export default function CasesPage({ params, searchParams }: Props) {
               </Suspense>
             </div>
           </div>
-          <ResultsBoundary searchParams={searchParams} omit={['adopt']} fallback={<TableRowsSkeleton rows={10} columns={[8, 40, 8, 12, 16, 12]} className="panel" />}>
+          <Suspense fallback={CASE_LIST_SKELETON}>
             <Results params={params} searchParams={searchParams} />
-          </ResultsBoundary>
+          </Suspense>
         </div>
       </div>
+      </ShallowUrlParams>
     </>
   );
 }
@@ -88,7 +95,6 @@ async function HeaderActions({ params, searchParams }: Props) {
   const access = await requireProject(team, slug);
   const base = `/teams/${team}/projects/${access.project.slug}`;
   const tree = await getSuiteTree(access.project.id);
-  const suite = parseCaseFilters(sp).suite;
   return (
     <LibraryActions
       base={base}
@@ -96,8 +102,8 @@ async function HeaderActions({ params, searchParams }: Props) {
       suites={flattenSuites(tree.roots)}
       canCreate={access.can({ testCase: ['create'] })}
       startAdopting={first(sp.adopt) === '1'}
-      newCaseHref={`${base}/cases/new${suite && suite !== 'unassigned' ? `?suite=${suite}` : ''}`}
-      exportHref={`${base}/cases/export${suite ? `?suite=${suite}` : ''}`}
+      newCaseHref={`${base}/cases/new`}
+      exportHref={`${base}/cases/export`}
       aiPrompt={organizePrompt({ casesUrl: `${baseUrl()}${base}/cases` })}
     />
   );
@@ -121,8 +127,9 @@ async function Coverage({ params }: { params: Params }) {
   );
 }
 
-async function Tree({ params, searchParams }: Props) {
-  const [{ team, project: slug }, sp] = await Promise.all([params, searchParams]);
+/** The tree reads the suite on screen from the URL itself, so it does not wait for the query. */
+async function Tree({ params }: { params: Params }) {
+  const { team, project: slug } = await params;
   const access = await requireProject(team, slug);
   const tree = await getSuiteTree(access.project.id);
   return (
@@ -132,7 +139,6 @@ async function Tree({ params, searchParams }: Props) {
       roots={tree.roots}
       total={tree.total}
       unassigned={tree.unassigned}
-      selected={parseCaseFilters(sp).suite ?? null}
       canEdit={access.can({ testCase: ['update'] })}
       canDelete={access.can({ testCase: ['delete'] })}
     />
@@ -147,65 +153,32 @@ async function TagFilter({ params }: { params: Params }) {
   return <UrlMultiSelect param="tag" placeholder="Tag" allLabel="All tags" options={tags.map((t) => ({ value: t, label: t }))} className="min-w-28" />;
 }
 
+/**
+ * Renders the list on the server once, into the query the client list reads.
+ * The read is a private cache (`lib/page-data.ts`), so hovering a link here
+ * prefetches the page with its rows.
+ */
 async function Results({ params, searchParams }: Props) {
   const [{ team, project: slug }, sp] = await Promise.all([params, searchParams]);
   const access = await requireProject(team, slug);
-  const base = `/teams/${team}/projects/${access.project.slug}`;
-  const filters = parseCaseFilters(sp);
+  const projectRef = { team, project: access.project.slug };
   const now = await renderedAt();
-  const [result, tree] = await Promise.all([listCases(access.project.id, filters, now), getSuiteTree(access.project.id)]);
-  const canCreate = access.can({ testCase: ['create'] });
-
-  if (result.rows.length === 0) {
-    const filtered = Object.keys(sp).some((k) => k !== 'suite' && k !== 'adopt' && sp[k]);
-    if (tree.total === 0) {
-      return (
-        <EmptyState
-          icon={ClipboardList}
-          title="No test cases yet"
-          description={
-            canCreate
-              ? 'Write a case by hand, or adopt the Playwright tests this project already runs: each becomes a case that is linked to it.'
-              : 'Nobody has written a test case for this project yet.'
-          }
-        />
-      );
-    }
-    return (
-      <EmptyState
-        icon={ClipboardList}
-        title={filtered ? 'No test cases match' : 'This suite is empty'}
-        description={filtered ? 'Try clearing a filter or searching for something else.' : 'Create a case here, or move cases into this suite from the list.'}
-      />
-    );
-  }
-
-  const inOneSuite = !!filters.suite;
-  // Moving up and down is within one suite's own cases: a suite with sub-suites lists theirs too.
-  const unfiltered = Object.keys(sp).every((k) => k === 'suite' || k === 'adopt' || !sp[k]);
-  const leaf = filters.suite === 'unassigned' || !flattenSuites(tree.roots).some((s) => s.value !== filters.suite && isChildOf(tree.roots, s.value, filters.suite!));
+  const key = caseListKey(sp);
+  const [view, tree] = await Promise.all([caseListView(access.project.id, key, now, listCases), getSuiteTree(access.project.id)]);
+  const queries = makeServerQueryClient();
+  queries.setQueryData(caseListQuery(projectRef, key).queryKey, view);
   return (
-    <>
-      <CaseList
-        base={base}
-        projectRef={{ team, project: access.project.slug }}
-        rows={result.rows}
-        suites={flattenSuites(tree.roots)}
+    <HydrationBoundary state={dehydrate(queries)}>
+      <UrlCaseResults
+        base={`/teams/${team}/projects/${access.project.slug}`}
+        projectRef={projectRef}
+        roots={tree.roots}
+        total={tree.total}
+        canCreate={access.can({ testCase: ['create'] })}
         canEdit={access.can({ testCase: ['update'] })}
         canDelete={access.can({ testCase: ['delete'] })}
-        showSuite={!inOneSuite || filters.suite !== 'unassigned'}
-        reorderable={inOneSuite && leaf && unfiltered && result.total === result.rows.length}
-        sort={filters.sort}
-        dir={filters.dir}
         now={now}
-        caseQuery={listQuery(sp)}
       />
-      <Pagination page={result.page} pageSize={result.pageSize} total={result.total} />
-    </>
+    </HydrationBoundary>
   );
-}
-
-function isChildOf(roots: SuiteNode[], id: string, parentId: string): boolean {
-  const walk = (nodes: SuiteNode[]): boolean => nodes.some((n) => (n.id === id ? n.parentId === parentId : walk(n.children)));
-  return walk(roots);
 }

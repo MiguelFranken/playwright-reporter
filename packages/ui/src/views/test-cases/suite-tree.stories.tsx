@@ -66,3 +66,22 @@ export const ReadOnly: Story = {
 export const NoSuites: Story = { args: { roots: [], total: 4, unassigned: 4, selected: 'unassigned' } };
 
 export const LongNames: Story = { args: { roots: longSuiteTree, selected: 's-long' } };
+
+/**
+ * A host that switches the list in place takes the click (`onSelect`) and
+ * hears where the pointer rests (`onIntent`) to load that list ahead of it.
+ */
+export const SelectsInPlace: Story = {
+  args: { onSelect: fn(), onIntent: fn() },
+  play: async ({ canvasElement, args }) => {
+    const c = within(canvasElement);
+    await userEvent.hover(c.getByRole('link', { name: /Search/ }));
+    await expect(args.onIntent).toHaveBeenCalledWith('s-search');
+    await userEvent.click(c.getByRole('link', { name: /Search/ }));
+    await expect(args.onSelect).toHaveBeenCalledWith('s-search');
+    await userEvent.click(c.getByRole('link', { name: /All test cases/ }));
+    await expect(args.onSelect).toHaveBeenCalledWith(null);
+    await userEvent.click(c.getByRole('link', { name: /Unassigned/ }));
+    await expect(args.onSelect).toHaveBeenCalledWith('unassigned');
+  },
+};

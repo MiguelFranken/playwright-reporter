@@ -17,8 +17,17 @@ import { isUuid, parsePage } from '@/lib/db/queries/shared';
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
-/** The params that shape the list; anything else (a dialog flag) is not carried to a case. */
-export const LIST_PARAMS = ['suite', 'q', 'status', 'priority', 'type', 'automation', 'verdict', 'tag', 'attention', 'unverified', 'sort', 'dir'] as const;
+/** A query string as the record the parser takes, with repeated params as arrays. */
+export function searchRecord(query: string): SearchParams {
+  const out: Record<string, string | string[]> = {};
+  for (const [k, v] of new URLSearchParams(query)) {
+    const prev = out[k];
+    out[k] = prev === undefined ? v : Array.isArray(prev) ? [...prev, v] : [prev, v];
+  }
+  return out;
+}
+
+export { caseListKey, LIST_PARAMS, listQuery } from './list-params';
 
 function first(v: string | string[] | undefined): string | undefined {
   return Array.isArray(v) ? v[0] : v;
@@ -48,15 +57,4 @@ export function parseCaseFilters(sp: SearchParams): CaseFilters & { sort: CaseSo
     dir: first(sp.dir) === 'desc' ? 'desc' : 'asc',
     page: parsePage(first(sp.page)),
   };
-}
-
-/** The list's own params as a query string (with its `?`), to carry onto a case link. */
-export function listQuery(sp: SearchParams): string {
-  const out = new URLSearchParams();
-  for (const key of LIST_PARAMS) {
-    const v = sp[key];
-    for (const value of Array.isArray(v) ? v : v ? [v] : []) out.append(key, value);
-  }
-  const qs = out.toString();
-  return qs ? `?${qs}` : '';
 }
