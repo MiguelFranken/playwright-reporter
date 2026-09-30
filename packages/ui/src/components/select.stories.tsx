@@ -12,21 +12,7 @@ const BROWSERS = [
 const meta = {
   title: 'Primitives/Forms/Select',
   component: Select,
-  parameters: {
-    layout: 'centered',
-    a11y: {
-      config: {
-        // Base UI's positioner inserts aria-hidden, tabbable focus guards
-        // around the open listbox. axe reads them as unnamed input fields and
-        // as focusable aria-hidden content. They are the library's focus trap,
-        // not controls of ours, and there is nothing to name or expose.
-        rules: [
-          { id: 'aria-input-field-name', enabled: false },
-          { id: 'aria-hidden-focus', enabled: false },
-        ],
-      },
-    },
-  },
+  parameters: { layout: 'centered' },
   args: { onValueChange: fn() },
 } satisfies Meta<typeof Select>;
 
@@ -76,6 +62,33 @@ export const Grouped: Story = {
 
 export const Disabled: Story = { render: BrowserSelect, args: { disabled: true } };
 
+/** Labelled by a `<label for>` instead of `aria-label`: the listbox takes that name too. */
+export const WithVisibleLabel: Story = {
+  render: (args) => (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor="browser-select" className="text-label-m">
+        Browser
+      </label>
+      <Select items={BROWSERS} defaultValue="all" {...args}>
+        <SelectTrigger id="browser-select" className="min-w-48">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {BROWSERS.map((b) => (
+            <SelectItem key={b.value} value={b.value}>
+              {b.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    await userEvent.click(within(canvasElement).getByRole('combobox', { name: 'Browser' }));
+    await expect(await within(document.body).findByRole('listbox', { name: 'Browser' })).toBeInTheDocument();
+  },
+};
+
 /** Pointer path. The listbox is portalled, so it is queried off the body. */
 export const PicksAnOption: Story = {
   render: BrowserSelect,
@@ -98,7 +111,9 @@ export const PicksByKeyboard: Story = {
     trigger.focus();
     await userEvent.keyboard('{Enter}');
 
-    const listbox = await within(document.body).findByRole('listbox');
+    // The listbox carries the trigger's name, so a screen reader announces
+    // "Browser, listbox" rather than a bare list.
+    const listbox = await within(document.body).findByRole('listbox', { name: 'Browser' });
     await waitFor(() => expect(within(listbox).getAllByRole('option').length).toBeGreaterThan(1));
 
     await userEvent.keyboard('{ArrowDown}{Enter}');
