@@ -11,7 +11,6 @@ const meta = {
   component: ScreenFrame,
   args: { image: tall[0].image, frame: { width: 1280, height: 720 }, zoom: 0.4, alt: 'Checkout filled in — desktop' },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta<typeof ScreenFrame>;
 
 export default meta;

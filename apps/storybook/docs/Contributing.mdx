@@ -52,5 +52,5 @@ Rules worth knowing:
 - Base UI portals its overlays, so query Dialog/Select/Tooltip content with
   `within(document.body)`, not the canvas.
 - Views take fixtures from `src/fixtures`; never inline a large object in a story.
-- Tag Patterns and Views stories `['themed']` to have them run in dark mode too.
+- Every story runs twice, in light and in dark mode; there is nothing to opt into.
 - Relative times must pass the `NOW` fixture, or assertions drift by the day.

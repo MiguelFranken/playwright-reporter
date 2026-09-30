@@ -9,7 +9,6 @@ const meta = {
   args: { flows: reviewFlows, onDecide: fn(), onFilterChange: fn(), onSelectionChange: fn(), onFolderChange: fn(), onSizeChange: fn() },
   parameters: { layout: 'fullscreen' },
   decorators: [(Story) => <div className="min-h-dvh bg-surface p-6">{Story()}</div>],
-  tags: ['themed'],
 } satisfies Meta<typeof ReviewStoryboard>;
 
 export default meta;

@@ -6,7 +6,6 @@ const meta = {
   title: 'Marketing/Sections/CtaBand',
   component: CtaBand,
   parameters: { layout: 'fullscreen' },
-  tags: ['themed'],
   args: {
     heading: 'Point it at a Neon branch and run the demo.',
     text: <p>Five minutes, one database, no account to create.</p>,

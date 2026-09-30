@@ -8,7 +8,6 @@ const meta = {
   title: 'Views/Library/Dialogs/LibraryReferenceDialog',
   component: LibraryReferenceDialog,
   args: { open: true, onOpenChange: fn(), reference: redesignReference, runs: redesignRuns, onSave: fn(), onRemove: fn(), now: NOW },
-  tags: ['themed'],
 } satisfies Meta<typeof LibraryReferenceDialog>;
 
 export default meta;

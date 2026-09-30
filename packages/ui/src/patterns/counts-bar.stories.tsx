@@ -19,7 +19,6 @@ const meta = {
   component: CountsBar,
   args: { counts: counts({ total: 240, passed: 228, flaky: 7, failed: 5 }) },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   decorators: [(Story) => <div className="max-w-md">{Story()}</div>],
 } satisfies Meta<typeof CountsBar>;
 

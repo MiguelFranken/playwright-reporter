@@ -8,7 +8,6 @@ const meta = {
   component: ResultAttempts,
   args: { attempts },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta<typeof ResultAttempts>;
 
 export default meta;

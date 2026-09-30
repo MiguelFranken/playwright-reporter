@@ -3,23 +3,10 @@ import { expect, fn, userEvent, within } from 'storybook/test';
 import { INVITATION_LINK, INVITATIONS, MEMBERS } from '../../fixtures/teams';
 import { InviteDialog, TeamMembers } from './team-members';
 
-const OPEN_SELECT_A11Y = {
-  a11y: {
-    config: {
-      // Base UI's focus guards around an open listbox. Same exception as Primitives/Select.
-      rules: [
-        { id: 'aria-input-field-name', enabled: false },
-        { id: 'aria-hidden-focus', enabled: false },
-      ],
-    },
-  },
-} as const;
-
 const meta = {
   title: 'Views/Teams/Members',
   component: TeamMembers,
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   args: {
     members: MEMBERS,
     invitations: INVITATIONS,
@@ -63,7 +50,6 @@ export const Default: Story = {
 };
 
 export const ChangesARole: Story = {
-  parameters: OPEN_SELECT_A11Y,
   play: async ({ canvasElement, args }) => {
     await userEvent.click(within(canvasElement).getByRole('combobox', { name: 'Role of Grace Hopper' }));
     await userEvent.click(await within(document.body).findByRole('option', { name: 'Admin' }));
@@ -107,7 +93,6 @@ type DialogStory = StoryObj<typeof InviteDialog>;
 
 /** Pick a role, read what it allows, then create a link or add an existing account. */
 export const Invite: DialogStory = {
-  parameters: OPEN_SELECT_A11Y,
   render: (args) => <InviteDialog {...args} />,
   args: { open: true, onOpenChange: fn(), onSubmit: fn() },
   play: async ({ args }) => {

@@ -7,7 +7,6 @@ const meta = {
   title: 'Views/Account/Access/Connected apps',
   component: ConnectedApps,
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   args: { apps: CONNECTED_APPS, onDisconnect: fn() },
   decorators: [
     (Story) => (

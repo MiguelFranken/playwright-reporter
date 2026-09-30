@@ -7,7 +7,6 @@ const meta = {
   title: 'Marketing/Sections/ComparisonTable',
   component: ComparisonTable,
   parameters: { layout: 'fullscreen' },
-  tags: ['themed'],
   args: {
     header: { heading: 'How it compares', intro: <p>Facts, not marketing. Where we do less, it says so.</p> },
     columns: comparisonColumns,

@@ -27,7 +27,6 @@ const meta = {
   component: Hosted,
   args: { image: changed.image, diff: checkoutDesktopDiff, frame: { width: 1280, height: 720 }, zoom: 0.5, alt: 'Checkout filled in', onActiveChange: fn() },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta<typeof Hosted>;
 
 export default meta;

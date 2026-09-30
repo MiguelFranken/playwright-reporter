@@ -13,7 +13,6 @@ import { RetentionSweepsTable, StorageUsageTable, StoreSchedule } from '../views
 const meta = {
   title: 'Pages/Admin storage',
   parameters: { layout: 'fullscreen' },
-  tags: ['themed'],
 } satisfies Meta;
 
 export default meta;

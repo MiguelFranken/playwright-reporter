@@ -6,7 +6,6 @@ const meta = {
   title: 'Views/Teams/General',
   component: TeamGeneralForm,
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   args: { name: 'Acme', slug: 'acme', onSubmit: fn() },
 } satisfies Meta<typeof TeamGeneralForm>;
 

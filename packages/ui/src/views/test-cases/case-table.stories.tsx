@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useState } from 'react';
 import { expect, fn, userEvent, within } from 'storybook/test';
-import { PENDING_STATE_A11Y } from '../../fixtures/a11y';
 import { NOW } from '../../fixtures/now';
 import { caseRows, longCaseRow } from '../../fixtures/test-cases';
 import { CaseTable, type CaseTableProps } from './case-table';
@@ -21,7 +20,6 @@ function Selectable(props: CaseTableProps) {
 const meta = {
   title: 'Views/TestCases/Library/CaseTable',
   component: CaseTable,
-  tags: ['themed'],
   args: {
     rows: caseRows,
     hrefs: { case: (n: number) => `/cases/${n}` },
@@ -73,4 +71,4 @@ export const InSuiteOrder: Story = {
 
 export const LongText: Story = { args: { rows: [longCaseRow, ...caseRows.slice(0, 2)] } };
 
-export const Pending: Story = { args: { isPending: true }, parameters: PENDING_STATE_A11Y };
+export const Pending: Story = { args: { isPending: true } };

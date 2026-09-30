@@ -11,7 +11,6 @@ const hrefs = { run: (n: number) => `#run-${n}`, branch: (name: string) => `#bra
 const meta = {
   title: 'Views/Branches',
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta;
 
 export default meta;

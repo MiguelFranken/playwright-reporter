@@ -5,7 +5,6 @@ import { ForceDeleteStorage } from './force-delete-storage';
 const meta = {
   title: 'Views/Admin/Storage/Force delete',
   component: ForceDeleteStorage,
-  tags: ['themed'],
   args: { open: false, onOpenChange: fn(), expected: 'delete all artifacts', onConfirm: fn() },
 } satisfies Meta<typeof ForceDeleteStorage>;
 

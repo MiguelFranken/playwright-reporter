@@ -5,7 +5,6 @@ const meta = {
   title: 'Marketing/Sections/SectionHeader',
   component: SectionHeader,
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   args: {
     content: {
       eyebrow: 'Flakiness',

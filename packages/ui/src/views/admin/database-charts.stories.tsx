@@ -15,7 +15,6 @@ const meta = {
   component: DatabaseIngestChart,
   args: { data: ingestDays() },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   decorators: [(Story) => <div className="w-full max-w-4xl">{Story()}</div>],
 } satisfies Meta<typeof DatabaseIngestChart>;
 

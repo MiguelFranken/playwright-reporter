@@ -1,13 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, fn, userEvent, within } from 'storybook/test';
-import { PENDING_STATE_A11Y } from '../../fixtures/a11y';
 import { VisualDiffForm } from './visual-diff-form';
 
 const meta = {
   title: 'Views/Settings/General/Visual comparison',
   component: VisualDiffForm,
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   args: { value: { threshold: 0.1, autoApprove: true, maxChangedPixels: 0, maxChangedPercent: 0 }, action: fn() },
   decorators: [
     (Story) => (
@@ -50,6 +48,6 @@ export const ReadOnly: Story = { args: { disabled: true } };
 /** A deployment that measures nothing (a Vercel preview, or `IMAGE_DIFF_DRIVER=none`). */
 export const NotMeasured: Story = { args: { inactiveReason: 'This deployment does not measure image comparisons (IMAGE_DIFF_DRIVER is none). The settings apply where it does.' } };
 
-export const Saving: Story = { args: { pending: true }, parameters: PENDING_STATE_A11Y };
+export const Saving: Story = { args: { pending: true } };
 
 export const WithError: Story = { args: { error: 'The threshold is between 0.01 and 0.5.' } };

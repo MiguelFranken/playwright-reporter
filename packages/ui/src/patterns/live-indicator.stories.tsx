@@ -8,7 +8,6 @@ const meta = {
   args: { state: 'live' },
   argTypes: { state: { control: 'inline-radio', options: ['connecting', 'live', 'polling', 'done', 'off'] } },
   parameters: { layout: 'centered' },
-  tags: ['themed'],
 } satisfies Meta<typeof LiveIndicator>;
 
 export default meta;

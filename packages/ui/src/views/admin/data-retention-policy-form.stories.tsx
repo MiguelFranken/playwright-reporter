@@ -11,7 +11,6 @@ const meta = {
   title: 'Views/Admin/Retention/Data retention policy',
   component: DataRetentionPolicyForm,
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   args: { policy: DATA_RETENTION_POLICY, action: fn(), artifactDays: 30, onFieldsChange: fn() },
   decorators: [
     (Story) => (

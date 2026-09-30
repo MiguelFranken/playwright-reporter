@@ -10,7 +10,6 @@ const meta = {
   component: MetricCard,
   args: { label: 'Pass rate', value: '98.4%' },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   decorators: [
     (Story) => (
       <TooltipProvider>

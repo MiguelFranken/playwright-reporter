@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, within } from 'storybook/test';
-import { PENDING_STATE_A11Y } from '../../fixtures/a11y';
 import { DUE_PREVIEW, STORAGE_USAGE } from '../../fixtures/admin';
 import { DataRetentionDue } from './database';
 import { PolicyPreview } from './policy-preview';
@@ -10,7 +9,6 @@ const meta = {
   title: 'Views/Admin/Retention/Policy preview',
   component: PolicyPreview,
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   args: { status: 'ready', children: <DataRetentionDue due={DUE_PREVIEW} enabled caption={null} /> },
   decorators: [
     (Story) => (
@@ -48,7 +46,6 @@ export const Loading: Story = {
 /** The previous answer stays, dimmed, while the next one loads. */
 export const Updating: Story = {
   args: { status: 'updating' },
-  parameters: PENDING_STATE_A11Y,
   play: async ({ canvasElement }) => {
     const region = within(canvasElement).getByRole('region', { name: 'If you save these changes' });
     await expect(region).toHaveAttribute('aria-busy', 'true');

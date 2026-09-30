@@ -6,7 +6,6 @@ const meta = {
   title: 'Marketing/Site chrome/AnnouncementBar',
   component: AnnouncementBar,
   parameters: { layout: 'fullscreen' },
-  tags: ['themed'],
   args: {
     text: 'v0.4 adds per-shard progress and the flaky-test drawer.',
     href: '/features',

@@ -10,7 +10,6 @@ const meta = {
   component: DebugWithAiMenu,
   args: { prompt: debugPrompt({ resultUrl: RESULT_URL }), setupHref: '/account/ai' },
   parameters: { layout: 'centered' },
-  tags: ['themed'],
 } satisfies Meta<typeof DebugWithAiMenu>;
 
 export default meta;

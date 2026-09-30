@@ -28,7 +28,6 @@ const meta = {
   component: OnAScreen,
   args: { captureId: tall.id, threads: reviewThreads, label: 'Checkout, desktop', now: NOW, viewerId: VIEWER_ID, canComment: true, onCreateThread: fn(), onReply: fn(), onSetThreadStatus: fn() },
   parameters: { layout: 'centered' },
-  tags: ['themed'],
 } satisfies Meta<typeof OnAScreen>;
 
 export default meta;

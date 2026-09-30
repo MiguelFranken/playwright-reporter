@@ -2,7 +2,6 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { counts } from '../../fixtures/runs';
 import { mixedResults, passedResults } from '../../fixtures/results';
-import { PENDING_STATE_A11Y } from '../../fixtures/a11y';
 import { RunSummary } from './run-summary';
 
 const hrefs = {
@@ -22,7 +21,6 @@ const meta = {
     onFilterChange: fn(),
   },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta<typeof RunSummary>;
 
 export default meta;
@@ -52,7 +50,7 @@ export const FilteredByErrorGroup: Story = {
   },
 };
 
-export const Pending: Story = { args: { isPending: true }, parameters: PENDING_STATE_A11Y };
+export const Pending: Story = { args: { isPending: true } };
 
 /** The outcome tiles are links, so the filtered view is a real, shareable URL. */
 export const TilesLinkToFilteredViews: Story = {

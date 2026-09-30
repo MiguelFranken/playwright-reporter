@@ -7,7 +7,6 @@ const meta = {
   title: 'Marketing/Sections/Faq',
   component: Faq,
   parameters: { layout: 'fullscreen' },
-  tags: ['themed'],
   args: {
     header: { eyebrow: 'FAQ', heading: 'Questions engineers actually ask' },
     items: faqItems.map((item) => ({ ...item, answer: <p>{item.answer}</p> })),

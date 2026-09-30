@@ -14,7 +14,6 @@ import { PurgeRunHistory } from '../views/admin/purge-run-history';
 const meta = {
   title: 'Pages/Admin database',
   parameters: { layout: 'fullscreen' },
-  tags: ['themed'],
 } satisfies Meta;
 
 export default meta;

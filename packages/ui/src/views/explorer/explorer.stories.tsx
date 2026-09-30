@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { explorerRows } from '../../fixtures/tests';
 import { emptyTestOverview, healthyTestOverview, testOverview } from '../../fixtures/tests';
 import { NOW } from '../../fixtures/now';
-import { PENDING_STATE_A11Y } from '../../fixtures/a11y';
 import { ExplorerTable, type ExplorerSort, type SortDir } from './explorer-table';
 import { TestDrawer } from './test-drawer';
 import { TestOverview, type TestOverviewPreview } from './test-overview';
@@ -46,7 +45,6 @@ const meta = {
     onTestIntent: fn(),
   },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta<typeof ExplorerTable>;
 
 export default meta;
@@ -58,7 +56,7 @@ export const Empty: Story = { args: { rows: [] } };
 
 export const RowSelected: Story = { args: { activeTestId: 't1' } };
 
-export const Pending: Story = { args: { isPending: true }, parameters: PENDING_STATE_A11Y };
+export const Pending: Story = { args: { isPending: true } };
 
 export const SortedByReliability: Story = { args: { sort: 'reliability', dir: 'asc' } };
 

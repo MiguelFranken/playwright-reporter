@@ -5,7 +5,6 @@ import { TokenRevealDialog } from './token-reveal-dialog';
 const meta = {
   title: 'Patterns/Dialogs/TokenRevealDialog',
   component: TokenRevealDialog,
-  tags: ['themed'],
   args: {
     created: { name: 'GitHub Actions', token: 'pwr_live_9f2c8a41b6d3e7f0a2c5b8d1e4f7a0c3b6d9e2f5' },
     onDismiss: fn(),

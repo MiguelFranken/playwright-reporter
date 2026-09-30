@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { useState } from 'react';
-import { PENDING_STATE_A11Y } from '../fixtures/a11y';
 import { Button } from '../components/button';
 import {
   FilterSelect,
@@ -25,7 +24,6 @@ const meta = {
   component: RangeToggle,
   args: { value: '30', onValueChange: fn() },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta<typeof RangeToggle>;
 
 export default meta;
@@ -113,7 +111,6 @@ export const Bar: Story = {
 
 /** What a control looks like while a navigation transition is in flight. */
 export const Pending: Story = {
-  parameters: PENDING_STATE_A11Y,
   render: () => (
     <div className="flex flex-wrap items-center gap-2">
       <RangeToggle isPending value="30" onValueChange={fn()} />

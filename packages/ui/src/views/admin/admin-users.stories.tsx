@@ -8,7 +8,6 @@ const meta = {
   title: 'Views/Admin/Directory/Users',
   component: AdminUsers,
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   args: {
     users: ADMIN_USERS,
     currentUserId: 'u-ada',

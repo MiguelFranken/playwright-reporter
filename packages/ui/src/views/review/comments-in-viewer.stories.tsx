@@ -30,7 +30,6 @@ const meta = {
   component: Hosted,
   args: { flows: commentedFlows, initial: { checkpointId: commentedCheckpointId, variant: 'desktop' }, onDecide: fn(), comments },
   parameters: { layout: 'fullscreen' },
-  tags: ['themed'],
   // The callbacks are shared by every story here: each starts with none recorded.
   beforeEach: () => {
     for (const f of Object.values(comments)) if (typeof f === 'function' && 'mockClear' in f) f.mockClear();

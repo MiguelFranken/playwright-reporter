@@ -8,7 +8,6 @@ const meta = {
   component: DiffBadge,
   args: { diff: checkoutDesktopDiff },
   parameters: { layout: 'centered' },
-  tags: ['themed'],
 } satisfies Meta<typeof DiffBadge>;
 
 export default meta;

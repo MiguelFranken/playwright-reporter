@@ -28,7 +28,6 @@ const meta = {
   component: Hosted,
   args: { flows: reviewFlows, initial: { checkpointId: changed.id, variant: 'desktop' }, onDecide: fn(), onSelectionChange: fn(), onIgnoreRegionsChange: fn() },
   parameters: { layout: 'fullscreen' },
-  tags: ['themed'],
 } satisfies Meta<typeof Hosted>;
 
 export default meta;

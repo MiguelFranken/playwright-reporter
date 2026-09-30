@@ -8,7 +8,6 @@ const hrefs = { all: '/cases', unassigned: '/cases?suite=unassigned', suite: (id
 const meta = {
   title: 'Views/TestCases/Library/SuiteTree',
   component: SuiteTree,
-  tags: ['themed'],
   args: {
     roots: suiteTree,
     total: 21,
@@ -22,11 +21,7 @@ const meta = {
     onMoveSuite: fn(),
   },
   decorators: [(Story) => <div className="w-72">{<Story />}</div>],
-  parameters: {
-    layout: 'padded',
-    // Base UI's aria-hidden, tabbable focus guards around the open menu. Same exception as Views/Shell/AppSidebar.
-    a11y: { config: { rules: [{ id: 'aria-hidden-focus', enabled: false }] } },
-  },
+  parameters: { layout: 'padded' },
 } satisfies Meta<typeof SuiteTree>;
 
 export default meta;

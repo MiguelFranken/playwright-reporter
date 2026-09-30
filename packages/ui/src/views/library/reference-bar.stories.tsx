@@ -9,7 +9,6 @@ const meta = {
   component: LibraryReferenceBar,
   args: { references: libraryReferences, current: mainReference, onReferenceChange: fn(), onSettings: fn(), onKeep: fn(), runHref: (n: number) => `#run-${n}`, now: NOW },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta<typeof LibraryReferenceBar>;
 
 export default meta;
@@ -17,10 +16,6 @@ type Story = StoryObj<typeof meta>;
 
 /** The default branch, following its newest run. */
 export const Default: Story = {
-  parameters: {
-    // Base UI's aria-hidden, tabbable focus guards around the open menu. Same exception as Views/Shell/AppSidebar.
-    a11y: { config: { rules: [{ id: 'aria-hidden-focus', enabled: false }] } },
-  },
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: /Showing main/ }));
@@ -61,8 +56,6 @@ export const NotKept: Story = {
 /** Picking another reference to compare every screen with. */
 export const CompareWith: Story = {
   args: { onCompareChange: fn() },
-  // Base UI's focus guards around the open menu (see packages/ui/AGENTS.md).
-  parameters: { a11y: { config: { rules: [{ id: 'aria-hidden-focus', enabled: false }] } } },
   play: async ({ args }) => {
     const body = within(document.body);
     await userEvent.click(body.getByRole('button', { name: 'Compare with…' }));
@@ -75,8 +68,6 @@ export const CompareWith: Story = {
 /** Comparing: the button names the other reference, and stopping is one click. */
 export const Comparing: Story = {
   args: { current: redesignReference, compareWith: mainReference, onCompareChange: fn() },
-  // Base UI's focus guards around the open menu (see packages/ui/AGENTS.md).
-  parameters: { a11y: { config: { rules: [{ id: 'aria-hidden-focus', enabled: false }] } } },
   play: async ({ args }) => {
     const body = within(document.body);
     await expect(body.getByText(/Every screen is compared with/)).toBeInTheDocument();

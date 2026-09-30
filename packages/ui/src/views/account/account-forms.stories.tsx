@@ -6,7 +6,6 @@ const meta = {
   title: 'Views/Account/Profile/Forms',
   component: ChangeNameForm,
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   args: { name: 'Ada Lovelace', onSubmit: fn() },
 } satisfies Meta<typeof ChangeNameForm>;
 

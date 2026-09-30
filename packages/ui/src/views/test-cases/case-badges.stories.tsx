@@ -42,7 +42,6 @@ function AllBadges() {
 const meta = {
   title: 'Views/TestCases/Case/Badges',
   component: AllBadges,
-  tags: ['themed'],
   parameters: { layout: 'padded' },
 } satisfies Meta<typeof AllBadges>;
 

@@ -15,7 +15,6 @@ const meta = {
   title: 'Marketing/Sections/FeatureShowcase',
   component: FeatureShowcase,
   parameters: { layout: 'fullscreen' },
-  tags: ['themed'],
   args: {
     header: {
       eyebrow: 'Debugging',

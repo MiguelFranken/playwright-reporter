@@ -96,7 +96,7 @@ export function ExplorerTable({
   };
 
   return (
-    <div className={cn('panel overflow-x-auto transition-opacity duration-150', isPending && 'opacity-60')}>
+    <div className={cn('panel overflow-x-auto', isPending && 'pending')} aria-busy={isPending || undefined}>
       <Table className="tabular-nums">
         <TableHeader>
           <TableRow className="hover:bg-transparent">

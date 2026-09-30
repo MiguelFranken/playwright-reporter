@@ -11,7 +11,6 @@ const meta = {
   title: 'Marketing/Sections/Hero',
   component: Hero,
   parameters: { layout: 'fullscreen' },
-  tags: ['themed'],
   args: {
     eyebrow: 'Self-hosted · Open source',
     heading: 'Every Playwright run, kept.',

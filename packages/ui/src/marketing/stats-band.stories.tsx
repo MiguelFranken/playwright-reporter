@@ -5,7 +5,6 @@ const meta = {
   title: 'Marketing/Sections/StatsBand',
   component: StatsBand,
   parameters: { layout: 'fullscreen' },
-  tags: ['themed'],
   args: {
     header: { heading: 'Own the data' },
     items: [

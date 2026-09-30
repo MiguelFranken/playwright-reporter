@@ -23,7 +23,6 @@ const meta = {
   component: Hosted,
   args: { captured: { width: 390, height: 844 }, onChange: fn() },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta<typeof Hosted>;
 
 export default meta;

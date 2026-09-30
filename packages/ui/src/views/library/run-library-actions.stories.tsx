@@ -8,7 +8,6 @@ const meta = {
   component: RunLibraryActions,
   args: { reference: redesignReference, runNumber: 483, libraryHref: '#library-pr-212', onPin: fn() },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta<typeof RunLibraryActions>;
 
 export default meta;

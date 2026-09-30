@@ -6,7 +6,6 @@ import { Label } from './label';
 const meta = {
   title: 'Primitives/Forms/FileInput',
   component: FileInput,
-  tags: ['themed'],
   parameters: { layout: 'centered' },
   args: { id: 'file', name: 'file', hint: 'JSON or CSV, up to 4 MB', onFilesChange: fn() },
   render: (args) => (

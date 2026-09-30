@@ -7,7 +7,6 @@ const meta = {
   component: CopyButton,
   args: { value: 'pwr_live_9f2c8a41', label: 'Copy token' },
   parameters: { layout: 'centered' },
-  tags: ['themed'],
 } satisfies Meta<typeof CopyButton>;
 
 export default meta;

@@ -78,7 +78,7 @@ export function CaseTable({
   };
 
   return (
-    <div className={cn('panel overflow-hidden', isPending && 'opacity-60')}>
+    <div className={cn('panel overflow-hidden', isPending && 'pending')} aria-busy={isPending || undefined}>
       <Table>
         <TableHeader>
           <TableRow className="hover:bg-transparent">

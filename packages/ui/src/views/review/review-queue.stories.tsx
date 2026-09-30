@@ -13,7 +13,6 @@ const meta = {
     now: NOW,
   },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta<typeof ReviewQueue>;
 
 export default meta;

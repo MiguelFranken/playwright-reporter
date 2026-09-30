@@ -30,7 +30,6 @@ const meta = {
   component: Hosted,
   args: { onValueChange: fn() },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta<typeof Hosted>;
 
 export default meta;

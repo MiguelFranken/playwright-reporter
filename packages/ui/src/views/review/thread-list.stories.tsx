@@ -43,7 +43,6 @@ const meta = {
   },
   decorators: [(Story) => <div className="w-80">{Story()}</div>],
   parameters: { layout: 'centered' },
-  tags: ['themed'],
 } satisfies Meta<typeof Hosted>;
 
 export default meta;
@@ -81,6 +80,15 @@ export const WholeImageThread: Story = {
     await userEvent.click(canvas.getByRole('button', { name: /^Thread 5: / }));
     await userEvent.type(await canvas.findByRole('textbox', { name: 'Reply to thread 5' }), 'Agreed{Enter}');
     await expect(args.onReply).toHaveBeenCalledWith({ threadId: 'thread-5', body: 'Agreed' });
+  },
+};
+
+/** A thread still being posted: its row stays readable and reports itself busy. */
+export const PostingThread: Story = {
+  args: { groups: [{ captureId: 'cap-desktop', variant: 'desktop', threads: [{ ...buttonThread, pending: true }] }] },
+  play: async ({ canvasElement }) => {
+    const row = within(canvasElement).getByRole('button', { name: /^Thread \d+: / }).closest('[aria-busy]');
+    await expect(row).toHaveAttribute('aria-busy', 'true');
   },
 };
 

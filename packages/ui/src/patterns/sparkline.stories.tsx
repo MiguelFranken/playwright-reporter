@@ -8,7 +8,6 @@ const meta = {
   title: 'Patterns/Metrics & charts/Sparkline',
   component: Sparkline,
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   args: { data: SERIES },
   decorators: [(Story) => <div className="w-40">{Story()}</div>],
 } satisfies Meta<typeof Sparkline>;

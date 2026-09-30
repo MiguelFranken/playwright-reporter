@@ -94,11 +94,12 @@ export function LibraryViewList({
           type="button"
           onClick={() => onSelect(v)}
           aria-current={active ? 'true' : undefined}
+          aria-busy={pendingId === v.id || undefined}
           title={v.description ?? describeViewConfig(v.config)}
           className={cn(
             'flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-body-m outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40',
             active ? 'bg-accent-subtle font-medium text-accent-text' : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-            pendingId === v.id && 'opacity-60',
+            pendingId === v.id && 'pending overflow-hidden',
           )}
         >
           <Icon className="size-4 shrink-0" />

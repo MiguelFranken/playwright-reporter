@@ -7,7 +7,6 @@ const meta = {
   title: 'Views/Library/Browser/FeedbackInbox',
   component: FeedbackInbox,
   args: { open: true, onOpenChange: fn(), flows: libraryFlows, now: NOW, onOpenThread: fn() },
-  tags: ['themed'],
 } satisfies Meta<typeof FeedbackInbox>;
 
 export default meta;

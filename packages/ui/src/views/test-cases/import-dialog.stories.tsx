@@ -5,7 +5,6 @@ import { ImportDialog } from './import-dialog';
 const meta = {
   title: 'Views/TestCases/Dialogs/ImportDialog',
   component: ImportDialog,
-  tags: ['themed'],
   args: { open: true, onOpenChange: fn(), action: fn() },
 } satisfies Meta<typeof ImportDialog>;
 

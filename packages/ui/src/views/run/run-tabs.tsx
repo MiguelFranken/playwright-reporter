@@ -2,6 +2,7 @@
 
 import { Bug, FileText, LayoutGrid, Settings, type LucideIcon } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '../../components/tabs';
+import { cn } from '../../lib/cn';
 import { RUN_TABS, RUN_TAB_LABELS as LABELS, type RunTab } from '../../lib/run-tab';
 
 export type { RunTab };
@@ -70,7 +71,9 @@ export function RunTabs({
         </TabsList>
         {actions ? <div className="flex items-center gap-2 pb-1">{actions}</div> : null}
       </div>
-      <div className={isPending ? 'min-w-0 opacity-60 transition-opacity' : 'min-w-0 transition-opacity'}>{children}</div>
+      <div className={cn('min-w-0', isPending && 'pending')} aria-busy={isPending || undefined}>
+        {children}
+      </div>
     </Tabs>
   );
 }

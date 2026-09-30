@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, fn, userEvent, within } from 'storybook/test';
-import { PENDING_STATE_A11Y } from '../fixtures/a11y';
 import { CommentPin } from './comment-pin';
 
 const meta = {
@@ -9,7 +8,6 @@ const meta = {
   args: { number: 3, 'aria-label': 'Thread 3', onClick: fn() },
   argTypes: { state: { control: 'inline-radio', options: ['open', 'outdated', 'resolved', 'draft'] } },
   parameters: { layout: 'centered' },
-  tags: ['themed'],
 } satisfies Meta<typeof CommentPin>;
 
 export default meta;
@@ -35,7 +33,6 @@ export const States: Story = {
     </div>
   ),
   // The saving pin is dimmed; the same pin at full strength is checked above.
-  parameters: PENDING_STATE_A11Y,
 };
 
 export const TwoDigits: Story = { args: { number: 128, 'aria-label': 'Thread 128' } };

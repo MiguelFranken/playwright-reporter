@@ -18,7 +18,6 @@ const hrefs = {
 const meta = {
   title: 'Views/Run/Tab content/Tabs',
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta;
 
 export default meta;

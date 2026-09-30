@@ -7,7 +7,6 @@ const meta = {
   component: MetaChip,
   args: { children: 'chromium' },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta<typeof MetaChip>;
 
 export default meta;

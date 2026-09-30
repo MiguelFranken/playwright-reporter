@@ -21,7 +21,6 @@ import { RunsTableDemo } from './demos/runs-table';
 const meta = {
   title: 'Marketing/Demos/Demos',
   parameters: { layout: 'fullscreen' },
-  tags: ['themed'],
 } satisfies Meta;
 
 export default meta;

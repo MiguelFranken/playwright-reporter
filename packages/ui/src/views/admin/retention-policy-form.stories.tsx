@@ -13,7 +13,6 @@ const meta = {
   title: 'Views/Admin/Retention/Retention policy',
   component: RetentionPolicyForm,
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   args: { policy: RETENTION_POLICY, kinds: KINDS, action: fn(), onFieldsChange: fn() },
   decorators: [
     (Story) => (

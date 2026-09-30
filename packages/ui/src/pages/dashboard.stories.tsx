@@ -23,7 +23,6 @@ import { ChronicFailuresList, FlakyTestsList } from '../views/dashboard/test-hea
 const meta = {
   title: 'Pages/Dashboard',
   parameters: { layout: 'fullscreen' },
-  tags: ['themed'],
 } satisfies Meta;
 
 export default meta;

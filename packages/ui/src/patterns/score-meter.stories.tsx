@@ -9,7 +9,6 @@ const meta = {
   component: ScoreMeter,
   args: { score: 82 },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   decorators: [(Story) => <div className="max-w-md">{Story()}</div>],
 } satisfies Meta<typeof ScoreMeter>;
 

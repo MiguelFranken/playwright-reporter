@@ -5,7 +5,39 @@ import { Select as SelectPrimitive } from "@base-ui/react/select"
 import { cn } from "../lib/cn"
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
 
-const Select = SelectPrimitive.Root
+/**
+ * Base UI names the trigger but leaves the listbox it opens unnamed, so a
+ * screen reader announces a bare "listbox". The trigger reads its own label
+ * however it got one (`aria-labelledby`, `aria-label`, a `<Label htmlFor>`)
+ * and hands it to the list.
+ */
+const SelectListLabelContext = React.createContext<{
+  label: string | undefined
+  setLabel: (label: string | undefined) => void
+} | null>(null)
+
+function Select<Value, Multiple extends boolean | undefined = false>(
+  props: SelectPrimitive.Root.Props<Value, Multiple>
+) {
+  const [label, setLabel] = React.useState<string>()
+  const value = React.useMemo(() => ({ label, setLabel }), [label])
+  return (
+    <SelectListLabelContext.Provider value={value}>
+      <SelectPrimitive.Root {...props} />
+    </SelectListLabelContext.Provider>
+  )
+}
+
+function labelOf(el: HTMLElement): string | undefined {
+  const text = (nodes: Iterable<Element | null>) =>
+    [...nodes].map((n) => n?.textContent?.trim()).filter(Boolean).join(" ") || undefined
+  const ids = el.getAttribute("aria-labelledby")
+  return (
+    (ids ? text(ids.split(/\s+/).map((id) => el.ownerDocument.getElementById(id))) : undefined) ??
+    (el.getAttribute("aria-label") || undefined) ??
+    ("labels" in el && el.labels ? text(el.labels as NodeListOf<HTMLLabelElement>) : undefined)
+  )
+}
 
 function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   return (
@@ -31,12 +63,29 @@ function SelectTrigger({
   className,
   size = "default",
   children,
+  ref,
   ...props
 }: SelectPrimitive.Trigger.Props & {
   size?: "sm" | "default"
 }) {
+  const setLabel = React.useContext(SelectListLabelContext)?.setLabel
+  const own = React.useRef<HTMLElement | null>(null)
+  // No deps: a label can change without this component re-rendering for any
+  // other reason, and setting the same string again is a no-op.
+  React.useLayoutEffect(() => {
+    if (own.current) setLabel?.(labelOf(own.current))
+  })
+  const mergedRef = React.useCallback(
+    (node: HTMLButtonElement | null) => {
+      own.current = node
+      if (typeof ref === "function") ref(node)
+      else if (ref) ref.current = node
+    },
+    [ref]
+  )
   return (
     <SelectPrimitive.Trigger
+      ref={mergedRef}
       data-slot="select-trigger"
       data-size={size}
       className={cn(
@@ -69,6 +118,7 @@ function SelectContent({
     SelectPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset" | "alignItemWithTrigger"
   >) {
+  const label = React.useContext(SelectListLabelContext)?.label
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Positioner
@@ -86,7 +136,7 @@ function SelectContent({
           {...props}
         >
           <SelectScrollUpButton />
-          <SelectPrimitive.List>{children}</SelectPrimitive.List>
+          <SelectPrimitive.List aria-label={label}>{children}</SelectPrimitive.List>
           <SelectScrollDownButton />
         </SelectPrimitive.Popup>
       </SelectPrimitive.Positioner>

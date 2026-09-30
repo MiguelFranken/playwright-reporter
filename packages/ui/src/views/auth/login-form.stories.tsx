@@ -6,7 +6,6 @@ const meta = {
   title: 'Views/Auth/Login',
   component: LoginForm,
   parameters: { layout: 'centered' },
-  tags: ['themed'],
   args: { onSubmit: fn(), className: 'w-96' },
 } satisfies Meta<typeof LoginForm>;
 

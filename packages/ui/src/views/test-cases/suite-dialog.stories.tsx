@@ -6,7 +6,6 @@ import { SuiteDialog } from './suite-dialog';
 const meta = {
   title: 'Views/TestCases/Dialogs/SuiteDialog',
   component: SuiteDialog,
-  tags: ['themed'],
   args: {
     open: true,
     onOpenChange: fn(),

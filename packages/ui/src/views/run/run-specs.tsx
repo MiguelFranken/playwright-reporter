@@ -113,7 +113,7 @@ export function RunSpecs({
           <SpecToolbar filters={filters} onFilterChange={onFilterChange} isPending={isPending} shown={shown.length} total={specs.length} />
         ) : null}
 
-        <div className={cn('flex max-h-[70vh] min-w-0 flex-col gap-2 overflow-y-auto pe-0.5', isPending && 'opacity-60 transition-opacity')}>
+        <div className={cn('flex max-h-[70vh] min-w-0 flex-col gap-2 overflow-y-auto pe-0.5', isPending && 'pending')} aria-busy={isPending || undefined}>
           {shown.length === 0 ? (
             <EmptyState
               icon={FileCode2}

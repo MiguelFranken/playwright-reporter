@@ -9,7 +9,6 @@ const meta = {
   component: LibraryCard,
   args: { reference: unkeptReference, reviewHref: '#review-482', libraryHref: '#library-pr-209', onKeep: fn(), onSettings: fn(), now: NOW },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta<typeof LibraryCard>;
 
 export default meta;

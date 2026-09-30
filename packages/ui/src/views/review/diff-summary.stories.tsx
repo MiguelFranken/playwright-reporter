@@ -9,7 +9,6 @@ const meta = {
   args: { diff: checkoutDesktopDiff, referenceLabel: 'Approved (#470)' },
   parameters: { layout: 'padded' },
   decorators: [(Story) => <div className="max-w-80">{Story()}</div>],
-  tags: ['themed'],
 } satisfies Meta<typeof DiffSummary>;
 
 export default meta;

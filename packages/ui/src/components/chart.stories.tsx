@@ -55,7 +55,6 @@ const meta = {
     ),
   },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta<typeof ChartContainer>;
 
 export default meta;

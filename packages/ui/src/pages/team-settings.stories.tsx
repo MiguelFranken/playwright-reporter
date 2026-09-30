@@ -9,7 +9,6 @@ import { TeamProjects } from '../views/teams/team-projects';
 const meta = {
   title: 'Pages/Team settings',
   parameters: { layout: 'fullscreen' },
-  tags: ['themed'],
 } satisfies Meta;
 
 export default meta;

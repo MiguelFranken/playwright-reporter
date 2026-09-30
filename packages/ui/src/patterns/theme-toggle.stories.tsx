@@ -13,7 +13,6 @@ const meta = {
   title: 'Patterns/Controls/ThemeToggle',
   component: ThemeToggle,
   parameters: { layout: 'centered' },
-  tags: ['themed'],
 } satisfies Meta<typeof ThemeToggle>;
 
 export default meta;

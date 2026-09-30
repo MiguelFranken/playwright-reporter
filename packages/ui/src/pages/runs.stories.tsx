@@ -13,7 +13,6 @@ import { RunsTable } from '../views/runs/runs-table';
 const meta = {
   title: 'Pages/Runs',
   parameters: { layout: 'fullscreen' },
-  tags: ['themed'],
 } satisfies Meta;
 
 export default meta;

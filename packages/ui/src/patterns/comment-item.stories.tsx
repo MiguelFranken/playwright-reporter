@@ -9,7 +9,6 @@ const meta = {
   args: { comment: buttonThread.comments[0], now: NOW, onEdit: fn(), onDelete: fn() },
   decorators: [(Story) => <div className="w-80">{Story()}</div>],
   parameters: { layout: 'centered' },
-  tags: ['themed'],
 } satisfies Meta<typeof CommentItem>;
 
 export default meta;

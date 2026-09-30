@@ -5,7 +5,6 @@ import { PurgeRunHistory } from './purge-run-history';
 const meta = {
   title: 'Views/Admin/Retention/Purge run history',
   component: PurgeRunHistory,
-  tags: ['themed'],
   args: { open: false, onOpenChange: fn(), expected: 'delete all run history', onConfirm: fn() },
 } satisfies Meta<typeof PurgeRunHistory>;
 

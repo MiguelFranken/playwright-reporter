@@ -21,7 +21,6 @@ const meta = {
     onClose: fn(),
   },
   decorators: [(Story) => <div className="bg-surface p-6">{Story()}</div>],
-  tags: ['themed'],
 } satisfies Meta<typeof ThreadCompare>;
 
 export default meta;

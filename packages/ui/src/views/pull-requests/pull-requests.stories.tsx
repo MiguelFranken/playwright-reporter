@@ -15,7 +15,6 @@ const hrefs = {
 const meta = {
   title: 'Views/Pull requests',
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta;
 
 export default meta;

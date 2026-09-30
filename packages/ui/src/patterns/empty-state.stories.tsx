@@ -9,7 +9,6 @@ const meta = {
   component: EmptyState,
   args: { title: 'No runs yet' },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta<typeof EmptyState>;
 
 export default meta;

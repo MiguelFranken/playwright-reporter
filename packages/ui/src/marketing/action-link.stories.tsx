@@ -6,7 +6,6 @@ const meta = {
   title: 'Marketing/Content/ActionLink',
   component: ActionLink,
   parameters: { layout: 'padded' },
-  tags: ['themed'],
   args: { link: { href: '/get-started', label: 'Get started', appearance: 'primary' } },
 } satisfies Meta<typeof ActionLink>;
 

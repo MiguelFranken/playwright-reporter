@@ -13,7 +13,6 @@ const meta = {
   component: NavTabs,
   args: { items: ITEMS, activeHref: ITEMS[1]!.href, label: 'Team settings sections' },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta<typeof NavTabs>;
 
 export default meta;

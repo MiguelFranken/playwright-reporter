@@ -9,7 +9,6 @@ const meta = {
   args: { status: 'passed' },
   argTypes: { status: { control: 'select', options: ALL_STATUSES } },
   parameters: { layout: 'centered' },
-  tags: ['themed'],
 } satisfies Meta<typeof StatusBadge>;
 
 export default meta;

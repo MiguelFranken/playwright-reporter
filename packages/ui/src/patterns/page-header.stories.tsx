@@ -8,7 +8,6 @@ const meta = {
   component: PageHeader,
   args: { title: 'Runs' },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta<typeof PageHeader>;
 
 export default meta;

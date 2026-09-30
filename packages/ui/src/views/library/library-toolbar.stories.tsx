@@ -28,7 +28,6 @@ const meta = {
   component: Toolbar,
   args: { initial: DEFAULT_LIBRARY_VIEW, onChange: fn() },
   decorators: [(Story) => <div className="bg-surface p-4">{Story()}</div>],
-  tags: ['themed'],
 } satisfies Meta<typeof Toolbar>;
 
 export default meta;

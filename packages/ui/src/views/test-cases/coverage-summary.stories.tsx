@@ -6,7 +6,6 @@ import { CoverageSummary } from './coverage-summary';
 const meta = {
   title: 'Views/TestCases/Library/CoverageSummary',
   component: CoverageSummary,
-  tags: ['themed'],
   args: {
     coverage,
     hrefs: { planned: '/cases?automation=planned', failing: '/cases?verdict=failing', attention: '/cases?attention=1', uncovered: '/cases?adopt=1' },

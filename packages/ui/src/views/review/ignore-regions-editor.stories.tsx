@@ -19,7 +19,6 @@ const meta = {
     onCancel: fn(),
   },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta<typeof IgnoreRegionsEditor>;
 
 export default meta;

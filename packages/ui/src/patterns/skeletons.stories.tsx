@@ -11,7 +11,6 @@ import { ChartSkeleton, FilterSkeleton, ListRowsSkeleton, MetricCardsSkeleton, T
 const meta = {
   title: 'Patterns/States/Skeletons',
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta;
 
 export default meta;

@@ -7,7 +7,6 @@ const meta = {
   component: BackLink,
   args: { href: '/teams/acme/projects/web/branches', children: 'Branches' },
   parameters: { layout: 'padded' },
-  tags: ['themed'],
 } satisfies Meta<typeof BackLink>;
 
 export default meta;

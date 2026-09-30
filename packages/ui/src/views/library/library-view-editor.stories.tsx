@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, fn, userEvent, within } from 'storybook/test';
-import { PENDING_STATE_A11Y } from '../../fixtures/a11y';
 import { libraryFlows, savedViews } from '../../fixtures/library-views';
 import { DEFAULT_LIBRARY_VIEW, matchesLibraryFilters, type LibraryViewConfig } from '../../lib/library-views';
 import { LibraryViewEditor } from './library-view-editor';
@@ -20,7 +19,6 @@ const meta = {
     total: libraryFlows.length,
     onSubmit: fn(),
   },
-  tags: ['themed'],
 } satisfies Meta<typeof LibraryViewEditor>;
 
 export default meta;
@@ -63,5 +61,4 @@ export const WithError: Story = { args: { initialName: 'To fix', error: '“To f
 /** A library with one variant has nothing to choose there. */
 export const OneVariant: Story = { args: { variants: ['desktop'] } };
 
-// The dimmed buttons are the pending affordance (see PENDING_STATE_A11Y).
-export const Saving: Story = { args: { initialName: 'Checkout fixes', pending: true }, parameters: PENDING_STATE_A11Y };
+export const Saving: Story = { args: { initialName: 'Checkout fixes', pending: true } };
