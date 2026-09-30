@@ -88,27 +88,42 @@ export const ScreenSettings: Story = {
   },
 };
 
-/** The library decides nothing; an updated screen compares with the capture before it on the branch. */
+/**
+ * A library screen is the newest run's capture: it compares with the approved
+ * screen (else the capture before it) and is decided about as in that run's
+ * review.
+ */
 export const InTheLibrary: Story = {
   args: { mode: 'library' },
-  play: async () => {
+  play: async ({ args }) => {
     const body = within(document.body);
     await body.findByRole('dialog');
-    await expect(body.queryByRole('button', { name: /Approve/ })).toBeNull();
     await expect(body.getByRole('group', { name: 'Comparison' })).toBeInTheDocument();
     await userEvent.click(body.getByRole('button', { name: 'Side by side' }));
-    await expect(await body.findByText('Before (#481)')).toBeInTheDocument();
+    await expect(await body.findByText(/^Approved/, { selector: 'figcaption' })).toBeInTheDocument();
+    await userEvent.click(body.getByRole('button', { name: 'Approve' }));
+    await expect(args.onDecide).toHaveBeenCalledWith(expect.objectContaining({ decision: 'approved' }));
   },
 };
 
-/** An unchanged screen in the library: nothing to compare with. */
+/** Who may not decide sees the comparison, not the decision. */
+export const InTheLibraryReadOnly: Story = {
+  args: { mode: 'library', canDecide: false },
+  play: async () => {
+    const body = within(document.body);
+    await body.findByRole('dialog');
+    await expect(body.getByRole('group', { name: 'Comparison' })).toBeInTheDocument();
+    await expect(body.queryByRole('button', { name: /Approve/ })).toBeNull();
+  },
+};
+
+/** An unchanged screen in the library says what it is identical to. */
 export const InTheLibraryUnchanged: Story = {
   args: { mode: 'library', initial: { checkpointId: placeOrderFlow.checkpoints[0].id, variant: 'desktop' } },
   play: async () => {
     const body = within(document.body);
     await body.findByRole('dialog');
-    await expect(body.queryByRole('group', { name: 'Comparison' })).toBeNull();
-    await expect(body.getByText('Unchanged since run #481.')).toBeInTheDocument();
+    await expect(body.getByText(/^Identical to /)).toBeInTheDocument();
   },
 };
 
@@ -196,6 +211,5 @@ export const LibraryComparison: Story = {
     await body.findByRole('dialog');
     await userEvent.click(body.getByRole('button', { name: 'Side by side' }));
     await expect(body.getByText('main')).toBeInTheDocument();
-    await expect(body.queryByRole('button', { name: /Approve/ })).toBeNull();
   },
 };

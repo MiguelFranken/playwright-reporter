@@ -22,8 +22,8 @@ import { deleteLibraryView, saveLibraryView } from '@/app/(app)/teams/[team]/pro
  * The library bound to the URL — the view (`view`), what differs from it
  * (`state`, `priority`, `group`, `sort`, `variant`), the search, the folder,
  * and the open checkpoint and thread (`cp`, `v`, `thread`), so any of it can
- * be linked to — and to the actions: comments, approving a folder's screens
- * from the tree, and the person's own views.
+ * be linked to — and to the actions: comments, deciding about screens (a
+ * folder's from the tree, one in the viewer) and the areas they leave out, and the person's own views.
  */
 export function UrlLibraryBrowser({
   team,
@@ -64,12 +64,11 @@ export function UrlLibraryBrowser({
   const cp = params.get('cp');
   const v = params.get('v');
   const selection = useMemo<ReviewSelection | null>(() => (cp ? { checkpointId: cp, variant: v } : null), [cp, v]);
-  const { flows: optimistic, comments, onDecide, pendingIds } = useReviewActions({
+  const { flows: optimistic, comments, onDecide, pendingIds, onIgnoreRegionsChange, ignorePendingId } = useReviewActions({
     team,
     project,
     flows,
     selection,
-    library: true,
     canComment,
     canModerate,
     viewerId,
@@ -144,6 +143,8 @@ export function UrlLibraryBrowser({
       comments={comments}
       onDecide={canDecide ? onDecide : undefined}
       pendingIds={pendingIds}
+      onIgnoreRegionsChange={canDecide ? onIgnoreRegionsChange : undefined}
+      ignorePendingId={ignorePendingId}
       emptyTitle={emptyTitle}
       emptyDescription={emptyDescription}
     />

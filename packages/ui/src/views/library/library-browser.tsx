@@ -23,6 +23,7 @@ import {
 } from '../../lib/library-views';
 import { buildReviewTree, DEFAULT_FRAME, folderId, folderPathOf, inFolder, variantsOf, type FrameSettings, type ReviewDecisionInput, type ReviewFlowView, type ReviewGrouping } from '../../lib/review';
 import { CheckpointViewer, type ReviewCommentsProps, type ReviewSelection } from '../review/checkpoint-viewer';
+import type { IgnoreRect } from '../review/ignore-regions-editor';
 import { filterFlows } from '../review/review-storyboard';
 import { approveFolderAction, ReviewTree, type FolderAction, type FolderMenuTarget } from '../review/review-tree';
 import { SCREEN_ZOOM_VAR } from '../review/screen-frame';
@@ -84,10 +85,17 @@ export interface LibraryBrowserProps {
   frame?: FrameSettings;
   onFrameChange?: (next: FrameSettings) => void;
   comments?: ReviewCommentsProps;
-  /** Approving a folder's screens that need review, from its menu in the tree; absent for who may not decide. */
+  /**
+   * Deciding about screens — a folder's from its menu in the tree, one in the
+   * viewer — as in the review of the run that captured them; absent for who
+   * may not decide.
+   */
   onDecide?: (input: ReviewDecisionInput) => void;
   /** Screens being decided about. */
   pendingIds?: readonly string[];
+  /** Saves the areas a screen leaves out of comparisons, in the viewer. */
+  onIgnoreRegionsChange?: (input: { captureId: string; regions: IgnoreRect[] }) => void;
+  ignorePendingId?: string | null;
   emptyTitle?: string;
   emptyDescription?: React.ReactNode;
 }
@@ -132,6 +140,8 @@ export function LibraryBrowser({
   comments = {},
   onDecide,
   pendingIds,
+  onIgnoreRegionsChange,
+  ignorePendingId,
   emptyTitle = 'No screens yet',
   emptyDescription,
 }: LibraryBrowserProps) {
@@ -376,7 +386,11 @@ export function LibraryBrowser({
         flows={viewerFlows}
         selection={selection}
         onSelectionChange={setSelection}
-        canDecide={false}
+        canDecide={Boolean(onDecide)}
+        onDecide={onDecide}
+        pendingIds={pendingIds}
+        onIgnoreRegionsChange={onIgnoreRegionsChange}
+        ignorePendingId={ignorePendingId}
         frame={frame ?? DEFAULT_FRAME}
         onFrameChange={onFrameChange}
         mode="library"

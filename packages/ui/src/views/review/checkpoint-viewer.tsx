@@ -90,13 +90,12 @@ function seconds(ms: number) {
 
 /**
  * The reference a capture is compared with: another line of work's capture
- * when the library compares two, else (in review) the approved baseline, else
- * the run before.
+ * when the library compares two, else the approved baseline, else the capture
+ * before it — in the library as in a run's review, since a library screen is
+ * the newest run's capture and is decided about like one.
  */
-function referenceOf(capture: ReviewCaptureView, library: boolean): { image: ReviewImage; label: string; same: boolean } | null {
+function referenceOf(capture: ReviewCaptureView): { image: ReviewImage; label: string; same: boolean } | null {
   if (capture.compare) return { image: capture.compare.image, label: capture.compare.label, same: capture.compare.same };
-  // The library compares an updated screen with the capture before it on the branch.
-  if (library) return capture.previous && !capture.previous.same ? { image: capture.previous.image, label: `Before (#${capture.previous.runNumber})`, same: false } : null;
   if (capture.baseline) return { image: capture.baseline.image, label: `Approved${capture.baseline.runNumber ? ` (#${capture.baseline.runNumber})` : ''}`, same: capture.baseline.same };
   if (capture.previous) return { image: capture.previous.image, label: `Run #${capture.previous.runNumber}`, same: capture.previous.same };
   return null;
@@ -110,7 +109,7 @@ const PRELOAD_AROUND = 2;
  * against, fetched while the reviewer looks at this one: the arrow keys and
  * the step after an approval show the next screen at once.
  */
-function usePreloadNeighbours(all: readonly Position[], at: number, library: boolean) {
+function usePreloadNeighbours(all: readonly Position[], at: number) {
   const urls = useMemo(() => {
     if (at < 0) return [];
     const out = new Set<string>();
@@ -118,12 +117,12 @@ function usePreloadNeighbours(all: readonly Position[], at: number, library: boo
       if (i === at) continue;
       for (const c of all[i].checkpoint.captures) {
         if (c.image.available) out.add(c.image.url);
-        const reference = referenceOf(c, library);
+        const reference = referenceOf(c);
         if (reference?.image.available && !reference.same) out.add(reference.image.url);
       }
     }
     return [...out];
-  }, [all, at, library]);
+  }, [all, at]);
   useEffect(() => {
     // The browser keeps what these fetch in its cache; the timer lets the open screen's own images go first.
     const timer = setTimeout(() => {
@@ -172,7 +171,7 @@ export function CheckpointViewer({
   /** The screen captures are shown on; uncontrolled when absent. */
   frame?: FrameSettings;
   onFrameChange?: (next: FrameSettings) => void;
-  /** `library`: documentation — the screens, what they show and where, without statuses, comparisons or decisions. */
+  /** `library`: the screens as documentation — where each stands in the review loop instead of a run's statuses; decisions only with `canDecide` and `onDecide`. */
   mode?: StoryboardMode;
   /** Saves the areas a capture's checkpoint and variant leave out of comparisons; without it they cannot be edited. */
   onIgnoreRegionsChange?: (input: { captureId: string; regions: IgnoreRect[] }) => void;
@@ -184,7 +183,7 @@ export function CheckpointViewer({
   const all = useMemo(() => positions(flows), [flows]);
   const at = selection ? all.findIndex((p) => p.checkpoint.id === selection.checkpointId || p.checkpoint.aliases?.includes(selection.checkpointId)) : -1;
   const pos = at >= 0 ? all[at] : null;
-  usePreloadNeighbours(all, at, library);
+  usePreloadNeighbours(all, at);
   const [stage, setStage] = useState<StageMode>('changes');
   const [activeRegion, setActiveRegion] = useState<number | null>(null);
   const [commenting, setCommenting] = useState(false);
@@ -206,14 +205,14 @@ export function CheckpointViewer({
   const variant = selection?.variant ?? null;
   const shown = variant ? captures.filter((c) => c.variant === variant) : captures;
   const current = shown.length === 1 ? shown[0] : null;
-  const reference = current ? referenceOf(current, library) : null;
-  // In the library a screen is compared with the capture before it, which nobody measured; its diff (against an approved baseline) is not that.
-  const diff = current && reference && (!library || current.compare) ? (current.diff ?? null) : null;
+  const reference = current ? referenceOf(current) : null;
+  const diff = current && reference ? (current.diff ?? null) : null;
+  const deciding = Boolean(canDecide && onDecide);
   const measuredSize = current && diff ? diffImageSize(current.image, diff) : null;
   const hasChanges = Boolean(current?.image.available && diff?.state === 'done' && (diff.changedPixels > 0 || diff.sizeChanged) && measuredSize);
   const regions = hasChanges ? diff!.regions : [];
   const ownSize = current?.image.width && current.image.height ? { width: current.image.width, height: current.image.height } : null;
-  const canIgnore = Boolean(onIgnoreRegionsChange && canDecide && !library && current?.image.available && (measuredSize ?? ownSize));
+  const canIgnore = Boolean(onIgnoreRegionsChange && canDecide && !current?.compare && current?.image.available && (measuredSize ?? ownSize));
   const effectiveStage: StageMode = !current
     ? 'image'
     : stage === 'ignore'
@@ -401,8 +400,7 @@ export function CheckpointViewer({
         const t = shownThreads.find((x) => x.id === openThreadId);
         if (t) comments.onSetThreadStatus({ threadId: t.id, status: t.status === 'open' ? 'resolved' : 'open', captureId: threadGroups.find((g) => g.threads.includes(t))?.captureId });
       } else if (key === 'r' && canComment && current) setComposing(true);
-      else if (library) return;
-      else if (key === 'a' && canDecide && onDecide && !busy) approve();
+      else if (key === 'a' && deciding && !busy) approve();
       else return;
       e.preventDefault();
     };
@@ -613,7 +611,7 @@ export function CheckpointViewer({
                       </div>
                     ) : (
                       <div role="region" aria-label={`${label}, comparison`} tabIndex={0} className="mx-auto overflow-x-hidden overflow-y-auto rounded-md ring-1 ring-border outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40" style={{ width: frames[0].width * zoom, height: frames[0].height * zoom + 40 }}>
-                        <ImageCompare current={current.image} reference={reference.image} mode={effectiveStage as CompareMode} referenceLabel={reference.label} currentLabel={library ? 'This one' : 'This run'} alt={label} />
+                        <ImageCompare current={current.image} reference={reference.image} mode={effectiveStage as CompareMode} referenceLabel={reference.label} currentLabel={library ? (current.compare || !current.runNumber ? 'This one' : `Run #${current.runNumber}`) : 'This run'} alt={label} />
                       </div>
                     )
                   ) : (
@@ -658,24 +656,22 @@ export function CheckpointViewer({
                     </p>
                   ) : null}
                   {pos.checkpoint.description ? <p className="text-sm text-pretty">{pos.checkpoint.description}</p> : null}
-                  {current?.decision && !library ? <DecisionNote capture={current} /> : null}
+                  {current?.decision ? <DecisionNote capture={current} /> : null}
                   {current && reference && diff && !reference.same ? (
                     <DiffSummary diff={diff} referenceLabel={reference.label} />
                   ) : current && reference ? (
                     <p className="text-xs text-muted-foreground">{reference.same ? `Identical to ${reference.label.toLowerCase()}.` : `Differs from ${reference.label.toLowerCase()}.`}</p>
-                  ) : current && !library ? (
+                  ) : current ? (
                     <p className="text-xs text-muted-foreground">Nothing to compare with yet: this is the first capture of this checkpoint.</p>
-                  ) : current?.previous?.same ? (
-                    <p className="text-xs text-muted-foreground">Unchanged since run #{current.previous.runNumber}.</p>
                   ) : null}
-                  {current?.ignoreRegions?.length && !library ? (
+                  {current?.ignoreRegions?.length ? (
                     <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                       <EyeOff className="size-3.5" /> {current.ignoreRegions.length} {current.ignoreRegions.length === 1 ? 'area is' : 'areas are'} left out of the comparison.
                     </p>
                   ) : null}
                 </section>
 
-                {canDecide && onDecide && !library ? (
+                {deciding ? (
                   <section className="flex flex-col gap-2" aria-label="Decision">
                     {confirmApprove ? (
                       <div className="flex animate-rise-in flex-col gap-2 rounded-lg border border-border bg-surface-sunken p-2.5" role="group" aria-label="Open comments">
@@ -741,6 +737,15 @@ export function CheckpointViewer({
                 ) : null}
 
                 <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
+                  {library && current?.runNumber ? (
+                    <>
+                      <dt className="text-muted-foreground">Captured in</dt>
+                      <dd className="tabular-nums">
+                        Run #{current.runNumber}
+                        {current.baseline ? ` · approved screen from ${current.baseline.runNumber ? `run #${current.baseline.runNumber}` : 'an earlier run'}` : ' · nothing approved yet'}
+                      </dd>
+                    </>
+                  ) : null}
                   {pos.checkpoint.stepPath.length ? (
                     <>
                       <dt className="text-muted-foreground">Step</dt>
@@ -820,7 +825,7 @@ export function CheckpointViewer({
                     <Keyboard className="size-3.5" /> Keyboard shortcuts
                   </summary>
                   <ul className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-                    {SHORTCUTS.filter(([keys]) => (!library || !['A', 'N'].includes(keys[0])) && (canComment || !['C', 'R', 'E'].includes(keys[0]))).map(([keys, what]) => (
+                    {SHORTCUTS.filter(([keys]) => (deciding || keys[0] !== 'A') && (canComment || !['C', 'R', 'E'].includes(keys[0]))).map(([keys, what]) => (
                       <li key={what} className="contents">
                         <span className="flex gap-1">
                           {keys.map((k) => (
@@ -931,7 +936,7 @@ function useStackedHeight() {
   return height;
 }
 
-/** Where the screens on show stand in the review loop, in the library (which has no decisions to show). */
+/** Where the screens on show stand in the review loop, in the library (in place of a run's statuses). */
 function LibraryStates({ captures }: { captures: readonly ReviewCaptureView[] }) {
   const states = new Set<LibraryState>(captures.flatMap((c) => [...captureStates(c)]));
   const shown = (['waiting', 'verify', 'updated'] as const).filter((s) => states.has(s));

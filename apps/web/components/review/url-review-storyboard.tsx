@@ -128,16 +128,15 @@ interface LiveCapture {
  * the viewer gets the numbers (and a tolerance approval) as soon as the
  * workflow has them, without reloading the page.
  */
-function useLiveDiffs(ref: { team: string; project: string }, flows: readonly ReviewFlowView[], selection: ReviewSelection | null, library: boolean) {
+function useLiveDiffs(ref: { team: string; project: string }, flows: readonly ReviewFlowView[], selection: ReviewSelection | null) {
   const targets = useMemo(() => {
     if (!selection) return [];
     const cp = flows.flatMap((f) => f.checkpoints).find((c) => c.id === selection.checkpointId);
     return (cp?.captures ?? [])
-      // The library has nothing to review; it only measures when it compares two lines of work.
-      .filter((c) => (!selection.variant || c.variant === selection.variant) && (!library || c.compare) && awaitsDiff(c))
+      .filter((c) => (!selection.variant || c.variant === selection.variant) && awaitsDiff(c))
       .map((c) => ({ id: c.id, compareId: c.compare?.captureId }))
       .slice(0, 4);
-  }, [flows, selection, library]);
+  }, [flows, selection]);
   // One map per answer, not per render: the storyboard patches its flows only when a measurement arrives.
   const combine = useCallback(
     (results: { data?: LiveCapture }[]) => {
@@ -204,7 +203,6 @@ export function useReviewActions({
   project,
   flows,
   selection,
-  library,
   decide,
   onCommentsChanged,
   canComment,
@@ -217,7 +215,6 @@ export function useReviewActions({
   project: string;
   flows: ReviewFlowView[];
   selection: ReviewSelection | null;
-  library: boolean;
   decide?: (input: ReviewDecisionInput) => Promise<{ ok: true; decided: number; resolvedThreads?: number } | { ok: false; message: string }>;
   onCommentsChanged?: () => void;
   canComment: boolean;
@@ -230,7 +227,7 @@ export function useReviewActions({
   const [ignorePendingId, setIgnorePendingId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const [, startTransition] = useTransition();
-  const live = useLiveDiffs({ team, project }, flows, selection, library);
+  const live = useLiveDiffs({ team, project }, flows, selection);
   const withLiveFlows = useMemo(() => withLive(flows, live), [flows, live]);
   const [optimistic, addChange] = useOptimistic(withLiveFlows, applyChange);
   const onIgnoreRegionsChange = (input: { captureId: string; regions: IgnoreRect[] }) => {
@@ -368,7 +365,6 @@ export function UrlReviewStoryboard({
     project,
     flows,
     selection,
-    library: mode === 'library',
     decide,
     onCommentsChanged,
     canComment,
