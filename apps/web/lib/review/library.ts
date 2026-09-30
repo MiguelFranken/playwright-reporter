@@ -2,10 +2,10 @@
  * The library: the branches and pull requests kept as visual documentation,
  * and the screens each one shows.
  *
- * A reference follows its newest run — for every test, the checkpoints of the
- * newest run on that branch or request that captured it, so a partial run
- * does not hide the flows it skipped and a checkpoint a test no longer takes
- * drops out — or is pinned to one run, which then shows exactly that run.
+ * A reference follows its newest runs — every checkpoint and variant as the
+ * newest run on that branch or request captured it, so a partial run updates
+ * the screens it took and leaves the rest, and a checkpoint a test no longer
+ * takes drops out — or is pinned to one run, which then shows exactly that run.
  * The default branch is always in the library, kept or not; one reference is
  * the default the library opens on.
  */
@@ -21,8 +21,9 @@ import {
   type LibraryRunView,
 } from '@miguelfranken/ui/lib/library';
 import { db } from '@/lib/db/drizzle';
-import { libraryReferences, reviewCaptures, reviewCheckpoints, runs, type LibraryReferenceRow } from '@/lib/db/schema';
-import { assembleFlows, checkpointsWhere, runReview, runReviewCounts, type ReviewFlowRecord } from './queries';
+import { libraryReferences, reviewCaptures, reviewCheckpoints, runs, testAttempts, testResults, type LibraryReferenceRow } from '@/lib/db/schema';
+import { mergeCheckpointOrder } from './library-order';
+import { assembleFlows, capturesById, compareCaptures, isFinalAttempt, runReview, runReviewCounts, selectCheckpoints, type CheckpointRecord, type ReviewFlowRecord } from './queries';
 
 export class LibraryError extends Error {}
 
@@ -158,8 +159,8 @@ export async function defaultLibraryRef(projectId: string, defaultBranch: string
 }
 
 /**
- * The reference's flows: the pinned run's, or — following the newest — each
- * test as the newest run on the reference captured it.
+ * The reference's flows: the pinned run's, or — following the newest — every
+ * image as the newest run on the reference captured it (see `libraryCheckpoints`).
  */
 export async function libraryFlows(projectId: string, key: LibraryRefKey, filter: { testIds?: readonly string[] } = {}): Promise<ReviewFlowRecord[]> {
   if (filter.testIds && filter.testIds.length === 0) return [];
@@ -171,22 +172,141 @@ export async function libraryFlows(projectId: string, key: LibraryRefKey, filter
       return filter.testIds ? flows.filter((f) => filter.testIds!.includes(f.testId)) : flows;
     }
   }
-  const newest = await db
-    .selectDistinctOn([reviewCheckpoints.testId], { testId: reviewCheckpoints.testId, runId: reviewCheckpoints.runId })
-    .from(reviewCheckpoints)
-    .innerJoin(runs, eq(runs.id, reviewCheckpoints.runId))
+  return assembleFlows(await libraryCheckpoints(projectId, key, filter.testIds), { byTest: true });
+}
+
+type Ranked = { captureId: string; testId: string; checkpointName: string; variant: string; checkpointId: string; runId: string; startedAt: Date; runNumber: number; rank: number };
+
+/** Newer run first: by start, then by number for runs started in the same instant. */
+const newer = (a: { startedAt: Date; runNumber: number }, b: { startedAt: Date; runNumber: number }) => +b.startedAt - +a.startedAt || b.runNumber - a.runNumber;
+
+/**
+ * The images a following reference shows: for every test, checkpoint and
+ * variant, the newest capture on the reference (final attempts only), so a
+ * run of some tests — or a test that failed half way — updates what it
+ * captured and leaves every other image as it was.
+ *
+ * A checkpoint drops out once a later run of its test on the reference
+ * passed, captured checkpoints, and did not capture this one in any variant:
+ * the test no longer takes that screenshot. A failed, skipped or not-run test
+ * never takes anything away, and neither does a run with fewer variants.
+ *
+ * Each capture also carries the one before it on the reference (`previous`),
+ * which is what tells an updated screen from one captured again unchanged.
+ */
+export async function libraryCheckpoints(projectId: string, key: LibraryRefKey, testIds?: readonly string[]): Promise<CheckpointRecord[]> {
+  const ranked = db.$with('ranked').as(
+    db
+      .select({
+        captureId: reviewCaptures.id,
+        testId: reviewCaptures.testId,
+        checkpointName: reviewCaptures.checkpointName,
+        variant: reviewCaptures.variant,
+        checkpointId: reviewCaptures.checkpointId,
+        runId: reviewCaptures.runId,
+        startedAt: runs.startedAt,
+        runNumber: runs.number,
+        rank: sql<number>`row_number() over (partition by ${reviewCaptures.testId}, ${reviewCaptures.checkpointName}, ${reviewCaptures.variant} order by ${runs.startedAt} desc, ${runs.number} desc)`.as('rank'),
+      })
+      .from(reviewCaptures)
+      .innerJoin(reviewCheckpoints, eq(reviewCheckpoints.id, reviewCaptures.checkpointId))
+      .innerJoin(testAttempts, eq(testAttempts.id, reviewCheckpoints.attemptId))
+      .innerJoin(runs, eq(runs.id, reviewCaptures.runId))
+      .where(and(eq(reviewCaptures.projectId, projectId), refWhere(key), isFinalAttempt, testIds ? inArray(reviewCaptures.testId, [...testIds]) : undefined)),
+  );
+  const rows: Ranked[] = (await db.with(ranked).select().from(ranked).where(sql`${ranked.rank} <= 2`)).map((r) => ({ ...r, startedAt: new Date(r.startedAt), rank: Number(r.rank) }));
+  if (rows.length === 0) return [];
+
+  // The newest passing result of each test that captured checkpoints: what the test takes today.
+  const tested = [...new Set(rows.map((r) => r.testId))];
+  const passes = await db
+    .selectDistinctOn([testResults.testId], { testId: testResults.testId, startedAt: runs.startedAt, runNumber: runs.number })
+    .from(testResults)
+    .innerJoin(runs, eq(runs.id, testResults.runId))
     .where(
       and(
-        eq(reviewCheckpoints.projectId, projectId),
+        eq(runs.projectId, projectId),
         refWhere(key),
-        filter.testIds ? inArray(reviewCheckpoints.testId, [...filter.testIds]) : undefined,
+        inArray(testResults.testId, tested),
+        inArray(testResults.outcome, ['passed', 'flaky']),
+        sql`exists (select 1 from ${reviewCheckpoints} cp where cp.test_result_id = ${testResults.id})`,
       ),
     )
-    .orderBy(reviewCheckpoints.testId, desc(runs.startedAt), desc(runs.number));
-  if (newest.length === 0) return [];
-  const pairs = newest.map((n) => sql`(${n.testId}::uuid, ${n.runId}::uuid)`);
-  const checkpoints = await checkpointsWhere(sql`(${reviewCheckpoints.testId}, ${reviewCheckpoints.runId}) in (${sql.join(pairs, sql`, `)})`);
-  return assembleFlows(checkpoints);
+    .orderBy(testResults.testId, desc(runs.startedAt), desc(runs.number));
+  const lastPass = new Map(passes.map((p) => [p.testId, { startedAt: new Date(p.startedAt), runNumber: p.runNumber }]));
+
+  const identity = (r: Pick<Ranked, 'testId' | 'checkpointName' | 'variant'>) => `${r.testId}\u0000${r.checkpointName}\u0000${r.variant}`;
+  const previousOf = new Map(rows.filter((r) => r.rank === 2).map((r) => [identity(r), r]));
+  // A checkpoint is as recent as its most recent variant: a run that captured fewer variants retires none of them.
+  const checkpointKey = (r: Pick<Ranked, 'testId' | 'checkpointName'>) => `${r.testId}\u0000${r.checkpointName}`;
+  const latestOfCheckpoint = new Map<string, Ranked>();
+  for (const r of rows) {
+    const current = latestOfCheckpoint.get(checkpointKey(r));
+    if (r.rank === 1 && (!current || newer(current, r) > 0)) latestOfCheckpoint.set(checkpointKey(r), r);
+  }
+  const shown = rows.filter((r) => {
+    if (r.rank !== 1) return false;
+    const pass = lastPass.get(r.testId);
+    return !pass || newer(pass, latestOfCheckpoint.get(checkpointKey(r))!) >= 0;
+  });
+  if (shown.length === 0) return [];
+
+  const previousRows = shown.flatMap((r) => previousOf.get(identity(r)) ?? []);
+  const [metadata, raw, previous] = await Promise.all([
+    selectCheckpoints(inArray(reviewCheckpoints.id, [...new Set(shown.map((r) => r.checkpointId))])),
+    capturesById(shown.map((r) => r.captureId)),
+    capturesById(previousRows.map((r) => r.captureId)),
+  ]);
+  const compared = await compareCaptures(raw);
+  const previousById = new Map(previous.map((c) => [c.id, c]));
+  const rankOf = new Map(shown.map((r) => [r.captureId, r]));
+  for (const c of compared) {
+    const before = previousOf.get(identity(c));
+    const capture = before ? previousById.get(before.captureId) : undefined;
+    c.previous = before && capture ? { capture, runNumber: before.runNumber } : null;
+    c.runNumber = rankOf.get(c.id)!.runNumber;
+  }
+
+  // One checkpoint per test and name, described by its newest capture's checkpoint.
+  const cpById = new Map(metadata.map((m) => [m.id, m]));
+  const byName = new Map<string, { record: CheckpointRecord; at: Ranked }>();
+  for (const c of compared) {
+    const at = rankOf.get(c.id)!;
+    const meta = cpById.get(at.checkpointId);
+    if (!meta) continue;
+    const key = `${c.testId}\u0000${c.checkpointName}`;
+    const existing = byName.get(key);
+    if (!existing) byName.set(key, { record: { ...meta, captures: [c] }, at });
+    else {
+      existing.record.captures.push(c);
+      if (newer(at, existing.at) < 0) byName.set(key, { record: { ...meta, captures: existing.record.captures }, at });
+    }
+  }
+
+  // Each test's checkpoints in the order its runs took them, newest run first.
+  const runsOfTest = new Map<string, Map<string, Ranked>>();
+  for (const { at } of byName.values()) (runsOfTest.get(at.testId) ?? runsOfTest.set(at.testId, new Map()).get(at.testId)!).set(at.runId, at);
+  const pairs = [...runsOfTest].flatMap(([testId, byRun]) => [...byRun.keys()].map((runId) => sql`(${testId}::uuid, ${runId}::uuid)`));
+  const sequences = await db
+    .select({ testId: reviewCheckpoints.testId, runId: reviewCheckpoints.runId, name: reviewCheckpoints.name, sequence: reviewCheckpoints.sequence })
+    .from(reviewCheckpoints)
+    .innerJoin(testAttempts, eq(testAttempts.id, reviewCheckpoints.attemptId))
+    .where(and(sql`(${reviewCheckpoints.testId}, ${reviewCheckpoints.runId}) in (${sql.join(pairs, sql`, `)})`, isFinalAttempt))
+    .orderBy(reviewCheckpoints.sequence);
+
+  const out: CheckpointRecord[] = [];
+  for (const [testId, byRun] of runsOfTest) {
+    const orders = [...byRun.values()]
+      .sort(newer)
+      .map((r) => sequences.filter((s) => s.testId === testId && s.runId === r.runId).map((s) => s.name));
+    const records = [...byName.values()].filter((x) => x.at.testId === testId).map((x) => x.record);
+    const names = mergeCheckpointOrder(orders, new Set(records.map((r) => r.name)));
+    names.forEach((name, i) => {
+      const record = records.find((r) => r.name === name);
+      if (record) out.push({ ...record, sequence: i });
+    });
+  }
+  return out;
 }
 
 /**
