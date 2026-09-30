@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.52](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.51...v0.0.52) (2026-09-30)
+
+### Features
+
+* **retention:** keep library screens and commented flows, unless the policy lets them expire ([#63](https://github.com/MiguelFranken/playwright-reporter/issues/63)) ([ad42cb7](https://github.com/MiguelFranken/playwright-reporter/commit/ad42cb7cef61f39f4228ceba76a53185a99e0d50))
+
 ## [0.0.51](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.50...v0.0.51) (2026-09-29)
 
 ### Features
