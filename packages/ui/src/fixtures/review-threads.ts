@@ -111,6 +111,36 @@ export function flowWithThreads(threads: ReviewThreadView[] = reviewThreads): Re
   };
 }
 
+/** The checkout's desktop capture, and the approved screen the viewer compares it with. */
+const checkoutDesktop = placeOrderFlow.checkpoints[1].captures.find((c) => c.variant === 'desktop')!;
+const approvedCheckout = checkoutDesktop.baseline!;
+
+/** Asked for on the approved screen; this run changed the screen since: ready to verify. */
+export const fixedThread: ReviewThreadView = {
+  ...buttonThread,
+  id: 'thread-fixed',
+  placement: 'outdated',
+  originRunNumber: approvedCheckout.runNumber,
+  anchor: { kind: 'point', x: 0.62, y: 0.35 },
+  origin: { captureId: approvedCheckout.captureId, image: approvedCheckout.image, anchor: { kind: 'point', x: 0.62, y: 0.33 } },
+};
+
+/** An area on the approved screen, ready to verify too. */
+export const movedAreaThread: ReviewThreadView = {
+  ...outdatedThread,
+  number: 3,
+  id: 'thread-moved',
+  anchor: { kind: 'area', x: 0.05, y: 0.08, w: 0.3, h: 0.1 },
+  originRunNumber: approvedCheckout.runNumber,
+  origin: { captureId: approvedCheckout.captureId, image: approvedCheckout.image, anchor: { kind: 'area', x: 0.05, y: 0.06, w: 0.3, h: 0.1 } },
+  comments: [comment('The header wraps onto two lines; keep the logo and the search on one.', 60 * 30, { author: grace, authorId: 'user-grace' })],
+};
+
+/** Two comments to verify, one still waiting for a fix, one resolved. */
+export const verifyThreads: ReviewThreadView[] = [fixedThread, totalsThread, movedAreaThread, resolvedThread];
+
+export const verifyFlows: ReviewFlowView[] = [flowWithThreads(verifyThreads)];
+
 export const commentedFlows: ReviewFlowView[] = [flowWithThreads()];
 
 /** The checkpoint of `flowWithThreads` that carries the threads. */
