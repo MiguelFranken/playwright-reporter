@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.61](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.60...v0.0.61) (2026-09-30)
+
+### Bug Fixes
+
+* **review:** scroll the checkpoint viewer as a page below the side-panel width ([86c5654](https://github.com/MiguelFranken/playwright-reporter/commit/86c56545dd294e019a51aeabd771b57474449c24))
+
 ## [0.0.60](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.59...v0.0.60) (2026-09-30)
 
 ### Features
