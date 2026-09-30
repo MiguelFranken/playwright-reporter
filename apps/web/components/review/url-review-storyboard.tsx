@@ -170,7 +170,7 @@ interface ViewSettings {
 }
 
 /** The reviewer's screen size and viewer frame, kept in this browser; nothing breaks without storage. */
-function useViewSettings(): [ViewSettings | null, (next: Partial<ViewSettings>) => void] {
+export function useViewSettings(): [ViewSettings | null, (next: Partial<ViewSettings>) => void] {
   const [settings, setSettings] = useState<ViewSettings | null>(null);
   useEffect(() => {
     try {
@@ -192,6 +192,106 @@ function useViewSettings(): [ViewSettings | null, (next: Partial<ViewSettings>) 
       return next;
     });
   return [settings, update];
+}
+
+/**
+ * What a storyboard does with its flows, bound to the server actions: live
+ * measurements of the open checkpoint, optimistic decisions and comment
+ * changes, ignored areas. The run review and the library share it.
+ */
+export function useReviewActions({
+  team,
+  project,
+  flows,
+  selection,
+  library,
+  decide,
+  onCommentsChanged,
+  canComment,
+  canModerate,
+  viewerId,
+  openThread,
+  onOpenThreadChange,
+}: {
+  team: string;
+  project: string;
+  flows: ReviewFlowView[];
+  selection: ReviewSelection | null;
+  library: boolean;
+  decide?: (input: ReviewDecisionInput) => Promise<{ ok: true; decided: number; resolvedThreads?: number } | { ok: false; message: string }>;
+  onCommentsChanged?: () => void;
+  canComment: boolean;
+  canModerate: boolean;
+  viewerId: string | null;
+  openThread: number | null;
+  onOpenThreadChange: (n: number | null) => void;
+}) {
+  const [pendingIds, setPendingIds] = useState<string[]>([]);
+  const [ignorePendingId, setIgnorePendingId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const [, startTransition] = useTransition();
+  const live = useLiveDiffs({ team, project }, flows, selection, library);
+  const withLiveFlows = useMemo(() => withLive(flows, live), [flows, live]);
+  const [optimistic, addChange] = useOptimistic(withLiveFlows, applyChange);
+  const onIgnoreRegionsChange = (input: { captureId: string; regions: IgnoreRect[] }) => {
+    setIgnorePendingId(input.captureId);
+    startTransition(async () => {
+      const res = await saveIgnoreRegions({ team, project }, input);
+      setIgnorePendingId(null);
+      if (!res.ok) {
+        toast.error(res.message);
+        return;
+      }
+      // The old measurement no longer applies; the viewer asks for the new one.
+      queryClient.removeQueries({ queryKey: captureDiffQuery({ team, project }, input.captureId).queryKey });
+      toast.success(input.regions.length ? 'Areas saved. Measuring again…' : 'Nothing is left out any more. Measuring again…');
+    });
+  };
+
+  const ref = { team, project };
+  const onDecide = (input: ReviewDecisionInput) => {
+    setPendingIds((ids) => [...ids, ...input.captureIds]);
+    startTransition(async () => {
+      addChange({ type: 'decide', input });
+      const res = await (decide ? decide(input) : decideReview(ref, input));
+      setPendingIds((ids) => ids.filter((id) => !input.captureIds.includes(id)));
+      if (!res.ok) toast.error(res.message);
+      else if (input.captureIds.length > 1) toast.success(`${res.decided} images ${input.decision === 'approved' ? 'approved' : 'marked for changes'}.`);
+      else if (res.resolvedThreads) toast.success(`Approved; ${res.resolvedThreads} ${res.resolvedThreads === 1 ? 'comment' : 'comments'} resolved.`);
+    });
+  };
+
+  /** Runs a comment action with its optimistic change; a failure shows why, and the page stays as the server has it. */
+  const commentAction = (change: Change, run: () => Promise<{ ok: true } | { ok: false; message: string }>, done?: () => void) =>
+    startTransition(async () => {
+      addChange(change);
+      const res = await run();
+      if (!res.ok) toast.error(res.message);
+      else {
+        onCommentsChanged?.();
+        done?.();
+      }
+    });
+  const temp = () => `pending-${crypto.randomUUID()}`;
+  const comments = {
+    canComment,
+    canModerate,
+    viewerId,
+    openThread,
+    onOpenThreadChange,
+    onCreateThread: (input: NewThreadInput) => commentAction({ type: 'create', input, tempId: temp() }, () => createReviewThread(ref, input)),
+    onReply: (input: ThreadReplyInput) => commentAction({ type: 'reply', input, tempId: temp() }, () => replyToReviewThread(ref, input)),
+    onSetThreadStatus: (input: ThreadStatusInput) =>
+      commentAction({ type: 'status', input }, () => setReviewThreadStatus(ref, input), () => {
+        if (input.status === 'resolved') toast.success('Comment resolved.', { action: { label: 'Undo', onClick: () => comments.onSetThreadStatus({ ...input, status: 'open' }) } });
+      }),
+    onEditComment: (input: CommentEditInput) => commentAction({ type: 'edit', input }, () => editReviewComment(ref, input)),
+    onDeleteComment: (input: { commentId: string; threadId: string }) => {
+      if (!window.confirm('Delete this comment? The first comment of a thread takes the whole thread with it.')) return;
+      commentAction({ type: 'delete', input }, () => deleteReviewComment(ref, { commentId: input.commentId }));
+    },
+  };
+  return { flows: optimistic, pendingIds, onDecide, onIgnoreRegionsChange, ignorePendingId, comments };
 }
 
 /**
@@ -250,10 +350,6 @@ export function UrlReviewStoryboard({
 }) {
   const { params, set } = useShallowSearch();
   const [local, setLocal] = useState<ReviewSelection | null>(null);
-  const [pendingIds, setPendingIds] = useState<string[]>([]);
-  const [ignorePendingId, setIgnorePendingId] = useState<string | null>(null);
-  const queryClient = useQueryClient();
-  const [, startTransition] = useTransition();
   const [view, setView] = useViewSettings();
   const [localFolder, setLocalFolder] = useState<string | null>(null);
   const groupParam = params.get('group');
@@ -266,69 +362,21 @@ export function UrlReviewStoryboard({
   const selection = syncUrl ? urlSelection : local;
   const sortParam = params.get('sort');
   const sort = (REVIEW_SORTS as readonly string[]).includes(sortParam ?? '') ? (sortParam as ReviewSort) : undefined;
-  const live = useLiveDiffs({ team, project }, flows, selection, mode === 'library');
-  const withLiveFlows = useMemo(() => withLive(flows, live), [flows, live]);
-  const [optimistic, addChange] = useOptimistic(withLiveFlows, applyChange);
   const [localThread, setLocalThread] = useState<number | null>(null);
-
-  const onIgnoreRegionsChange = (input: { captureId: string; regions: IgnoreRect[] }) => {
-    setIgnorePendingId(input.captureId);
-    startTransition(async () => {
-      const res = await saveIgnoreRegions({ team, project }, input);
-      setIgnorePendingId(null);
-      if (!res.ok) {
-        toast.error(res.message);
-        return;
-      }
-      // The old measurement no longer applies; the viewer asks for the new one.
-      queryClient.removeQueries({ queryKey: captureDiffQuery({ team, project }, input.captureId).queryKey });
-      toast.success(input.regions.length ? 'Areas saved. Measuring again…' : 'Nothing is left out any more. Measuring again…');
-    });
-  };
-
-  const ref = { team, project };
-  const onDecide = (input: ReviewDecisionInput) => {
-    setPendingIds((ids) => [...ids, ...input.captureIds]);
-    startTransition(async () => {
-      addChange({ type: 'decide', input });
-      const res = await (decide ? decide(input) : decideReview(ref, input));
-      setPendingIds((ids) => ids.filter((id) => !input.captureIds.includes(id)));
-      if (!res.ok) toast.error(res.message);
-      else if (input.captureIds.length > 1) toast.success(`${res.decided} images ${input.decision === 'approved' ? 'approved' : 'marked for changes'}.`);
-      else if (res.resolvedThreads) toast.success(`Approved; ${res.resolvedThreads} ${res.resolvedThreads === 1 ? 'comment' : 'comments'} resolved.`);
-    });
-  };
-
-  /** Runs a comment action with its optimistic change; a failure shows why, and the page stays as the server has it. */
-  const commentAction = (change: Change, run: () => Promise<{ ok: true } | { ok: false; message: string }>, done?: () => void) =>
-    startTransition(async () => {
-      addChange(change);
-      const res = await run();
-      if (!res.ok) toast.error(res.message);
-      else {
-        onCommentsChanged?.();
-        done?.();
-      }
-    });
-  const temp = () => `pending-${crypto.randomUUID()}`;
-  const comments = {
+  const { flows: optimistic, pendingIds, onDecide, onIgnoreRegionsChange, ignorePendingId, comments } = useReviewActions({
+    team,
+    project,
+    flows,
+    selection,
+    library: mode === 'library',
+    decide,
+    onCommentsChanged,
     canComment,
     canModerate,
     viewerId,
-    openThread: syncUrl ? (Number(params.get('thread')) || null) : localThread,
-    onOpenThreadChange: (n: number | null) => (syncUrl ? set({ thread: n ? String(n) : null }) : setLocalThread(n)),
-    onCreateThread: (input: NewThreadInput) => commentAction({ type: 'create', input, tempId: temp() }, () => createReviewThread(ref, input)),
-    onReply: (input: ThreadReplyInput) => commentAction({ type: 'reply', input, tempId: temp() }, () => replyToReviewThread(ref, input)),
-    onSetThreadStatus: (input: ThreadStatusInput) =>
-      commentAction({ type: 'status', input }, () => setReviewThreadStatus(ref, input), () => {
-        if (input.status === 'resolved') toast.success('Comment resolved.', { action: { label: 'Undo', onClick: () => comments.onSetThreadStatus({ ...input, status: 'open' }) } });
-      }),
-    onEditComment: (input: CommentEditInput) => commentAction({ type: 'edit', input }, () => editReviewComment(ref, input)),
-    onDeleteComment: (input: { commentId: string; threadId: string }) => {
-      if (!window.confirm('Delete this comment? The first comment of a thread takes the whole thread with it.')) return;
-      commentAction({ type: 'delete', input }, () => deleteReviewComment(ref, { commentId: input.commentId }));
-    },
-  };
+    openThread: syncUrl ? Number(params.get('thread')) || null : localThread,
+    onOpenThreadChange: (n) => (syncUrl ? set({ thread: n ? String(n) : null }) : setLocalThread(n)),
+  });
 
   return (
     <ReviewStoryboard

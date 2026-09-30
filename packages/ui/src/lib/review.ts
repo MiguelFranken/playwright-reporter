@@ -8,6 +8,7 @@
  * what lets a run with nothing new ask for no review at all.
  */
 import type { ReviewThreadView } from './review-threads';
+import type { CasePriority } from './test-cases';
 import type { Tone } from './tone';
 
 /** What a reviewer records. */
@@ -257,6 +258,8 @@ export interface ReviewCaptureView {
   ignoreRegions?: DiffRegion[];
   /** Comment threads on the image: its own and the open ones placed on earlier captures of it. */
   threads?: ReviewThreadView[];
+  /** The run it was captured in, where one flow shows several runs' images (the library). */
+  runNumber?: number | null;
 }
 
 export interface ReviewCheckpointView {
@@ -275,6 +278,12 @@ export interface ReviewCheckpointView {
   offsetMs?: number | null;
   tags: string[];
   captures: ReviewCaptureView[];
+  /**
+   * In the library, a checkpoint the flow's newest run did not capture (it
+   * ran only some tests, or the test failed before it): the older run it
+   * comes from, and that attempt's result and video.
+   */
+  origin?: { runNumber: number; resultHref: string; videoUrl?: string | null } | null;
 }
 
 /** A test case a flow's test is linked to. */
@@ -285,6 +294,7 @@ export interface ReviewCaseRef {
   href: string;
   /** Its suite, outermost first; empty when the case has none. */
   suitePath: string[];
+  priority?: CasePriority;
 }
 
 /** A test's review checkpoints, in order: one journey through the product. */
@@ -300,6 +310,8 @@ export interface ReviewFlowView {
   project?: string | null;
   /** The test's outcome in this run (`passed`, `failed`, `flaky`…). */
   outcome: string;
+  /** The run the flow's result belongs to. */
+  runNumber?: number | null;
   flow?: string | null;
   resultHref: string;
   videoUrl?: string | null;

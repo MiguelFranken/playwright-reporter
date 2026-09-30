@@ -220,13 +220,13 @@ describe('test cases', () => {
     const suiteId = await ensureSuite(ctx, ['Checkout', 'Ordering']);
     const linked = await createCase(ctx, { title: 'Book a workshop', suiteId });
     await linkTests(ctx, linked.id, [capture.testId]);
-    const unfiled = await createCase(ctx, { title: 'Booking works on mobile' });
+    const unfiled = await createCase(ctx, { title: 'Booking works on mobile', priority: 'high' });
     await linkTests(ctx, unfiled.id, [capture.testId]);
 
     const byTest = await casesOfTests(tenant.project.id, [capture.testId, randomUUID()]);
     expect(byTest[capture.testId]).toEqual([
-      { key: `TC-${linked.number}`, title: 'Book a workshop', suitePath: ['Checkout', 'Ordering'] },
-      { key: `TC-${unfiled.number}`, title: 'Booking works on mobile', suitePath: [] },
+      { key: `TC-${linked.number}`, title: 'Book a workshop', suitePath: ['Checkout', 'Ordering'], priority: 'none' },
+      { key: `TC-${unfiled.number}`, title: 'Booking works on mobile', suitePath: [], priority: 'high' },
     ]);
     const flows = await libraryFlows(tenant.project.id, { kind: 'branch', branch: 'main' }, { testIds: [capture.testId] });
     expect(flows[0].checkpoints[0].captures.length).toBe(2);

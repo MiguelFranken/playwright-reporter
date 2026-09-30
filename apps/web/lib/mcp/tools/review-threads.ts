@@ -9,9 +9,12 @@
  */
 import { z } from 'zod';
 import { checkpointLabel } from '@miguelfranken/ui/lib/review';
+import { libraryRefParam, type LibraryRefKey } from '@miguelfranken/ui/lib/library';
 import { MAX_COMMENT_LENGTH, THREAD_FILTERS } from '@miguelfranken/ui/lib/review-threads';
+import { defaultBranch } from '@/lib/db/queries/mcp';
 import { threadPosition } from '@/lib/review/images';
-import { captureInProject, runReview, type ComparedCapture } from '@/lib/review/queries';
+import { defaultLibraryRef, libraryFlows } from '@/lib/review/library';
+import { captureInProject, runReview, type ComparedCapture, type ReviewFlowRecord } from '@/lib/review/queries';
 import { createThread, replyToThread, setThreadStatus, ThreadError } from '@/lib/review/threads';
 import { invalid, notFound } from '../errors';
 import { branchParam, commonParams, isUuid, runParam } from '../params';
@@ -41,17 +44,38 @@ const asInvalid = (error: unknown): never => {
 
 const listInput = z.object({
   ...commonParams,
-  run: runParam.optional().describe('The run (default "latest"). Scope "latest" with branch. Ignored with capture.'),
+  run: runParam.optional().describe('The run (default "latest"). Scope "latest" with branch. Ignored with capture or library.'),
   branch: branchParam,
+  library: z
+    .boolean()
+    .optional()
+    .describe(
+      'The library’s screens instead of one run: every screen of branch (or pullRequest; default: the library’s default reference) as its newest run captured it, so feedback on screens a partial run skipped is included.',
+    ),
+  pullRequest: z.number().int().positive().optional().describe('With library: a pull (merge) request number instead of a branch.'),
   capture: captureParam.optional().describe('Only this image’s threads.'),
   status: z.enum(THREAD_FILTERS).optional().describe('open (default), resolved or all.'),
+  placement: z
+    .enum(['exact', 'outdated'])
+    .optional()
+    .describe('exact: on the image as it is now (waiting for changes). outdated: placed on an earlier version that has changed since (ready to verify, then resolve).'),
   test: z.string().optional().describe('Part of a test title or file, to narrow the list.'),
 });
 
+/** Where the library opens a capture's checkpoint, and one of its threads. */
+function libraryUrl(base: string, capture: Pick<ComparedCapture, 'checkpointId' | 'variant'>, thread: number | null) {
+  const url = new URL(base);
+  url.searchParams.set('cp', capture.checkpointId);
+  url.searchParams.set('v', capture.variant);
+  if (thread) url.searchParams.set('thread', String(thread));
+  return url.toString();
+}
+
 const listOutput = output({
   project: z.string(),
-  run: z.number(),
-  counts: z.object({ open: z.number(), resolved: z.number() }),
+  run: z.number().describe('The run shown; in the library, the newest run the screens come from.'),
+  reference: z.string().nullable().optional().describe('With library: "branch:main" or "pr:212".'),
+  counts: z.object({ open: z.number(), resolved: z.number(), outdated: z.number().optional().describe('Open threads placed on an earlier version of their image.') }),
   images: z.array(
     z.object({
       captureId: z.string(),
@@ -59,6 +83,7 @@ const listOutput = output({
       checkpoint: z.string(),
       variant: z.string(),
       imageStatus: z.string(),
+      run: z.number().optional().describe('The run the image was captured in.'),
       threads: z.array(threadOut),
     }),
   ),
@@ -69,7 +94,7 @@ export const listReviewThreads = defineTool({
   title: 'List review comment threads',
   toolset: 'core',
   description:
-    'The comment threads people (or assistants) pinned on a run’s review images — change requests at a spot or an area of a screenshot — per image, by the number on the pin, with where each points (pixels, percent, CSS pixels) and the conversation. Open ones by default. See one pinned on its image with get_review_checkpoint and thread.',
+    'The comment threads people (or assistants) pinned on a run’s review images — change requests at a spot or an area of a screenshot — per image, by the number on the pin, with where each points (pixels, percent, CSS pixels) and the conversation. Open ones by default. With library, every screen of a branch or pull request as the library shows it, so feedback on screens a partial run skipped is included; placement "outdated" lists the feedback whose image changed since (ready to verify), "exact" what still waits for a change. See one pinned on its image with get_review_checkpoint and thread.',
   input: listInput,
   output: listOutput,
   async handler(args, ctx) {
@@ -77,47 +102,70 @@ export const listReviewThreads = defineTool({
     const filter = args.status ?? 'open';
     const keep = (s: string) => filter === 'all' || s === filter;
     let runNumber: number;
-    let entries: { capture: ComparedCapture; test: string; checkpoint: string }[];
+    let reference: LibraryRefKey | null = null;
+    let entries: { capture: ComparedCapture; test: string; checkpoint: string; runNumber: number }[];
+    const q = args.test?.toLowerCase();
+    const flowEntries = (flows: readonly ReviewFlowRecord[]) =>
+      flows
+        .filter((f) => !q || f.titlePath.join(' ').toLowerCase().includes(q) || f.file.toLowerCase().includes(q))
+        .flatMap((f) =>
+          f.checkpoints.flatMap((cp) =>
+            cp.captures.map((capture) => ({ capture, test: f.titlePath.join(' › ') || f.title, checkpoint: checkpointLabel(cp.name, cp.title), runNumber: capture.runNumber ?? f.origins?.[cp.testResultId]?.runNumber ?? f.runNumber })),
+          ),
+        );
     if (args.capture) {
       const found = await captureOf(project.project.id, project.ref, args.capture);
       runNumber = found.runNumber;
-      entries = [{ capture: found.capture, test: found.testTitle, checkpoint: checkpointLabel(found.capture.checkpointName, found.checkpointTitle) }];
+      entries = [{ capture: found.capture, test: found.testTitle, checkpoint: checkpointLabel(found.capture.checkpointName, found.checkpointTitle), runNumber: found.runNumber }];
+    } else if (args.library || args.pullRequest) {
+      if (args.branch && args.pullRequest) throw invalid('Pass "branch" or "pullRequest", not both.');
+      reference = args.pullRequest
+        ? { kind: 'pull_request', prNumber: args.pullRequest }
+        : args.branch
+          ? { kind: 'branch', branch: args.branch }
+          : await defaultLibraryRef(project.project.id, await defaultBranch(project.project.id, project.project.settings));
+      const flows = await libraryFlows(project.project.id, reference);
+      entries = flowEntries(flows);
+      runNumber = Math.max(0, ...entries.map((e) => e.runNumber));
     } else {
       const run = await resolveRun(project, args.run, { branch: args.branch });
       runNumber = run.number;
-      const q = args.test?.toLowerCase();
-      const flows = await runReview({ id: run.id, startedAt: run.startedAt });
-      entries = flows
-        .filter((f) => !q || f.titlePath.join(' ').toLowerCase().includes(q) || f.file.toLowerCase().includes(q))
-        .flatMap((f) => f.checkpoints.flatMap((cp) => cp.captures.map((capture) => ({ capture, test: f.titlePath.join(' › ') || f.title, checkpoint: checkpointLabel(cp.name, cp.title) }))));
+      entries = flowEntries(await runReview({ id: run.id, startedAt: run.startedAt }));
     }
-    const counts = { open: 0, resolved: 0 };
+    const counts = { open: 0, resolved: 0, outdated: 0 };
+    const shows = (t: { status: string; placement: string }) => keep(t.status) && (!args.placement || t.placement === args.placement);
+    const where = (capture: ComparedCapture, n: number | null, run: number) =>
+      reference ? libraryUrl(project.links.library(reference), capture, n) : reviewUrl(project.links, run, capture, n);
     const images = entries
-      .map(({ capture, test, checkpoint }) => {
-        for (const t of capture.threads) counts[t.status]++;
+      .map(({ capture, test, checkpoint, runNumber: run }) => {
+        for (const t of capture.threads) {
+          counts[t.status]++;
+          if (t.status === 'open' && t.placement === 'outdated') counts.outdated++;
+        }
         return {
           captureId: capture.id,
           test,
           checkpoint,
           variant: capture.variant,
           imageStatus: capture.status,
-          threads: capture.threads.filter((t) => keep(t.status)).map((t) => toThreadOut(t, capture, reviewUrl(project.links, runNumber, capture, t.number))),
+          run,
+          threads: capture.threads.filter(shows).map((t) => toThreadOut(t, capture, where(capture, t.number, run))),
           positions: new Map(capture.threads.map((t) => [t.number, threadPosition(t, capture).text])),
         };
       })
       .filter((i) => i.threads.length > 0);
     return {
-      data: { project: project.ref, run: runNumber, counts, images: images.map(({ positions: _, ...rest }) => rest) },
+      data: { project: project.ref, run: runNumber, reference: reference ? libraryRefParam(reference) : null, counts, images: images.map(({ positions: _, ...rest }) => rest) },
       render(md, d) {
-        md.heading(`Comment threads of run #${d.run}`, 2);
-        md.line(`${d.counts.open} open, ${d.counts.resolved} resolved.`);
+        md.heading(d.reference ? `Comment threads in the library: ${d.reference}` : `Comment threads of run #${d.run}`, 2);
+        md.line(`${d.counts.open} open (${d.counts.outdated ?? 0} on an earlier version of their image), ${d.counts.resolved} resolved.`);
         if (!d.images.length) {
           md.line(filter === 'open' ? 'No open threads: nothing asks for a change.' : 'No threads match.');
           return;
         }
         for (const [i, img] of d.images.entries()) {
           md.heading(`${img.checkpoint} — ${img.variant} (${img.test})`, 3);
-          md.line(`Capture ${img.captureId} · image ${img.imageStatus} · ${link('open in the app', img.threads[0].url.replace(/&thread=\d+$/, ''))}`);
+          md.line(`Capture ${img.captureId} · run #${img.run} · image ${img.imageStatus} · ${link('open in the app', img.threads[0].url.replace(/&thread=\d+$/, ''))}`);
           for (const t of img.threads) renderThread(md, t, images[i].positions.get(t.number) ?? '');
         }
         md.line('To see the pins on the image: get_review_checkpoint with the capture (and thread for one close-up).');

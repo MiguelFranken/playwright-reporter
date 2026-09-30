@@ -98,7 +98,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </Suspense>
           }
         />
-        <SidebarInset className="min-w-0 overflow-hidden">
+        {/* Clipped, not hidden: `overflow: hidden` makes the inset a scroll container, and nothing inside it (this
+            header, the library's folder tree) could stick to the window any more. `--sticky-offset` is the header's
+            height: what sticks below it starts there. */}
+        <SidebarInset className="min-w-0 overflow-clip [--sticky-offset:3.5rem]">
           <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2.5 border-b border-separator bg-surface/85 px-4 backdrop-blur-sm md:rounded-t-xl">
             <SidebarTrigger className="-ms-1.5" />
             <Suspense fallback={<BreadcrumbsSkeleton />}>

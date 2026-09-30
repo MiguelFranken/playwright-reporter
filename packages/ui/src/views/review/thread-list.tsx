@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, History, MessageSquare, MessageSquarePlus, RotateCcw } from 'lucide-react';
+import { Check, Columns2, History, MessageSquare, MessageSquarePlus, RotateCcw } from 'lucide-react';
 import { Button } from '../../components/button';
 import { Kbd } from '../../components/kbd';
 import { SegmentedControl } from '../../components/segmented-control';
@@ -78,13 +78,14 @@ export function ThreadList({
   onSetThreadStatus,
   onEditComment,
   onDeleteComment,
+  onCompareThread,
   className,
 }: ThreadListProps) {
   const all = groups.flatMap((g) => g.threads);
   const open = all.filter((t) => t.status === 'open').length;
   const resolved = all.length - open;
   const several = groups.length > 1;
-  const threadProps = { now, viewerId, canComment, canModerate, onReply, onSetThreadStatus, onEditComment, onDeleteComment };
+  const threadProps = { now, viewerId, canComment, canModerate, onReply, onSetThreadStatus, onEditComment, onDeleteComment, onCompareThread };
   const target = groups.length === 1 ? groups[0] : null;
 
   return (
@@ -149,6 +150,7 @@ export function ThreadList({
                     onOpen={() => onOpenThreadChange?.(openThreadId === t.id ? null : t.id)}
                     onHighlight={onHighlight}
                     onSetThreadStatus={onSetThreadStatus}
+                    onCompare={onCompareThread}
                   />
                   {openThreadId === t.id && t.anchor.kind === 'image' ? (
                     <div className="mt-1 animate-rise-in rounded-lg border border-border bg-surface p-3">
@@ -212,6 +214,7 @@ function ThreadRow({
   onOpen,
   onHighlight,
   onSetThreadStatus,
+  onCompare,
 }: {
   thread: ReviewThreadView;
   captureId: string;
@@ -221,6 +224,7 @@ function ThreadRow({
   onOpen: () => void;
   onHighlight?: (threadId: string | null) => void;
   onSetThreadStatus?: ThreadActions['onSetThreadStatus'];
+  onCompare?: ThreadActions['onCompareThread'];
 }) {
   const first = openingComment(thread);
   const answers = replies(thread);
@@ -287,6 +291,18 @@ function ThreadRow({
           </span>
         ) : null}
       </button>
+      {thread.origin && onCompare ? (
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          aria-label={`Compare thread ${thread.number} with the version commented on`}
+          title="Compare with the version commented on"
+          className="relative z-10 text-info-text"
+          onClick={() => onCompare(thread.id)}
+        >
+          <Columns2 />
+        </Button>
+      ) : null}
       {canComment && onSetThreadStatus && !thread.pending ? (
         <Button
           variant="ghost"

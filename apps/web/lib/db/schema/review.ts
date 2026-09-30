@@ -2,6 +2,7 @@ import { relations, sql } from 'drizzle-orm';
 import { boolean, check, index, integer, jsonb, pgEnum, pgTable, real, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { REVIEW_DECISIONS, type DecisionSource, type DiffRegion, type DiffShift, type DiffState } from '@miguelfranken/ui/lib/review';
 import { ANCHOR_KINDS, COMMENT_KINDS, COMMENT_SOURCES, THREAD_STATUSES } from '@miguelfranken/ui/lib/review-threads';
+import type { LibraryViewConfig } from '@miguelfranken/ui/lib/library-views';
 import { users } from './auth';
 import { attachments, projects, runs, testAttempts, testResults, tests } from './reporting';
 
@@ -335,6 +336,31 @@ export const libraryReferences = pgTable(
   ],
 );
 
+/**
+ * A person's own view of a project's library, Linear style: its filters
+ * (review state, test case priority), grouping, order and variant, under a
+ * name. Personal: only its owner lists it. `config` is read through
+ * `normalizeViewConfig`, so a view saved with an older vocabulary still opens.
+ */
+export const libraryViews = pgTable(
+  'library_views',
+  {
+    id: uuid('id').primaryKey(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    config: jsonb('config').$type<LibraryViewConfig>().notNull(),
+    position: integer('position').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('library_views_owner_idx').on(t.projectId, t.userId, t.position), uniqueIndex('library_views_name_idx').on(t.projectId, t.userId, sql`lower(${t.name})`)],
+);
+
 export const reviewCheckpointsRelations = relations(reviewCheckpoints, ({ many, one }) => ({
   run: one(runs, { fields: [reviewCheckpoints.runId], references: [runs.id] }),
   captures: many(reviewCaptures),
@@ -350,4 +376,5 @@ export type ReviewDecisionRow = typeof reviewDecisions.$inferSelect;
 export type ReviewThreadRow = typeof reviewThreads.$inferSelect;
 export type ReviewCommentRow = typeof reviewComments.$inferSelect;
 export type LibraryReferenceRow = typeof libraryReferences.$inferSelect;
+export type LibraryViewRow = typeof libraryViews.$inferSelect;
 export type ImageDiffRow = typeof imageDiffs.$inferSelect;

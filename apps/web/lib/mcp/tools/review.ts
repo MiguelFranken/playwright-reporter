@@ -52,6 +52,11 @@ export const threadOut = z.object({
   percent: box.nullable().describe('In percent of the image’s width and height.'),
   css: box.nullable().describe('In the page’s CSS pixels (pixels ÷ device scale factor), when the scale is known.'),
   placedOnRun: z.number().nullable(),
+  placedOnCapture: z
+    .string()
+    .nullable()
+    .optional()
+    .describe('The capture the thread was placed on. For an outdated thread, get_review_checkpoint with it shows the version the comment was about.'),
   comments: z.array(z.object({ kind: z.string(), author: z.string().nullable(), via: z.string(), at: z.string(), body: z.string() })),
   url: z.string().describe('The thread in the app, open at its pin.'),
 });
@@ -75,6 +80,7 @@ export function toThreadOut(t: CaptureThread, capture: ComparedCapture, url: str
     percent: pos.percent,
     css: pos.css,
     placedOnRun: t.originRunNumber,
+    placedOnCapture: t.originCaptureId,
     comments: threadComments(t),
     url,
   };
@@ -82,7 +88,12 @@ export function toThreadOut(t: CaptureThread, capture: ComparedCapture, url: str
 
 /** A thread as a few lines of markdown: number, where, status, then the conversation. */
 export function renderThread(md: { line(s: string): void }, t: z.infer<typeof threadOut>, position: string) {
-  const flags = [t.status, t.placement === 'outdated' ? `outdated — placed on run #${t.placedOnRun ?? '?'}, the image changed since` : null].filter(Boolean).join(', ');
+  const flags = [
+    t.status,
+    t.placement === 'outdated' ? `outdated — placed on run #${t.placedOnRun ?? '?'}, the image changed since${t.placedOnCapture ? ` (that version: capture ${t.placedOnCapture})` : ''}` : null,
+  ]
+    .filter(Boolean)
+    .join(', ');
   md.line(`**#${t.number}** · ${position} · ${flags}`);
   for (const c of t.comments) {
     if (c.kind !== 'comment') md.line(`  - _${c.author ?? 'Someone'} ${c.kind === 'resolved' ? 'resolved it' : 'reopened it'}_`);

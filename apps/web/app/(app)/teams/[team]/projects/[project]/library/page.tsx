@@ -4,9 +4,9 @@ import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
 import { libraryRefParam, libraryRefShort, parseLibraryRef, sameLibraryRef } from '@miguelfranken/ui/lib/library';
 import { ReviewStoryboardSkeleton } from '@miguelfranken/ui/views/review/review-skeleton';
 import { AddToLibraryButton, ConnectedReferenceBar } from '@/components/library/library-controls';
-import { UrlReviewStoryboard } from '@/components/review/url-review-storyboard';
+import { UrlLibraryBrowser } from '@/components/library/url-library-browser';
 import { requireProject } from '@/lib/auth/access';
-import { casesOfTests, defaultBranch, defaultLibraryRef, getLibraryReference, libraryCandidates, libraryFlows, listLibraryReferences, referenceRuns } from '@/lib/page-data';
+import { casesOfTests, defaultBranch, defaultLibraryRef, getLibraryReference, libraryCandidates, libraryFlows, listLibraryReferences, listLibraryViews, referenceRuns, renderedAt } from '@/lib/page-data';
 import { compareFlowViews } from '@/lib/review/diff/compare';
 import { toRunView } from '@/lib/review/library';
 import { caseHref, flowViewsAcrossRuns } from '@/lib/review/view-model';
@@ -28,7 +28,7 @@ export default function LibraryPage({ params, searchParams }: Props) {
     <>
       <PageHeader
         title="Library"
-        description="Every flow your tests capture, screen by screen, as a branch or pull request shows it. Browse by test case or file; open a screen for its details."
+        description="Every flow your tests capture, screen by screen, as a branch or pull request shows it — each screen as its newest run took it, with the feedback on it. Filter to what waits for you, or keep a view of your own."
       >
         <Suspense fallback={null}>
           <AddButton params={params} />
@@ -76,7 +76,7 @@ async function AddButton({ params }: Pick<Props, 'params'>) {
 
 async function Bar(props: Props) {
   const { team, access, project, branch, key, compare, base } = await scope(props);
-  const [references, runs] = await Promise.all([listLibraryReferences(project.id, branch), referenceRuns(project.id, key)]);
+  const [references, runs, now] = await Promise.all([listLibraryReferences(project.id, branch), referenceRuns(project.id, key), renderedAt()]);
   const current = references.find((r) => sameLibraryRef(r.key, key)) ?? (await getLibraryReference(project.id, key, branch));
   const compareWith = compare ? (references.find((r) => sameLibraryRef(r.key, compare)) ?? (await getLibraryReference(project.id, compare, branch))) : null;
   return (
@@ -89,6 +89,7 @@ async function Bar(props: Props) {
       compareWith={compareWith}
       runs={runs.map(toRunView)}
       canManage={access.can({ review: ['decide'] })}
+      now={now.toISOString()}
     />
   );
 }
@@ -96,21 +97,19 @@ async function Bar(props: Props) {
 async function Screens(props: Props) {
   const { team, access, project, key, compare, base } = await scope(props);
   const hrefs = projectHrefs(base);
-  const [records, compared] = await Promise.all([libraryFlows(project.id, key), compare ? libraryFlows(project.id, compare) : null]);
+  const [records, compared, savedViews] = await Promise.all([libraryFlows(project.id, key), compare ? libraryFlows(project.id, compare) : null, listLibraryViews(project.id, access.user.id)]);
   const byTest = await casesOfTests(project.id, records.map((r) => r.testId));
   const views = flowViewsAcrossRuns(records, hrefs, { byTest, href: caseHref(hrefs) });
   const flows = compare && compared ? await compareFlowViews(views, records, compared, libraryRefShort(compare)) : views;
   return (
-    <UrlReviewStoryboard
+    <UrlLibraryBrowser
       team={team}
       project={project.slug}
       flows={flows}
-      canDecide={false}
+      savedViews={savedViews}
       canComment={access.can({ review: ['comment'] })}
       canModerate={access.can({ project: ['delete'] })}
       viewerId={access.user.id}
-      defaultFilter="all"
-      mode="library"
       emptyTitle={`No screens for ${libraryRefShort(key)} yet`}
       emptyDescription={
         <>

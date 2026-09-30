@@ -1,25 +1,15 @@
 'use client';
 
-import { ArrowDownWideNarrow, Check, ChevronRight, CircleAlert, ClipboardList, Film, Folder, Images, Route, Search, ZoomIn, ZoomOut } from 'lucide-react';
-import { defaultRangeExtractor, useWindowVirtualizer, type Range } from '@tanstack/react-virtual';
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Badge } from '../../components/badge';
+import { ArrowDownWideNarrow, Check, Images, Search } from 'lucide-react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '../../components/button';
 import { Input } from '../../components/input';
-import { Slider } from '../../components/slider';
 import { ToggleGroup, ToggleGroupItem } from '../../components/toggle-group';
-import { CommentCountBadge } from '../../patterns/comment-count-badge';
 import { EmptyState } from '../../patterns/empty-state';
-import { ReviewStatusBadge, ReviewStatusDot } from '../../patterns/review-status-badge';
-import { StatusIcon } from '../../patterns/status-badge';
-import { Link } from '../../provider';
 import { cn } from '../../lib/cn';
 import {
   buildReviewTree,
-  captureViewport,
   changeScore,
-  checkpointLabel,
-  compareVariants,
   countStatuses,
   DEFAULT_FRAME,
   flattenFolders,
@@ -30,7 +20,6 @@ import {
   REVIEW_FILTERS,
   REVIEW_STATUS_TONES,
   variantsOf,
-  worstStatus,
   type FrameSettings,
   type ReviewCheckpointView,
   type ReviewDecisionInput,
@@ -42,20 +31,17 @@ import {
   type ReviewSort,
   type StoryboardMode,
 } from '../../lib/review';
-import { openThreadCount } from '../../lib/review-threads';
 import { toneSolid } from '../../lib/tone';
 import { CheckpointViewer, type ReviewCommentsProps, type ReviewSelection } from './checkpoint-viewer';
-import { DiffBadge, DiffMarks } from './diff-summary';
 import type { IgnoreRect } from './ignore-regions-editor';
 import { ReviewTree } from './review-tree';
-import { SCREEN_ZOOM_VAR, ScreenFrame } from './screen-frame';
+import { SCREEN_ZOOM_VAR } from './screen-frame';
+import { SizeControl, STORYBOARD_SIZE } from './size-control';
+import { needsReviewIds, StoryboardRows } from './storyboard-rows';
 
 export type { ReviewSelection };
 
-/** The overview's scale of a capture's real size: 10% (a strip of stamps) to 50% (readable, scrolling screens). */
-export const STORYBOARD_SIZE = { min: 0.1, max: 0.5, key: 0.01, jump: 0.05, default: 0.18 } as const;
-/** From this scale the frames load the full image and scroll, so a flow can be read without opening it. */
-const SCROLL_FROM = 0.28;
+export { STORYBOARD_SIZE };
 
 /** Uncontrolled unless the host passes the value: stories drive it, the app binds it to the URL. */
 function useControlled<T>(value: T | undefined, onChange: ((v: T) => void) | undefined, initial: T): [T, (v: T) => void] {
@@ -289,7 +275,7 @@ export function ReviewStoryboard({
       </EmptyState>
     ) : (
       <StoryboardRows
-        sections={sections}
+        sections={sections as readonly ReviewFolder[]}
         headings={tree || sections.length > 1}
         size={size}
         canDecide={canDecide && Boolean(onDecide) && !library}
@@ -362,7 +348,7 @@ export function ReviewStoryboard({
 
       {tree ? (
         <div className="grid gap-6 lg:grid-cols-[15rem_minmax(0,1fr)]">
-          <aside className="lg:sticky lg:top-4 lg:max-h-[calc(100dvh-2rem)] lg:self-start lg:overflow-y-auto">
+          <aside className="lg:sticky lg:top-[calc(var(--sticky-offset,0px)+1rem)] lg:max-h-[calc(100dvh-var(--sticky-offset,0px)-2rem)] lg:self-start lg:overflow-y-auto">
             <ReviewTree
               folders={folders}
               selected={folder}
@@ -399,456 +385,4 @@ export function ReviewStoryboard({
       />
     </div>
   );
-}
-
-const needsReviewIds = (list: readonly ReviewFlowView[]) =>
-  list.flatMap((f) => f.checkpoints.flatMap((c) => c.captures.filter((cap) => NEEDS_REVIEW.includes(cap.status)).map((cap) => cap.id)));
-
-type RowItem = { kind: 'heading'; key: string; section: ReviewFolder; first: boolean } | { kind: 'flow'; key: string; flow: ReviewFlowView; first: boolean };
-
-/** How far past the screen rows stay rendered, in rows: what a quick scroll reaches before the next frame. */
-const OVERSCAN = 4;
-/** The screen the server renders the first rows for, before the browser can say how large it is. */
-const INITIAL_RECT = { width: 1280, height: 1000 } as const;
-
-/**
- * A row's height before it is measured, from the screens it holds: close
- * enough that the scrollbar does not jump when the real row takes its place.
- */
-function estimateRow(item: RowItem, size: number, library: boolean): number {
-  if (item.kind === 'heading') return (item.first ? 0 : 24) + 42;
-  const { flow } = item;
-  const tallest = Math.max(
-    24,
-    ...flow.checkpoints.map((c) => Math.max(0, ...c.captures.map((cap) => captureViewport(cap).height)) * size),
-    flow.failureImage && !library ? 720 * size : 0,
-  );
-  const described = library && flow.checkpoints.some((c) => c.description) ? 44 : 0;
-  // Padding, the title and file lines, the checkpoint label, the variant line.
-  return 40 + 48 + 16 + 32 + tallest + described + 30;
-}
-
-/**
- * The rows, virtualised against the window: only the rows on screen and a
- * few either side are in the document, so a run with hundreds of tests
- * renders, scrolls and resizes as quickly as one with ten. Each row is
- * measured as it renders (and again when the size slider resizes it), the
- * heading of the section being scrolled through stays pinned at the top.
- */
-function StoryboardRows({
-  sections,
-  headings,
-  size,
-  canDecide,
-  library,
-  pending,
-  onOpen,
-  onApproveFlow,
-  variantSelected,
-  reveal,
-}: {
-  sections: readonly ReviewFolder[];
-  headings: boolean;
-  size: number;
-  canDecide: boolean;
-  library: boolean;
-  pending: ReadonlySet<string>;
-  onOpen: (checkpointId: string, variant: string | null) => void;
-  onApproveFlow: (ids: string[]) => void;
-  variantSelected: string | null;
-  reveal: { checkpointId: string } | null;
-}) {
-  const items = useMemo(() => {
-    const out: RowItem[] = [];
-    sections.forEach((section, i) => {
-      if (headings) out.push({ kind: 'heading', key: `folder:${section.id}`, section, first: i === 0 });
-      section.flows.forEach((flow, j) => out.push({ kind: 'flow', key: `${section.id}:${flow.resultId}`, flow, first: j === 0 }));
-    });
-    return out;
-  }, [sections, headings]);
-  const headingIndexes = useMemo(() => items.flatMap((item, i) => (item.kind === 'heading' ? [i] : [])), [items]);
-
-  // The window scrolls; the rows start where this list does on the page.
-  const listRef = useRef<HTMLDivElement>(null);
-  const [scrollMargin, setScrollMargin] = useState(0);
-  useLayoutEffect(() => {
-    const el = listRef.current;
-    if (!el) return;
-    const update = () => setScrollMargin(Math.round(el.getBoundingClientRect().top + window.scrollY));
-    update();
-    // Anything above the list that grows or wraps (the toolbar, a banner) moves it.
-    const observer = new ResizeObserver(update);
-    observer.observe(document.body);
-    return () => observer.disconnect();
-  }, []);
-
-  const activeHeading = useRef(-1);
-  const rangeExtractor = useCallback(
-    (range: Range) => {
-      activeHeading.current = headingIndexes.findLast((i) => i <= range.startIndex) ?? -1;
-      const shown = defaultRangeExtractor(range);
-      return activeHeading.current >= 0 && !shown.includes(activeHeading.current) ? [activeHeading.current, ...shown] : shown;
-    },
-    [headingIndexes],
-  );
-
-  const virtualizer = useWindowVirtualizer({
-    count: items.length,
-    estimateSize: (i) => estimateRow(items[i], size, library),
-    getItemKey: (i) => items[i].key,
-    overscan: OVERSCAN,
-    scrollMargin,
-    rangeExtractor,
-    initialRect: INITIAL_RECT,
-    // The same first rows on the server and in the browser's first render.
-    initialOffset: 0,
-    useFlushSync: false,
-  });
-
-  useEffect(() => {
-    if (!reveal) return;
-    const index = items.findIndex((item) => item.kind === 'flow' && item.flow.checkpoints.some((c) => c.id === reveal.checkpointId));
-    if (index < 0) return;
-    const shown = virtualizer.getVirtualItems().filter((v) => v.index !== activeHeading.current);
-    const [top, bottom] = [shown[0]?.index ?? -1, shown.at(-1)?.index ?? -1];
-    // Only when the row is out of the rendered range; a row already near the screen stays where the reviewer left it.
-    if (index > top + OVERSCAN && index < bottom - OVERSCAN) return;
-    virtualizer.scrollToIndex(index, { align: 'center' });
-    // Only a new close should move the page, not a change of the rows.
-  }, [reveal]);
-
-  const virtualItems = virtualizer.getVirtualItems();
-  return (
-    <div ref={listRef} className="relative" style={{ height: virtualizer.getTotalSize() }}>
-      {virtualItems.map((v) => {
-        const item = items[v.index];
-        const sticky = item.kind === 'heading' && v.index === activeHeading.current;
-        return (
-          <div
-            key={v.key}
-            ref={virtualizer.measureElement}
-            data-index={v.index}
-            className={cn('top-0 left-0 w-full', sticky ? 'sticky z-10' : 'absolute')}
-            style={sticky ? undefined : { transform: `translateY(${v.start - virtualizer.options.scrollMargin}px)` }}
-          >
-            {item.kind === 'heading' ? (
-              <SectionHeading section={item.section} first={item.first} />
-            ) : (
-              <FlowRow
-                flow={item.flow}
-                first={item.first}
-                size={size}
-                canDecide={canDecide}
-                library={library}
-                pending={pending}
-                onOpen={onOpen}
-                onApproveFlow={onApproveFlow}
-                variantSelected={variantSelected}
-              />
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function SectionHeading({ section, first }: { section: ReviewFolder; first: boolean }) {
-  return (
-    <div className={first ? undefined : 'pt-6'}>
-      <h2 className="-mx-1 mb-1 flex items-center gap-1.5 border-b border-separator bg-surface/95 px-1 py-2 text-label-m text-muted-foreground backdrop-blur">
-        <Folder className="size-4 shrink-0" />
-        {section.path.map((part, i) => (
-          <span key={i} className="flex min-w-0 items-center gap-1.5">
-            {i > 0 ? <ChevronRight aria-hidden className="size-3.5 shrink-0" /> : null}
-            <span className={cn('truncate', i === section.path.length - 1 && 'text-foreground')}>{part}</span>
-          </span>
-        ))}
-        <span className="ml-1 text-label-xs tabular-nums">· {section.flows.length}</span>
-      </h2>
-    </div>
-  );
-}
-
-const FlowRow = memo(function FlowRow({
-  flow,
-  first,
-  size,
-  canDecide,
-  library,
-  pending,
-  onOpen,
-  onApproveFlow,
-  variantSelected,
-}: {
-  flow: ReviewFlowView;
-  first: boolean;
-  size: number;
-  canDecide: boolean;
-  library: boolean;
-  pending: ReadonlySet<string>;
-  onOpen: (checkpointId: string, variant: string | null) => void;
-  onApproveFlow: (ids: string[]) => void;
-  variantSelected: string | null;
-}) {
-  const needsReview = useMemo(() => needsReviewIds([flow]), [flow]);
-  const failed = flow.outcome === 'failed' || flow.outcome === 'timedout' || flow.outcome === 'interrupted';
-  const heading = flow.titlePath.length ? flow.titlePath.join(' › ') : flow.title;
-  return (
-    <article className={cn('py-5', !first && 'border-t border-separator')} aria-label={flow.titlePath.length ? flow.titlePath.join(' › ') : flow.title}>
-      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-        <div className="grid min-w-0 grid-cols-[1.25rem_minmax(0,1fr)] items-center gap-x-2 gap-y-1">
-          {library ? <Route aria-hidden className="size-4 text-muted-foreground" /> : <StatusIcon status={flow.outcome} />}
-          <h3 className="truncate text-title-s" title={heading}>
-            <Link href={flow.resultHref} className="hover:underline">
-              {heading}
-            </Link>
-          </h3>
-          <p className="col-start-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-            <span className="truncate text-code-s" title={flow.file}>
-              {flow.file}
-              {flow.line ? `:${flow.line}` : ''}
-            </span>
-            {flow.project ? (
-              <Badge variant="secondary" className="text-label-xs">
-                {flow.project}
-              </Badge>
-            ) : null}
-            {flow.cases?.map((c) => (
-              <Link key={c.key} href={c.href} className="inline-flex items-center gap-1 rounded-md bg-accent-subtle px-1.5 py-0.5 text-label-xs text-accent-text hover:underline" title={c.title}>
-                <ClipboardList className="size-3" />
-                {c.key} <span className="max-w-48 truncate">{c.title}</span>
-              </Link>
-            ))}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-1 md:self-start">
-          {flow.videoUrl ? (
-            <Button variant="ghost" size="sm" nativeButton={false} render={<a href={flow.videoUrl} target="_blank" rel="noreferrer" />}>
-              <Film /> Video
-            </Button>
-          ) : null}
-          {flow.traceUrl && !library ? (
-            <Button variant="ghost" size="sm" nativeButton={false} render={<a href={flow.traceUrl} target="_blank" rel="noreferrer" />}>
-              <Route /> Trace
-            </Button>
-          ) : null}
-          {canDecide && needsReview.length ? (
-            <Button variant="outline" size="sm" disabled={needsReview.some((id) => pending.has(id))} onClick={() => onApproveFlow(needsReview)}>
-              <Check /> Approve test ({needsReview.length})
-            </Button>
-          ) : null}
-        </div>
-      </div>
-      <ol className="mt-4 flex items-start gap-6 overflow-x-auto pb-2 pl-7" aria-label={`Checkpoints of ${flow.title}`}>
-        {flow.checkpoints.map((cp) => (
-          <CheckpointColumn key={cp.id} checkpoint={cp} size={size} onOpen={onOpen} variantSelected={variantSelected} library={library} />
-        ))}
-        {failed && flow.failureImage && !library ? (
-          <li className="flex shrink-0 flex-col gap-2">
-            <a href={flow.resultHref} className="inline-flex h-6 items-center gap-1.5 text-label-m text-danger-text hover:underline">
-              <CircleAlert className="size-4" /> Failed here
-            </a>
-            <ScreenFrame image={flow.failureImage} frame={{ width: 1280, height: 720 }} zoom={size} live alt="Screenshot at the failure" scroll={false} tone="danger" />
-          </li>
-        ) : null}
-      </ol>
-    </article>
-  );
-});
-
-/** The pointer's precision: far below a pixel of the track, so the thumb follows the pointer instead of snapping to steps. */
-const POINTER_STEP = 0.0001;
-/** How fast the screens catch up with the value, as the time constant of an exponential ease (the same at any frame rate). */
-const EASE_MS = { drag: 40, jump: 90 } as const;
-/** Arrow keys move by `key`, with Shift and Page Up/Down by `jump`. */
-const KEY_STEPS: Record<string, number> = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1, PageUp: 5, PageDown: -5 };
-
-const clampSize = (v: number) => Math.min(STORYBOARD_SIZE.max, Math.max(STORYBOARD_SIZE.min, v));
-
-/**
- * The screen-size slider. The thumb follows the pointer continuously, and the
- * screens follow the value in one `requestAnimationFrame` loop that eases
- * toward it and writes it to their CSS variable (`onLive`), so uneven pointer
- * events still move them smoothly and a click, a key or a zoom button glides
- * instead of jumping. Nothing re-renders the rows until the motion settles
- * after the slider lets go; then `onCommit` renders them once at the new size.
- */
-function SizeControl({ size, onLive, onCommit }: { size: number; onLive: (v: number) => void; onCommit: (v: number) => void }) {
-  // The thumb's value while the slider is in motion; the committed size at rest.
-  const [thumb, setThumb] = useState<number | null>(null);
-  const motion = useRef({ x: size, target: size, ease: EASE_MS.drag as number, frame: 0, last: 0, dragging: false, commit: false });
-  useEffect(() => () => cancelAnimationFrame(motion.current.frame), []);
-  const shown = thumb ?? size;
-
-  const settle = () => {
-    const m = motion.current;
-    if (!m.commit || m.dragging || m.frame) return;
-    m.commit = false;
-    onCommit(+m.target.toFixed(4));
-    setThumb(null);
-  };
-  const tick = (now: number) => {
-    const m = motion.current;
-    const dt = m.last ? Math.min(now - m.last, 64) : 16;
-    m.last = now;
-    m.x += (m.target - m.x) * (1 - Math.exp(-dt / m.ease));
-    if (Math.abs(m.target - m.x) < 0.0002) m.x = m.target;
-    onLive(m.x);
-    // Outside a drag the thumb glides with the screens.
-    if (!m.dragging) setThumb(m.x);
-    if (m.x !== m.target) {
-      m.frame = requestAnimationFrame(tick);
-    } else {
-      m.frame = 0;
-      m.last = 0;
-      settle();
-    }
-  };
-  const moveTo = (v: number, ease: number) => {
-    const m = motion.current;
-    // From rest, start where the screens are: the committed size.
-    if (!m.frame && thumb === null) m.x = size;
-    m.target = clampSize(v);
-    m.ease = ease;
-    if (!m.frame) m.frame = requestAnimationFrame(tick);
-  };
-  /** Moves by `by` from where the slider is heading, on the 1% grid, and commits there. */
-  const step = (by: number) => {
-    const m = motion.current;
-    const from = m.frame || thumb !== null ? m.target : size;
-    m.commit = true;
-    moveTo(Math.round((from + by) / STORYBOARD_SIZE.key) * STORYBOARD_SIZE.key, EASE_MS.jump);
-  };
-
-  const icon = 'rounded text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/25 disabled:pointer-events-none disabled:opacity-40';
-  return (
-    <div className="flex items-center gap-2.5 rounded-lg border border-border bg-surface px-2 py-1" title="Screen size">
-      <button type="button" aria-label="Smaller screens" disabled={shown <= STORYBOARD_SIZE.min} onClick={() => step(-STORYBOARD_SIZE.jump)} className={icon}>
-        <ZoomOut className="size-4" />
-      </button>
-      <Slider
-        className="w-28"
-        min={STORYBOARD_SIZE.min}
-        max={STORYBOARD_SIZE.max}
-        step={POINTER_STEP}
-        value={shown}
-        onValueChange={(v, details) => {
-          const value = Array.isArray(v) ? v[0] : v;
-          const m = motion.current;
-          m.dragging = details.reason === 'drag';
-          if (m.dragging) setThumb(value);
-          moveTo(value, m.dragging ? EASE_MS.drag : EASE_MS.jump);
-        }}
-        onValueCommitted={() => {
-          const m = motion.current;
-          m.dragging = false;
-          m.commit = true;
-          settle();
-        }}
-        // With a pointer step this fine, the keys keep their own, coarser steps.
-        onKeyDownCapture={(e) => {
-          const n = KEY_STEPS[e.key];
-          if (!n) return;
-          e.preventDefault();
-          e.stopPropagation();
-          step(n * (e.shiftKey && Math.abs(n) === 1 ? STORYBOARD_SIZE.jump : STORYBOARD_SIZE.key));
-        }}
-        thumbLabel="Screen size"
-        valueText={(v) => `${Math.round(v * 100)}% of the real size`}
-      />
-      <button type="button" aria-label="Larger screens" disabled={shown >= STORYBOARD_SIZE.max} onClick={() => step(STORYBOARD_SIZE.jump)} className={icon}>
-        <ZoomIn className="size-4" />
-      </button>
-      <span className="w-9 text-right text-label-s text-muted-foreground tabular-nums">{Math.round(shown * 100)}%</span>
-    </div>
-  );
-}
-
-/** The gap between the variants of one checkpoint, in px; the checkpoints themselves sit twice as far apart. */
-const VARIANT_GAP = 12;
-
-function CheckpointColumn({
-  checkpoint,
-  size,
-  onOpen,
-  variantSelected,
-  library,
-}: {
-  checkpoint: ReviewCheckpointView;
-  size: number;
-  onOpen: (checkpointId: string, variant: string | null) => void;
-  variantSelected: string | null;
-  library: boolean;
-}) {
-  const captures = [...checkpoint.captures].sort((a, b) => compareVariants(a.variant, b.variant));
-  const status = worstStatus(captures.map((c) => c.status));
-  const label = checkpointLabel(checkpoint.name, checkpoint.title);
-  const scroll = size >= SCROLL_FROM;
-  const realWidth = captures.reduce((sum, c) => sum + captureViewport(c).width, 0);
-  const open = (variant: string | null) => onOpen(checkpoint.id, variantSelected ?? variant);
-  return (
-    <li className="flex shrink-0 flex-col gap-2" style={{ width: `max(150px, calc(${realWidth}px * var(${SCREEN_ZOOM_VAR}, ${size}) + ${VARIANT_GAP * (captures.length - 1)}px))` }}>
-      <div className="flex h-6 items-center gap-2">
-        <span aria-hidden className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-label-xs text-muted-foreground tabular-nums">
-          {checkpoint.sequence + 1}
-        </span>
-        <button
-          type="button"
-          onClick={() => open(captures.length === 1 ? captures[0].variant : null)}
-          aria-label={`Open ${checkpoint.sequence + 1}. ${label}`}
-          className="min-w-0 truncate text-left text-label-m outline-none hover:underline focus-visible:underline"
-          title={checkpoint.description ?? label}
-        >
-          {label}
-        </button>
-        {library || status === 'approved' ? null : <ReviewStatusBadge status={status} className="shrink-0" />}
-      </div>
-      {library && checkpoint.description ? <p className="-mt-1 line-clamp-2 pl-7 text-body-s text-muted-foreground">{checkpoint.description}</p> : null}
-      <div className="flex items-start" style={{ gap: VARIANT_GAP }}>
-        {captures.map((c) => (
-          <div key={c.id} className="flex flex-col gap-1.5">
-            {/* A click opens the viewer; the wheel scrolls the screen. The label above is the keyboard way in. */}
-            <div onClick={() => open(c.variant)} className="relative cursor-zoom-in">
-              <CommentCountBadge count={openThreadCount(c.threads)} />
-              <ScreenFrame
-                image={c.image}
-                frame={captureViewport(c)}
-                zoom={size}
-                live
-                alt={`${label} — ${c.variant}`}
-                scroll={scroll}
-                label={`${label}, ${c.variant} screen`}
-                tone={library ? undefined : c.status === 'changed' ? 'warning' : c.status === 'new' ? 'info' : c.status === 'changes_requested' ? 'danger' : undefined}
-                overlay={library && !c.compare ? undefined : (shown) => <ChangeMarks capture={c} shown={shown} />}
-              />
-            </div>
-            <span className="flex flex-wrap items-center gap-1.5 text-label-xs text-muted-foreground">
-              {library ? null : <ReviewStatusDot status={c.status} />}
-              <span className="capitalize">{c.variant}</span>
-              {library && !c.compare ? null : c.compare?.same ? (
-                <span>same as {c.compare.label}</span>
-              ) : (
-                <DiffBadge diff={c.diff} decision={library ? null : c.decision} className="h-4 px-1 text-label-xs" />
-              )}
-            </span>
-          </div>
-        ))}
-      </div>
-    </li>
-  );
-}
-
-/**
- * Where a screen changed, boxed on the storyboard's small screen. A preview
- * shows only the first screen of the page, so only the boxes on it are drawn.
- */
-function ChangeMarks({ capture, shown }: { capture: ReviewCaptureView; shown: 'full' | 'preview' }) {
-  const d = capture.diff;
-  if (!d || d.state !== 'done' || !d.regions.length || (capture.status === 'approved' && !capture.compare)) return null;
-  const size = d.head ?? (capture.image.width && capture.image.height ? { width: capture.image.width, height: capture.image.height } : null);
-  if (!size) return null;
-  const viewport = captureViewport(capture);
-  const cover = shown === 'full' ? size.height : Math.min(size.height, Math.round((viewport.height * size.width) / viewport.width));
-  return <DiffMarks regions={d.regions} width={size.width} height={size.height} coverHeight={cover} />;
 }

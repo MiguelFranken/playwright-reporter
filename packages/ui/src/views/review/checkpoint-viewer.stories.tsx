@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { useState } from 'react';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { diffStatesFlow, legacyFlow, libraryCompareFlows, longTextFlow, placeOrderFlow, reviewFlows, unavailableFlow } from '../../fixtures/review';
+import { libraryFlows, NOW, toVerifyFlow, VIEWER_ID } from '../../fixtures/library-views';
 import { CheckpointViewer, type ReviewSelection } from './checkpoint-viewer';
 
 const changed = placeOrderFlow.checkpoints[1];
@@ -88,14 +89,56 @@ export const ScreenSettings: Story = {
   },
 };
 
-/** In the library: the screen and what it shows, without statuses, comparisons or decisions. */
+/** The library decides nothing; an updated screen compares with the capture before it on the branch. */
 export const InTheLibrary: Story = {
   args: { mode: 'library' },
   play: async () => {
     const body = within(document.body);
     await body.findByRole('dialog');
-    await expect(body.queryByRole('group', { name: 'Comparison' })).toBeNull();
     await expect(body.queryByRole('button', { name: /Approve/ })).toBeNull();
+    await expect(body.getByRole('group', { name: 'Comparison' })).toBeInTheDocument();
+    await userEvent.click(body.getByRole('button', { name: 'Side by side' }));
+    await expect(await body.findByText('Before (#481)')).toBeInTheDocument();
+  },
+};
+
+/** An unchanged screen in the library: nothing to compare with. */
+export const InTheLibraryUnchanged: Story = {
+  args: { mode: 'library', initial: { checkpointId: placeOrderFlow.checkpoints[0].id, variant: 'desktop' } },
+  play: async () => {
+    const body = within(document.body);
+    await body.findByRole('dialog');
+    await expect(body.queryByRole('group', { name: 'Comparison' })).toBeNull();
+    await expect(body.getByText('Unchanged since run #481.')).toBeInTheDocument();
+  },
+};
+
+/**
+ * A comment made on an earlier version, in the library: the thread offers the
+ * comparison; it shows the version commented on with its pin and the comment
+ * beside the screen now, and resolves from there.
+ */
+export const ComparesACommentWithItsVersion: Story = {
+  args: {
+    mode: 'library',
+    flows: libraryFlows,
+    initial: { checkpointId: toVerifyFlow.checkpoints[1].id, variant: 'desktop' },
+    comments: { canComment: true, onCreateThread: fn(), onSetThreadStatus: fn(), onReply: fn(), now: NOW, viewerId: VIEWER_ID },
+  },
+  play: async ({ args }) => {
+    const body = within(document.body);
+    await body.findByRole('dialog');
+    await expect(body.getByText('Ready to verify')).toBeInTheDocument();
+    await userEvent.click(body.getByRole('button', { name: 'Compare thread 1 with the version commented on' }));
+    const compare = await body.findByRole('group', { name: 'Comment 1: the version commented on and the screen now' });
+    await expect(within(compare).getByText(/Commented on · run #483/)).toBeInTheDocument();
+    await expect(within(compare).getByText(/The order button should use the primary style/)).toBeInTheDocument();
+    await userEvent.click(within(compare).getByRole('button', { name: 'Resolve' }));
+    await expect(args.comments!.onSetThreadStatus).toHaveBeenCalledWith(expect.objectContaining({ threadId: 'thread-verify', status: 'resolved' }));
+    await userEvent.click(within(compare).getByRole('button', { name: 'Close comparison' }));
+    await waitFor(() => expect(body.queryByRole('group', { name: /the version commented on/ })).toBeNull());
+    await userEvent.click(body.getByRole('button', { name: 'Compare thread 1 with the version commented on' }));
+    await expect(await body.findByRole('group', { name: /the version commented on/ })).toBeInTheDocument();
   },
 };
 

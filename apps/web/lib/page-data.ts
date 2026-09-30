@@ -39,6 +39,7 @@ import * as mcpQueries from '@/lib/db/queries/mcp';
 import * as review from '@/lib/review/queries';
 import * as reviewCases from '@/lib/review/cases';
 import * as library from '@/lib/review/library';
+import * as libraryViews from '@/lib/review/library-views';
 
 /**
  * Thirty seconds: the shortest lifetime Next.js still includes in a per-link
@@ -317,6 +318,12 @@ export async function referenceRuns(...args: Parameters<typeof library.reference
   'use cache: private';
   cacheLife(PAGE_DATA);
   return library.referenceRuns(...args);
+}
+
+export async function listLibraryViews(...args: Parameters<typeof libraryViews.listLibraryViews>) {
+  'use cache: private';
+  cacheLife(PAGE_DATA);
+  return libraryViews.listLibraryViews(...args);
 }
 
 export async function libraryCandidates(...args: Parameters<typeof library.libraryCandidates>) {

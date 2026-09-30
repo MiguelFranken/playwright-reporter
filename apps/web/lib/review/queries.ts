@@ -33,7 +33,7 @@ import { createThread, resolveThreadsOf, threadsForCaptures, type CaptureThread 
 const thumbs = alias(attachments, 'thumb_attachments');
 
 /** The newest attempt of the checkpoint's result: the one a reviewer looks at. */
-const isFinalAttempt = sql`${testAttempts.retry} = (select max(ta2.retry) from ${testAttempts} ta2 where ta2.test_result_id = ${testAttempts.testResultId})`;
+export const isFinalAttempt = sql`${testAttempts.retry} = (select max(ta2.retry) from ${testAttempts} ta2 where ta2.test_result_id = ${testAttempts.testResultId})`;
 
 export type AttachmentState = Pick<Attachment, 'id' | 'status'>;
 
@@ -87,6 +87,8 @@ export interface ComparedCapture extends CaptureRecord {
   ignoreRegions: Rect[];
   /** The comment threads the image shows (see `threads.ts`). */
   threads: CaptureThread[];
+  /** The run it was captured in, where images of several runs are shown together (the library). */
+  runNumber?: number;
 }
 
 export interface CheckpointRecord {
@@ -288,32 +290,42 @@ export async function compareCaptures(
   });
 }
 
-/** The checkpoints of some results' final attempts, in order, with their compared captures. */
-export async function checkpointsWhere(where: SQL, context?: { runId: string; runStartedAt: Date }): Promise<CheckpointRecord[]> {
-  const cps = await db
-    .select({
-      id: reviewCheckpoints.id,
-      runId: reviewCheckpoints.runId,
-      testResultId: reviewCheckpoints.testResultId,
-      attemptId: reviewCheckpoints.attemptId,
-      testId: reviewCheckpoints.testId,
-      name: reviewCheckpoints.name,
-      title: reviewCheckpoints.title,
-      description: reviewCheckpoints.description,
-      sequence: reviewCheckpoints.sequence,
-      kind: reviewCheckpoints.kind,
-      flow: reviewCheckpoints.flow,
-      stepPath: reviewCheckpoints.stepPath,
-      url: reviewCheckpoints.url,
-      pageTitle: reviewCheckpoints.pageTitle,
-      tags: reviewCheckpoints.tags,
-      offsetMs: reviewCheckpoints.offsetMs,
-      capturedAt: reviewCheckpoints.capturedAt,
-    })
+export const checkpointColumns = {
+  id: reviewCheckpoints.id,
+  runId: reviewCheckpoints.runId,
+  testResultId: reviewCheckpoints.testResultId,
+  attemptId: reviewCheckpoints.attemptId,
+  testId: reviewCheckpoints.testId,
+  name: reviewCheckpoints.name,
+  title: reviewCheckpoints.title,
+  description: reviewCheckpoints.description,
+  sequence: reviewCheckpoints.sequence,
+  kind: reviewCheckpoints.kind,
+  flow: reviewCheckpoints.flow,
+  stepPath: reviewCheckpoints.stepPath,
+  url: reviewCheckpoints.url,
+  pageTitle: reviewCheckpoints.pageTitle,
+  tags: reviewCheckpoints.tags,
+  offsetMs: reviewCheckpoints.offsetMs,
+  capturedAt: reviewCheckpoints.capturedAt,
+};
+
+/** Checkpoint rows without their captures. */
+export async function selectCheckpoints(where: SQL): Promise<Omit<CheckpointRecord, 'captures'>[]> {
+  return db
+    .select(checkpointColumns)
     .from(reviewCheckpoints)
     .innerJoin(testAttempts, eq(testAttempts.id, reviewCheckpoints.attemptId))
     .where(and(where, isFinalAttempt))
     .orderBy(reviewCheckpoints.testResultId, reviewCheckpoints.sequence);
+}
+
+/** Captures by id, without their comparison. */
+export const capturesById = (ids: readonly string[]) => (ids.length ? selectCaptures(inArray(reviewCaptures.id, [...ids])) : Promise.resolve([]));
+
+/** The checkpoints of some results' final attempts, in order, with their compared captures. */
+export async function checkpointsWhere(where: SQL, context?: { runId: string; runStartedAt: Date }): Promise<CheckpointRecord[]> {
+  const cps = await selectCheckpoints(where);
   if (cps.length === 0) return [];
   const raw = await selectCaptures(
     inArray(
@@ -351,6 +363,19 @@ export interface ReviewFlowRecord {
   trace: AttachmentState | null;
   failureScreenshot: AttachmentState | null;
   checkpoints: CheckpointRecord[];
+  /**
+   * The library's flows gather each checkpoint from the newest run that
+   * captured it: the other results their checkpoints come from, by result id.
+   */
+  origins?: Record<string, FlowOrigin>;
+}
+
+/** A result some of a library flow's checkpoints come from, when it is not the flow's own. */
+export interface FlowOrigin {
+  runNumber: number;
+  runStartedAt: Date;
+  outcome: string;
+  video: AttachmentState | null;
 }
 
 /**
@@ -370,8 +395,12 @@ export async function runReview(run: { id: string; startedAt: Date | string }, f
  * Checkpoints as flows: one per result, with the test, its outcome, the
  * attempt's video, trace and failure screenshot, in the order the run
  * summary lists them (file, then title path).
+ *
+ * `byTest` makes one flow per test instead, for checkpoints gathered from
+ * several runs (the library's): the flow is the newest result's, in the
+ * order given, and `origins` says where the older checkpoints come from.
  */
-export async function assembleFlows(checkpoints: readonly CheckpointRecord[]): Promise<ReviewFlowRecord[]> {
+export async function assembleFlows(checkpoints: readonly CheckpointRecord[], { byTest = false }: { byTest?: boolean } = {}): Promise<ReviewFlowRecord[]> {
   if (checkpoints.length === 0) return [];
 
   const resultIds = [...new Set(checkpoints.map((c) => c.testResultId))];
@@ -401,26 +430,35 @@ export async function assembleFlows(checkpoints: readonly CheckpointRecord[]): P
       .orderBy(attachments.createdAt, sql`${attachments.ordinal} asc nulls last`),
   ]);
 
-  const byResult = new Map<string, CheckpointRecord[]>();
-  for (const c of checkpoints) byResult.set(c.testResultId, [...(byResult.get(c.testResultId) ?? []), c]);
+  const mediaOf = (attemptId: string) => {
+    const own = media.filter((m) => m.attemptId === attemptId);
+    const pick = (kind: string) => own.find((m) => m.kind === kind) ?? null;
+    // Playwright names its automatic screenshots `screenshot`; review images are `review:…`.
+    return { video: pick('video'), trace: pick('trace'), failureScreenshot: own.find((m) => m.kind === 'screenshot' && m.name === 'screenshot') ?? null };
+  };
+  const order = (a: { file: string; titlePath: string[]; project: string }, b: typeof a) =>
+    a.file.localeCompare(b.file) || a.titlePath.join('\u0000').localeCompare(b.titlePath.join('\u0000')) || a.project.localeCompare(b.project);
 
-  return results
-    .map((r) => {
-      const cps = byResult.get(r.resultId) ?? [];
-      const attemptId = cps[0].attemptId;
-      const own = media.filter((m) => m.attemptId === attemptId);
-      const pick = (kind: string) => own.find((m) => m.kind === kind) ?? null;
-      return {
-        ...r,
-        attemptId,
-        video: pick('video'),
-        trace: pick('trace'),
-        // Playwright names its automatic screenshots `screenshot`; review images are `review:…`.
-        failureScreenshot: own.find((m) => m.kind === 'screenshot' && m.name === 'screenshot') ?? null,
-        checkpoints: cps,
-      };
-    })
-    .sort((a, b) => a.file.localeCompare(b.file) || a.titlePath.join('\u0000').localeCompare(b.titlePath.join('\u0000')) || a.project.localeCompare(b.project));
+  const groupOf = (c: CheckpointRecord) => (byTest ? c.testId : c.testResultId);
+  const groups = new Map<string, CheckpointRecord[]>();
+  for (const c of checkpoints) groups.set(groupOf(c), [...(groups.get(groupOf(c)) ?? []), c]);
+  const resultById = new Map(results.map((r) => [r.resultId, r]));
+  const newestFirst = (a: (typeof results)[number], b: (typeof results)[number]) => +new Date(b.runStartedAt) - +new Date(a.runStartedAt) || b.runNumber - a.runNumber;
+
+  const flows: ReviewFlowRecord[] = [];
+  for (const cps of groups.values()) {
+    const own = [...new Set(cps.map((c) => c.testResultId))].flatMap((id) => resultById.get(id) ?? []).sort(newestFirst);
+    const head = own[0];
+    if (!head) continue;
+    const attemptId = cps.find((c) => c.testResultId === head.resultId)!.attemptId;
+    const origins: Record<string, FlowOrigin> = {};
+    for (const r of own.slice(1)) {
+      const attempt = cps.find((c) => c.testResultId === r.resultId)!.attemptId;
+      origins[r.resultId] = { runNumber: r.runNumber, runStartedAt: r.runStartedAt, outcome: r.outcome, video: mediaOf(attempt).video };
+    }
+    flows.push({ ...head, attemptId, ...mediaOf(attemptId), checkpoints: cps, ...(own.length > 1 ? { origins } : {}) });
+  }
+  return flows.sort(order);
 }
 
 /** Per-status image counts of a run's final attempts, for badges and the queue. */

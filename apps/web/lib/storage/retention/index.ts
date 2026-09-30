@@ -14,6 +14,7 @@
  */
 import { and, asc, desc, eq, inArray, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import { db } from '@/lib/db/drizzle';
+import { RESIZABLE_KINDS, variantKeys } from '@/lib/artifacts/image-variants';
 import { artifactSweeps, attachments, instanceSettings, libraryReferences, reviewCaptures, reviewCheckpoints, reviewDecisions, reviewThreads, runs, type ArtifactSweep } from '@/lib/db/schema';
 import { getStorage, type StorageAdapter } from '@/lib/storage';
 import { ingestSweepDue } from '@/lib/sweeps/continuation';
@@ -113,6 +114,12 @@ const isOpenThreadFlow = sql`exists (
       where t.status = 'open' and ocp.run_id = cp.run_id and ocp.test_result_id = cp.test_result_id
     )
 )`;
+
+/** Deletes the resized copies of the screenshots among `rows` (see `image-variants`). */
+async function deleteVariants(storage: StorageAdapter, rows: readonly { storageKey: string; kind: string }[]) {
+  const keys = rows.filter((r) => RESIZABLE_KINDS.has(r.kind)).flatMap((r) => variantKeys(r.storageKey));
+  for (let i = 0; i < keys.length; i += 1000) await storage.delete(keys.slice(i, i + 1000));
+}
 
 /**
  * Live artifacts the policy says have expired, over Drizzle-qualified columns.
@@ -215,7 +222,7 @@ export async function sweepExpiredArtifacts(options: SweepOptions): Promise<Swee
       }
       const batch = await db.transaction(async (tx) => {
         const rows = await tx
-          .select({ id: attachments.id, storageKey: attachments.storageKey, sizeBytes: attachments.sizeBytes })
+          .select({ id: attachments.id, storageKey: attachments.storageKey, sizeBytes: attachments.sizeBytes, kind: attachments.kind })
           .from(attachments)
           .where(and(eq(attachments.storageDriver, storage.name), dueWhere(policy, clock())))
           .orderBy(asc(attachments.createdAt))
@@ -223,6 +230,8 @@ export async function sweepExpiredArtifacts(options: SweepOptions): Promise<Swee
           .for('update', { skipLocked: true });
         if (rows.length === 0) return rows;
         if (storage.retention === 'app') await storage.delete(rows.map((r) => r.storageKey));
+        // The resized copies are the app's own, untagged: no lifecycle rule takes them, so they go here either way.
+        await deleteVariants(storage, rows);
         await tx
           .update(attachments)
           .set({ status: 'expired', expiredAt: sql`now()` })
@@ -286,7 +295,7 @@ export async function evictAllArtifacts(
       }
       const batch = await db.transaction(async (tx) => {
         const rows = await tx
-          .select({ id: attachments.id, storageKey: attachments.storageKey, sizeBytes: attachments.sizeBytes })
+          .select({ id: attachments.id, storageKey: attachments.storageKey, sizeBytes: attachments.sizeBytes, kind: attachments.kind })
           .from(attachments)
           .where(live)
           .orderBy(asc(attachments.createdAt))
@@ -294,6 +303,7 @@ export async function evictAllArtifacts(
           .for('update', { skipLocked: true });
         if (rows.length === 0) return rows;
         await storage.delete(rows.map((r) => r.storageKey));
+        await deleteVariants(storage, rows);
         await tx
           .update(attachments)
           .set({ status: 'expired', expiredAt: sql`now()` })

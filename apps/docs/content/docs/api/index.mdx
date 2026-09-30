@@ -59,6 +59,7 @@ anything, and a change the role may not make answers `404`, like a project the t
 | | |
 | --- | --- |
 | `POST …/test-cases`, `PATCH …/test-cases/{case}` | Create a test case (`201`, with its new key), or change some of its fields. Each edit is a new version; pass `expectedVersion` to refuse an edit if the case changed since you read it. |
+| `POST …/test-cases/bulk` | Apply one change to up to 200 cases (`cases`: keys or ids): their priority, status, severity, type, behavior, automation, suite, muting or tags. |
 | `POST …/test-cases/{case}/links` | Link Playwright tests (by test id) to a case, or unlink them. |
 | `POST …/test-cases/adopt` | Turn Playwright tests into linked test cases (`201`): `tests` into one suite or suites mirroring their files, or `placements` with a suite and title per group. |
 | `POST …/test-suites`, `POST …/test-suites/delete-empty` | Create a suite (`201`), or delete suites that hold no cases. |
@@ -71,6 +72,21 @@ curl -X POST -H "Authorization: Bearer $PW_REPORTER_PAT" -H "Content-Type: appli
   -d '{"title": "Pay by card", "suite": "Checkout / Payment", "priority": "high"}' \
   "https://reporter.example.com/api/v1/projects/acme/web/test-cases"
 ```
+
+Priorities are `critical`, `high`, `medium`, `low` and `none`. Change one case's, or many at once:
+
+```bash
+curl -X PATCH -H "Authorization: Bearer $PW_REPORTER_PAT" -H "Content-Type: application/json" \
+  -d '{"priority": "critical"}' \
+  "https://reporter.example.com/api/v1/projects/acme/web/test-cases/TC-12"
+
+curl -X POST -H "Authorization: Bearer $PW_REPORTER_PAT" -H "Content-Type: application/json" \
+  -d '{"cases": ["TC-12", "TC-14", "TC-15"], "priority": "high"}' \
+  "https://reporter.example.com/api/v1/projects/acme/web/test-cases/bulk"
+```
+
+The [library](/docs/using/visual-review#the-library) filters and groups flows by the highest priority of their test
+cases, so this is also how a team decides what its reviewers look at first.
 
 A suite is given by its id or by its path of names from the top (`Checkout / Payment`); a missing level is created.
 

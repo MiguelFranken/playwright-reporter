@@ -4,7 +4,9 @@ import { revalidatePath } from 'next/cache';
 import { actionError, denied, projectForAction, type Denied } from '@/lib/auth/access';
 import { audit } from '@/lib/auth/audit';
 import { parseLibraryRef, libraryRefParam, type LibraryReferencePatch } from '@miguelfranken/ui/lib/library';
+import type { LibraryViewDef } from '@miguelfranken/ui/lib/library-views';
 import { LibraryError, setLibraryReference } from '@/lib/review/library';
+import { createLibraryView, deleteLibraryView as removeLibraryView, LibraryViewError, updateLibraryView } from '@/lib/review/library-views';
 
 /**
  * Keeps, pins, renames, makes default or drops a library reference. Anyone
@@ -37,4 +39,36 @@ export async function updateLibraryReference(
     if (error instanceof LibraryError) return actionError(error.message);
     throw error;
   }
+}
+
+/**
+ * Saves the signed-in person's own library view: a new one, or (with `id`)
+ * a new name or new settings for one they saved. Anyone who can read the
+ * project may keep views of it; they are nobody else's.
+ */
+export async function saveLibraryView(
+  ref: { team: string; project: string },
+  input: { id?: string; name?: string; config?: unknown },
+): Promise<{ ok: true; view: LibraryViewDef } | Denied> {
+  const access = await projectForAction(ref.team, ref.project, { run: ['read'] });
+  if (denied(access)) return access;
+  try {
+    const view = input.id
+      ? await updateLibraryView({ projectId: access.project.id, userId: access.user.id, id: input.id, name: input.name, config: input.config })
+      : await createLibraryView({ projectId: access.project.id, userId: access.user.id, name: input.name ?? '', config: input.config });
+    revalidatePath(`/teams/${ref.team}/projects/${ref.project}/library`);
+    return { ok: true, view };
+  } catch (error) {
+    if (error instanceof LibraryViewError) return actionError(error.message);
+    throw error;
+  }
+}
+
+export async function deleteLibraryView(ref: { team: string; project: string }, id: string): Promise<{ ok: true } | Denied> {
+  const access = await projectForAction(ref.team, ref.project, { run: ['read'] });
+  if (denied(access)) return access;
+  const { deleted } = await removeLibraryView({ projectId: access.project.id, userId: access.user.id, id });
+  if (!deleted) return actionError('That view does not exist.');
+  revalidatePath(`/teams/${ref.team}/projects/${ref.project}/library`);
+  return { ok: true };
 }

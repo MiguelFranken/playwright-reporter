@@ -8,9 +8,26 @@
 import { z } from 'zod';
 import { checkpointLabel } from '@miguelfranken/ui/lib/review';
 import { libraryRefLabel, libraryRefParam, shownRun, type LibraryRefKey } from '@miguelfranken/ui/lib/library';
+import {
+  BUILT_IN_VIEWS,
+  captureStates,
+  describeViewConfig,
+  feedbackCounts,
+  flowPriority,
+  flowState,
+  LIBRARY_SORTS,
+  LIBRARY_STATE_LABELS,
+  LIBRARY_STATES,
+  matchesLibraryFilters,
+  sortLibraryFlows,
+  type LibraryViewConfig,
+} from '@miguelfranken/ui/lib/library-views';
+import { CASE_PRIORITIES } from '@miguelfranken/ui/lib/test-cases';
 import { defaultBranch } from '@/lib/db/queries/mcp';
 import { casesOfTests } from '@/lib/review/cases';
 import { defaultLibraryRef, getLibraryReference, LibraryError, libraryFlows, listLibraryReferences, setLibraryReference } from '@/lib/review/library';
+import { findLibraryView } from '@/lib/review/library-views';
+import { toFlowViews } from '@/lib/review/view-model';
 import { invalid } from '../errors';
 import { commonParams } from '../params';
 import { defineTool, output } from '../registry';
@@ -86,10 +103,26 @@ export const listLibrary = defineTool({
 
 // ---------------------------------------------------------------- get_library_flows
 
+const stateParam = z.enum(LIBRARY_STATES);
+
 const flowsInput = z.object({
   ...commonParams,
   ...refParams,
   test: z.string().optional().describe('Part of a test title, file or test case key (TC-12), to narrow the flows.'),
+  view: z
+    .string()
+    .optional()
+    .describe(
+      `A library view: a built-in one (${BUILT_IN_VIEWS.map((v) => `"${v.id}"`).join(', ')}) or one of your saved views, by name or id. Its filters and order apply; state and priority given here replace the view's.`,
+    ),
+  state: z
+    .array(stateParam)
+    .optional()
+    .describe(
+      'Only flows with a screen in any of these states: waiting (open comments or a change request on the screen as it is now), verify (commented on an earlier version, the screen changed since), needs-review, updated (changed since the capture before it), approved.',
+    ),
+  priority: z.array(z.enum(CASE_PRIORITIES)).optional().describe('Only flows whose highest linked test case priority is one of these ("none": no case, or no priority).'),
+  sort: z.enum(LIBRARY_SORTS).optional().describe('journey (suite and file order, the default), priority, urgency, recent or comments.'),
   limit: z.number().int().min(1).max(500).optional().describe('At most this many flows (default 50).'),
 });
 
@@ -99,6 +132,7 @@ const flowsOutput = output({
   name: z.string(),
   pinnedRun: z.number().nullable(),
   url: z.string(),
+  view: z.string().nullable().optional().describe('The filters applied, in words.'),
   total: z.number(),
   more: z.boolean().describe('More flows match than were returned: raise limit or narrow with test.'),
   flows: z.array(
@@ -107,14 +141,28 @@ const flowsOutput = output({
       file: z.string(),
       project: z.string(),
       run: z.number(),
-      cases: z.array(z.object({ key: z.string(), title: z.string() })),
+      priority: z.string().optional().describe('The highest priority of the linked test cases.'),
+      state: z.string().optional().describe('The most urgent state of its screens: waiting, verify, needs-review or approved.'),
+      openComments: z.number().optional(),
+      cases: z.array(z.object({ key: z.string(), title: z.string(), priority: z.string().optional() })),
       checkpoints: z.array(
         z.object({
           order: z.number(),
           title: z.string(),
           description: z.string().nullable(),
           url: z.string().nullable(),
-          captures: z.array(z.object({ captureId: z.string(), variant: z.string(), viewport: z.string().nullable() })),
+          run: z.number().optional().describe('The run the checkpoint was captured in: older than the flow’s when a later run did not capture it.'),
+          captures: z.array(
+            z.object({
+              captureId: z.string(),
+              variant: z.string(),
+              viewport: z.string().nullable(),
+              run: z.number().optional(),
+              states: z.array(z.string()).optional(),
+              openThreads: z.number().optional(),
+              outdatedThreads: z.number().optional().describe('Open threads placed on an earlier version of the image.'),
+            }),
+          ),
         }),
       ),
     }),
@@ -126,34 +174,63 @@ export const getLibraryFlows = defineTool({
   title: 'Get library flows',
   toolset: 'core',
   description:
-    'The screens of a branch or pull request as the library shows them: each flow (test) with its test cases and its checkpoints in journey order, each with its variants’ capture ids. Look at an image with get_review_checkpoint. Defaults to the library’s default reference.',
+    'The screens of a branch or pull request as the library shows them — every checkpoint as the newest run on it captured it, so partial runs never hide what they skipped: each flow (test) with its test cases and their priority, its checkpoints in journey order, and each variant’s capture id and review state (waiting for changes, ready to verify, needs review, updated, approved). Filter by state, priority or a view (e.g. view "to-fix" for open feedback on the screens as they are now). Look at an image with get_review_checkpoint. Defaults to the library’s default reference.',
   input: flowsInput,
   output: flowsOutput,
   async handler(args, ctx) {
     const project = await ctx.project(args.project, { run: ['read'] });
     const branch = await defaultBranch(project.project.id, project.project.settings);
     const key = refOf(args) ?? (await defaultLibraryRef(project.project.id, branch));
+    const saved = args.view ? await findLibraryView(project.project.id, project.user.id, args.view) : null;
+    if (args.view && !saved) throw invalid(`No view "${args.view}".`, `Built-in views: ${BUILT_IN_VIEWS.map((v) => v.id).join(', ')}.`);
+    const base: LibraryViewConfig | null = saved?.config ?? null;
+    const filters = { states: args.state ?? base?.filters.states ?? [], priorities: args.priority ?? base?.filters.priorities ?? [] };
+    const sort = args.sort ?? base?.sort ?? 'journey';
+    const filtered = Boolean(args.view || args.state || args.priority);
+
     const [reference, records] = await Promise.all([getLibraryReference(project.project.id, key, branch), libraryFlows(project.project.id, key)]);
     const cases = await casesOfTests(project.project.id, records.map((r) => r.testId));
     const q = args.test?.toLowerCase();
-    const all = records
-      .map((f) => ({
+    // Each record as the library's view model, one per test, so states and priorities read as they do in the app.
+    const views = records.map((r) => ({ record: r, view: toFlowViews([r], () => '', { byTest: cases, href: () => '' })[0] }));
+    const kept = views.filter(({ view }) => matchesLibraryFilters(view, filters));
+    const order = new Map(sortLibraryFlows(kept.map((k) => k.view), sort).map((v, i) => [v, i]));
+    const all = kept
+      .sort((a, b) => order.get(a.view)! - order.get(b.view)!)
+      .map(({ record: f, view }) => ({
         title: f.titlePath.join(' › ') || f.title,
         file: f.file,
         project: f.project,
         run: f.runNumber,
-        cases: (cases[f.testId] ?? []).map((c) => ({ key: c.key, title: c.title })),
-        checkpoints: f.checkpoints.map((cp) => ({
+        priority: flowPriority(view),
+        state: flowState(view),
+        openComments: feedbackCounts(view.checkpoints.flatMap((c) => c.captures)).open,
+        cases: (cases[f.testId] ?? []).map((c) => ({ key: c.key, title: c.title, priority: c.priority })),
+        checkpoints: f.checkpoints.map((cp, i) => ({
           order: cp.sequence + 1,
           title: checkpointLabel(cp.name, cp.title),
           description: cp.description,
           url: cp.url,
-          captures: cp.captures.map((c) => ({ captureId: c.id, variant: c.variant, viewport: c.viewportWidth ? `${c.viewportWidth}×${c.viewportHeight}` : null })),
+          run: f.origins?.[cp.testResultId]?.runNumber ?? f.runNumber,
+          captures: cp.captures.map((c) => {
+            const shown = view.checkpoints[i]?.captures.find((v) => v.id === c.id);
+            const counts = shown ? feedbackCounts([shown]) : { open: 0, outdated: 0 };
+            return {
+              captureId: c.id,
+              variant: c.variant,
+              viewport: c.viewportWidth ? `${c.viewportWidth}×${c.viewportHeight}` : null,
+              run: c.runNumber ?? f.runNumber,
+              states: shown ? [...captureStates(shown)] : [],
+              openThreads: counts.open,
+              outdatedThreads: counts.outdated,
+            };
+          }),
         })),
       }))
       .filter((f) => !q || [f.title, f.file, ...f.cases.flatMap((c) => [c.key, c.title])].some((s) => s.toLowerCase().includes(q)));
     const limit = args.limit ?? 50;
     const flows = all.slice(0, limit);
+    const described = filtered ? describeViewConfig({ filters, sort, group: 'suite', variant: null }) : null;
     return {
       data: {
         project: project.ref,
@@ -161,19 +238,28 @@ export const getLibraryFlows = defineTool({
         name: libraryRefLabel(reference),
         pinnedRun: reference.pinnedRun?.number ?? null,
         url: project.links.library(key),
+        view: saved ? `${saved.name}: ${described}` : described,
         total: all.length,
         more: all.length > flows.length,
         flows,
       },
       render(md, d) {
         md.heading(`Library: ${d.name}`, 2);
-        md.line(`${d.total} flow${d.total === 1 ? '' : 's'}${d.pinnedRun ? `, pinned to run #${d.pinnedRun}` : ', each as its newest run captured it'}. ${link('Open in the library', d.url)}`);
+        md.line(`${d.total} flow${d.total === 1 ? '' : 's'}${d.pinnedRun ? `, pinned to run #${d.pinnedRun}` : ', each screen as the newest run captured it'}${d.view ? ` — ${d.view}` : ''}. ${link('Open in the library', d.url)}`);
         if (d.more) md.line(`Showing ${d.flows.length}; pass "limit" or "test" for the rest.`);
         for (const f of d.flows) {
-          md.heading(`${f.title}${f.cases.length ? ` — ${f.cases.map((c) => c.key).join(', ')}` : ''}`, 3);
+          const facts = [f.priority && f.priority !== 'none' ? `priority ${f.priority}` : null, f.state && f.state !== 'approved' ? LIBRARY_STATE_LABELS[f.state as keyof typeof LIBRARY_STATE_LABELS].toLowerCase() : null, f.openComments ? `${f.openComments} open comments` : null].filter(Boolean);
+          md.heading(`${f.title}${f.cases.length ? ` — ${f.cases.map((c) => c.key).join(', ')}` : ''}${facts.length ? ` (${facts.join(', ')})` : ''}`, 3);
           md.table(
-            ['#', 'Checkpoint', 'Variants (capture id)'],
-            f.checkpoints.map((cp) => [cp.order, cp.title + (cp.description ? ` — ${cp.description}` : ''), cp.captures.map((c) => `${c.variant}: ${c.captureId}`).join(', ')]),
+            ['#', 'Checkpoint', 'Variants (capture id)', 'Run'],
+            f.checkpoints.map((cp) => [
+              cp.order,
+              cp.title + (cp.description ? ` — ${cp.description}` : ''),
+              cp.captures
+                .map((c) => `${c.variant}: ${c.captureId}${c.states?.length ? ` [${c.states.join(', ')}]` : ''}${c.openThreads ? ` · ${c.openThreads} open${c.outdatedThreads ? `, ${c.outdatedThreads} on an earlier version` : ''}` : ''}`)
+                .join('; '),
+              cp.run === f.run ? `#${cp.run}` : `#${cp.run} (earlier)`,
+            ]),
           );
         }
       },

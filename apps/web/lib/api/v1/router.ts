@@ -28,6 +28,7 @@ import { verifyFixTool } from '@/lib/mcp/tools/verify-fix';
 import { whoami } from '@/lib/mcp/tools/whoami';
 import {
   adoptTestsTool,
+  bulkUpdateTestCases,
   createTestCase,
   createTestSuite,
   deleteTestSuite,
@@ -271,6 +272,14 @@ export const router = {
         'Change fields of a test case: title, steps, status, priority, suite, tags and the rest. Only the fields given change; every edit is a new version in its history. Pass `expectedVersion` to refuse the edit if the case changed since you read it. Needs the `write` scope.',
       tags: ['Test cases'],
       params: { case: caseRef },
+    }),
+    bulkUpdate: fromTool(tool(bulkUpdateTestCases), {
+      method: 'POST',
+      path: `${P}/test-cases/bulk`,
+      summary: 'Update many test cases',
+      description:
+        'Apply one change to up to 200 test cases (`cases`: keys like `TC-12`, or ids): set their `priority`, `status`, `severity`, `type`, `behavior`, `automation` or `suite`, mute them, or add and remove tags. Each case that changes gets a new version in its history. Needs the `write` scope.',
+      tags: ['Test cases'],
     }),
     link: fromTool(tool(linkTestCase), {
       method: 'POST',

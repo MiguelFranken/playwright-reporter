@@ -9269,6 +9269,241 @@
         }
       }
     },
+    "/projects/{team}/{project}/test-cases/bulk": {
+      "post": {
+        "operationId": "bulkUpdateTestCases",
+        "summary": "Update many test cases",
+        "description": "Apply one change to up to 200 test cases (`cases`: keys like `TC-12`, or ids): set their `priority`, `status`, `severity`, `type`, `behavior`, `automation` or `suite`, mute them, or add and remove tags. Each case that changes gets a new version in its history. Needs the `write` scope.",
+        "tags": [
+          "Test cases"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "team",
+            "schema": {
+              "type": "string",
+              "description": "Team slug, as in the app URL (`/teams/<team>/…`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "project",
+            "schema": {
+              "type": "string",
+              "description": "Project slug, as in the app URL (`…/projects/<project>`)."
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "cases": {
+                    "minItems": 1,
+                    "maxItems": 200,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "description": "Test case key (\"TC-12\" or \"12\") or its id."
+                    },
+                    "description": "The cases to change, by key (\"TC-12\") or id; at most 200."
+                  },
+                  "suite": {
+                    "description": "Move them to this suite (id or path; missing levels are created). \"unassigned\" takes them out of their suite.",
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "draft",
+                      "deprecated"
+                    ]
+                  },
+                  "priority": {
+                    "type": "string",
+                    "enum": [
+                      "critical",
+                      "high",
+                      "medium",
+                      "low",
+                      "none"
+                    ]
+                  },
+                  "severity": {
+                    "type": "string",
+                    "enum": [
+                      "blocker",
+                      "critical",
+                      "major",
+                      "normal",
+                      "minor",
+                      "trivial",
+                      "none"
+                    ]
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "functional",
+                      "smoke",
+                      "regression",
+                      "integration",
+                      "e2e",
+                      "api",
+                      "unit",
+                      "performance",
+                      "security",
+                      "accessibility",
+                      "usability",
+                      "compatibility",
+                      "acceptance",
+                      "exploratory",
+                      "other"
+                    ]
+                  },
+                  "behavior": {
+                    "type": "string",
+                    "enum": [
+                      "positive",
+                      "negative",
+                      "destructive",
+                      "none"
+                    ]
+                  },
+                  "automation": {
+                    "type": "string",
+                    "enum": [
+                      "manual",
+                      "planned",
+                      "automated"
+                    ]
+                  },
+                  "muted": {
+                    "type": "boolean"
+                  },
+                  "addTags": {
+                    "description": "Adds tags to each case, keeping the others.",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "removeTags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "cases"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "updated": {
+                      "type": "number",
+                      "description": "Cases that changed; a case that already had every value is left alone."
+                    },
+                    "cases": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "updated",
+                    "cases",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters (`BAD_REQUEST`, `INVALID_ARGUMENT`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked token (`UNAUTHORIZED`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the required scope (`INSUFFICIENT_SCOPE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A test reference matches several tests (`AMBIGUOUS`; candidates in `details`), or an attachment is not available (`ARTIFACT_UNAVAILABLE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (`RATE_LIMITED`); see `Retry-After`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/projects/{team}/{project}/test-cases/{case}/links": {
       "post": {
         "operationId": "linkTestCase",
@@ -10198,6 +10433,77 @@
           },
           {
             "in": "query",
+            "name": "view",
+            "schema": {
+              "description": "A library view: a built-in one (\"all\", \"feedback\", \"to-fix\", \"to-verify\", \"to-review\") or one of your saved views, by name or id. Its filters and order apply; state and priority given here replace the view's.",
+              "type": "string"
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "schema": {
+              "description": "Only flows with a screen in any of these states: waiting (open comments or a change request on the screen as it is now), verify (commented on an earlier version, the screen changed since), needs-review, updated (changed since the capture before it), approved.",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "waiting",
+                  "verify",
+                  "needs-review",
+                  "updated",
+                  "approved"
+                ]
+              }
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true,
+            "style": "deepObject",
+            "explode": true
+          },
+          {
+            "in": "query",
+            "name": "priority",
+            "schema": {
+              "description": "Only flows whose highest linked test case priority is one of these (\"none\": no case, or no priority).",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "critical",
+                  "high",
+                  "medium",
+                  "low",
+                  "none"
+                ]
+              }
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true,
+            "style": "deepObject",
+            "explode": true
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "schema": {
+              "description": "journey (suite and file order, the default), priority, urgency, recent or comments.",
+              "type": "string",
+              "enum": [
+                "journey",
+                "priority",
+                "urgency",
+                "recent",
+                "comments"
+              ]
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
             "name": "limit",
             "schema": {
               "description": "At most this many flows (default 50).",
@@ -10235,6 +10541,13 @@
                     "url": {
                       "type": "string"
                     },
+                    "view": {
+                      "description": "The filters applied, in words.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "total": {
                       "type": "number"
                     },
@@ -10259,6 +10572,17 @@
                           "run": {
                             "type": "number"
                           },
+                          "priority": {
+                            "description": "The highest priority of the linked test cases.",
+                            "type": "string"
+                          },
+                          "state": {
+                            "description": "The most urgent state of its screens: waiting, verify, needs-review or approved.",
+                            "type": "string"
+                          },
+                          "openComments": {
+                            "type": "number"
+                          },
                           "cases": {
                             "type": "array",
                             "items": {
@@ -10268,6 +10592,9 @@
                                   "type": "string"
                                 },
                                 "title": {
+                                  "type": "string"
+                                },
+                                "priority": {
                                   "type": "string"
                                 }
                               },
@@ -10301,6 +10628,10 @@
                                     "null"
                                   ]
                                 },
+                                "run": {
+                                  "description": "The run the checkpoint was captured in: older than the flow’s when a later run did not capture it.",
+                                  "type": "number"
+                                },
                                 "captures": {
                                   "type": "array",
                                   "items": {
@@ -10317,6 +10648,22 @@
                                           "string",
                                           "null"
                                         ]
+                                      },
+                                      "run": {
+                                        "type": "number"
+                                      },
+                                      "states": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "openThreads": {
+                                        "type": "number"
+                                      },
+                                      "outdatedThreads": {
+                                        "description": "Open threads placed on an earlier version of the image.",
+                                        "type": "number"
                                       }
                                     },
                                     "required": [
@@ -10864,6 +11211,13 @@
                               "null"
                             ]
                           },
+                          "placedOnCapture": {
+                            "description": "The capture the thread was placed on. For an outdated thread, get_review_checkpoint with it shows the version the comment was about.",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
                           "comments": {
                             "type": "array",
                             "items": {
@@ -11271,7 +11625,7 @@
             "in": "query",
             "name": "run",
             "schema": {
-              "description": "The run (default \"latest\"). Scope \"latest\" with branch. Ignored with capture.",
+              "description": "The run (default \"latest\"). Scope \"latest\" with branch. Ignored with capture or library.",
               "anyOf": [
                 {
                   "type": "integer",
@@ -11292,6 +11646,28 @@
             "schema": {
               "description": "Git branch name, e.g. \"main\".",
               "type": "string"
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "library",
+            "schema": {
+              "description": "The library’s screens instead of one run: every screen of branch (or pullRequest; default: the library’s default reference) as its newest run captured it, so feedback on screens a partial run skipped is included.",
+              "type": "boolean"
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "pullRequest",
+            "schema": {
+              "description": "With library: a pull (merge) request number instead of a branch.",
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
             },
             "allowEmptyValue": true,
             "allowReserved": true
@@ -11323,6 +11699,20 @@
           },
           {
             "in": "query",
+            "name": "placement",
+            "schema": {
+              "description": "exact: on the image as it is now (waiting for changes). outdated: placed on an earlier version that has changed since (ready to verify, then resolve).",
+              "type": "string",
+              "enum": [
+                "exact",
+                "outdated"
+              ]
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
             "name": "test",
             "schema": {
               "description": "Part of a test title or file, to narrow the list.",
@@ -11344,7 +11734,15 @@
                       "type": "string"
                     },
                     "run": {
-                      "type": "number"
+                      "type": "number",
+                      "description": "The run shown; in the library, the newest run the screens come from."
+                    },
+                    "reference": {
+                      "description": "With library: \"branch:main\" or \"pr:212\".",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "counts": {
                       "type": "object",
@@ -11353,6 +11751,10 @@
                           "type": "number"
                         },
                         "resolved": {
+                          "type": "number"
+                        },
+                        "outdated": {
+                          "description": "Open threads placed on an earlier version of their image.",
                           "type": "number"
                         }
                       },
@@ -11381,6 +11783,10 @@
                           },
                           "imageStatus": {
                             "type": "string"
+                          },
+                          "run": {
+                            "description": "The run the image was captured in.",
+                            "type": "number"
                           },
                           "threads": {
                             "type": "array",
@@ -11535,6 +11941,13 @@
                                 "placedOnRun": {
                                   "type": [
                                     "number",
+                                    "null"
+                                  ]
+                                },
+                                "placedOnCapture": {
+                                  "description": "The capture the thread was placed on. For an outdated thread, get_review_checkpoint with it shows the version the comment was about.",
+                                  "type": [
+                                    "string",
                                     "null"
                                   ]
                                 },

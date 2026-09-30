@@ -70,6 +70,35 @@ describe('test case tools', () => {
     await client.close();
   });
 
+  test('a write token sets the priority of one case, or of many at once', async ({ db, tenant }) => {
+    const { token } = await createPat(tenant.adminUser, { scopes: ['read', 'write'] });
+    const client = await mcpClient({ token });
+    const project = `${tenant.team.slug}/${tenant.project.slug}`;
+    for (const title of ['Pay by card', 'Pay by invoice', 'Apply a coupon']) await call(client, 'create_test_case', { project, title });
+
+    const one = await call(client, 'update_test_case', { project, case: 'TC-1', priority: 'critical' });
+    expect(one.structuredContent).toMatchObject({ key: 'TC-1', version: 2 });
+    expect((await call(client, 'get_test_case', { project, case: 'TC-1' })).structuredContent).toMatchObject({ priority: 'critical' });
+
+    const many = await call(client, 'bulk_update_test_cases', { project, cases: ['TC-1', '2', 'TC-3'], priority: 'high', addTags: ['@checkout'] });
+    expect(many.isError).toBeFalsy();
+    expect(many.structuredContent).toMatchObject({ updated: 3, cases: ['TC-1', 'TC-2', 'TC-3'] });
+    const high = await call(client, 'list_test_cases', { project, priority: 'high' });
+    expect(high.structuredContent).toMatchObject({ total: 3, cases: [{ tags: ['checkout'] }, { tags: ['checkout'] }, { tags: ['checkout'] }] });
+    // Nothing left to change: no new versions.
+    expect((await call(client, 'bulk_update_test_cases', { project, cases: ['TC-1', 'TC-2'], priority: 'high' })).structuredContent).toMatchObject({ updated: 0 });
+    expect((await call(client, 'bulk_update_test_cases', { project, cases: ['TC-1'] })).isError).toBe(true);
+    expect((await call(client, 'bulk_update_test_cases', { project, cases: ['TC-99'], priority: 'low' })).isError).toBe(true);
+    expect((await call(client, 'bulk_update_test_cases', { project, cases: ['TC-1'], priority: 'urgent' })).isError).toBe(true);
+    await client.close();
+
+    // A viewer's write token changes nothing.
+    const viewer = await createMember(db, tenant.team.id, 'viewer');
+    const theirs = await mcpClient({ token: (await createPat(viewer, { scopes: ['read', 'write'] })).token });
+    expect((await call(theirs, 'bulk_update_test_cases', { project, cases: ['TC-1'], priority: 'low' })).isError).toBe(true);
+    await theirs.close();
+  });
+
   test('a write token sorts uncovered tests into suites with placements', async ({ tenant }) => {
     await playRun(tenant.tokenProject, {
       tests: [

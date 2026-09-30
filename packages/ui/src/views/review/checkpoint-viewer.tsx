@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, ChevronLeft, ChevronRight, ExternalLink, Eye, EyeOff, Film, Keyboard, MessageSquareWarning, Route, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, ExternalLink, Eye, EyeOff, Film, History, Keyboard, MessageSquareWarning, Route, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '../../components/badge';
 import { Button } from '../../components/button';
@@ -35,7 +35,10 @@ import { IgnoreRegionsEditor, type IgnoreRect } from './ignore-regions-editor';
 import { FrameToolbar } from './frame-toolbar';
 import { PinLayer, type PinFocusRequest, type ThreadDraft } from './pin-layer';
 import { ScreenFrame } from './screen-frame';
+import { ThreadCompare } from './thread-compare';
 import { ThreadList } from './thread-list';
+import { LibraryStateChip } from '../../patterns/library-state-chip';
+import { captureStates, type LibraryState } from '../../lib/library-views';
 
 /** What the viewer shows: a checkpoint, and one of its variants or (`null`) all of them side by side. */
 export interface ReviewSelection {
@@ -92,7 +95,8 @@ function seconds(ms: number) {
  */
 function referenceOf(capture: ReviewCaptureView, library: boolean): { image: ReviewImage; label: string; same: boolean } | null {
   if (capture.compare) return { image: capture.compare.image, label: capture.compare.label, same: capture.compare.same };
-  if (library) return null;
+  // The library compares an updated screen with the capture before it on the branch.
+  if (library) return capture.previous && !capture.previous.same ? { image: capture.previous.image, label: `Before (#${capture.previous.runNumber})`, same: false } : null;
   if (capture.baseline) return { image: capture.baseline.image, label: `Approved${capture.baseline.runNumber ? ` (#${capture.baseline.runNumber})` : ''}`, same: capture.baseline.same };
   if (capture.previous) return { image: capture.previous.image, label: `Run #${capture.previous.runNumber}`, same: capture.previous.same };
   return null;
@@ -191,6 +195,8 @@ export function CheckpointViewer({
   const [pinsHidden, setPinsHidden] = useState(false);
   const [focus, setFocus] = useState<PinFocusRequest | null>(null);
   const [confirmApprove, setConfirmApprove] = useState(false);
+  // An outdated thread shown beside the version it was made on.
+  const [comparingThreadId, setComparingThreadId] = useState<string | null>(null);
   const approveRef = useRef<HTMLButtonElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   // The dialog mounts its content in a portal after opening; state follows the element itself.
@@ -201,7 +207,8 @@ export function CheckpointViewer({
   const shown = variant ? captures.filter((c) => c.variant === variant) : captures;
   const current = shown.length === 1 ? shown[0] : null;
   const reference = current ? referenceOf(current, library) : null;
-  const diff = current && reference ? (current.diff ?? null) : null;
+  // In the library a screen is compared with the capture before it, which nobody measured; its diff (against an approved baseline) is not that.
+  const diff = current && reference && (!library || current.compare) ? (current.diff ?? null) : null;
   const measuredSize = current && diff ? diffImageSize(current.image, diff) : null;
   const hasChanges = Boolean(current?.image.available && diff?.state === 'done' && (diff.changedPixels > 0 || diff.sizeChanged) && measuredSize);
   const regions = hasChanges ? diff!.regions : [];
@@ -228,19 +235,23 @@ export function CheckpointViewer({
   };
   const stageSize = useElementSize(stageEl);
   const comparing = Boolean(current && effectiveStage !== 'image');
-  const frames = (comparing && current ? [current] : shown).map((c) => frameFor(frameSettings, c));
-  const zoomFrames = comparing && effectiveStage === 'side-by-side' ? [frames[0], frames[0]] : frames;
-  // Room for the captions above the screens and the stage's padding.
-  const zoom = frameSettings.zoom === 'fit' ? fitZoom(zoomFrames, { width: stageSize.width - 48, height: stageSize.height - 48 - 28 }) : frameSettings.zoom;
-  const pending = new Set(pendingIds);
-  const busy = shown.some((c) => pending.has(c.id));
-
   const canComment = Boolean(comments.canComment && comments.onCreateThread);
   const threadGroups = shown.map((c) => ({ captureId: c.id, variant: c.variant, threads: c.threads ?? [] }));
   const shownThreads = threadGroups.flatMap((g) => g.threads);
+  const comparedThread = comparingThreadId ? (shownThreads.find((t) => t.id === comparingThreadId && t.origin) ?? null) : null;
+  const comparedCapture = comparedThread ? (shown.find((c) => c.threads?.some((t) => t.id === comparedThread.id)) ?? null) : null;
+  const threadComparing = Boolean(comparedThread && comparedCapture);
+  const frames = (threadComparing ? [comparedCapture!] : comparing && current ? [current] : shown).map((c) => frameFor(frameSettings, c));
+  const zoomFrames = threadComparing || (comparing && effectiveStage === 'side-by-side') ? [frames[0], frames[0]] : frames;
+  // Room for the captions above the screens and the stage's padding.
+  // Room for the captions above the screens (and, comparing a thread, its banner and comment) and the stage's padding.
+  const zoom = frameSettings.zoom === 'fit' ? fitZoom(zoomFrames, { width: stageSize.width - 48, height: stageSize.height - 48 - (threadComparing ? 190 : 28) }) : frameSettings.zoom;
+  const pending = new Set(pendingIds);
+  const busy = shown.some((c) => pending.has(c.id));
+
   const openCount = openThreadCount(shownThreads);
   // Pins sit on images drawn at the capture's own geometry: the plain image, its changes, and this run's side of a side-by-side.
-  const pinsOn = effectiveStage === 'image' || effectiveStage === 'changes' || effectiveStage === 'side-by-side';
+  const pinsOn = threadComparing || effectiveStage === 'image' || effectiveStage === 'changes' || effectiveStage === 'side-by-side';
   const listed = sortThreads(shownThreads.filter((t) => threadFilter === 'all' || t.status === threadFilter || t.id === openThreadId));
 
   // A new checkpoint starts at its first change, without a half-placed pin or an open thread; comment mode stays on.
@@ -251,6 +262,7 @@ export function CheckpointViewer({
     setComposing(false);
     setConfirmApprove(false);
     setOpenThreadId(null);
+    setComparingThreadId(null);
   }, [selectionKey]);
 
   // A link to a thread (`thread=3`) opens it and brings its pin into view, once its checkpoint is shown.
@@ -269,6 +281,14 @@ export function CheckpointViewer({
     if (id) setDraft(null);
     if (opts.focus && id) setFocus((f) => ({ threadId: id, nonce: (f?.nonce ?? 0) + 1, ping: true }));
     comments.onOpenThreadChange?.(id ? (shownThreads.find((t) => t.id === id)?.number ?? null) : null);
+  };
+  /** Shows an outdated thread beside the version it was made on, or (the same one again) closes that. */
+  const compareThread = (id: string | null) => {
+    setComparingThreadId(id);
+    if (id) {
+      setPinsHidden(false);
+      openThread(id);
+    }
   };
   const stepThread = (delta: number) => {
     if (!listed.length) return;
@@ -372,6 +392,7 @@ export function CheckpointViewer({
       else if (e.key === ']') stepThread(1);
       else if (e.key === '[') stepThread(-1);
       else if (key === 'h' && shownThreads.length) setPinsHidden((h) => !h);
+      else if (key === 'o' && (comparedThread || shownThreads.find((t) => t.id === openThreadId)?.origin)) compareThread(comparedThread ? null : openThreadId);
       else if (key === 'e' && canComment && openThreadId && comments.onSetThreadStatus) {
         const t = shownThreads.find((x) => x.id === openThreadId);
         if (t) comments.onSetThreadStatus({ threadId: t.id, status: t.status === 'open' ? 'resolved' : 'open', captureId: threadGroups.find((g) => g.threads.includes(t))?.captureId });
@@ -416,6 +437,7 @@ export function CheckpointViewer({
         onSetThreadStatus={comments.onSetThreadStatus}
         onEditComment={comments.onEditComment}
         onDeleteComment={comments.onDeleteComment}
+        onCompareThread={(id) => compareThread(id)}
       />
     ) : null;
 
@@ -531,7 +553,21 @@ export function CheckpointViewer({
                     commenting && 'shadow-[inset_0_0_0_2px_var(--accent-solid)]',
                   )}
                 >
-                  {current && effectiveStage === 'changes' && diff ? (
+                  {comparedThread && comparedCapture ? (
+                    <ThreadCompare
+                      thread={comparedThread}
+                      image={comparedCapture.image}
+                      frame={frames[0]}
+                      zoom={zoom}
+                      label={label}
+                      currentLabel={library ? `Now${comparedCapture.runNumber ? ` · run #${comparedCapture.runNumber}` : ''}` : 'This run'}
+                      now={comments.now}
+                      currentOverlay={pinLayer(comparedCapture, `${label}, now`)}
+                      canResolve={canComment && Boolean(comments.onSetThreadStatus)}
+                      onResolve={() => comments.onSetThreadStatus?.({ threadId: comparedThread.id, status: 'resolved', captureId: comparedCapture.id })}
+                      onClose={() => compareThread(null)}
+                    />
+                  ) : current && effectiveStage === 'changes' && diff ? (
                     <div className="flex min-w-max justify-center">
                       <DiffHighlight image={current.image} diff={diff} frame={frames[0]} zoom={zoom} alt={label} active={activeRegion} onActiveChange={setActiveRegion}>
                         {pinLayer(current, label)}
@@ -611,6 +647,12 @@ export function CheckpointViewer({
                       ))}
                     </div>
                   )}
+                  {library ? <LibraryStates captures={shown} /> : null}
+                  {pos.checkpoint.origin ? (
+                    <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <History className="size-3.5" /> Captured in run #{pos.checkpoint.origin.runNumber}: the newest run did not capture this screen.
+                    </p>
+                  ) : null}
                   {pos.checkpoint.description ? <p className="text-sm text-pretty">{pos.checkpoint.description}</p> : null}
                   {current?.decision && !library ? <DecisionNote capture={current} /> : null}
                   {current && reference && diff && !reference.same ? (
@@ -619,6 +661,8 @@ export function CheckpointViewer({
                     <p className="text-xs text-muted-foreground">{reference.same ? `Identical to ${reference.label.toLowerCase()}.` : `Differs from ${reference.label.toLowerCase()}.`}</p>
                   ) : current && !library ? (
                     <p className="text-xs text-muted-foreground">Nothing to compare with yet: this is the first capture of this checkpoint.</p>
+                  ) : current?.previous?.same ? (
+                    <p className="text-xs text-muted-foreground">Unchanged since run #{current.previous.runNumber}.</p>
                   ) : null}
                   {current?.ignoreRegions?.length && !library ? (
                     <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -688,6 +732,7 @@ export function CheckpointViewer({
                     onSetThreadStatus={comments.onSetThreadStatus}
                     onEditComment={comments.onEditComment}
                     onDeleteComment={comments.onDeleteComment}
+                    onCompareThread={(id) => compareThread(id)}
                   />
                 ) : null}
 
@@ -751,8 +796,8 @@ export function CheckpointViewer({
                 </dl>
 
                 <nav className="flex flex-col gap-1" aria-label="Evidence">
-                  {pos.flow.videoUrl ? (
-                    <a className="inline-flex items-center gap-2 text-sm text-accent-text hover:underline" href={`${pos.flow.videoUrl}${pos.checkpoint.offsetMs != null ? `#t=${(pos.checkpoint.offsetMs / 1000).toFixed(1)}` : ''}`} target="_blank" rel="noreferrer">
+                  {(pos.checkpoint.origin ? pos.checkpoint.origin.videoUrl : pos.flow.videoUrl) ? (
+                    <a className="inline-flex items-center gap-2 text-sm text-accent-text hover:underline" href={`${pos.checkpoint.origin ? pos.checkpoint.origin.videoUrl : pos.flow.videoUrl}${pos.checkpoint.offsetMs != null ? `#t=${(pos.checkpoint.offsetMs / 1000).toFixed(1)}` : ''}`} target="_blank" rel="noreferrer">
                       <Film className="size-4" /> Watch the video{pos.checkpoint.offsetMs != null ? ` at ${seconds(pos.checkpoint.offsetMs)}` : ''}
                     </a>
                   ) : null}
@@ -761,7 +806,7 @@ export function CheckpointViewer({
                       <Route className="size-4" /> Open the trace
                     </a>
                   ) : null}
-                  <a className="inline-flex items-center gap-2 text-sm text-accent-text hover:underline" href={pos.flow.resultHref}>
+                  <a className="inline-flex items-center gap-2 text-sm text-accent-text hover:underline" href={pos.checkpoint.origin?.resultHref ?? pos.flow.resultHref}>
                     <ExternalLink className="size-4" /> Test result
                   </a>
                 </nav>
@@ -827,6 +872,7 @@ const SHORTCUTS: [string[], string][] = [
   [['[', ']'], 'Previous / next comment'],
   [['E'], 'Resolve or reopen the open comment'],
   [['H'], 'Hide or show the pins'],
+  [['O'], 'Compare the open comment with the version it was made on'],
   [['Esc'], 'Leave comment mode, then close'],
 ];
 
@@ -862,4 +908,18 @@ function useElementSize(el: HTMLElement | null) {
     return () => observer.disconnect();
   }, [el]);
   return size;
+}
+
+/** Where the screens on show stand in the review loop, in the library (which has no decisions to show). */
+function LibraryStates({ captures }: { captures: readonly ReviewCaptureView[] }) {
+  const states = new Set<LibraryState>(captures.flatMap((c) => [...captureStates(c)]));
+  const shown = (['waiting', 'verify', 'updated'] as const).filter((s) => states.has(s));
+  if (!shown.length) return null;
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {shown.map((s) => (
+        <LibraryStateChip key={s} state={s} />
+      ))}
+    </div>
+  );
 }

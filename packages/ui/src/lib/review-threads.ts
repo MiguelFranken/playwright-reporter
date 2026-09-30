@@ -13,6 +13,7 @@
  * handed to views as fractions of the image they are drawn on, so a pin does
  * not care about zoom.
  */
+import type { ReviewImage } from './review';
 
 export const THREAD_STATUSES = ['open', 'resolved'] as const;
 export type ThreadStatus = (typeof THREAD_STATUSES)[number];
@@ -144,6 +145,13 @@ export interface ReviewThreadView {
   placement: ThreadPlacement;
   /** The run the thread was placed on. */
   originRunNumber?: number | null;
+  /**
+   * The image the thread was placed on, when the one it is shown with has
+   * changed since (`outdated`) and the original is still stored: what the
+   * comment was about, to compare with the screen as it is now. `anchor` is
+   * where the pin sits on that image.
+   */
+  origin?: { captureId: string; checkpointId?: string | null; image: ReviewImage; anchor: FractionAnchor } | null;
   createdAt: string;
   resolvedAt?: string | null;
   resolvedBy?: string | null;
@@ -186,6 +194,8 @@ export interface ThreadActions {
   onSetThreadStatus?: (input: ThreadStatusInput) => void;
   onEditComment?: (input: CommentEditInput) => void;
   onDeleteComment?: (input: { commentId: string; threadId: string }) => void;
+  /** Show an outdated thread's version commented on beside the screen as it is now (the viewer does this itself). */
+  onCompareThread?: (threadId: string) => void;
 }
 
 /** The threads a list shows: `open`, `resolved` or every one. */
