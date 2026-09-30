@@ -31,7 +31,7 @@ export const FromAnAssistant: Story = { args: { thread: totalsThread } };
 export const Outdated: Story = {
   args: { thread: outdatedThread },
   play: async ({ canvasElement }) => {
-    await expect(within(canvasElement).getByText(/the image changed since/)).toBeVisible();
+    await expect(within(canvasElement).getByText(/the screen has changed since/)).toBeVisible();
   },
 };
 

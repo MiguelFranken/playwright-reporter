@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, History, RotateCcw, X } from 'lucide-react';
+import { Check, Columns2, History, RotateCcw, X } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { Button } from '../../components/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../components/tooltip';
@@ -23,6 +23,12 @@ export interface ThreadViewProps extends ThreadActions {
   onClose?: () => void;
   /** Focus the reply box when it mounts. */
   autoFocusReply?: boolean;
+  /** Shown on the image it was placed on (beside the screen now), not on the screen now. */
+  onOrigin?: boolean;
+  /** Tools beside resolve (an AI hand-off menu). */
+  actions?: React.ReactNode;
+  /** Off where the view around it already says the screen changed since (verifying). */
+  showPlacement?: boolean;
   className?: string;
 }
 
@@ -40,6 +46,9 @@ export function ThreadView({
   canModerate = false,
   onClose,
   autoFocusReply = false,
+  onOrigin = false,
+  actions,
+  showPlacement = true,
   onReply,
   onSetThreadStatus,
   onEditComment,
@@ -72,6 +81,7 @@ export function ThreadView({
         <span className="text-label-s">{resolved ? 'Resolved' : 'Open'}</span>
         {thread.anchor.kind === 'image' ? <span className="text-label-xs text-muted-foreground">· whole image</span> : null}
         <div className="ml-auto flex items-center gap-0.5">
+          {actions}
           {canComment && onSetThreadStatus && !thread.pending ? (
             <Tooltip>
               <TooltipTrigger render={<Button variant="ghost" size="icon-sm" aria-label={toggleLabel} onClick={toggle} />}>{resolved ? <RotateCcw /> : <Check />}</TooltipTrigger>
@@ -86,21 +96,22 @@ export function ThreadView({
         </div>
       </header>
 
-      {thread.placement === 'outdated' ? (
-        <p className="flex items-start gap-1.5 rounded-md bg-surface-sunken px-2 py-1.5 text-label-xs text-muted-foreground">
-          <History aria-hidden className="mt-px size-3.5 shrink-0" />
-          <span className="min-w-0 flex-1">
-            Placed on {thread.originRunNumber ? `run #${thread.originRunNumber}` : 'an earlier image'}; the image changed since, so the pin may be off.
-            {thread.origin && onCompareThread ? (
-              <>
-                {' '}
-                <button type="button" className="text-accent-text underline-offset-2 hover:underline focus-visible:underline" onClick={() => onCompareThread(thread.id)}>
-                  Compare with the version commented on
-                </button>
-              </>
-            ) : null}
-          </span>
-        </p>
+      {thread.placement === 'outdated' && showPlacement ? (
+        <div className="flex flex-col gap-1.5 rounded-md border border-info-border bg-info-subtle px-2 py-1.5 text-label-xs text-info-text">
+          <p className="flex items-start gap-1.5">
+            <History aria-hidden className="mt-px size-3.5 shrink-0" />
+            <span className="min-w-0 flex-1">
+              {onOrigin
+                ? `Placed here, on ${thread.originRunNumber ? `run #${thread.originRunNumber}` : 'this version'}. The screen has changed since: check whether it was fixed.`
+                : `Placed on ${thread.originRunNumber ? `run #${thread.originRunNumber}` : 'an earlier version'}; the screen has changed since, so check whether it was fixed.`}
+            </span>
+          </p>
+          {thread.origin && onCompareThread && !resolved ? (
+            <Button size="xs" variant="outline" className="self-start bg-surface" onClick={() => onCompareThread(thread.id)}>
+              <Columns2 /> Verify the fix
+            </Button>
+          ) : null}
+        </div>
       ) : null}
 
       <ol ref={listRef} className="flex max-h-80 flex-col gap-3 overflow-y-auto overscroll-contain">

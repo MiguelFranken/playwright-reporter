@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useState } from 'react';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
-import { commentedCheckpointId, commentedFlows, flowWithThreads, NOW, VIEWER_ID } from '../../fixtures/review-threads';
+import { commentedCheckpointId, commentedFlows, flowWithThreads, NOW, verifyFlows, VIEWER_ID } from '../../fixtures/review-threads';
 import { CheckpointViewer, type ReviewSelection } from './checkpoint-viewer';
 
 const desktopCapture = commentedFlows[0].checkpoints[1].captures.find((c) => c.variant === 'desktop')!;
@@ -148,5 +148,59 @@ export const NoComments: Story = {
     const body = within(document.body);
     await body.findByRole('dialog');
     await expect(body.getByText(/No comments yet/)).toBeInTheDocument();
+  },
+};
+
+/**
+ * Side by side, a comment made on the approved screen is drawn on the left,
+ * where it was placed; the right shows where it lands now, as a marker.
+ */
+export const OnTheImageItWasMadeOn: Story = {
+  args: { flows: verifyFlows },
+  play: async () => {
+    const body = within(document.body);
+    await body.findByRole('dialog');
+    await userEvent.click(body.getByRole('button', { name: 'Side by side' }));
+    const left = within(await body.findByRole('region', { name: /— Approved \(#470\)$/ }));
+    await expect(left.getByRole('button', { name: /^Thread 1: / })).toBeInTheDocument();
+    const right = within(body.getByRole('region', { name: /— This run$/ }));
+    await expect(right.queryByRole('button', { name: /^Thread 1: / })).toBeNull();
+    await expect(right.getByRole('button', { name: /^Thread 2: / })).toBeInTheDocument();
+    await expect(body.getByText('2 comments made here')).toBeInTheDocument();
+  },
+};
+
+/** The comments made before the screen changed, one by one: E resolves one and shows the next, until none is left. */
+export const VerifyTheFixes: Story = {
+  args: { flows: verifyFlows },
+  play: async ({ args }) => {
+    const body = within(document.body);
+    await body.findByRole('dialog');
+    const list = within(body.getByRole('region', { name: /Comments/ }));
+    await expect(list.getByText('2 comments to verify')).toBeInTheDocument();
+    await expect(list.getByRole('list', { name: 'To verify' })).toBeInTheDocument();
+    await expect(list.getByRole('list', { name: 'Waiting for a fix' })).toBeInTheDocument();
+    await userEvent.click(list.getByRole('button', { name: 'Verify' }));
+    await expect(await body.findByText('Verify comment 1')).toBeInTheDocument();
+    await userEvent.keyboard('e');
+    await expect(args.comments!.onSetThreadStatus).toHaveBeenCalledWith({ threadId: 'thread-fixed', status: 'resolved', captureId: desktopCapture.id });
+    await expect(await body.findByText('Verify comment 3')).toBeInTheDocument();
+    await userEvent.keyboard('e');
+    await expect(await body.findByText('Nothing left to verify')).toBeInTheDocument();
+    await userEvent.click(body.getByRole('button', { name: 'Back to the screen' }));
+    await waitFor(() => expect(body.queryByText('Nothing left to verify')).toBeNull());
+  },
+};
+
+/** The open comments go to an AI assistant as a prompt that names the image and the comments. */
+export const FixWithAi: Story = {
+  args: { flows: verifyFlows, comments: { ...comments, assistant: { setupHref: '#connect', project: 'acme/web' } } },
+  play: async () => {
+    const body = within(document.body);
+    await body.findByRole('dialog');
+    const list = within(body.getByRole('region', { name: /Comments/ }));
+    await userEvent.click(list.getByRole('button', { name: 'Fix with AI' }));
+    const item = await body.findByRole('menuitem', { name: 'Copy prompt' });
+    await waitFor(() => expect(item).toBeVisible());
   },
 };
