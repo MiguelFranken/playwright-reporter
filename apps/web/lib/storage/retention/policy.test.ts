@@ -12,11 +12,11 @@ function form(fields: Record<string, string>) {
 
 describe('environmentPolicy', () => {
   it('keeps everything until somebody opts in', () => {
-    expect(environmentPolicy({})).toEqual({ policy: { enabled: false, days: 30, overrides: {} }, source: 'default' });
+    expect(environmentPolicy({})).toEqual({ policy: { enabled: false, days: 30, overrides: {}, keepVisuals: true }, source: 'default' });
   });
 
   it('turns retention on from ARTIFACT_RETENTION_DAYS, clamped', () => {
-    expect(environmentPolicy({ ARTIFACT_RETENTION_DAYS: '14' })).toEqual({ policy: { enabled: true, days: 14, overrides: {} }, source: 'environment' });
+    expect(environmentPolicy({ ARTIFACT_RETENTION_DAYS: '14' })).toEqual({ policy: { enabled: true, days: 14, overrides: {}, keepVisuals: true }, source: 'environment' });
     expect(environmentPolicy({ ARTIFACT_RETENTION_DAYS: '99999' }).policy.days).toBe(3650);
   });
 
@@ -27,8 +27,13 @@ describe('environmentPolicy', () => {
 
 describe('normalizePolicy', () => {
   it('reads a stored policy back', () => {
-    const p: RetentionPolicy = { enabled: true, days: 30, overrides: { video: 7, trace: 14 } };
+    const p: RetentionPolicy = { enabled: true, days: 30, overrides: { video: 7, trace: 14 }, keepVisuals: false };
     expect(normalizePolicy(p)).toEqual(p);
+  });
+
+  it('keeps the visuals for a policy saved before the option existed', () => {
+    expect(normalizePolicy({ enabled: true, days: 30, overrides: {} })?.keepVisuals).toBe(true);
+    expect(normalizePolicy({ enabled: true, days: 30, overrides: {}, keepVisuals: 'no' })?.keepVisuals).toBe(true);
   });
 
   it('drops unknown kinds, nonsense days and overrides equal to the default', () => {
@@ -36,6 +41,7 @@ describe('normalizePolicy', () => {
       enabled: true,
       days: 30,
       overrides: { video: 7 },
+      keepVisuals: true,
     });
   });
 
@@ -48,7 +54,7 @@ describe('normalizePolicy', () => {
 
 describe('cutoffs', () => {
   it('groups kinds that share a lifetime, shortest first', () => {
-    const groups = cutoffs({ enabled: true, days: 30, overrides: { video: 7, trace: 7, screenshot: 90 } }, now);
+    const groups = cutoffs({ enabled: true, days: 30, overrides: { video: 7, trace: 7, screenshot: 90 }, keepVisuals: true }, now);
     expect(groups).toEqual([
       { before: new Date(now.getTime() - 7 * DAY), kinds: ['video', 'trace'] },
       { before: new Date(now.getTime() - 30 * DAY), kinds: ['image', 'text', 'other'] },
@@ -57,12 +63,12 @@ describe('cutoffs', () => {
   });
 
   it('is one group when nothing is overridden', () => {
-    expect(cutoffs({ enabled: true, days: 10, overrides: {} }, now)).toHaveLength(1);
+    expect(cutoffs({ enabled: true, days: 10, overrides: {}, keepVisuals: true }, now)).toHaveLength(1);
   });
 });
 
 describe('expiresAt and daysFor', () => {
-  const policy: RetentionPolicy = { enabled: true, days: 30, overrides: { video: 7 } };
+  const policy: RetentionPolicy = { enabled: true, days: 30, overrides: { video: 7 }, keepVisuals: true };
 
   it('adds the kind’s lifetime to the upload time', () => {
     expect(daysFor(policy, 'video')).toBe(7);
@@ -81,8 +87,14 @@ describe('policyFromForm', () => {
       enabled: true,
       days: 30,
       overrides: { video: 7 },
+      keepVisuals: true,
     });
-    expect(policyFromForm(form({ enabled: 'off', days: '5' }))).toEqual({ enabled: false, days: 5, overrides: {} });
+    expect(policyFromForm(form({ enabled: 'off', days: '5' }))).toEqual({ enabled: false, days: 5, overrides: {}, keepVisuals: true });
+  });
+
+  it('lets the visuals expire only when asked to', () => {
+    expect(policyFromForm(form({ enabled: 'on', days: '30', visuals: 'expire' }))).toMatchObject({ keepVisuals: false });
+    expect(policyFromForm(form({ enabled: 'on', days: '30', visuals: 'keep' }))).toMatchObject({ keepVisuals: true });
   });
 
   it.each([

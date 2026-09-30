@@ -66,7 +66,7 @@ async function rowsById(db: Db, ids: string[]) {
   return new Map(rows.map((r) => [r.id, r]));
 }
 
-const policy = (p: Partial<RetentionPolicy> = {}): RetentionPolicy => ({ enabled: true, days: 30, overrides: {}, ...p });
+const policy = (p: Partial<RetentionPolicy> = {}): RetentionPolicy => ({ enabled: true, days: 30, overrides: {}, keepVisuals: true, ...p });
 
 const superadmin = () => createUserRow(db, { instanceRole: 'superadmin' });
 
@@ -136,7 +136,7 @@ describe('updateRetentionPolicy (admin action)', () => {
 
     const res = await updateRetentionPolicy(null, form({ enabled: 'on', days: '30', 'days.video': '7', 'days.trace': '14', 'days.image': '' }));
     expect(res).toEqual({ ok: true, message: 'Retention policy saved.' });
-    expect((await getRetentionPolicy()).policy).toEqual({ enabled: true, days: 30, overrides: { video: 7, trace: 14 } });
+    expect((await getRetentionPolicy()).policy).toEqual({ enabled: true, days: 30, overrides: { video: 7, trace: 14 }, keepVisuals: true });
 
     const [log] = await db.select().from(auditLogs).where(eq(auditLogs.action, 'storage.retention.update'));
     expect(log.actorId).toBe(admin.id);

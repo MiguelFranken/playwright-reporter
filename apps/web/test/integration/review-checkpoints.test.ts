@@ -199,7 +199,7 @@ describe('retention', () => {
     await decide({ projectId: tenant.project.id, captureIds: [desktopCapture.id], decision: 'approved', userId: null });
     await markUploaded(db);
 
-    const policy = { enabled: true, days: 1, overrides: {} };
+    const policy = { enabled: true, days: 1, overrides: {}, keepVisuals: true };
     const due = await db.select({ id: attachments.id }).from(attachments).where(dueWhere(policy, new Date(Date.now() + 2 * 86_400_000)));
     const ids = due.map((d) => d.id);
     expect(ids).toContain(mobile.id);

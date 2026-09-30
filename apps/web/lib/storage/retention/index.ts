@@ -14,7 +14,7 @@
  */
 import { and, asc, desc, eq, inArray, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import { db } from '@/lib/db/drizzle';
-import { artifactSweeps, attachments, instanceSettings, libraryReferences, reviewCaptures, reviewDecisions, reviewThreads, runs, type ArtifactSweep } from '@/lib/db/schema';
+import { artifactSweeps, attachments, instanceSettings, libraryReferences, reviewCaptures, reviewCheckpoints, reviewDecisions, reviewThreads, runs, type ArtifactSweep } from '@/lib/db/schema';
 import { getStorage, type StorageAdapter } from '@/lib/storage';
 import { ingestSweepDue } from '@/lib/sweeps/continuation';
 import { INGEST_SWEEP_INTERVAL_MS, ingestSweepEnabled } from './config';
@@ -97,20 +97,32 @@ const isLibraryScreen = sql`exists (
 )`;
 
 /**
- * The image an open comment thread was placed on. A change request points at
- * a spot on it; losing the image before the thread is resolved loses what it
- * points at.
+ * An image of a flow — one test's checkpoints in one run, every variant — on
+ * which an open comment thread was placed. A change request points at a spot
+ * on one image, but it is read against the steps around it; losing the flow
+ * before the thread is resolved loses what it is about.
  */
-const isOpenThreadOrigin = sql`exists (
-  select 1 from ${reviewThreads} t
-  join ${reviewCaptures} c on c.id = t.origin_capture_id
-  where t.status = 'open' and (c.attachment_id = ${attachments.id} or c.thumbnail_attachment_id = ${attachments.id})
+const isOpenThreadFlow = sql`exists (
+  select 1 from ${reviewCaptures} c
+  join ${reviewCheckpoints} cp on cp.id = c.checkpoint_id
+  where (c.attachment_id = ${attachments.id} or c.thumbnail_attachment_id = ${attachments.id})
+    and exists (
+      select 1 from ${reviewThreads} t
+      join ${reviewCaptures} oc on oc.id = t.origin_capture_id
+      join ${reviewCheckpoints} ocp on ocp.id = oc.checkpoint_id
+      where t.status = 'open' and ocp.run_id = cp.run_id and ocp.test_result_id = cp.test_result_id
+    )
 )`;
 
-/** Live artifacts the policy says have expired, over Drizzle-qualified columns. Review baselines, library screens and images with open threads are kept. */
+/**
+ * Live artifacts the policy says have expired, over Drizzle-qualified columns.
+ * Review baselines are always kept; library screens and flows with open
+ * threads unless the policy lets visuals expire (`keepVisuals`).
+ */
 export function dueWhere(policy: RetentionPolicy, now: Date = new Date()): SQL {
   const groups = cutoffs(policy, now).map((c) => and(inArray(attachments.kind, c.kinds), lt(attachments.createdAt, c.before))!);
-  return and(isNull(attachments.expiredAt), or(...groups), sql`not ${isReviewBaseline}`, sql`not ${isLibraryScreen}`, sql`not ${isOpenThreadOrigin}`)!;
+  const kept = [sql`not ${isReviewBaseline}`, ...(policy.keepVisuals ? [sql`not ${isLibraryScreen}`, sql`not ${isOpenThreadFlow}`] : [])];
+  return and(isNull(attachments.expiredAt), or(...groups), ...kept)!;
 }
 
 // ---------------------------------------------------------------- stats

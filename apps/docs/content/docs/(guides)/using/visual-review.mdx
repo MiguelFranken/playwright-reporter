@@ -173,8 +173,9 @@ the same, and a link to it (`…/review?cp=…&v=desktop&thread=3`) opens the vi
 A thread belongs to the image — the checkpoint and variant — not to one run. While it is open it shows on later runs'
 captures too: where the pixels are the same, exactly where it was placed; where the image changed since, with a dashed
 pin that says it was placed on an earlier run. That is how a change request reaches the run that fixes it, and the
-reviewer resolves it there. Approving an image with open comments asks whether to resolve them. The image an open
-thread was placed on is kept by the retention policy until it is resolved.
+reviewer resolves it there. Approving an image with open comments asks whether to resolve them. While a thread is open,
+the retention policy keeps the whole flow it was placed on — every checkpoint of that test in that run — unless an admin
+lets these visuals expire.
 
 Admins and members can decide; everyone in the team, viewers included, can comment. You can edit and delete your own
 comments, and admins can delete anyone's; deleting a thread's first comment deletes the thread.
@@ -217,7 +218,7 @@ references nobody kept, too.
 
 The approved image of each checkpoint is its baseline and is kept by the
 [artifact retention](/docs/administration/retention) policy, however old it is — as are the screens the library shows,
-and the runs pinned in it.
+and the runs pinned in it, unless an admin lets library screens expire.
 
 ## For AI assistants
 
