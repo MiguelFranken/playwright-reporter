@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.0.60](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.59...v0.0.60) (2026-09-30)
+
+### Features
+
+* **library:** one toolbar row, with Filter and Display beside search and feedback ([a2a4253](https://github.com/MiguelFranken/playwright-reporter/commit/a2a4253aa73068f1b05110974e742710a4b63055))
+
+### Bug Fixes
+
+* **library:** even spacing in the Display panel and a visually hidden title ([86e2af9](https://github.com/MiguelFranken/playwright-reporter/commit/86e2af9c75c64129adb0df6d2b3230408a8ffacc))
+
 ## [0.0.59](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.58...v0.0.59) (2026-09-30)
 
 ### Performance Improvements
