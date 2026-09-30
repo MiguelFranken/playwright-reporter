@@ -1,5 +1,6 @@
 import { Suspense, type ReactNode } from 'react';
 import { searchKey } from '@/lib/search-key';
+import { PendingResults } from './pending-results';
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -17,6 +18,10 @@ type SearchParams = Record<string, string | string[] | undefined>;
  * `omit` names params that do not change the results (a selected row that
  * opens a drawer, say), so setting them keeps the table where it is.
  *
+ * The key only changes once the server has answered, so on its own the old
+ * rows would still sit there for the round trip. `PendingResults` covers that
+ * stretch: it swaps in the same skeleton on the click itself.
+ *
  * Reading the query is dynamic, so the key is computed under an outer boundary
  * with the same fallback; the static shell around it still prerenders.
  */
@@ -33,9 +38,11 @@ export function ResultsBoundary({
 }) {
   return (
     <Suspense fallback={fallback}>
-      <Keyed searchParams={searchParams} omit={omit} fallback={fallback}>
-        {children}
-      </Keyed>
+      <PendingResults omit={omit} fallback={fallback}>
+        <Keyed searchParams={searchParams} omit={omit} fallback={fallback}>
+          {children}
+        </Keyed>
+      </PendingResults>
     </Suspense>
   );
 }
