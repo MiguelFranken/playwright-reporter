@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.0.68](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.67...v0.0.68) (2026-09-30)
+
+### Features
+
+* **review:** comments written by an AI agent show as the agent's ([faa7fec](https://github.com/MiguelFranken/playwright-reporter/commit/faa7feca0c0d0afbfa2bc9cf3c210d1b10af5d6c))
+
+### Bug Fixes
+
+* **review:** let the keyboard scroll a long comment thread ([38501bd](https://github.com/MiguelFranken/playwright-reporter/commit/38501bdc8b73ef660e44ec607280cca0b92db7cc))
+
 ## [0.0.67](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.66...v0.0.67) (2026-09-30)
 
 ### Features
