@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { runNeighbours } from '@/lib/db/queries/mcp';
+import { runArtifactCompleteness, runNeighbours } from '@/lib/db/queries/mcp';
 import { getRunByNumber, listRunErrorGroups, listRunSpecs } from '@/lib/db/queries/runs';
 import { isStale } from '@/lib/runs/staleness';
 import { branchParam, commonParams, environmentParam, runParam } from '../params';
@@ -7,6 +7,7 @@ import { defineTool, output } from '../registry';
 import { dur, link, when } from '../render/markdown';
 import { firstLine } from '../render/sanitize';
 import { resolveRun } from '../resolve';
+import { artifactsLine, executorLine, workingTreeLine, type RunProvenance } from '@miguelfranken/ui/lib/provenance';
 import { categoryOf, countsLine, runHeadline, runSummarySchema, toRunSummary } from './shared';
 
 const INCLUDE = ['failures', 'specs', 'shards', 'metadata'] as const;
@@ -46,6 +47,28 @@ const outputSchema = output({
   shards: z.array(z.object({ index: z.number(), status: z.string(), durationMs: z.number().nullable(), hostname: z.string().nullable() })).optional(),
   metadata: z.object({ system: z.record(z.string(), z.unknown()), playwrightProjects: z.array(z.string()) }).optional(),
   neighbours: z.object({ previousOnBranch: z.number().nullable(), nextOnBranch: z.number().nullable() }),
+  provenance: z
+    .object({
+      executor: z.string(),
+      executorDetectedBy: z
+        .enum(['provider', 'ci-env', 'option'])
+        .nullable()
+        .describe('How the reporter decided the executor: a known CI provider, the bare CI variable (a local wrapper may set it), or an explicit option. Null when the reporter did not say.'),
+      dirty: z.boolean().nullable().describe('Whether the working tree had uncommitted changes to tracked files; null when unknown (older reporter, no checkout).'),
+      dirtyFiles: z.number().nullable(),
+    })
+    .describe('What the run actually exercised. A dirty run may not match its commit: two runs with one SHA can test different code.'),
+  artifacts: z
+    .object({
+      total: z.number(),
+      uploaded: z.number(),
+      pending: z.number(),
+      failed: z.number(),
+      expired: z.number(),
+      reviewCaptures: z.number(),
+      reviewCapturesMissing: z.number().describe('Review captures whose image is not stored (upload pending, failed or expired).'),
+    })
+    .describe('Attachment upload completeness. Failed or pending uploads mean the run cannot serve as complete visual evidence.'),
 });
 
 export const getRun = defineTool({
@@ -60,11 +83,12 @@ export const getRun = defineTool({
     const project = await ctx.project(args.project);
     const resolved = await resolveRun(project, args.run, { branch: args.branch, environment: args.environment });
     const include = new Set(args.include ?? ['failures']);
-    const [full, groups, specs, neighbours] = await Promise.all([
+    const [full, groups, specs, neighbours, artifacts] = await Promise.all([
       getRunByNumber(project.project.id, resolved.number),
       include.has('failures') ? listRunErrorGroups(resolved.id) : Promise.resolve([]),
       include.has('specs') ? listRunSpecs(resolved.id) : Promise.resolve([]),
       runNeighbours(project.project.id, resolved),
+      runArtifactCompleteness(resolved.id),
     ]);
     const summary = toRunSummary(resolved, project.links);
     const stale = resolved.status === 'incomplete' && full && isStale(full);
@@ -96,6 +120,13 @@ export const getRun = defineTool({
         sampleResultUrl: project.links.result(resolved.number, g.sampleResultId),
       })),
       neighbours: { previousOnBranch: neighbours.previous, nextOnBranch: neighbours.next },
+      provenance: {
+        executor: resolved.executor,
+        executorDetectedBy: resolved.ci?.detectedBy ?? null,
+        dirty: resolved.git?.dirty ?? null,
+        dirtyFiles: resolved.git?.dirtyFiles ?? null,
+      },
+      artifacts,
     };
     if (include.has('specs')) {
       const failing = specs.filter((s) => s.failed + s.flaky > 0);
@@ -125,7 +156,9 @@ export const getRun = defineTool({
           ['Author', r.author],
           ['Pull request', r.prNumber ? link(`#${r.prNumber}`, r.prUrl) : null],
           ['CI', [r.ciProvider, r.ciJob].filter(Boolean).join(' · ') + (r.ciBuildUrl ? ` (${link('build', r.ciBuildUrl)})` : '') || null],
-          ['Executor', r.executor],
+          ['Executor', executorLine(provenanceOf(d))],
+          ['Working tree', workingTreeLine(provenanceOf(d), r.commit)],
+          ['Artifacts', artifactsLine(d.artifacts)],
           ['Tags', r.tags.length ? r.tags.join(', ') : null],
           ['Playwright', r.playwrightVersion ? `${r.playwrightVersion}${r.workers ? `, ${r.workers} workers` : ''}` : null],
           ['Shards', r.shardTotal > 1 ? r.shardTotal : null],
@@ -161,3 +194,7 @@ export const getRun = defineTool({
     };
   },
 });
+
+function provenanceOf(d: { run: { ciProvider: string | null }; provenance: z.infer<typeof outputSchema>['provenance'] }): RunProvenance {
+  return { ...d.provenance, ciProvider: d.run.ciProvider };
+}

@@ -107,6 +107,13 @@ describe('options', () => {
     const o = resolveOptions({ token: 't', serverUrl: 'http://x', git: { branch: 'main' } }, { PW_REPORTER_GIT_BRANCH: 'stage' });
     expect(o?.git.branch).toBe('main');
   });
+  it('reads an explicit executor, option before env, and ignores anything else', () => {
+    const env = { PW_REPORTER_TOKEN: 't', PW_REPORTER_URL: 'http://x' };
+    expect(resolveOptions({}, env)?.executor).toBeUndefined();
+    expect(resolveOptions({}, { ...env, PW_REPORTER_EXECUTOR: 'Local' })?.executor).toBe('local');
+    expect(resolveOptions({}, { ...env, PW_REPORTER_EXECUTOR: 'laptop' })?.executor).toBeUndefined();
+    expect(resolveOptions({ executor: 'ci' }, { ...env, PW_REPORTER_EXECUTOR: 'local' })?.executor).toBe('ci');
+  });
   it('detects github run id', () => {
     expect(detectCiRunId({ GITHUB_RUN_ID: '1', GITHUB_RUN_ATTEMPT: '2' })).toBe('gh-1-2');
   });

@@ -145,9 +145,12 @@ Every option can also be set through its environment variable.
 | `git` | `PW_REPORTER_GIT_BRANCH`, `_SHA`, `_MESSAGE`, `_REPO_URL`, `_AUTHOR` | the commit under test, where no CI variables or checkout say it |
 | `git.prNumber`, `.prUrl`, `.prTitle` | `PW_REPORTER_PR_NUMBER`, `_URL`, `_TITLE` | the pull or merge request, likewise; detected on GitHub and GitLab, and the link is derived from the repository when only the number is known |
 | `ci` | `PW_REPORTER_CI_PROVIDER`, `PW_REPORTER_BUILD_URL`, `_BUILD_NUMBER`, `PW_REPORTER_CI_JOB` | the build that ran the tests, likewise |
+| `executor` | `PW_REPORTER_EXECUTOR` | `ci` or `local`; wins over the `CI` variable, which a local wrapper script may set |
 
 Git and CI metadata come from Playwright's `captureGitInfo`, CI environment variables and the local checkout. A test
 image run outside CI (a Kubernetes job, say) has none of those; set `git` and `ci` and they win over detection.
+The reporter also records whether the checkout had uncommitted changes to tracked files, as a flag and a count of
+files — never their paths or contents — so two local runs of the same commit are told apart.
 
 > [!TIP]
 > Running the tests through Turborepo in strict env mode? List the `PW_REPORTER_*` variables in the task's

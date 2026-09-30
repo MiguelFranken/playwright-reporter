@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { attemptEndEventSchema, checkpointSchema, classifyAttachment, legacyCheckpoints, parseReviewAttachmentName, runStartSchema } from './index';
+import { attemptEndEventSchema, checkpointSchema, ciInfoSchema, gitInfoSchema, classifyAttachment, legacyCheckpoints, parseReviewAttachmentName, runStartSchema } from './index';
 
 describe('protocol', () => {
   it('classifies attachments', () => {
@@ -13,6 +13,14 @@ describe('protocol', () => {
 
   it('rejects malformed run start', () => {
     expect(runStartSchema.safeParse({}).success).toBe(false);
+  });
+
+  it('carries working-tree state and how the executor was decided, both optional', () => {
+    expect(gitInfoSchema.parse({ sha: 'abc', dirty: true, dirtyFiles: 3 })).toMatchObject({ dirty: true, dirtyFiles: 3 });
+    expect(gitInfoSchema.parse({ sha: 'abc' }).dirty).toBeUndefined();
+    expect(gitInfoSchema.safeParse({ dirtyFiles: -1 }).success).toBe(false);
+    expect(ciInfoSchema.parse({ provider: 'unknown', detectedBy: 'ci-env' }).detectedBy).toBe('ci-env');
+    expect(ciInfoSchema.safeParse({ detectedBy: 'guess' }).success).toBe(false);
   });
 
   it('accepts a minimal attempt end', () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { branchHref } from './index';
+import { branchHref, toRunHeaderData } from './index';
 
 const BASE = '/teams/t/projects/p';
 
@@ -18,5 +18,18 @@ describe('branchHref', () => {
       const path = branchHref(BASE, name).slice(`${BASE}/branches/`.length);
       expect(path.split('/').map(decodeURIComponent).join('/')).toBe(name);
     }
+  });
+});
+
+describe('toRunHeaderData', () => {
+  const row = { gitRepoUrl: 'https://github.com/a/b', gitSha: 'abcdef1234', gitShortSha: null };
+
+  it('reads the working tree and the executor source from the stored metadata', () => {
+    const data = toRunHeaderData({ ...row, git: { dirty: true, dirtyFiles: 3 }, ci: { detectedBy: 'ci-env' as const } });
+    expect(data).toMatchObject({ gitShortSha: 'abcdef1', gitDirty: true, gitDirtyFiles: 3, executorDetectedBy: 'ci-env' });
+  });
+
+  it('leaves them unknown for a run from an older reporter', () => {
+    expect(toRunHeaderData({ ...row, git: {}, ci: {} })).toMatchObject({ gitDirty: null, gitDirtyFiles: null, executorDetectedBy: null });
   });
 });

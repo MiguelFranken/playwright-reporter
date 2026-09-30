@@ -1,2 +1,2 @@
-import { n as IngestClient, r as createIngestApi, t as HttpError } from "./client-D4XTXo1n.mjs";
+import { n as IngestClient, r as createIngestApi, t as HttpError } from "./client-CncN1kb3.mjs";
 export { HttpError, IngestClient, createIngestApi };
