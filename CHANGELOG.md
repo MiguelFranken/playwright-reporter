@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.64](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.63...v0.0.64) (2026-09-30)
+
+### Features
+
+* **review:** drag the slider comparison's line itself ([3730dcb](https://github.com/MiguelFranken/playwright-reporter/commit/3730dcb4e65f71c9c3ac181d0cdad24ec218f377))
+
 ## [0.0.63](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.62...v0.0.63) (2026-09-30)
 
 ### Features
