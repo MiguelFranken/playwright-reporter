@@ -224,7 +224,7 @@ describe.each(ERAS)('debug tools (%s)', (era) => {
     const flaky = (await call(client, 'get_rerun_command', { run: 1, scope: 'flaky', repeat: 10 })).structuredContent as { commands: { command: string }[] };
     expect(flaky.commands[0].command).toBe("npx playwright test '(^|/)tests/x\\.spec\\.ts$:10' --project=chromium --repeat-each=10 --retries=0");
     const titles = (await call(client, 'get_rerun_command', { run: 1, style: 'titles', launcher: 'pnpm test:e2e --' })).structuredContent as { commands: { style: string; command: string }[] };
-    expect(titles.commands[0]).toMatchObject({ style: 'titles', command: expect.stringMatching(/^pnpm test:e2e -- '\(\^\|\/\)tests\/checkout\\\.spec\\\.ts\$' --grep /) });
+    expect(titles.commands[0]).toMatchObject({ style: 'grep', selection: 'titles', command: expect.stringMatching(/^pnpm test:e2e -- '\(\^\|\/\)tests\/checkout\\\.spec\\\.ts\$' --grep /) });
   });
 
   test('get_artifact: an inline screenshot, a trace link, and expiry', async ({ tenant, storage }) => {

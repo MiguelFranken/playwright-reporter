@@ -37,7 +37,9 @@ const outputSchema = output({
     z.object({
       browser: z.string(),
       tests: z.number(),
-      style: z.enum(['locations', 'titles', 'grep']),
+      // The v1 response keeps its two values: selecting by title is a --grep.
+      style: z.enum(['locations', 'grep']).describe('locations: by file:line. grep: by title (the "titles" and "grep" styles).'),
+      selection: z.enum(['locations', 'titles', 'grep']).describe('The style that selected these tests.'),
       command: z.string(),
       listCommand: z.string().describe('The same selection with --list: run it first and compare what it lists with `expected` and `tests`.'),
       expected: z.number().describe('How many tests the selection should list.'),
@@ -110,7 +112,7 @@ export const getRerunCommand = defineTool({
         project: project.ref,
         run: { number: run.number, branch: run.gitBranch, commit: run.gitShortSha, url: project.links.run(run.number) },
         selected: selected.length,
-        commands,
+        commands: commands.map((c) => ({ ...c, style: c.style === 'locations' ? ('locations' as const) : ('grep' as const), selection: c.style })),
         tests: selected.slice(0, 100).map((r) => ({
           title: r.titlePath.join(' › ') || r.title,
           file: r.file,
@@ -126,7 +128,7 @@ export const getRerunCommand = defineTool({
       render(md, d) {
         md.heading(`Re-run ${d.selected} test(s) from ${link(`#${d.run.number}`, d.run.url)}`, 2);
         for (const c of d.commands) {
-          md.line(`${c.browser} (${c.tests} test(s), selected by ${c.style}). Preview, should list ${c.expected}:`);
+          md.line(`${c.browser} (${c.tests} test(s), selected by ${c.selection}). Preview, should list ${c.expected}:`);
           md.line(`\`\`\`bash\n${c.listCommand}\n\`\`\``);
           md.line('Run:');
           md.line(`\`\`\`bash\n${c.command}\n\`\`\``);

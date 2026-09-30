@@ -4729,9 +4729,18 @@
                             "type": "string",
                             "enum": [
                               "locations",
+                              "grep"
+                            ],
+                            "description": "locations: by file:line. grep: by title (the \"titles\" and \"grep\" styles)."
+                          },
+                          "selection": {
+                            "type": "string",
+                            "enum": [
+                              "locations",
                               "titles",
                               "grep"
-                            ]
+                            ],
+                            "description": "The style that selected these tests."
                           },
                           "command": {
                             "type": "string"
@@ -4749,6 +4758,7 @@
                           "browser",
                           "tests",
                           "style",
+                          "selection",
                           "command",
                           "listCommand",
                           "expected"
