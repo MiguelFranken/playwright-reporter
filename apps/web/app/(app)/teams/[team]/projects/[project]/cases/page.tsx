@@ -20,7 +20,7 @@ import {
 import { CoverageSummary } from '@miguelfranken/ui/views/test-cases/coverage-summary';
 import { Pagination } from '@/components/filters/pagination';
 import { ResultsBoundary } from '@/components/filters/results-boundary';
-import { UrlSearch, UrlSelect } from '@/components/filters/url-filters';
+import { UrlMultiSelect, UrlSearch } from '@/components/filters/url-filters';
 import { CaseList } from '@/components/test-cases/case-list';
 import { LibraryActions } from '@/components/test-cases/library-actions';
 import { SuiteSidebar } from '@/components/test-cases/suite-sidebar';
@@ -65,10 +65,10 @@ export default function CasesPage({ params, searchParams }: Props) {
           <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
             <UrlSearch placeholder="Search key, title, steps or tags" className="xl:min-w-72" />
             <div className="flex flex-wrap items-center gap-2">
-              <UrlSelect param="status" placeholder="Status" allLabel="All statuses" options={labelItems(CASE_STATUSES, CASE_STATUS_LABELS)} className="min-w-32" />
-              <UrlSelect param="priority" placeholder="Priority" allLabel="All priorities" options={labelItems(CASE_PRIORITIES, CASE_PRIORITY_LABELS)} className="min-w-32" />
-              <UrlSelect param="automation" placeholder="Automation" allLabel="All automation" options={labelItems(CASE_AUTOMATIONS, CASE_AUTOMATION_LABELS)} className="min-w-36" />
-              <UrlSelect param="verdict" placeholder="Linked tests" allLabel="Any result" options={labelItems(CASE_VERDICTS, CASE_VERDICT_LABELS)} className="min-w-36" />
+              <UrlMultiSelect param="status" placeholder="Status" allLabel="All statuses" options={labelItems(CASE_STATUSES, CASE_STATUS_LABELS)} className="min-w-32" />
+              <UrlMultiSelect param="priority" placeholder="Priority" allLabel="All priorities" options={labelItems(CASE_PRIORITIES, CASE_PRIORITY_LABELS)} className="min-w-32" />
+              <UrlMultiSelect param="automation" placeholder="Automation" allLabel="All automation" options={labelItems(CASE_AUTOMATIONS, CASE_AUTOMATION_LABELS)} className="min-w-36" />
+              <UrlMultiSelect param="verdict" placeholder="Linked tests" allLabel="Any result" options={labelItems(CASE_VERDICTS, CASE_VERDICT_LABELS)} className="min-w-36" />
               <Suspense fallback={<FilterSkeleton widths={[120]} />}>
                 <TagFilter params={params} />
               </Suspense>
@@ -144,7 +144,7 @@ async function TagFilter({ params }: { params: Params }) {
   const { project } = await requireProject(team, slug);
   const tags = await listCaseTags(project.id);
   if (tags.length === 0) return null;
-  return <UrlSelect param="tag" placeholder="Tag" allLabel="All tags" options={tags.map((t) => ({ value: t, label: t }))} className="min-w-28" />;
+  return <UrlMultiSelect param="tag" placeholder="Tag" allLabel="All tags" options={tags.map((t) => ({ value: t, label: t }))} className="min-w-28" />;
 }
 
 async function Results({ params, searchParams }: Props) {

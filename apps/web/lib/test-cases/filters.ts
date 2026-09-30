@@ -32,7 +32,7 @@ function oneOf<T extends string>(values: readonly T[], v: string | string[] | un
 export function parseCaseFilters(sp: SearchParams): CaseFilters & { sort: CaseSort; dir: 'asc' | 'desc' } {
   const suite = first(sp.suite);
   const sortParam = first(sp.sort);
-  const tag = first(sp.tag);
+  const tags = (Array.isArray(sp.tag) ? sp.tag : sp.tag ? [sp.tag] : []).filter(Boolean).slice(0, 50);
   return {
     suite: suite === 'unassigned' || (suite && isUuid(suite)) ? suite : undefined,
     q: first(sp.q)?.slice(0, 200) || undefined,
@@ -41,7 +41,7 @@ export function parseCaseFilters(sp: SearchParams): CaseFilters & { sort: CaseSo
     type: oneOf(CASE_TYPES, sp.type),
     automation: oneOf(CASE_AUTOMATIONS, sp.automation),
     verdict: oneOf(CASE_VERDICTS, sp.verdict),
-    tags: tag ? [tag] : undefined,
+    tags: tags.length ? tags : undefined,
     attention: first(sp.attention) === '1' || undefined,
     unverified: first(sp.unverified) === '1' || undefined,
     sort: (CASE_SORTS as readonly string[]).includes(sortParam ?? '') ? (sortParam as CaseSort) : 'position',

@@ -51,6 +51,18 @@ export const FiltersFromTheSummary: Story = {
   },
 };
 
+/** The summary's toggles add up: a second one widens the filter instead of replacing it. */
+export const SummaryTogglesAddUp: Story = {
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: /Ready to verify\s*1/ }));
+    await userEvent.click(canvas.getByRole('button', { name: /^Needs review/ }));
+    await expect(args.onConfigChange).toHaveBeenLastCalledWith(expect.objectContaining({ filters: { states: ['verify', 'needs-review'], priorities: [] } }));
+    await expect(canvas.getByRole('button', { name: /Ready to verify\s*1/ })).toHaveAttribute('aria-pressed', 'true');
+    await expect(canvas.getByRole('button', { name: /^Needs review/ })).toHaveAttribute('aria-pressed', 'true');
+  },
+};
+
 /** A built-in view: the developer's — open feedback on the screens as they are, by priority. */
 export const ToFix: Story = {
   args: { activeViewId: 'to-fix', config: BUILT_IN_VIEWS.find((v) => v.id === 'to-fix')!.config },
