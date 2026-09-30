@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.53](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.52...v0.0.53) (2026-09-30)
+
+### Features
+
+* **web:** add Vercel Speed Insights, only in builds made on Vercel ([#64](https://github.com/MiguelFranken/playwright-reporter/issues/64)) ([ed98b14](https://github.com/MiguelFranken/playwright-reporter/commit/ed98b1422704e6a8033a5e8b518e4433ba4ce64c))
+
 ## [0.0.52](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.51...v0.0.52) (2026-09-30)
 
 ### Features
