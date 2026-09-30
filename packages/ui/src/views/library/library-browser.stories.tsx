@@ -26,11 +26,12 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Every flow, by suite: the counts say what waits, the rows say where. */
+/** Every flow, by suite: the views count what waits, the rows say where. */
 export const Default: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByRole('button', { name: /Ready to verify\s*1/ })).toHaveAttribute('aria-pressed', 'false');
+    // Nothing is filtered, so there is no row of filter chips.
+    await expect(canvas.queryByRole('button', { name: /^Remove the/ })).toBeNull();
     await expect(canvas.getByRole('article', { name: /places an order/ })).toBeInTheDocument();
     await expect(canvas.getByRole('img', { name: 'Priority: Critical' })).toBeInTheDocument();
     // The views list their counts; a screen from an earlier run says which.
@@ -39,27 +40,19 @@ export const Default: Story = {
   },
 };
 
-/** A count filters to its step of the loop: here, the feedback a reviewer can verify now. */
-export const FiltersFromTheSummary: Story = {
+/** The Filter menu narrows the library to a step of the loop, and the filter shows as a chip under the title. */
+export const FiltersFromTheMenu: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: /Ready to verify\s*1/ }));
+    const body = within(document.body);
+    await userEvent.click(canvas.getByRole('button', { name: /^Filter/ }));
+    await userEvent.click(await body.findByRole('menuitemcheckbox', { name: /Ready to verify/ }));
     await expect(args.onConfigChange).toHaveBeenCalledWith(expect.objectContaining({ filters: { states: ['verify'], priorities: [] } }));
+    await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(canvas.queryByRole('article', { name: /lists everything that is missing/ })).toBeNull());
     await expect(canvas.getByRole('article', { name: /places an order/ })).toBeInTheDocument();
-    await expect(canvas.getByRole('button', { name: 'Remove the state filter' })).toBeInTheDocument();
-  },
-};
-
-/** The summary's toggles add up: a second one widens the filter instead of replacing it. */
-export const SummaryTogglesAddUp: Story = {
-  play: async ({ canvasElement, args }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: /Ready to verify\s*1/ }));
-    await userEvent.click(canvas.getByRole('button', { name: /^Needs review/ }));
-    await expect(args.onConfigChange).toHaveBeenLastCalledWith(expect.objectContaining({ filters: { states: ['verify', 'needs-review'], priorities: [] } }));
-    await expect(canvas.getByRole('button', { name: /Ready to verify\s*1/ })).toHaveAttribute('aria-pressed', 'true');
-    await expect(canvas.getByRole('button', { name: /^Needs review/ })).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(canvas.getByRole('button', { name: 'Remove the state filter' }));
+    await expect(await canvas.findByRole('article', { name: /lists everything that is missing/ })).toBeInTheDocument();
   },
 };
 

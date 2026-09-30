@@ -5,30 +5,22 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { Button } from '../../components/button';
 import { Input } from '../../components/input';
 import { EmptyState } from '../../patterns/empty-state';
-import { LIBRARY_STATE_ICONS } from '../../patterns/library-state-chip';
 import { ScrollToTop } from '../../patterns/scroll-to-top';
-import { cn } from '../../lib/cn';
 import {
   BUILT_IN_VIEWS,
   describeViewConfig,
   feedbackCounts,
   groupLibraryFlows,
   LIBRARY_FOLDERS_LABELS,
-  LIBRARY_STATE_HINTS,
-  LIBRARY_STATE_LABELS,
-  LIBRARY_STATE_TONES,
   libraryCounts,
   matchesLibraryFilters,
   matchingCheckpointIds,
   sameViewConfig,
   sortLibraryFlows,
-  type LibraryCounts,
-  type LibraryState,
   type LibraryViewConfig,
   type LibraryViewDef,
 } from '../../lib/library-views';
 import { buildReviewTree, DEFAULT_FRAME, folderId, folderPathOf, inFolder, variantsOf, type FrameSettings, type ReviewFlowView, type ReviewGrouping } from '../../lib/review';
-import { toneText } from '../../lib/tone';
 import { CheckpointViewer, type ReviewCommentsProps, type ReviewSelection } from '../review/checkpoint-viewer';
 import { filterFlows } from '../review/review-storyboard';
 import { ReviewTree } from '../review/review-tree';
@@ -46,51 +38,8 @@ function useControlled<T>(value: T | undefined, onChange: ((v: T) => void) | und
   return value === undefined ? [own, (v) => (setOwn(v), onChange?.(v))] : [value, (v) => onChange?.(v)];
 }
 
-const SUMMARY_STATES: LibraryState[] = ['waiting', 'verify', 'needs-review', 'updated'];
-/** The summary's short labels; the full one is the button's title. */
-const SUMMARY_LABELS: Partial<Record<LibraryState, string>> = { waiting: 'Waiting', verify: 'To verify', 'needs-review': 'Needs review', updated: 'Updated' };
 /** Nothing is being decided in the library. */
 const NOTHING_PENDING: ReadonlySet<string> = new Set();
-
-/**
- * Where the flows on screen stand, as one strip of four toggles that each
- * filter the library to one step of the review loop: what waits for
- * changes, what is ready to verify, what nobody reviewed, what changed since
- * the last capture. They add up: two pressed show the flows in either state.
- */
-export function LibrarySummary({ counts, states, onToggle }: { counts: LibraryCounts; states: readonly LibraryState[]; onToggle: (state: LibraryState) => void }) {
-  return (
-    <div className="inline-flex max-w-full shrink-0 overflow-x-auto rounded-lg border border-border bg-surface shadow-xs [scrollbar-width:none]" role="group" aria-label="Review state">
-      {SUMMARY_STATES.map((s, i) => {
-        const Icon = LIBRARY_STATE_ICONS[s];
-        const active = states.includes(s);
-        const n = counts.states[s];
-        return (
-          <button
-            key={s}
-            type="button"
-            aria-pressed={active}
-            aria-label={`${LIBRARY_STATE_LABELS[s]} ${n}`}
-            onClick={() => onToggle(s)}
-            title={LIBRARY_STATE_HINTS[s]}
-            className={cn(
-              'flex h-8 shrink-0 items-center gap-1.5 px-2.5 text-label-s whitespace-nowrap outline-none transition-colors focus-visible:z-10 focus-visible:ring-[3px] focus-visible:ring-ring/25',
-              i > 0 && 'border-l border-border',
-              i === 0 && 'rounded-l-[7px]',
-              i === SUMMARY_STATES.length - 1 && 'rounded-r-[7px]',
-              active ? 'bg-accent-subtle text-accent-text' : 'hover:bg-muted/60',
-              n === 0 && !active && 'text-muted-foreground',
-            )}
-          >
-            <Icon className={cn('size-3.5 shrink-0', active ? 'text-accent-text' : n ? toneText[LIBRARY_STATE_TONES[s]] : 'text-muted-foreground')} />
-            <span>{SUMMARY_LABELS[s]}</span>
-            <span className={cn('tabular-nums', active ? 'text-accent-text' : 'text-muted-foreground')}>{n}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 /** Open comments below every folder of the tree, by folder id; `''` is everything. */
 function attentionByFolder(flows: readonly ReviewFlowView[], grouping: ReviewGrouping): Map<string, number> {
@@ -258,8 +207,6 @@ export function LibraryBrowser({
       comments.onOpenThreadChange?.(item.thread.number);
     }
   };
-  const toggleState = (state: LibraryState) =>
-    setConfig({ ...config, filters: { ...config.filters, states: config.filters.states.includes(state) ? config.filters.states.filter((s) => s !== state) : [...config.filters.states, state] } });
 
   if (flows.length === 0 || total === 0) {
     return <EmptyState icon={Images} title={emptyTitle} description={emptyDescription} />;
@@ -335,24 +282,24 @@ export function LibraryBrowser({
                 onSaveAs={canEdit ? () => setEditor({ mode: 'create', name: '', config }) : undefined}
               />
             </div>
-            <div className="flex w-full items-center gap-2 sm:w-auto">
-              <div className="relative min-w-0 flex-1 sm:flex-none">
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap">
+              {/* On a phone the search takes its own line; the buttons wrap below it. */}
+              <div className="relative min-w-0 basis-full sm:basis-auto">
                 <Search aria-hidden className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
                 <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find a test, case or checkpoint" aria-label="Find a test, case or checkpoint" className="h-8 w-full pl-8 sm:w-64" />
               </div>
               <FeedbackInboxButton flows={inScope} onClick={() => setInbox(true)} />
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <LibrarySummary counts={counts} states={config.filters.states} onToggle={toggleState} />
-            <LibraryFilterMenu config={config} onChange={setConfig} counts={counts} />
-            <LibraryFilterChips config={config} onChange={setConfig} />
-            <div className="ml-auto">
+              <LibraryFilterMenu config={config} onChange={setConfig} counts={counts} />
               <LibraryDisplayMenu config={config} onChange={setConfig} variants={variants}>
                 <SizeControl size={size} onLive={setLiveSize} onCommit={setSize} />
               </LibraryDisplayMenu>
             </div>
           </div>
+          {filtered ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <LibraryFilterChips config={config} onChange={setConfig} />
+            </div>
+          ) : null}
         </header>
 
         {visible.length === 0 ? (

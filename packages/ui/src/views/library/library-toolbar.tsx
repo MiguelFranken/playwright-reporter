@@ -55,7 +55,7 @@ export function LibraryFilterMenu({ config, onChange, counts }: { config: Librar
         <ListFilter /> Filter
         {active ? <span className="rounded-full bg-accent-subtle px-1.5 text-label-xs text-accent-text tabular-nums">{active}</span> : null}
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-64">
+      <DropdownMenuContent align="end" className="w-64">
         <DropdownMenuGroup>
           <DropdownMenuLabel>Review state</DropdownMenuLabel>
           {LIBRARY_STATES.map((s) => {
