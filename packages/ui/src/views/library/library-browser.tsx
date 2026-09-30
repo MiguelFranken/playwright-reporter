@@ -60,7 +60,7 @@ const NOTHING_PENDING: ReadonlySet<string> = new Set();
  */
 export function LibrarySummary({ counts, states, onToggle }: { counts: LibraryCounts; states: readonly LibraryState[]; onToggle: (state: LibraryState) => void }) {
   return (
-    <div className="inline-flex max-w-full shrink-0 overflow-x-auto rounded-lg border border-border bg-surface shadow-xs" role="group" aria-label="Review state">
+    <div className="inline-flex max-w-full shrink-0 overflow-x-auto rounded-lg border border-border bg-surface shadow-xs [scrollbar-width:none]" role="group" aria-label="Review state">
       {SUMMARY_STATES.map((s, i) => {
         const Icon = LIBRARY_STATE_ICONS[s];
         const active = states.includes(s);
@@ -317,12 +317,14 @@ export function LibraryBrowser({
       <div className="flex min-w-0 flex-col gap-4">
         <header className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <div className="flex min-w-0 flex-1 items-center gap-2">
-              <ViewIcon aria-hidden className="size-4 shrink-0 text-muted-foreground" />
-              <h2 className="min-w-0 truncate text-title-m" title={activeView?.description ?? describeViewConfig(config)}>
-                {activeView?.name ?? 'All flows'}
-              </h2>
-              {modified ? <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-label-xs text-muted-foreground">Edited</span> : null}
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+              <div className="flex min-w-0 max-w-full items-center gap-2">
+                <ViewIcon aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+                <h2 className="min-w-0 truncate text-title-m" title={activeView?.description ?? describeViewConfig(config)}>
+                  {activeView?.name ?? 'All flows'}
+                </h2>
+                {modified ? <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-label-xs text-muted-foreground">Edited</span> : null}
+              </div>
               <ViewSaveControls
                 modified={modified}
                 savedViewName={savedActive?.name ?? null}

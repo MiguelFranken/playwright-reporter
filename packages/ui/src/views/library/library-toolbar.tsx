@@ -272,7 +272,7 @@ export function ViewSaveControls({
 }) {
   if (!modified) return null;
   return (
-    <span className="inline-flex items-center gap-1">
+    <span className="inline-flex flex-wrap items-center gap-1">
       <Button variant="ghost" size="sm" onClick={onReset}>
         <RotateCcw /> Reset
       </Button>

@@ -231,15 +231,18 @@ open comment of the flows shown, what waits and what can be verified, and opens 
 
 **Filter** narrows the flows by state and by test case [priority](/docs/using/test-cases#priority-in-the-library) — any
 value within one, every one that is set. A flow that passes shows its whole journey, with the screens that do not match
-stepped back. **Display** groups the flows by test case suite, spec file, state or priority, and orders them by suite,
-priority, urgency, most recently captured or most open comments. The rail on the left — views and folders — stays in
-reach while the flows scroll.
+stepped back. **Display** holds everything about how they are laid out: the folders (test case suites or spec files),
+grouping (by folder, state or priority), order (by suite, priority, urgency, most recently captured or most open
+comments), the variant and the screen size. The rail on the left — views and the folder tree — stays in reach while the
+flows scroll, and a button at the bottom right takes a long library back to the top.
 
 **Views** keep a combination: **Open feedback**, **To fix** (a developer's open feedback, by priority), **To verify**
-and **To review** (updated screens, unreviewed ones and feedback to verify) are there for everyone. Change the filters
-and **Save view** keeps them as a view of your own; a changed view can be saved into itself, saved as a new one or
-reset. Your views are yours: nobody else sees them. Everything on screen is in the link, so a filtered library can be
-shared as it is.
+and **To review** (updated screens, unreviewed ones and feedback to verify) are there for everyone. **+** beside *Your
+views* opens the view builder: a name, the states and priorities it shows, its folders, grouping, order and variant, and
+how many flows it would hold as you choose. Change what is on screen and **Save view** opens the builder with it; a
+changed view can also be saved into itself or reset. A view's menu edits, duplicates, renames or deletes it — built-in
+views can be duplicated into one of your own. Your views are yours: nobody else sees them. Everything on screen is in
+the link, so a filtered library can be shared as it is.
 
 **Compare with…** in the library measures every screen against another branch or pull request: what differs is boxed
 and measured on the storyboard, a screen that is the same says so, and the viewer offers the comparisons with the other
