@@ -350,7 +350,7 @@ function CheckpointColumn({
         {library || status === 'approved' ? null : <ReviewStatusBadge status={status} className="shrink-0" />}
       </div>
       {library && checkpoint.description ? <p className="-mt-1 line-clamp-2 pl-7 text-body-s text-muted-foreground">{checkpoint.description}</p> : null}
-      <div className={cn('flex items-start transition-opacity', dimmed && 'opacity-40 hover:opacity-100')} style={{ gap: VARIANT_GAP }}>
+      <div className="flex items-start" style={{ gap: VARIANT_GAP }}>
         {captures.map((c) => {
           const f = feedbackCounts([c]);
           const updated = library && c.previous && !c.previous.same;
@@ -369,6 +369,8 @@ function CheckpointColumn({
                   alt={`${label} — ${c.variant}`}
                   scroll={scroll}
                   label={`${label}, ${c.variant} screen`}
+                  // Outside the view's filter: the screen steps back, its labels stay readable.
+                  className={cn('transition-opacity', dimmed && 'opacity-40 hover:opacity-100')}
                   tone={library ? (f.current ? 'danger' : f.outdated ? 'info' : undefined) : c.status === 'changed' ? 'warning' : c.status === 'new' ? 'info' : c.status === 'changes_requested' ? 'danger' : undefined}
                   overlay={library && !c.compare ? undefined : () => <ChangeMarks capture={c} />}
                 />

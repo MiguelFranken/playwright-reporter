@@ -31,7 +31,7 @@ export function LibraryStateChip({ state, iconOnly = false, className, count }: 
     <Badge variant="outline" title={LIBRARY_STATE_HINTS[state]} className={cn('gap-1 border-transparent font-medium', toneBadge[tone], className)}>
       <Icon className="size-3" />
       {LIBRARY_STATE_LABELS[state]}
-      {count != null ? <span className="tabular-nums opacity-80">{count}</span> : null}
+      {count != null ? <span className="tabular-nums">{count}</span> : null}
     </Badge>
   );
 }

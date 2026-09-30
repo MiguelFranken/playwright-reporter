@@ -29,3 +29,18 @@ export const None: Story = {
     await expect(canvasElement.querySelector('[data-slot="comment-count-badge"]')).toBeNull();
   },
 };
+
+/** Every open comment was made on an earlier version: the screen is ready to verify. */
+export const AllOnAnEarlierVersion: Story = {
+  args: { count: 2, outdated: 2 },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByText('2 open comments, all on an earlier version')).toBeInTheDocument();
+  },
+};
+
+export const SomeOnAnEarlierVersion: Story = {
+  args: { count: 3, outdated: 1 },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByText('3 open comments, 1 on an earlier version')).toBeInTheDocument();
+  },
+};

@@ -173,7 +173,9 @@ the same, and a link to it (`…/review?cp=…&v=desktop&thread=3`) opens the vi
 A thread belongs to the image — the checkpoint and variant — not to one run. While it is open it shows on later runs'
 captures too: where the pixels are the same, exactly where it was placed; where the image changed since, with a dashed
 pin that says it was placed on an earlier run. That is how a change request reaches the run that fixes it, and the
-reviewer resolves it there. Approving an image with open comments asks whether to resolve them. While a thread is open,
+reviewer resolves it there: **Compare with the version commented on** (or <kbd>O</kbd>) shows the image the comment was
+made on, with its pin and the comment, beside the screen as it is now, and resolves it from there. A screen that changed
+never resolves a comment by itself. Approving an image with open comments asks whether to resolve them. While a thread is open,
 the retention policy keeps the whole flow it was placed on — every checkpoint of that test in that run — unless an admin
 lets these visuals expire.
 
@@ -192,15 +194,17 @@ place in the library.
 
 ## The library
 
-**Library** in the sidebar shows the product's flows as documentation: the same storyboard and viewer, without
-statuses, comparisons or approvals, with each checkpoint's description under its title. It opens on the **default
+**Library** in the sidebar shows the product's flows as documentation, and the feedback on them: the same storyboard
+and viewer, without approvals, with each checkpoint's description under its title. It opens on the **default
 reference** — the default branch, unless you chose another — and the picker at the top switches to any branch or pull
 request kept in the library.
 
 A reference shows either:
 
-- **its newest run**: every test as the newest run on that branch or pull request captured it, so a run of only some
-  tests does not hide the others, and a checkpoint a test no longer takes disappears; or
+- **its newest runs**: every checkpoint and variant as the newest run on that branch or pull request captured it. A
+  full run updates every screen; a run of only some tests — or a test that failed half way — updates what it captured
+  and leaves every other screen as it was, marked with the run it comes from. A checkpoint disappears only once a later
+  run of its test passed without capturing it; or
 - **a pinned run**: exactly that run, whatever runs next. Pin the run of a release to document what customers see.
 
 Keep a branch or pull request from the library's **Add to library**, from its own page (**Keep in library**), or pin
@@ -208,6 +212,34 @@ a run from its review (**Pin to library**). A long-lived pull request can stay i
 everyone can see the product state it builds. **Library settings** give a reference a name and a sentence for readers
 who do not know the branch ("Checkout redesign"), choose its version, and make it the default: the library opens on
 it, and test case pages show its screens.
+
+### Reviewing in the library
+
+Every screen has a state in the review loop, and the four counts above the flows filter to one of them:
+
+| State | Means | Whose turn |
+| --- | --- | --- |
+| **Waiting for changes** | An open comment (or change request) on the screen as it is now. | A developer's |
+| **Ready to verify** | An open comment made on an earlier version: the screen changed since. | The reviewer's: compare, then resolve |
+| **Needs review** | Differs from the approved screen, or nobody approved it, and nobody commented. | A reviewer's |
+| **Updated** | Changed since the capture before it on this branch. | Anyone curious |
+
+The loop: tests run and upload their screens; reviewers comment where something should change; developers fix it —
+in as many small commits as they like — and run just the affected tests; the changed screens turn **Ready to verify**,
+and the reviewer compares each with the version they commented on and resolves the comment. **Feedback** lists every
+open comment of the flows shown, what waits and what can be verified, and opens the viewer at its pin.
+
+**Filter** narrows the flows by state and by test case [priority](/docs/using/test-cases#priority-in-the-library) — any
+value within one, every one that is set. A flow that passes shows its whole journey, with the screens that do not match
+stepped back. **Display** groups the flows by test case suite, spec file, state or priority, and orders them by suite,
+priority, urgency, most recently captured or most open comments. The rail on the left — views and folders — stays in
+reach while the flows scroll.
+
+**Views** keep a combination: **Open feedback**, **To fix** (a developer's open feedback, by priority), **To verify**
+and **To review** (updated screens, unreviewed ones and feedback to verify) are there for everyone. Change the filters
+and **Save view** keeps them as a view of your own; a changed view can be saved into itself, saved as a new one or
+reset. Your views are yours: nobody else sees them. Everything on screen is in the link, so a filtered library can be
+shared as it is.
 
 **Compare with…** in the library measures every screen against another branch or pull request: what differs is boxed
 and measured on the storyboard, a screen that is the same says so, and the viewer offers the comparisons with the other
@@ -235,7 +267,11 @@ replies to one, and `resolve_review_thread` resolves it; comments an assistant w
 comments of a run, and it can reply with what it changed for you to check.
 
 `list_library` names the references in the library and the run each shows; `get_library_flows` lists a reference's
-flows and checkpoints, with capture ids to look at, and the link to hand a person. With a write-scoped token,
+flows and checkpoints, with capture ids to look at, each screen's state and open comments, and the link to hand a
+person — filtered by `state`, `priority` or a `view` ("show me what is ready to verify", `view: "to-fix"`).
+`list_review_threads` with `library: true` lists the open comments of every screen a branch shows, not just one run's,
+and `placement: "outdated"` the ones made on an earlier version: with `placedOnCapture`, `get_review_checkpoint` shows
+the version the comment was about. With a write-scoped token,
 `set_library_reference` keeps a pull request in the library, pins its run or makes it the default. The [REST API](/docs/api)
 has the same reads under `/runs/{run}/review-checkpoints`, `/review-captures/{capture}` (with `annotatedImageUrl`, the
 image with its pins drawn on it), `/review-threads`, `/library` and `/library/flows`, and — with a write-scoped token —

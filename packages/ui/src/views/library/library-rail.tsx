@@ -1,12 +1,13 @@
 'use client';
 
 import { Bookmark, Layers, MessageSquareWarning, MoreHorizontal, Pencil, RefreshCw, ScanEye, Trash2, Wrench } from 'lucide-react';
+import { useState } from 'react';
 import { Button } from '../../components/button';
+import { Input } from '../../components/input';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../../components/dropdown-menu';
 import { cn } from '../../lib/cn';
 import { formatNumber } from '../../lib/format';
-import { describeViewConfig, type LibraryViewDef } from '../../lib/library-views';
-import { ViewNamePopover } from './library-toolbar';
+import { describeViewConfig, LIBRARY_VIEW_NAME_MAX, type LibraryViewDef } from '../../lib/library-views';
 
 const BUILT_IN_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   all: Layers,
@@ -20,7 +21,7 @@ const BUILT_IN_ICONS: Record<string, React.ComponentType<{ className?: string }>
  * The library's views, as Linear lists them: the built-in ones every member
  * has — one per step of the review loop — and the person's own, each with
  * how many flows it shows. The one on screen is marked; a saved one can be
- * renamed or deleted from its menu.
+ * renamed in place or deleted from its menu.
  */
 export function LibraryViewList({
   views,
@@ -46,7 +47,34 @@ export function LibraryViewList({
 }) {
   const builtIn = views.filter((v) => v.builtIn);
   const saved = views.filter((v) => !v.builtIn);
+  const [renaming, setRenaming] = useState<string | null>(null);
   const row = (v: LibraryViewDef) => {
+    if (renaming === v.id && onRename) {
+      return (
+        <li key={v.id}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const name = String(new FormData(e.currentTarget).get('name') ?? '').trim();
+              if (name && name !== v.name) onRename(v, name);
+              setRenaming(null);
+            }}
+          >
+            <Input
+              name="name"
+              defaultValue={v.name}
+              maxLength={LIBRARY_VIEW_NAME_MAX}
+              autoFocus
+              onFocus={(e) => e.currentTarget.select()}
+              onBlur={() => setRenaming(null)}
+              onKeyDown={(e) => e.key === 'Escape' && (e.preventDefault(), setRenaming(null))}
+              aria-label={`Rename the view ${v.name}`}
+              className="h-8"
+            />
+          </form>
+        </li>
+      );
+    }
     const Icon = v.builtIn ? (BUILT_IN_ICONS[v.id] ?? Layers) : Bookmark;
     const active = v.id === activeId;
     return (
@@ -84,17 +112,9 @@ export function LibraryViewList({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               {onRename ? (
-                <ViewNamePopover
-                  trigger={
-                    <DropdownMenuItem closeOnClick={false}>
-                      <Pencil /> Rename
-                    </DropdownMenuItem>
-                  }
-                  title={`Rename “${v.name}”`}
-                  initial={v.name}
-                  submitLabel="Rename"
-                  onSubmit={(name) => onRename(v, name)}
-                />
+                <DropdownMenuItem onClick={() => setRenaming(v.id)}>
+                  <Pencil /> Rename
+                </DropdownMenuItem>
               ) : null}
               {onDelete ? (
                 <DropdownMenuItem variant="destructive" onClick={() => onDelete(v)}>
