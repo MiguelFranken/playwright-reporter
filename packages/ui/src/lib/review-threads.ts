@@ -226,3 +226,48 @@ export function replies(thread: Pick<ReviewThreadView, 'comments'>): ReviewComme
   const first = openingComment(thread);
   return thread.comments.filter((c) => c.kind === 'comment' && c !== first);
 }
+
+/**
+ * Where an open thread stands in the loop a developer works it through:
+ * - `verify`: placed on an earlier version, and the screen changed since — look whether the change asked for was made.
+ * - `waiting`: still on the pixels it was made on — nothing changed yet, it waits for a fix.
+ * - `resolved`: done.
+ */
+export type ThreadStage = 'verify' | 'waiting' | 'resolved';
+
+export function threadStage(thread: Pick<ReviewThreadView, 'status' | 'placement'>): ThreadStage {
+  if (thread.status === 'resolved') return 'resolved';
+  return thread.placement === 'outdated' ? 'verify' : 'waiting';
+}
+
+export const THREAD_STAGE_LABELS: Record<ThreadStage, string> = { verify: 'To verify', waiting: 'Waiting for a fix', resolved: 'Resolved' };
+
+/** The rectangle of an image a close-up shows, in that image's pixels, and the scale it is drawn at. */
+export interface CloseUpWindow {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  scale: number;
+}
+
+/**
+ * The part of an image of `size` around `anchor` that a close-up of `box`
+ * CSS pixels shows: an area with room around it, a point with enough of the
+ * page around it to read what it points at (`reach` image pixels across).
+ * Kept inside the image; never magnified past `maxScale`.
+ */
+export function closeUpWindow(anchor: FractionAnchor, size: ImageSize, box: ImageSize, { reach = 520, maxScale = 1.5 }: { reach?: number; maxScale?: number } = {}): CloseUpWindow {
+  const areaW = anchor.kind === 'area' && anchor.w != null ? anchor.w * size.width : 0;
+  const areaH = anchor.kind === 'area' && anchor.h != null ? anchor.h * size.height : 0;
+  const cx = anchor.kind === 'area' ? (anchor.x * size.width + areaW / 2) : anchor.x * size.width;
+  const cy = anchor.kind === 'area' ? (anchor.y * size.height + areaH / 2) : anchor.y * size.height;
+  const aspect = box.width / box.height;
+  // What must fit: the area with a margin, or the reach around a point, in the box's shape.
+  let width = Math.max(anchor.kind === 'area' ? areaW * 1.4 + 48 : reach, (anchor.kind === 'area' ? areaH * 1.4 + 48 : 0) * aspect, box.width / maxScale);
+  width = Math.min(width, size.width, size.height * aspect);
+  const height = width / aspect;
+  const left = Math.min(Math.max(0, cx - width / 2), Math.max(0, size.width - width));
+  const top = Math.min(Math.max(0, cy - height / 2), Math.max(0, size.height - height));
+  return { left, top, width, height, scale: box.width / width };
+}
