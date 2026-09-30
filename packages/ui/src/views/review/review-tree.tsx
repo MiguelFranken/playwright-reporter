@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronRight, ChevronsDownUp, ChevronsUpDown, FileCode2, Folder, FolderOpen, Layers } from 'lucide-react';
+import { ChevronRight, ChevronsDownUp, ChevronsUpDown, FileCode2, Folder, FolderOpen, Layers, MessageSquare } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '../../components/button';
 import { ToggleGroup, ToggleGroupItem } from '../../components/toggle-group';
@@ -39,6 +39,8 @@ export function ReviewTree({
   needsReview,
   showNeedsReview = true,
   allLabel = 'All flows',
+  attention,
+  className,
 }: {
   folders: readonly ReviewFolder[];
   /** The selected folder's id, or `null` for everything. */
@@ -51,6 +53,9 @@ export function ReviewTree({
   /** Off in the library, where nothing waits for a decision. */
   showNeedsReview?: boolean;
   allLabel?: string;
+  /** In the library: open comments below each folder by id (`''` for all), shown instead of the image count. */
+  attention?: ReadonlyMap<string, number>;
+  className?: string;
 }) {
   const [open, setOpen] = useState(() => initiallyOpen(folders, selected));
   const toggle = (id: string) =>
@@ -64,7 +69,7 @@ export function ReviewTree({
   const allOpen = expandable.length > 0 && expandable.every((id) => open.has(id));
 
   return (
-    <nav aria-label="Folders" className="flex min-w-0 flex-col gap-2">
+    <nav aria-label="Folders" className={cn('flex min-w-0 flex-col gap-2', className)}>
       <div className="flex items-center gap-1">
         <ToggleGroup
           variant="segment"
@@ -102,11 +107,11 @@ export function ReviewTree({
             <span className="size-6 shrink-0" />
             <Layers className="size-4 shrink-0" />
             <span className="min-w-0 flex-1 truncate">{allLabel}</span>
-            <Count total={total} needsReview={showNeedsReview ? needsReview : 0} />
+            <Count total={total} needsReview={showNeedsReview ? needsReview : 0} comments={attention?.get('') ?? 0} />
           </RowButton>
         </li>
         {folders.map((f) => (
-          <Branch key={f.id} folder={f} depth={0} selected={selected} onSelect={onSelect} grouping={grouping} open={open} onToggle={toggle} showNeedsReview={showNeedsReview} />
+          <Branch key={f.id} folder={f} depth={0} selected={selected} onSelect={onSelect} grouping={grouping} open={open} onToggle={toggle} showNeedsReview={showNeedsReview} attention={attention} />
         ))}
       </ul>
     </nav>
@@ -122,6 +127,7 @@ function Branch({
   open,
   onToggle,
   showNeedsReview,
+  attention,
 }: {
   folder: ReviewFolder;
   depth: number;
@@ -131,6 +137,7 @@ function Branch({
   open: ReadonlySet<string>;
   onToggle: (id: string) => void;
   showNeedsReview: boolean;
+  attention?: ReadonlyMap<string, number>;
 }) {
   const active = selected === folder.id;
   const hasChildren = folder.children.length > 0;
@@ -169,13 +176,13 @@ function Branch({
         >
           <Icon className="size-4 shrink-0" />
           <span className="min-w-0 flex-1 truncate">{folder.name}</span>
-          <Count total={folder.total} needsReview={showNeedsReview ? folder.needsReview : 0} />
+          <Count total={folder.total} needsReview={showNeedsReview ? folder.needsReview : 0} comments={attention?.get(folder.id) ?? 0} />
         </button>
       </div>
       {isOpen ? (
         <ul className="flex flex-col gap-px">
           {folder.children.map((c) => (
-            <Branch key={c.id} folder={c} depth={depth + 1} selected={selected} onSelect={onSelect} grouping={grouping} open={open} onToggle={onToggle} showNeedsReview={showNeedsReview} />
+            <Branch key={c.id} folder={c} depth={depth + 1} selected={selected} onSelect={onSelect} grouping={grouping} open={open} onToggle={onToggle} showNeedsReview={showNeedsReview} attention={attention} />
           ))}
         </ul>
       ) : null}
@@ -201,7 +208,14 @@ function RowButton({ depth, active, onClick, title, children }: { depth: number;
   );
 }
 
-function Count({ total, needsReview }: { total: number; needsReview: number }) {
+function Count({ total, needsReview, comments = 0 }: { total: number; needsReview: number; comments?: number }) {
+  if (comments)
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-accent-subtle px-1.5 text-label-xs text-accent-text tabular-nums" title={`${comments} open ${comments === 1 ? 'comment' : 'comments'} · ${total} images`}>
+        <MessageSquare aria-hidden className="size-3" />
+        {formatNumber(comments)}
+      </span>
+    );
   return needsReview ? (
     <span className="rounded-full bg-warning-subtle px-1.5 text-label-xs text-warning-text tabular-nums" title={`${needsReview} of ${total} images need review`}>
       {formatNumber(needsReview)}

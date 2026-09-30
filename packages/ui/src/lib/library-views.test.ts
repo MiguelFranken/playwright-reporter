@@ -152,7 +152,9 @@ describe('views in the URL', () => {
     const toFix = BUILT_IN_VIEWS.find((v) => v.id === 'to-fix')!.config;
     expect(viewConfigFromParams(params({ sort: 'recent' }), toFix)).toEqual({ ...toFix, sort: 'recent' });
     // An emptied filter outlasts the view's.
-    expect(viewConfigFromParams(params({ state: '' }), toFix).filters.states).toEqual([]);
+    expect(viewConfigFromParams(params({ state: '-' }), toFix).filters.states).toEqual([]);
+    expect(viewConfigToParams({ ...toFix, filters: { ...toFix.filters, states: [] } }, toFix).state).toBe('-');
+    expect(viewConfigFromParams(params({ variant: '-' }), { ...toFix, variant: 'mobile' }).variant).toBeNull();
     // Unknown values are dropped, known ones kept in display order.
     expect(viewConfigFromParams(params({ state: 'verify,bogus,waiting', priority: 'low,high', group: 'nope' })).filters).toEqual({ states: ['waiting', 'verify'], priorities: ['high', 'low'] });
     expect(viewConfigFromParams(params({ group: 'nope' })).group).toBe('suite');

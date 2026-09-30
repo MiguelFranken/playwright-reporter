@@ -95,6 +95,7 @@ export function ConnectedReferenceBar({
   compareWith = null,
   runs,
   canManage,
+  now,
 }: {
   team: string;
   project: string;
@@ -105,6 +106,8 @@ export function ConnectedReferenceBar({
   compareWith?: LibraryReferenceView | null;
   runs: LibraryRunView[];
   canManage: boolean;
+  /** The instant the page was rendered at (`renderedAt()`): relative times read the same on the server and in the browser. */
+  now: string;
 }) {
   const router = useRouter();
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -122,6 +125,7 @@ export function ConnectedReferenceBar({
         onSettings={canManage ? () => setSettingsOpen(true) : undefined}
         onKeep={canManage ? () => update(current.key, { keep: true }, `${libraryRefLabel(current)} is in the library.`) : undefined}
         pending={pending}
+        now={new Date(now)}
       />
       {canManage ? (
         <ReferenceSettings projectRef={{ team, project }} reference={current} runs={runs} open={settingsOpen} onOpenChange={setSettingsOpen} onRemoved={() => router.push(`${base}/library`)} />

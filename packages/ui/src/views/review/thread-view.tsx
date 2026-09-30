@@ -44,6 +44,7 @@ export function ThreadView({
   onSetThreadStatus,
   onEditComment,
   onDeleteComment,
+  onCompareThread,
   className,
 }: ThreadViewProps) {
   const resolved = thread.status === 'resolved';
@@ -88,7 +89,17 @@ export function ThreadView({
       {thread.placement === 'outdated' ? (
         <p className="flex items-start gap-1.5 rounded-md bg-surface-sunken px-2 py-1.5 text-label-xs text-muted-foreground">
           <History aria-hidden className="mt-px size-3.5 shrink-0" />
-          Placed on {thread.originRunNumber ? `run #${thread.originRunNumber}` : 'an earlier image'}; the image changed since, so the pin may be off.
+          <span className="min-w-0 flex-1">
+            Placed on {thread.originRunNumber ? `run #${thread.originRunNumber}` : 'an earlier image'}; the image changed since, so the pin may be off.
+            {thread.origin && onCompareThread ? (
+              <>
+                {' '}
+                <button type="button" className="text-accent-text underline-offset-2 hover:underline focus-visible:underline" onClick={() => onCompareThread(thread.id)}>
+                  Compare with the version commented on
+                </button>
+              </>
+            ) : null}
+          </span>
         </p>
       ) : null}
 

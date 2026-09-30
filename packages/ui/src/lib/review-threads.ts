@@ -194,6 +194,8 @@ export interface ThreadActions {
   onSetThreadStatus?: (input: ThreadStatusInput) => void;
   onEditComment?: (input: CommentEditInput) => void;
   onDeleteComment?: (input: { commentId: string; threadId: string }) => void;
+  /** Show an outdated thread's version commented on beside the screen as it is now (the viewer does this itself). */
+  onCompareThread?: (threadId: string) => void;
 }
 
 /** The threads a list shows: `open`, `resolved` or every one. */

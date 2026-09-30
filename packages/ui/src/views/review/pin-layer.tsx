@@ -83,6 +83,7 @@ export function PinLayer({
   onSetThreadStatus,
   onEditComment,
   onDeleteComment,
+  onCompareThread,
 }: PinLayerProps) {
   const layerRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<{ start: { x: number; y: number }; end: { x: number; y: number } } | null>(null);
@@ -92,7 +93,7 @@ export function PinLayer({
   const pins = hidden ? [] : threads.filter((t) => t.anchor.kind !== 'image' && (showResolved || t.status === 'open' || t.id === openThreadId));
   const offscreen = useOffscreenPins(layerRef, pins);
   const ownDraft = draft && draft.captureId === captureId ? draft : null;
-  const threadProps = { now, viewerId, canComment, canModerate, captureId, onReply, onSetThreadStatus, onEditComment, onDeleteComment };
+  const threadProps = { now, viewerId, canComment, canModerate, captureId, onReply, onSetThreadStatus, onEditComment, onDeleteComment, onCompareThread };
 
   // Leaving comment mode drops a half-placed pin.
   useEffect(() => {

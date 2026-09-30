@@ -246,7 +246,12 @@ export function libraryCounts(flows: readonly ReviewFlowView[]) {
   return { states, priorities, comments, flows: flows.length };
 }
 
+export type LibraryCounts = ReturnType<typeof libraryCounts>;
+
 // ---------------------------------------------------------------- the URL and saved views
+
+/** An emptied filter, or every variant, in the URL: an empty value would be dropped from a query string. */
+const EMPTY = '-';
 
 /** The search params a view is written to; `view` names the saved or built-in view it started from. */
 export const LIBRARY_VIEW_PARAMS = ['view', 'state', 'priority', 'group', 'sort', 'variant'] as const;
@@ -267,24 +272,24 @@ export function viewConfigFromParams(get: (name: string) => string | null, base:
     },
     group: oneOf(LIBRARY_GROUPINGS, get('group'), base.group),
     sort: oneOf(LIBRARY_SORTS, get('sort'), base.sort),
-    variant: has('variant') ? get('variant') || null : base.variant,
+    variant: has('variant') ? (get('variant') && get('variant') !== EMPTY ? get('variant') : null) : base.variant,
   };
 }
 
 /**
  * The params that say how `config` differs from `base`, the rest cleared: a
- * view's link carries only what someone changed. An emptied filter is written
- * as an empty value, so it outlasts a view that sets one.
+ * view's link carries only what someone changed. An emptied filter (and
+ * "every variant") is written as `-`, so it outlasts a view that sets one.
  */
 export function viewConfigToParams(config: LibraryViewConfig, base: LibraryViewConfig = DEFAULT_LIBRARY_VIEW): Record<(typeof LIBRARY_VIEW_PARAMS)[number], string | null> {
   const same = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
   return {
     view: null,
-    state: same(config.filters.states, base.filters.states) ? null : config.filters.states.join(','),
-    priority: same(config.filters.priorities, base.filters.priorities) ? null : config.filters.priorities.join(','),
+    state: same(config.filters.states, base.filters.states) ? null : config.filters.states.join(',') || EMPTY,
+    priority: same(config.filters.priorities, base.filters.priorities) ? null : config.filters.priorities.join(',') || EMPTY,
     group: config.group === base.group ? null : config.group,
     sort: config.sort === base.sort ? null : config.sort,
-    variant: config.variant === base.variant ? null : (config.variant ?? ''),
+    variant: config.variant === base.variant ? null : (config.variant ?? EMPTY),
   };
 }
 
