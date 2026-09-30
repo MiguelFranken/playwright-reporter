@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.0.67](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.66...v0.0.67) (2026-09-30)
+
+### Features
+
+* **mcp:** a work list of visual feedback, explicit comparisons and image budgets ([e8aedd5](https://github.com/MiguelFranken/playwright-reporter/commit/e8aedd53b4ced1065df0e698ac42fcf3aeeefde6))
+* **reporter:** record uncommitted changes and how the executor was decided ([fdc9379](https://github.com/MiguelFranken/playwright-reporter/commit/fdc9379a8bacc1a9bc0f8b164e3c4238211d40fe))
+* **review:** close-ups of the spot a comment points at ([9692530](https://github.com/MiguelFranken/playwright-reporter/commit/9692530796f7603a0f26c08b42897f37231e85b8))
+* **review:** verify fixes comment by comment, pins on the image they were made on ([cea5c4b](https://github.com/MiguelFranken/playwright-reporter/commit/cea5c4b65f01974a560c3a12dc96d0adb1ee6eaf))
+
+### Bug Fixes
+
+* **api:** keep the re-run command's response style to its v1 values ([989727d](https://github.com/MiguelFranken/playwright-reporter/commit/989727de528d0f3a186c9bacb5716fdb7d7c1272))
+* **mcp:** anchored re-run selectors with a --list preview ([49eed5f](https://github.com/MiguelFranken/playwright-reporter/commit/49eed5f35aa824b73c196f88eadd8b3a66e7bc65))
+* **retention:** keep the default branch's library screens and the images views compare against ([#73](https://github.com/MiguelFranken/playwright-reporter/issues/73)) ([1f8d874](https://github.com/MiguelFranken/playwright-reporter/commit/1f8d874ba2b586fff1a6b3eaf2e825a0dd078304))
+
 ## [0.0.66](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.65...v0.0.66) (2026-09-30)
 
 ### Features
