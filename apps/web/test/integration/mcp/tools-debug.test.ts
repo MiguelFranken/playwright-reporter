@@ -205,13 +205,26 @@ describe.each(ERAS)('debug tools (%s)', (era) => {
       ],
     });
     const client = await mcpClient({ token: (await createPat(tenant.adminUser)).token, era });
-    const failed = (await call(client, 'get_rerun_command', {})).structuredContent as { commands: { browser: string; command: string }[] };
+    const failed = (await call(client, 'get_rerun_command', {})).structuredContent as {
+      commands: { browser: string; command: string }[];
+      tests: { testId: string; titlePath: string[]; selector: { location: string | null } }[];
+      notes: string[];
+    };
     expect(failed.commands).toEqual([
-      expect.objectContaining({ browser: 'chromium', command: 'npx playwright test tests/checkout.spec.ts:10 --project=chromium' }),
-      expect.objectContaining({ browser: 'firefox', command: 'npx playwright test tests/checkout.spec.ts:10 --project=firefox' }),
+      expect.objectContaining({
+        browser: 'chromium',
+        command: "npx playwright test '(^|/)tests/checkout\\.spec\\.ts$:10' --project=chromium",
+        listCommand: "npx playwright test '(^|/)tests/checkout\\.spec\\.ts$:10' --project=chromium --list",
+        expected: 1,
+      }),
+      expect.objectContaining({ browser: 'firefox', command: "npx playwright test '(^|/)tests/checkout\\.spec\\.ts$:10' --project=firefox", expected: 1 }),
     ]);
+    expect(failed.tests[0]).toMatchObject({ testId: expect.any(String), titlePath: expect.any(Array), selector: { location: 'tests/checkout.spec.ts:10' } });
+    expect(failed.notes).toEqual(expect.arrayContaining([expect.stringContaining('listCommand')]));
     const flaky = (await call(client, 'get_rerun_command', { run: 1, scope: 'flaky', repeat: 10 })).structuredContent as { commands: { command: string }[] };
-    expect(flaky.commands[0].command).toBe('npx playwright test tests/x.spec.ts:10 --project=chromium --repeat-each=10 --retries=0');
+    expect(flaky.commands[0].command).toBe("npx playwright test '(^|/)tests/x\\.spec\\.ts$:10' --project=chromium --repeat-each=10 --retries=0");
+    const titles = (await call(client, 'get_rerun_command', { run: 1, style: 'titles', launcher: 'pnpm test:e2e --' })).structuredContent as { commands: { style: string; command: string }[] };
+    expect(titles.commands[0]).toMatchObject({ style: 'titles', command: expect.stringMatching(/^pnpm test:e2e -- '\(\^\|\/\)tests\/checkout\\\.spec\\\.ts\$' --grep /) });
   });
 
   test('get_artifact: an inline screenshot, a trace link, and expiry', async ({ tenant, storage }) => {
@@ -248,7 +261,11 @@ describe.each(ERAS)('debug tools (%s)', (era) => {
     await regression(tenant);
     const client = await mcpClient({ token: (await createPat(tenant.adminUser)).token, era });
     const { prompts } = await client.listPrompts();
-    expect(prompts.map((p) => p.name)).toEqual(['triage_run', 'debug_test', 'investigate_flake', 'branch_check', 'organize_tests']);
+    expect(prompts.map((p) => p.name)).toEqual(['triage_run', 'debug_test', 'investigate_flake', 'branch_check', 'fix_visual_feedback', 'organize_tests']);
+    const fix = await client.getPrompt({ name: 'fix_visual_feedback', arguments: { branch: 'feature/sessions' } });
+    const fixText = (fix.messages[0].content as { text: string }).text;
+    expect(fixText).toContain('list_feedback_requests with branch "feature/sessions"');
+    expect(fixText).toContain('Do not post replies');
     const prompt = await client.getPrompt({ name: 'debug_test', arguments: { test: 'checkout works', run: '#3' } });
     expect((prompt.messages[0].content as { text: string }).text).toContain('get_failure_context');
 

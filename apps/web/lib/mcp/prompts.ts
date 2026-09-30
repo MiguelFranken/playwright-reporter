@@ -57,6 +57,27 @@ export const PROMPTS: PromptDef[] = [
       `Compare the branch "${a.branch}"${scope(a)} against the base branch with the playwright-reporter tools: call compare_runs with branch "${a.branch}". Summarise new failures, new flakes, fixes and slowdowns, call get_failure_context for any new failure that is not obvious, and give a go / no-go with reasons.`,
   },
   {
+    name: 'fix_visual_feedback',
+    title: 'Fix visual feedback',
+    description: 'Work through every open request on a branch’s screenshots: trace each to its code, fix it, re-run only the producing tests, and check the new images against the originals.',
+    args: z.object({
+      project,
+      branch: z.string().optional().describe('The branch the work is on (the library reference). Give it: a default may be another branch.'),
+      pullRequest: z.string().optional().describe('A pull request number instead of a branch.'),
+      reply: z.string().optional().describe('"yes" to reply on each thread with what changed. Default: propose replies in the report, post nothing.'),
+    }),
+    text: (a) => {
+      const ref = a.pullRequest ? `pullRequest ${a.pullRequest}` : a.branch ? `branch "${a.branch}"` : 'the branch of this checkout (ask me if unsure — do not rely on a default)';
+      return `Fix the open visual feedback${scope(a)} on ${ref} with the playwright-reporter tools, in this workspace.
+1. Work list. Call list_feedback_requests with ${ref}${a.project ? ` and project "${a.project}"` : ''}, following nextCursor to the end. It covers screens a partial run skipped and change requests without a comment. Write down every request (requestId, test, checkpoint key, variant, current and original capture, the conversation) before changing anything, and keep each one in the list until the end, even if it stops appearing.
+2. Evidence. For each request, get_review_checkpoint with its capture, thread and against "origin" (images "focus" for a tall page), and read the whole conversation. A request without a comment: look at the image to see what should change; ask me only if it stays ambiguous, and keep fixing the others meanwhile. Pixel coordinates are the image’s, not CSS pixels; a pin carried over from an earlier image may be off.
+3. Code. Search the spec for the checkpoint key, follow its setup into the route, component or template and shared primitives, and fix the owner. Keep test titles and checkpoint keys. Change a test only when it misrepresents correct behaviour.
+4. Re-run only the producing tests (list_feedback_requests "producers"), with this repository’s own launcher. Preview the selection with --list and check the titles and count against the producers before running; get_rerun_command gives anchored selectors and a preview.
+5. Verify. With the uploaded run: get_run for its counts and artifacts, list_review_checkpoints with status "all", then for each request get_review_checkpoint of the new capture against the original (againstCapture) in every variant. Keep four results apart: test passed, image stored, change made as asked, approved by a person. A passed test, a changed image or an "outdated" thread is not an approval — and verify_fix judges test behaviour, not visual requests.
+6. Hand-off. Report every initial request: its cause and fix, producing test, links to the original and the new image in the app, and your verdict. Do not resolve threads, approve images or change library settings.${a.reply === 'yes' ? ' Reply on each thread with comment_on_review saying what changed.' : ' Do not post replies: include the reply you would post for each thread in the report.'}`;
+    },
+  },
+  {
     name: 'organize_tests',
     title: 'Organize tests into test cases',
     description: 'Sort the Playwright tests no test case covers yet into existing or new cases and suites.',

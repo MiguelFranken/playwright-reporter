@@ -250,6 +250,12 @@ export interface ReviewCaptureView {
   baseline?: { captureId: string; image: ReviewImage; runNumber: number | null; same: boolean; approvedAt: string; approvedBy?: string | null } | null;
   /** The same checkpoint and variant in the run before, for a comparison without an approval. */
   previous?: { captureId: string; image: ReviewImage; runNumber: number; same: boolean } | null;
+  /**
+   * "Changes requested" on this checkpoint and variant without a comment — so
+   * no thread says what — still standing: on these pixels (`onThisImage`), or
+   * on an earlier image this one replaced, which is then to be checked.
+   */
+  request?: { by?: string | null; at: string; runNumber?: number | null; captureId?: string | null; onThisImage: boolean } | null;
   /** Another line of work's capture of the same screen, when the library compares two. */
   compare?: { captureId: string; image: ReviewImage; label: string; same: boolean } | null;
   /** How the image differs from the one the viewer compares it with, when measured. */

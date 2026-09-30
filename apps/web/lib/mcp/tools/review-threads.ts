@@ -198,7 +198,7 @@ export const commentOnReview = defineTool({
   title: 'Comment on a review image',
   toolset: 'write',
   description:
-    'Pin a comment thread on a review image — at a spot or an area (in percent of the image), or about the whole image — or reply to a thread by its number. Say what should change and where, as a reviewer would; after fixing one, reply with what you did. Shown to people in the review viewer.',
+    'Pin a comment thread on a review image — at a spot or an area (in percent of the image), or about the whole image — or reply to a thread by its number. Say what should change and where, as a reviewer would. Reply to report a fix only when the user asked you to — a write-scoped token is not that permission. Shown to people in the review viewer.',
   input: commentInput,
   output: commentOutput,
   annotations: WRITE,

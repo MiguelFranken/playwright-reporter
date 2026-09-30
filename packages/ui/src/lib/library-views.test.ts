@@ -60,6 +60,12 @@ describe('where a screen stands', () => {
     expect([...captureStates(cap('a', { threads: [thread(1, 'exact'), thread(2, 'outdated')] }))]).toEqual(['waiting', 'verify']);
   });
 
+  test('changes requested without a comment stay open once a new image replaces the one asked about', () => {
+    const asked = { at: '2026-09-30T10:00:00.000Z', runNumber: 59 };
+    expect([...captureStates({ ...cap('a', { status: 'changes_requested' }), request: { ...asked, onThisImage: true } })]).toEqual(['waiting']);
+    expect(captureStates({ ...cap('a', { status: 'changed' }), request: { ...asked, onThisImage: false } }).has('verify')).toBe(true);
+  });
+
   test('a change request waits without a comment; resolved threads are not feedback', () => {
     expect([...captureStates(cap('a', { status: 'changes_requested' }))]).toEqual(['waiting']);
     expect([...captureStates(cap('a', { threads: [thread(1, 'exact', 'resolved')] }))]).toEqual(['approved']);

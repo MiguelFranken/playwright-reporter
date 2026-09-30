@@ -50,6 +50,11 @@ export interface ToolRoute {
   omitOutput?: string[];
   /** Tools like `whoami` are not about one project. Default true. */
   projectScoped?: boolean;
+  /**
+   * Arguments the endpoint always passes, and does not offer: e.g. no inline
+   * images, which a JSON answer never carries, so none are read and encoded.
+   */
+  fixedArgs?: Record<string, unknown>;
 }
 
 function without(schema: z.ZodObject, keys: string[]): z.ZodObject {
@@ -59,7 +64,7 @@ function without(schema: z.ZodObject, keys: string[]): z.ZodObject {
 
 export function toolInput(tool: ToolDef, route: ToolRoute): z.ZodObject {
   const scoped = route.projectScoped ?? true;
-  return without(tool.input, [...MCP_ONLY, ...Object.values(route.rename ?? {}), ...(route.omit ?? [])]).extend({
+  return without(tool.input, [...MCP_ONLY, ...Object.values(route.rename ?? {}), ...(route.omit ?? []), ...Object.keys(route.fixedArgs ?? {})]).extend({
     ...(scoped ? { team: teamParam, project: projectSlugParam } : {}),
     ...route.params,
   });
@@ -100,7 +105,7 @@ export function fromTool(tool: ToolDef, route: ToolRoute) {
         rest[to] = rest[from];
         delete rest[from];
       }
-      const args = scoped ? { ...rest, project: `${team}/${project}` } : rest;
+      const args = { ...(scoped ? { ...rest, project: `${team}/${project}` } : rest), ...route.fixedArgs };
       // Loaded per call: the access layer is server-only, and the spec generator
       // (`scripts/gen-openapi.ts`) imports this router outside Next.js.
       const { createToolContext } = await import('@/lib/mcp/context');

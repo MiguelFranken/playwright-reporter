@@ -23,7 +23,7 @@ also accepts `project`, `format` (`markdown` | `json`) and `maxChars`. See the R
 | [`compare_runs`](#compare_runs) | debug | What changed between two runs, or between a branch and its base branch: new failures, fixed tests, new flakes, still failing (same or different error), added and removed tests, and tests that got much slower. |
 | [`verify_fix`](#verify_fix) | debug | After a fix landed: did later runs fix the test? Give the test and the run it failed in. |
 | [`get_artifact`](#get_artifact) | debug | The contents of one test attachment: screenshots and visual diffs as images you can look at, text attachments inline, traces and videos as short-lived links (with a trace-viewer link and a local show-trace command). |
-| [`get_rerun_command`](#get_rerun_command) | debug | The exact "npx playwright test …" command that re-runs a run’s failed and/or flaky tests on the same browser projects, one command per project. |
+| [`get_rerun_command`](#get_rerun_command) | debug | The exact "npx playwright test …" command that re-runs a run’s failed and/or flaky tests on the same browser projects, one command per project, with a --list preview and the number of tests it should list. |
 | [`list_test_suites`](#list_test_suites) | core | The project's test case suites as a tree, with how many cases each holds. |
 | [`list_test_cases`](#list_test_cases) | core | Search and filter the manual and automated test cases of a project: by suite, status, priority, automation, tag, or what their linked Playwright tests say (failing, flaky, stale). |
 | [`get_test_case`](#get_test_case) | core | One test case in full: description, conditions, steps, classification, custom fields, and the Playwright tests linked to it with their latest result and last 30 days. |
@@ -35,8 +35,9 @@ also accepts `project`, `format` (`markdown` | `json`) and `maxChars`. See the R
 | [`delete_test_suite`](#delete_test_suite) | write | Delete suites that hold no test cases, e.g. |
 | [`link_test_case`](#link_test_case) | write | Link Playwright tests (by test id from find_tests) to a test case, or unlink them. |
 | [`adopt_tests`](#adopt_tests) | write | Turn Playwright tests into test cases already linked to them: steps from their test.step() calls, one case per test across browsers. |
+| [`list_feedback_requests`](#list_feedback_requests) | core | Start here to fix a product from visual feedback: every open request for a change on its screenshots — comment threads and "changes requested" without a comment — one record each, with the producing test (id, full title, file, browser), the checkpoint key, the image now and the one the request was made on, the whole conversation, and whether it waits for a fix or changed since (verify). |
 | [`list_review_checkpoints`](#list_review_checkpoints) | core | A run's review checkpoints — the named screenshots its tests capture at their milestones, per variant (desktop, mobile) — in journey order, with each image's review status (changed against its approved baseline, new, approved or changes requested) its open comment threads, and its measured pixel change: how much of the image changed, in how many regions, whether the page changed size or its content moved. |
-| [`get_review_checkpoint`](#get_review_checkpoint) | core | One review checkpoint image to look at, with its approved baseline (or the previous run’s capture) beside it, the measured change (changed pixels, regions in image pixels) and close-ups of the largest changed regions, so you can say what changed. |
+| [`get_review_checkpoint`](#get_review_checkpoint) | core | One review checkpoint image to look at, beside the image it is compared with — the one a request was made on (against "origin"), the approved baseline, or the run before — with the measured change and close-ups of the largest changed regions. |
 | [`review_checkpoint`](#review_checkpoint) | write | Approve review checkpoint images, or ask for changes — with a comment, and on one image with pins that mark each change where it is. |
 | [`list_review_threads`](#list_review_threads) | core | The comment threads people (or assistants) pinned on a run’s review images — change requests at a spot or an area of a screenshot — per image, by the number on the pin, with where each points (pixels, percent, CSS pixels) and the conversation. |
 | [`comment_on_review`](#comment_on_review) | write | Pin a comment thread on a review image — at a spot or an area (in percent of the image), or about the whole image — or reply to a thread by its number. |
@@ -114,7 +115,7 @@ One run in detail: status, git and CI context, counts, the top failure groups by
 | `environment` | string |  | Environment label the reporter sent, e.g. "staging". |
 | `include` | `"failures"` \| `"specs"` \| `"shards"` \| `"metadata"`[] |  | Extra sections: failures (default), specs, shards, metadata. |
 
-Structured output fields: `project`, `run`, `failureGroups`, `specs`, `shards`, `metadata`, `neighbours`, `truncated`.
+Structured output fields: `project`, `run`, `failureGroups`, `specs`, `shards`, `metadata`, `neighbours`, `provenance`, `artifacts`, `truncated`.
 
 ## list_run_results
 
@@ -355,7 +356,7 @@ Structured output fields: `project`, `attachment`, `resultUrl`, `delivered`, `ur
 
 **Get re-run command** · toolset `debug`
 
-The exact "npx playwright test …" command that re-runs a run’s failed and/or flaky tests on the same browser projects, one command per project. Read-only: it prints the command and never starts a run.
+The exact "npx playwright test …" command that re-runs a run’s failed and/or flaky tests on the same browser projects, one command per project, with a --list preview and the number of tests it should list. Read-only: it prints the command and never starts a run.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -366,8 +367,9 @@ The exact "npx playwright test …" command that re-runs a run’s failed and/or
 | `scope` | `"failed"` \| `"flaky"` \| `"failed-and-flaky"` |  | Which tests (default failed, which includes timed out). |
 | `tests` | string[] |  | Exactly these test or result ids of the run; overrides scope. |
 | `browser` | string |  | Playwright project name, e.g. "chromium" (see list_filters). |
-| `style` | `"locations"` \| `"grep"` |  | Select tests by file:line (default) or by --grep on titles. |
+| `style` | `"locations"` \| `"titles"` \| `"grep"` |  | Select tests by file:line from the reported run (default), or by "titles": anchored file filters plus a --grep anchored on each test’s file and full title, which survives moved lines. "grep" is the same title selection. Titles are chosen automatically when a line is unknown. |
 | `repeat` | integer (2–100) |  | Add --repeat-each=N --retries=0, e.g. to reproduce a flake. |
+| `launcher` | string |  | The command prefix your repository runs Playwright with, used instead of "npx playwright test", e.g. "pnpm test:e2e --". Printed as given. |
 
 Structured output fields: `project`, `run`, `selected`, `commands`, `tests`, `notes`, `truncated`.
 
@@ -596,6 +598,28 @@ Turn Playwright tests into test cases already linked to them: steps from their t
 
 Structured output fields: `created`, `skipped`, `message`, `truncated`.
 
+## list_feedback_requests
+
+**List open visual feedback requests** · toolset `core`
+
+Start here to fix a product from visual feedback: every open request for a change on its screenshots — comment threads and "changes requested" without a comment — one record each, with the producing test (id, full title, file, browser), the checkpoint key, the image now and the one the request was made on, the whole conversation, and whether it waits for a fix or changed since (verify). Library scope by default, so screens a partial run skipped are included. Paged; counts cover all pages.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+| `branch` | string |  | The library reference: a branch, e.g. "feature/workshop-sessions". Pass the branch the work is on — do not rely on a default. |
+| `pullRequest` | integer (–9007199254740991) |  | The library reference: a pull (merge) request number, instead of a branch. |
+| `run` | integer (–9007199254740991) \| string |  | One run instead of the library (only its own captures: a partial run leaves screens out). |
+| `stage` | `"all"` \| `"waiting"` \| `"verify"` |  | waiting: the image is still the one the request was made on. verify: it changed since — check it. Default all. |
+| `test` | string |  | Part of a test title or file, to narrow the list. |
+| `variant` | string |  | Only this variant, e.g. "desktop" or "mobile". |
+| `limit` | integer (1–200) |  | Requests per page (1–200, default 50). |
+| `cursor` | string |  | Opaque cursor from a previous response, for the next page. Keep the other filters unchanged. |
+
+Structured output fields: `project`, `scope`, `pinnedRun`, `latestRun`, `counts`, `requests`, `producers`, `nextCursor`, `notes`, `truncated`.
+
 ## list_review_checkpoints
 
 **List review checkpoints** · toolset `core`
@@ -619,22 +643,26 @@ Structured output fields: `project`, `run`, `reviewUrl`, `counts`, `tests`, `tru
 
 **Get a review checkpoint** · toolset `core`
 
-One review checkpoint image to look at, with its approved baseline (or the previous run’s capture) beside it, the measured change (changed pixels, regions in image pixels) and close-ups of the largest changed regions, so you can say what changed. Open comment threads are drawn on the image as numbered pins, a close-up per pin follows, and the threads are listed by the same numbers. Large images are scaled to fit.
+One review checkpoint image to look at, beside the image it is compared with — the one a request was made on (against "origin"), the approved baseline, or the run before — with the measured change and close-ups of the largest changed regions. Open comment threads are drawn as numbered pins, a close-up per pin follows, and the threads are listed by the same numbers. images "focus" with a thread attaches just that spot, then and now: readable on tall pages, and small. Each attached image is described in attachedImages.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
 | `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
 | `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
-| `capture` | string | yes | Capture id, from list_review_checkpoints. |
-| `compare` | boolean |  | Also attach the approved baseline image (or the previous run’s) to compare with. Default true. |
-| `changes` | boolean |  | Attach close-ups of the measured changed regions (up to 3), this run’s crop then the reference’s. Default true. |
+| `capture` | string | yes | Capture id, from list_review_checkpoints, list_feedback_requests or list_review_threads. |
+| `against` | `"auto"` \| `"origin"` \| `"baseline"` \| `"previous"` |  | What to compare with. origin: the image the focused thread (or a change request without a comment) was made on — what the request was about. baseline: the approved image. previous: the same checkpoint in the run before. auto (default): origin for a focused thread made on an earlier image, else the baseline, else the previous capture. |
+| `againstCapture` | string |  | Compare with this capture id instead (any capture of the project), e.g. an original from list_feedback_requests. |
+| `compare` | boolean |  | Attach the image compared with. Default true. |
+| `images` | `"all"` \| `"focus"` \| `"none"` |  | all (default): the full images, then close-ups. focus: close-ups only — the focused thread on this image and on the one compared with (or the changed regions) — readable on tall pages and small. none: text only. |
+| `maxImages` | integer (1–12) |  | At most this many images (default 8); the rest are listed as omitted. |
+| `changes` | boolean |  | Attach close-ups of the measured changed regions (up to 3), this image’s crop then the reference’s. Default true. |
 | `pins` | boolean |  | Draw the open comment threads on the image as numbered pins. Default true. |
-| `thread` | integer (–9007199254740991) |  | Focus one comment thread by its number: its close-up is attached (and its pin drawn even if resolved). |
+| `thread` | integer (–9007199254740991) |  | Focus one comment thread by its number: its close-up is attached — on this image and on the one compared with — and its pin drawn even if resolved. |
 | `pinCrops` | boolean |  | Attach a close-up around each pin. Default: when at most 6 threads are open. |
 | `includeResolved` | boolean |  | Also list (and pin) resolved threads. Default false. |
 
-Structured output fields: `project`, `captureId`, `test`, `checkpoint`, `variant`, `run`, `status`, `viewport`, `sameAsReference`, `reference`, `imageUrl`, `referenceUrl`, `diff`, `changedRegions`, `note`, `image`, `annotatedImageUrl`, `reviewUrl`, `threads`, `attachments`, `truncated`.
+Structured output fields: `project`, `captureId`, `test`, `checkpoint`, `variant`, `run`, `status`, `viewport`, `sameAsReference`, `reference`, `imageUrl`, `referenceUrl`, `comparison`, `diff`, `changedRegions`, `note`, `image`, `annotatedImageUrl`, `reviewUrl`, `request`, `threads`, `attachments`, `attachedImages`, `omittedImages`, `truncated`.
 
 ## review_checkpoint
 
@@ -681,7 +709,7 @@ Structured output fields: `project`, `run`, `reference`, `counts`, `images`, `tr
 
 **Comment on a review image** · toolset `write` · **writes**
 
-Pin a comment thread on a review image — at a spot or an area (in percent of the image), or about the whole image — or reply to a thread by its number. Say what should change and where, as a reviewer would; after fixing one, reply with what you did. Shown to people in the review viewer.
+Pin a comment thread on a review image — at a spot or an area (in percent of the image), or about the whole image — or reply to a thread by its number. Say what should change and where, as a reviewer would. Reply to report a fix only when the user asked you to — a write-scoped token is not that permission. Shown to people in the review viewer.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -778,6 +806,7 @@ Structured output fields: `project`, `reference`, `kept`, `url`, `truncated`.
 | `debug_test` | `project?`, `test`, `run?` | Find out why one test fails and what change fixes it, then how to confirm the fix. |
 | `investigate_flake` | `project?`, `test` | Decide whether a test is flaky or broken, classify the defect, and propose a stabilisation. |
 | `branch_check` | `project?`, `branch` | Compare a branch’s latest run with the base branch and get a go / no-go. |
+| `fix_visual_feedback` | `project?`, `branch?`, `pullRequest?`, `reply?` | Work through every open request on a branch’s screenshots: trace each to its code, fix it, re-run only the producing tests, and check the new images against the originals. |
 | `organize_tests` | `project?`, `search?` | Sort the Playwright tests no test case covers yet into existing or new cases and suites. |
 
 ## Resources

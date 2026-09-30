@@ -793,6 +793,20 @@ export function CheckpointViewer({
                   ) : null}
                   {pos.checkpoint.description ? <p className="text-sm text-pretty">{pos.checkpoint.description}</p> : null}
                   {current?.decision ? <DecisionNote capture={current} /> : null}
+                  {current?.request ? (
+                    <ChangeRequestNote
+                      request={current.request}
+                      onPin={canComment ? () => toggleCommenting(true) : undefined}
+                      onCompare={
+                        !current.request.onThisImage && reference && reference.captureId === current.request.captureId
+                          ? () => {
+                              setVerifying(false);
+                              setStage('side-by-side');
+                            }
+                          : undefined
+                      }
+                    />
+                  ) : null}
                   {current && reference && diff && !reference.same ? (
                     <DiffSummary diff={diff} referenceLabel={reference.label} />
                   ) : current && reference ? (
@@ -1039,6 +1053,37 @@ function DecisionNote({ capture }: { capture: ReviewCaptureView }) {
       </p>
       {/* A change request's comment lives on as a thread below. */}
       {d.comment && d.decision === 'approved' ? <p className="mt-1 text-sm text-pretty whitespace-pre-wrap">{d.comment}</p> : null}
+    </div>
+  );
+}
+
+/**
+ * "Changes requested" without a comment: nobody said what, and no thread
+ * carries it — so it is spelled out here, on the image asked about (pin what
+ * should change) and on a newer one (compare it with the image asked about).
+ */
+function ChangeRequestNote({ request, onPin, onCompare }: { request: NonNullable<ReviewCaptureView['request']>; onPin?: () => void; onCompare?: () => void }) {
+  const who = `${request.by ?? 'Someone'}${request.runNumber ? ` (run #${request.runNumber})` : ''}`;
+  return (
+    <div role="note" className={cn('flex flex-col gap-2 rounded-md border p-2.5 text-xs', request.onThisImage ? 'border-danger-border bg-danger-subtle text-danger-text' : 'border-info-border bg-info-subtle text-info-text')}>
+      <p className="flex items-start gap-1.5">
+        {request.onThisImage ? <MessageSquareWarning aria-hidden className="mt-px size-3.5 shrink-0" /> : <History aria-hidden className="mt-px size-3.5 shrink-0" />}
+        <span>
+          {request.onThisImage
+            ? `${who} asked for changes to this image without saying what.`
+            : `${who} asked for changes to an earlier version of this screen, without a comment. It changed since: check whether it is what was asked.`}
+        </span>
+      </p>
+      {request.onThisImage && onPin ? (
+        <Button size="xs" variant="outline" className="self-start bg-surface" onClick={onPin}>
+          Pin what should change
+        </Button>
+      ) : null}
+      {!request.onThisImage && onCompare ? (
+        <Button size="xs" variant="outline" className="self-start bg-surface" onClick={onCompare}>
+          Compare with the version asked about
+        </Button>
+      ) : null}
     </div>
   );
 }
