@@ -31,7 +31,7 @@ export const Slider: Story = {
     await waitFor(() => expect(handle).toHaveAttribute('aria-valuenow', '10'));
 
     // Dragging from a quarter of the way to three quarters leaves the split there.
-    const surface = handle.parentElement!;
+    const surface = handle.closest<HTMLElement>('[data-slot="compare-surface"]')!;
     const r = surface.getBoundingClientRect();
     const y = r.top + r.height / 2;
     await userEvent.pointer([

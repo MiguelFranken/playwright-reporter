@@ -114,7 +114,8 @@ const clampSplit = (v: number) => Math.min(100, Math.max(0, v));
 
 /**
  * The reference with this run's image over it, split at a line you drag —
- * anywhere on the images, or the line's handle with the keyboard. The split
+ * anywhere on the images, or the line's handle with the keyboard. The labels
+ * and the handle stay in view while a tall capture scrolls. The split
  * eases toward the pointer in one `requestAnimationFrame` loop (`useGlide`)
  * that writes a CSS variable, so dragging renders nothing; the handle's value
  * is rendered once the split comes to rest.
@@ -137,7 +138,8 @@ function SplitCompare({ current, reference, currentLabel, referenceLabel, alt }:
   return (
     <div
       ref={root}
-      className="relative cursor-ew-resize touch-pan-y overflow-hidden rounded-md border border-border bg-surface select-none"
+      data-slot="compare-surface"
+      className="relative cursor-ew-resize touch-pan-y overflow-clip rounded-md border border-border bg-surface select-none"
       style={{ '--split': `${split}%` } as React.CSSProperties}
       onPointerDown={(e) => {
         if (e.button !== 0) return;
@@ -151,40 +153,43 @@ function SplitCompare({ current, reference, currentLabel, referenceLabel, alt }:
       onPointerUp={end}
       onPointerCancel={end}
     >
+      {/* Stays in view while the images scroll under it: which side is which, and the handle. */}
+      <div className="pointer-events-none sticky top-0 z-10 h-0">
+        <span aria-hidden className="pointer-events-none absolute top-2 left-2 rounded-md bg-background/85 px-1.5 py-0.5 text-label-xs text-muted-foreground shadow-e1 backdrop-blur">
+          {referenceLabel}
+        </span>
+        <span aria-hidden className="pointer-events-none absolute top-2 right-2 rounded-md bg-background/85 px-1.5 py-0.5 text-label-xs text-muted-foreground shadow-e1 backdrop-blur">
+          {currentLabel}
+        </span>
+        <div
+          role="slider"
+          tabIndex={0}
+          data-slot="compare-split"
+          aria-label="Split position"
+          aria-orientation="horizontal"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(split)}
+          aria-valuetext={`${Math.round(split)}% ${referenceLabel}, ${100 - Math.round(split)}% ${currentLabel}`}
+          className="pointer-events-auto absolute top-10 left-(--split) flex size-7 -translate-x-1/2 items-center justify-center rounded-full border border-accent-border bg-background text-accent-text shadow-e2 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
+          onKeyDown={(e) => {
+            const n = SPLIT_KEYS[e.key];
+            const to = e.key === 'Home' ? 0 : e.key === 'End' ? 100 : n ? clampSplit(Math.round(glide.target() + n * (e.shiftKey && Math.abs(n) === 1 ? 10 : 1))) : null;
+            if (to === null) return;
+            e.preventDefault();
+            glide.to(to, GLIDE_MS.jump);
+          }}
+        >
+          <svg aria-hidden viewBox="0 0 16 16" className="size-3.5 fill-current">
+            <path d="M6 4 2 8l4 4zM10 4l4 4-4 4z" />
+          </svg>
+        </div>
+      </div>
       <Picture image={reference} alt={`${alt} — ${referenceLabel}`} />
       <div className="absolute inset-0 [clip-path:inset(0_0_0_var(--split))]">
         <Picture image={current} alt={`${alt} — ${currentLabel}`} />
       </div>
-      <span aria-hidden className="pointer-events-none absolute top-2 left-2 rounded-md bg-background/85 px-1.5 py-0.5 text-label-xs text-muted-foreground shadow-e1 backdrop-blur">
-        {referenceLabel}
-      </span>
-      <span aria-hidden className="pointer-events-none absolute top-2 right-2 rounded-md bg-background/85 px-1.5 py-0.5 text-label-xs text-muted-foreground shadow-e1 backdrop-blur">
-        {currentLabel}
-      </span>
       <div aria-hidden className="pointer-events-none absolute inset-y-0 left-(--split) w-0.5 -translate-x-1/2 bg-accent-solid shadow-e2" />
-      <div
-        role="slider"
-        tabIndex={0}
-        data-slot="compare-split"
-        aria-label="Split position"
-        aria-orientation="horizontal"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={Math.round(split)}
-        aria-valuetext={`${Math.round(split)}% ${referenceLabel}, ${100 - Math.round(split)}% ${currentLabel}`}
-        className="absolute top-10 left-(--split) flex size-7 -translate-x-1/2 items-center justify-center rounded-full border border-accent-border bg-background text-accent-text shadow-e2 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
-        onKeyDown={(e) => {
-          const n = SPLIT_KEYS[e.key];
-          const to = e.key === 'Home' ? 0 : e.key === 'End' ? 100 : n ? clampSplit(Math.round(glide.target() + n * (e.shiftKey && Math.abs(n) === 1 ? 10 : 1))) : null;
-          if (to === null) return;
-          e.preventDefault();
-          glide.to(to, GLIDE_MS.jump);
-        }}
-      >
-        <svg aria-hidden viewBox="0 0 16 16" className="size-3.5 fill-current">
-          <path d="M6 4 2 8l4 4zM10 4l4 4-4 4z" />
-        </svg>
-      </div>
     </div>
   );
 }
