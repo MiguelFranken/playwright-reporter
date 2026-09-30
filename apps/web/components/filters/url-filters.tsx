@@ -3,12 +3,14 @@
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useState, useTransition } from 'react';
 import {
+  FilterMultiSelect,
   FilterSelect,
   FilterSelectSkeleton,
   RangeToggle,
   RangeToggleSkeleton,
   SearchField,
   SearchFieldSkeleton,
+  type FilterMultiSelectProps,
   type FilterSelectProps,
   type RangeToggleProps,
   type SearchFieldProps,
@@ -134,6 +136,22 @@ function UrlSelectInner({ param, ...rest }: UrlSelectProps) {
       onValueChange={(next) => set({ [param]: next })}
     />
   );
+}
+
+type UrlMultiSelectProps = Omit<FilterMultiSelectProps, 'value' | 'onValueChange' | 'isPending'> & { param: string };
+
+/** A filter that takes several values, as the param repeated: `?priority=critical&priority=high`. */
+export function UrlMultiSelect(props: UrlMultiSelectProps) {
+  return (
+    <Suspense fallback={<FilterSelectSkeleton className={props.className} />}>
+      <UrlMultiSelectInner {...props} />
+    </Suspense>
+  );
+}
+
+function UrlMultiSelectInner({ param, ...rest }: UrlMultiSelectProps) {
+  const { params, set, isPending } = useUrlParams();
+  return <FilterMultiSelect {...rest} value={params.getAll(param)} isPending={isPending} onValueChange={(next) => set({ [param]: next })} />;
 }
 
 type UrlSearchProps = Omit<SearchFieldProps, 'value' | 'onValueChange' | 'isPending'> & { param?: string };

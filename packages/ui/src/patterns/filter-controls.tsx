@@ -103,6 +103,80 @@ export function FilterSelect({
   );
 }
 
+export interface FilterMultiSelectProps {
+  /** The selected values; empty means the filter is off. */
+  value: readonly string[];
+  onValueChange: (next: string[]) => void;
+  options: { value: string; label: string }[];
+  placeholder: string;
+  /** Label of the option that clears the filter, and of the trigger while nothing is picked. */
+  allLabel?: string;
+  isPending?: boolean;
+  className?: string;
+}
+
+/** The `all` item stands for an empty selection: it shows checked then, and picking it clears the rest. */
+const ALL = 'all';
+
+/**
+ * A filter that takes any number of its options at once — `Critical, High` —
+ * in the same trigger as `FilterSelect`, so a bar can mix both. The list stays
+ * open while options are toggled; the "All" item clears them.
+ */
+export function FilterMultiSelect({
+  value,
+  onValueChange,
+  options,
+  placeholder,
+  allLabel = 'All',
+  isPending,
+  className,
+}: FilterMultiSelectProps) {
+  const items = [{ value: ALL, label: allLabel }, ...options];
+  const labelOf = (v: string) => options.find((o) => o.value === v)?.label ?? v;
+  const selected = value.length ? [...value] : [ALL];
+  return (
+    <Select
+      multiple
+      items={items}
+      value={selected}
+      onValueChange={(next) => {
+        const picked = next as string[];
+        // "All" picked on top of a selection clears it; anything picked on top of "All" replaces it.
+        if (picked.includes(ALL) && !selected.includes(ALL)) onValueChange([]);
+        else onValueChange(picked.filter((v) => v !== ALL));
+      }}
+    >
+      <SelectTrigger
+        className={cn('min-w-40', isPending && 'pending overflow-hidden', className)}
+        aria-label={placeholder}
+        aria-busy={isPending || undefined}
+      >
+        <SelectValue placeholder={placeholder}>
+          {() =>
+            value.length === 0 ? (
+              allLabel
+            ) : (
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className="truncate">{value.length === 1 ? labelOf(value[0]!) : `${labelOf(value[0]!)}, ${labelOf(value[1]!)}`}</span>
+                {value.length > 2 ? <span className="shrink-0 rounded-full bg-accent-subtle px-1.5 text-label-xs text-accent-text tabular-nums">+{value.length - 2}</span> : null}
+              </span>
+            )
+          }
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent className="min-w-48">
+        <SelectItem value={ALL}>{allLabel}</SelectItem>
+        {options.map((o) => (
+          <SelectItem key={o.value} value={o.value}>
+            {o.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 export function FilterSelectSkeleton({ className }: { className?: string }) {
   return <Skeleton className={cn('h-9 min-w-40 rounded-lg', className)} />;
 }

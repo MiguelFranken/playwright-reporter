@@ -56,7 +56,7 @@ const NOTHING_PENDING: ReadonlySet<string> = new Set();
  * Where the flows on screen stand, as one strip of four toggles that each
  * filter the library to one step of the review loop: what waits for
  * changes, what is ready to verify, what nobody reviewed, what changed since
- * the last capture.
+ * the last capture. They add up: two pressed show the flows in either state.
  */
 export function LibrarySummary({ counts, states, onToggle }: { counts: LibraryCounts; states: readonly LibraryState[]; onToggle: (state: LibraryState) => void }) {
   return (
@@ -259,7 +259,7 @@ export function LibraryBrowser({
     }
   };
   const toggleState = (state: LibraryState) =>
-    setConfig({ ...config, filters: { ...config.filters, states: config.filters.states.includes(state) ? config.filters.states.filter((s) => s !== state) : [state] } });
+    setConfig({ ...config, filters: { ...config.filters, states: config.filters.states.includes(state) ? config.filters.states.filter((s) => s !== state) : [...config.filters.states, state] } });
 
   if (flows.length === 0 || total === 0) {
     return <EmptyState icon={Images} title={emptyTitle} description={emptyDescription} />;

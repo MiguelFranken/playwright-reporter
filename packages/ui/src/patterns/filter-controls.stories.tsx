@@ -3,6 +3,7 @@ import { expect, fn, userEvent, within } from 'storybook/test';
 import { useState } from 'react';
 import { Button } from '../components/button';
 import {
+  FilterMultiSelect,
   FilterSelect,
   FilterSelectSkeleton,
   RangeToggle,
@@ -65,6 +66,53 @@ export const Select_: Story = {
   },
 };
 
+const PRIORITIES = [
+  { value: 'critical', label: 'Critical' },
+  { value: 'high', label: 'High' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'low', label: 'Low' },
+];
+
+/** Any number of options at once; the trigger names the first two and counts the rest. */
+export const MultiSelect: Story = {
+  render: function Render() {
+    const [value, setValue] = useState<string[]>(['critical', 'high', 'medium']);
+    return <FilterMultiSelect value={value} options={PRIORITIES} placeholder="Priority" allLabel="All priorities" onValueChange={setValue} />;
+  },
+};
+
+export const MultiSelectEmpty: Story = {
+  render: function Render() {
+    const [value, setValue] = useState<string[]>([]);
+    return <FilterMultiSelect value={value} options={PRIORITIES} placeholder="Priority" allLabel="All priorities" onValueChange={setValue} />;
+  },
+};
+
+/** Options add up while the list stays open, and "All" clears them again. */
+export const MultiSelectAddsUp: Story = {
+  render: function Render() {
+    const [value, setValue] = useState<string[]>([]);
+    return (
+      <div className="flex flex-col gap-2">
+        <FilterMultiSelect value={value} options={PRIORITIES} placeholder="Priority" allLabel="All priorities" onValueChange={setValue} />
+        <p className="text-body-xs text-muted-foreground">Selected: {value.join(', ') || '(none)'}</p>
+      </div>
+    );
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(document.body);
+    await userEvent.click(canvas.getByRole('combobox', { name: 'Priority' }));
+    await userEvent.click(await body.findByRole('option', { name: 'Critical' }));
+    await userEvent.click(await body.findByRole('option', { name: 'High' }));
+    await expect(canvas.getByText('Selected: critical, high')).toBeInTheDocument();
+    await expect(body.getByRole('option', { name: 'All priorities' })).toHaveAttribute('aria-selected', 'false');
+    await userEvent.click(body.getByRole('option', { name: 'All priorities' }));
+    await expect(canvas.getByText('Selected: (none)')).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+  },
+};
+
 export const Search: Story = {
   render: function Render() {
     const [value, setValue] = useState('');
@@ -98,11 +146,13 @@ export const Bar: Story = {
   render: function Render() {
     const [range, setRange] = useState('30');
     const [branch, setBranch] = useState('all');
+    const [priorities, setPriorities] = useState<string[]>(['critical']);
     const [query, setQuery] = useState('');
     return (
       <div className="flex flex-wrap items-center gap-2">
         <RangeToggle value={range} onValueChange={(n) => setRange(n ?? 'all')} />
         <FilterSelect value={branch} options={BRANCHES} placeholder="Branch" onValueChange={(n) => setBranch(n ?? 'all')} />
+        <FilterMultiSelect value={priorities} options={PRIORITIES} placeholder="Priority" allLabel="All priorities" onValueChange={setPriorities} />
         <SearchField value={query} placeholder="Search tests…" onValueChange={(n) => setQuery(n ?? '')} />
       </div>
     );
@@ -115,6 +165,7 @@ export const Pending: Story = {
     <div className="flex flex-wrap items-center gap-2">
       <RangeToggle isPending value="30" onValueChange={fn()} />
       <FilterSelect isPending value="all" options={BRANCHES} placeholder="Branch" onValueChange={fn()} />
+      <FilterMultiSelect isPending value={['critical', 'high']} options={PRIORITIES} placeholder="Priority" onValueChange={fn()} />
       <SearchField isPending value="cart" onValueChange={fn()} />
     </div>
   ),
