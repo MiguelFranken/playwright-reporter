@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.63](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.62...v0.0.63) (2026-09-30)
+
+### Features
+
+* **library:** approve and request changes from the library's viewer ([e35258e](https://github.com/MiguelFranken/playwright-reporter/commit/e35258e3af75744c2723d4df728f900eab9a684a))
+
 ## [0.0.62](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.61...v0.0.62) (2026-09-30)
 
 ### Features
