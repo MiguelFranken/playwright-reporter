@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, fn, userEvent, within } from 'storybook/test';
-import { buttonThread, longThread, NOW, outdatedThread, resolvedThread, totalsThread, VIEWER_ID } from '../../fixtures/review-threads';
+import { agentRepliedThread, buttonThread, longThread, NOW, outdatedThread, resolvedThread, totalsThread, VIEWER_ID } from '../../fixtures/review-threads';
 import { ThreadView } from './thread-view';
 
 const meta = {
@@ -26,6 +26,14 @@ export const Default: Story = {
 };
 
 export const FromAnAssistant: Story = { args: { thread: totalsThread } };
+
+/** An AI agent replied with what it changed. */
+export const AgentReplied: Story = {
+  args: { thread: agentRepliedThread },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByRole('article', { name: /Comment by Codex, an AI agent/ })).toBeVisible();
+  },
+};
 
 /** Placed on an earlier run whose image changed since. */
 export const Outdated: Story = {

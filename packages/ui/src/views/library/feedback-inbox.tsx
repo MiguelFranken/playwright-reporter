@@ -1,6 +1,6 @@
 'use client';
 
-import { History, MessageSquare, MessagesSquare } from 'lucide-react';
+import { Bot, History, MessageSquare, MessagesSquare } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Button } from '../../components/button';
 import { SegmentedControl } from '../../components/segmented-control';
@@ -11,7 +11,7 @@ import { cn } from '../../lib/cn';
 import { formatRelative } from '../../lib/format';
 import { flowPriority } from '../../lib/library-views';
 import { checkpointLabel, type ReviewFlowView } from '../../lib/review';
-import { openingComment, replies, type ReviewThreadView } from '../../lib/review-threads';
+import { commentAuthorName, isAgentComment, openingComment, replies, type ReviewThreadView } from '../../lib/review-threads';
 import type { CasePriority } from '../../lib/test-cases';
 import { PriorityIcon } from '../test-cases/case-badges';
 
@@ -118,8 +118,15 @@ export function FeedbackInbox({
                   </span>
                   <span className="flex min-w-0 flex-1 flex-col gap-1">
                     <span className="flex items-center gap-1.5 text-label-xs text-muted-foreground">
-                      <ProfileAvatar name={first?.author?.name ?? 'AI assistant'} image={first?.author?.image} size="sm" className="size-4" fallbackClassName="text-[8px]" />
-                      <span className="truncate text-label-s text-foreground">{first?.author?.name ?? 'AI assistant'}</span>
+                      {first && isAgentComment(first) ? (
+                        <span aria-hidden className="flex size-4 shrink-0 items-center justify-center rounded-full bg-accent-solid text-accent-on-solid">
+                          <Bot className="size-2.5" />
+                        </span>
+                      ) : (
+                        <ProfileAvatar name={commentAuthorName(first)} image={first?.author?.image} size="sm" className="size-4" fallbackClassName="text-[8px]" />
+                      )}
+                      <span className="truncate text-label-s text-foreground">{commentAuthorName(first)}</span>
+                      {first && isAgentComment(first) ? <span className="shrink-0">agent</span> : null}
                       <span aria-hidden>·</span>
                       <span className="shrink-0">{formatRelative(first?.at ?? item.thread.createdAt, { now })}</span>
                     </span>

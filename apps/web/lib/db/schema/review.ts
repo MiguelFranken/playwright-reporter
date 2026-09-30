@@ -293,6 +293,12 @@ export const reviewComments = pgTable(
     kind: reviewCommentKindEnum('kind').notNull().default('comment'),
     body: text('body').notNull().default(''),
     source: commentSourceEnum('source').notNull().default('app'),
+    /**
+     * The AI agent that wrote the comment for `user_id` ("Codex", "Claude
+     * Code"): shown as the author, with the person it acted for beside it.
+     * Null for a person's own comment.
+     */
+    agentName: text('agent_name'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     editedAt: timestamp('edited_at', { withTimezone: true }),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),

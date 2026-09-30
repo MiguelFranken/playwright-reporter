@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useState } from 'react';
 import { expect, fn, userEvent, within } from 'storybook/test';
-import { buttonThread, NOW, pagewideThread, reviewThreads, VIEWER_ID } from '../../fixtures/review-threads';
+import { agentRepliedThread, buttonThread, NOW, pagewideThread, reviewThreads, VIEWER_ID } from '../../fixtures/review-threads';
 import type { ThreadFilter } from '../../lib/review-threads';
 import { ThreadList } from './thread-list';
 
@@ -120,5 +120,13 @@ export const ReadOnly: Story = {
     const canvas = within(canvasElement);
     await expect(canvas.queryByRole('button', { name: 'Comment' })).toBeNull();
     await expect(canvas.queryByRole('button', { name: /^Resolve thread/ })).toBeNull();
+  },
+};
+
+/** An AI agent replied with the fix it made: the row shows it, for the reviewer to check. */
+export const AgentReplied: Story = {
+  args: { groups: [{ captureId: 'cap-desktop', variant: 'desktop', threads: [agentRepliedThread] }] },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByText(/Codex replied:/)).toBeVisible();
   },
 };

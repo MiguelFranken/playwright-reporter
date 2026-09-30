@@ -64,7 +64,7 @@ export function fixCommentsPrompt({ captureId, threads, project, screen }: { cap
     `capture ${captureId}${project ? ` in project ${project}` : ''}.\n\n` +
     `Call get_review_checkpoint with capture "${captureId}" to see the image with the open comments as numbered pins and a close-up of each. ` +
     'For each comment, find the component or styles in this codebase that render that part of the screen and make the change it asks for — nothing beyond it. ' +
-    'Then tell me what you changed, per comment number, and reply on each thread with comment_on_review saying what changed. ' +
+    'Then tell me what you changed, per comment number, and reply on each thread with comment_on_review — with agent set to your name — saying what changed and where. ' +
     'Do not resolve the threads: a person resolves them after checking the next run’s screenshot.'
   );
 }

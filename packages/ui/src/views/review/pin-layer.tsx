@@ -4,7 +4,7 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '../../components/popover';
 import { cn } from '../../lib/cn';
-import { anchorFromDrag, openingComment, type FractionAnchor, type ImageSize, type ReviewThreadView, type ThreadActions } from '../../lib/review-threads';
+import { anchorFromDrag, commentAuthorName, openingComment, type FractionAnchor, type ImageSize, type ReviewThreadView, type ThreadActions } from '../../lib/review-threads';
 import { CommentComposer } from '../../patterns/comment-composer';
 import { CommentPin } from '../../patterns/comment-pin';
 import { ThreadView } from './thread-view';
@@ -313,7 +313,7 @@ function ThreadPin({
                 state={t.status === 'resolved' ? 'resolved' : outdated ? 'outdated' : 'open'}
                 selected={open}
                 pending={t.pending}
-                aria-label={`Thread ${t.number}${t.status === 'resolved' ? ', resolved' : ''}${first ? `: ${first.author?.name ?? 'AI assistant'} — ${excerpt(first.body)}` : ''}`}
+                aria-label={`Thread ${t.number}${t.status === 'resolved' ? ', resolved' : ''}${first ? `: ${commentAuthorName(first)} — ${excerpt(first.body)}` : ''}`}
               />
             }
           />

@@ -101,6 +101,16 @@ export const longThread: ReviewThreadView = {
   ],
 };
 
+/** An agent's reply saying what it changed, written with Ada's access. */
+export const agentReply: ReviewCommentView = comment(
+  'Changed the order button to the primary variant in `CheckoutSummary.tsx` and added `mt-4` above it, matching the cart page. Run #484 shows it.',
+  8,
+  { agent: { name: 'Codex' }, source: 'mcp' },
+);
+
+/** A pin that an AI agent answered: the fix it reports waits for a person to check. */
+export const agentRepliedThread: ReviewThreadView = { ...buttonThread, id: 'thread-agent', comments: [...buttonThread.comments, agentReply] };
+
 /** The order flow with threads on its changed checkout screen. */
 export function flowWithThreads(threads: ReviewThreadView[] = reviewThreads): ReviewFlowView {
   return {

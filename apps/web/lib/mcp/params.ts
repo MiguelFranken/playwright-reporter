@@ -179,6 +179,18 @@ function stableStringify(value: unknown): string {
 // ------------------------------------------------------------------ references
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/**
+ * How an assistant signs what it writes on review images. Its comments show as
+ * the agent's, beside the person whose access it uses.
+ */
+export const agentParam = z
+  .string()
+  .trim()
+  .min(1)
+  .max(60)
+  .optional()
+  .describe('Your name as an agent, e.g. "Codex" or "Claude Code": your comments show as that agent, for the person whose access you use. Default: the connected app’s name.');
+
 export const isUuid = (value: string) => UUID.test(value);
 
 export interface AppUrl {

@@ -1,12 +1,14 @@
 'use client';
 
-import { ArrowRight, Check, Columns2, History, MessageSquare, MessageSquarePlus, RotateCcw } from 'lucide-react';
+import { ArrowRight, Bot, Check, Columns2, History, MessageSquare, MessageSquarePlus, RotateCcw } from 'lucide-react';
 import { Button } from '../../components/button';
 import { Kbd } from '../../components/kbd';
 import { SegmentedControl } from '../../components/segmented-control';
 import { cn } from '../../lib/cn';
 import { formatRelative } from '../../lib/format';
 import {
+  commentAuthorName,
+  isAgentComment,
   matchesThreadFilter,
   openingComment,
   replies,
@@ -276,8 +278,12 @@ function ThreadRow({
   const first = openingComment(thread);
   const answers = replies(thread);
   const resolved = thread.status === 'resolved';
-  const people = [...new Map(answers.filter((c) => c.author).map((c) => [c.author!.name, c.author!])).values()].slice(0, 3);
-  const name = first?.author?.name ?? 'AI assistant';
+  // People who replied; an agent's reply is the agent's, said on its own below.
+  const people = [...new Map(answers.filter((c) => c.author && !isAgentComment(c)).map((c) => [c.author!.name, c.author!])).values()].slice(0, 3);
+  const name = commentAuthorName(first);
+  // The newest reply, when an agent wrote it: what it says it changed is what a reviewer checks next.
+  const last = answers.at(-1);
+  const agentReply = last && isAgentComment(last) ? last : null;
   return (
     <div
       className={cn(
@@ -312,10 +318,19 @@ function ThreadRow({
         </span>
         <span className="flex items-center gap-1.5 text-label-xs text-muted-foreground">
           <span className="truncate text-label-s text-foreground">{name}</span>
+          {first && isAgentComment(first) ? <span className="shrink-0">agent</span> : null}
           <span aria-hidden>·</span>
           <span className="shrink-0">{thread.pending ? 'Posting…' : formatRelative(first?.at ?? thread.createdAt, { now })}</span>
         </span>
         <span className="mt-0.5 line-clamp-2 text-sm text-pretty break-words">{first?.body ?? ''}</span>
+        {agentReply ? (
+          <span className="mt-1 flex items-start gap-1.5 rounded-md bg-accent-subtle/60 px-1.5 py-1 text-label-xs text-accent-text">
+            <Bot aria-hidden className="mt-px size-3 shrink-0" />
+            <span className="min-w-0 line-clamp-2">
+              <span className="text-label-xs">{commentAuthorName(agentReply)} replied:</span> {agentReply.body}
+            </span>
+          </span>
+        ) : null}
         {answers.length || thread.placement === 'outdated' || thread.anchor.kind === 'image' ? (
           <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-label-xs text-muted-foreground">
             {answers.length ? (

@@ -11521,6 +11521,34 @@
                                     "null"
                                   ]
                                 },
+                                "agent": {
+                                  "description": "Set when an AI agent wrote the comment.",
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "name": {
+                                          "type": "string"
+                                        },
+                                        "for": {
+                                          "description": "The person whose access the agent used.",
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "name",
+                                        "for"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
                                 "via": {
                                   "type": "string"
                                 },
@@ -11871,6 +11899,12 @@
                   "resolveThreads": {
                     "description": "With approved: also resolve the images’ open threads (their changes are done).",
                     "type": "boolean"
+                  },
+                  "agent": {
+                    "description": "Your name as an agent, e.g. \"Codex\" or \"Claude Code\": your comments show as that agent, for the person whose access you use. Default: the connected app’s name.",
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 60
                   }
                 },
                 "required": [
@@ -12396,6 +12430,34 @@
                                   "type": [
                                     "string",
                                     "null"
+                                  ]
+                                },
+                                "agent": {
+                                  "description": "Set when an AI agent wrote the comment.",
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "name": {
+                                          "type": "string"
+                                        },
+                                        "for": {
+                                          "description": "The person whose access the agent used.",
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "name",
+                                        "for"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
                                   ]
                                 },
                                 "via": {
@@ -12962,6 +13024,34 @@
                                           "null"
                                         ]
                                       },
+                                      "agent": {
+                                        "description": "Set when an AI agent wrote the comment.",
+                                        "anyOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "name": {
+                                                "type": "string"
+                                              },
+                                              "for": {
+                                                "description": "The person whose access the agent used.",
+                                                "type": [
+                                                  "string",
+                                                  "null"
+                                                ]
+                                              }
+                                            },
+                                            "required": [
+                                              "name",
+                                              "for"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ]
+                                      },
                                       "via": {
                                         "type": "string"
                                       },
@@ -13172,6 +13262,12 @@
                       "x",
                       "y"
                     ]
+                  },
+                  "agent": {
+                    "description": "Your name as an agent, e.g. \"Codex\" or \"Claude Code\": your comments show as that agent, for the person whose access you use. Default: the connected app’s name.",
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 60
                   }
                 },
                 "required": [
@@ -13346,6 +13442,12 @@
                     "description": "A closing note: what was done, or why it is reopened.",
                     "type": "string",
                     "maxLength": 4000
+                  },
+                  "agent": {
+                    "description": "Your name as an agent, e.g. \"Codex\" or \"Claude Code\": your comments show as that agent, for the person whose access you use. Default: the connected app’s name.",
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 60
                   }
                 },
                 "required": [

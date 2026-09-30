@@ -598,6 +598,8 @@ export async function decide(input: {
   resolveThreads?: boolean;
   /** Where the change request's comment was written, for its thread. */
   commentSource?: CommentSource;
+  /** The AI agent deciding for `userId`, named on the comments it writes. */
+  agentName?: string | null;
 }): Promise<{ decided: number; resolvedThreads: number }> {
   const ids = [...new Set(input.captureIds)].filter((id) => /^[0-9a-f-]{36}$/i.test(id));
   if (ids.length === 0) throw new ReviewError('Nothing to decide about.');
@@ -630,7 +632,7 @@ export async function decide(input: {
       userId: input.userId,
     })),
   );
-  const author = { userId: input.userId, source: input.commentSource ?? 'app' };
+  const author = { userId: input.userId, source: input.commentSource ?? 'app', agentName: input.agentName ?? null };
   if (input.decision === 'changes_requested' && comment) {
     const seen = new Set<string>();
     for (const c of captures) {

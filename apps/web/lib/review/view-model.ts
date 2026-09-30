@@ -36,6 +36,7 @@ export function toCommentView(c: CommentRecord): ReviewCommentView {
     body: c.body,
     author: c.authorName ? { name: c.authorName, image: displayableAvatar(c.authorImage) } : null,
     authorId: c.userId,
+    agent: c.agentName ? { name: c.agentName } : null,
     source: c.source,
     at: c.createdAt.toISOString(),
     editedAt: c.editedAt?.toISOString() ?? null,

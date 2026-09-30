@@ -680,6 +680,7 @@ Approve review checkpoint images, or ask for changes — with a comment, and on 
 | `comment` | string |  | Why — what should change. Opens a thread about the whole image with a change request. |
 | `pins` | object[] |  | With changes_requested on one capture: pin each change where it is, in percent of the image, as a numbered thread. |
 | `resolveThreads` | boolean |  | With approved: also resolve the images’ open threads (their changes are done). |
+| `agent` | string |  | Your name as an agent, e.g. "Codex" or "Claude Code": your comments show as that agent, for the person whose access you use. Default: the connected app’s name. |
 
 Structured output fields: `project`, `decided`, `decision`, `pinned`, `resolvedThreads`, `truncated`.
 
@@ -709,7 +710,7 @@ Structured output fields: `project`, `run`, `reference`, `counts`, `images`, `tr
 
 **Comment on a review image** · toolset `write` · **writes**
 
-Pin a comment thread on a review image — at a spot or an area (in percent of the image), or about the whole image — or reply to a thread by its number. Say what should change and where, as a reviewer would. Reply to report a fix only when the user asked you to — a write-scoped token is not that permission. Shown to people in the review viewer.
+Pin a comment thread on a review image — at a spot or an area (in percent of the image), or about the whole image — or reply to a thread by its number. Say what should change and where, as a reviewer would. Reply to report a fix only when the user asked you to — a write-scoped token is not that permission. Shown in the viewer as an AI agent’s comment (name yourself with agent), for the person whose access you use.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -720,6 +721,7 @@ Pin a comment thread on a review image — at a spot or an area (in percent of t
 | `body` | string | yes | The comment: what should change, or the answer to the thread. |
 | `thread` | integer (–9007199254740991) |  | Reply to this thread, by the number on its pin. Without it, a new thread. |
 | `at` | object |  | Where a new thread points, in percent of the image: a spot, or an area with w and h. Without it, the whole image. |
+| `agent` | string |  | Your name as an agent, e.g. "Codex" or "Claude Code": your comments show as that agent, for the person whose access you use. Default: the connected app’s name. |
 
 Structured output fields: `project`, `captureId`, `action`, `thread`, `threadId`, `url`, `truncated`.
 
@@ -738,6 +740,7 @@ Mark a comment thread on a review image resolved — or open again — by the im
 | `thread` | integer (–9007199254740991) | yes | The thread’s number: the one on its pin. |
 | `status` | `"resolved"` \| `"open"` |  | resolved (default), or open to reopen it. |
 | `comment` | string |  | A closing note: what was done, or why it is reopened. |
+| `agent` | string |  | Your name as an agent, e.g. "Codex" or "Claude Code": your comments show as that agent, for the person whose access you use. Default: the connected app’s name. |
 
 Structured output fields: `project`, `thread`, `status`, `changed`, `url`, `truncated`.
 
