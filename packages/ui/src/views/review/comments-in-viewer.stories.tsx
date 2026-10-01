@@ -94,7 +94,7 @@ export const PinAComment: Story = {
 export const DrawAComment: Story = {
   play: async ({ args }) => {
     const body = within(document.body);
-    await body.findByRole('dialog');
+    await onTheScreen();
     await userEvent.keyboard('c');
     const toolbar = within(await body.findByRole('toolbar', { name: 'Comment tools' }));
     await userEvent.keyboard('6');
@@ -120,7 +120,7 @@ export const WithADrawing: Story = {
   args: { flows: drawnFlows },
   play: async () => {
     const body = within(document.body);
-    await body.findByRole('dialog');
+    await onTheScreen();
     const list = within(body.getByRole('region', { name: /Comments/ }));
     await expect(list.getByRole('button', { name: /^Thread 7: .*drawn in blue, yellow, red, green, purple/ })).toBeInTheDocument();
   },
