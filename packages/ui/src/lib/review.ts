@@ -399,7 +399,9 @@ export const ZOOM_LEVELS = [0.25, 0.33, 0.5, 0.67, 0.75, 1, 1.25, 1.5] as const;
  * How the viewer frames an image: a screen of `width` × `height` CSS pixels
  * the capture is scaled into (by width) and scrolls in, shown at `zoom`.
  * `captured` uses each capture's own viewport; `fit` picks the zoom that
- * shows the whole frame.
+ * shows the whole frame. The viewer never shows a frame wider than it has
+ * room for, nor taller: a zoom above what fits the width is held at it, and a
+ * frame taller than the space ends there and scrolls inside.
  */
 export interface FrameSettings {
   preset: FramePreset;
@@ -416,12 +418,35 @@ export function frameFor(settings: FrameSettings, capture: Parameters<typeof cap
   return { width: Math.max(160, Math.round(settings.width)), height: Math.max(160, Math.round(settings.height)) };
 }
 
+const MIN_ZOOM = 0.1;
+
+/** The largest zoom at which frames side by side (with `gap` between them) fit into `available` CSS pixels of width. */
+export function widthZoom(frames: readonly FrameSize[], available: number, gap = 24): number {
+  if (frames.length === 0 || available <= 0) return 1;
+  // The gaps between the screens stay their size at any zoom.
+  const width = frames.reduce((sum, f) => sum + f.width, 0);
+  return Math.max(MIN_ZOOM, (available - gap * (frames.length - 1)) / width);
+}
+
 /** The zoom that fits frames side by side (with `gap` between them) into the space available. */
 export function fitZoom(frames: readonly FrameSize[], available: FrameSize, gap = 24): number {
   if (frames.length === 0 || available.width <= 0 || available.height <= 0) return 1;
-  const width = frames.reduce((sum, f) => sum + f.width, 0) + gap * (frames.length - 1);
   const height = Math.max(...frames.map((f) => f.height));
-  return Math.max(0.1, Math.min(1, available.width / width, available.height / height));
+  return Math.max(MIN_ZOOM, Math.min(1, widthZoom(frames, available.width, gap), available.height / height));
+}
+
+/**
+ * The zoom a frame is shown at: `fit`, else the zoom asked for, held at the
+ * largest that fits the width — the space never scrolls sideways.
+ */
+export function shownZoom(zoom: FrameSettings['zoom'], frames: readonly FrameSize[], available: FrameSize, gap = 24): number {
+  return zoom === 'fit' ? fitZoom(frames, available, gap) : Math.min(zoom, widthZoom(frames, available.width, gap));
+}
+
+/** A frame cut to the `height` CSS pixels there is room for at `zoom`: a longer screen ends at the space's edge and scrolls inside. */
+export function frameWithin(frame: FrameSize, height: number, zoom: number): FrameSize {
+  if (height <= 0) return frame;
+  return { width: frame.width, height: Math.max(24 / zoom, Math.min(frame.height, Math.floor(height) / zoom)) };
 }
 
 /**

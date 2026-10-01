@@ -89,6 +89,27 @@ export const ScreenSettings: Story = {
 };
 
 /**
+ * A zoom larger than the stage is wide is held at what fits the width, and a
+ * screen longer than the stage ends at its bottom edge: the stage never
+ * scrolls, the screen does.
+ */
+export const ZoomHeldAtTheWidth: Story = {
+  args: { initial: { checkpointId: changed.id, variant: 'desktop' }, frame: { preset: 'desktop', width: 1280, height: 720, zoom: 1.5 } },
+  play: async () => {
+    const body = within(document.body);
+    await body.findByRole('dialog');
+    await userEvent.click(body.getByRole('button', { name: 'Image' }));
+    const stage = body.getByLabelText('Checkpoint screens');
+    const screen = body.getByRole('region', { name: /desktop screen/ });
+    await waitFor(() => expect(screen.getBoundingClientRect().width).toBeLessThanOrEqual(stage.clientWidth - 48));
+    await expect(screen.getBoundingClientRect().bottom).toBeLessThanOrEqual(stage.getBoundingClientRect().bottom);
+    await expect(stage.scrollWidth).toBeLessThanOrEqual(stage.clientWidth);
+    await expect(stage.scrollHeight).toBeLessThanOrEqual(stage.clientHeight);
+    await expect(body.getByRole('combobox', { name: 'Zoom' })).not.toHaveTextContent('150%');
+  },
+};
+
+/**
  * A library screen is the newest run's capture: it compares with the approved
  * screen (else the capture before it) and is decided about as in that run's
  * review.
