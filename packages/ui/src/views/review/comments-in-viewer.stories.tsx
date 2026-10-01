@@ -185,6 +185,7 @@ export const OnTheImageItWasMadeOn: Story = {
   play: async () => {
     const body = within(document.body);
     await body.findByRole('dialog');
+    await userEvent.click(body.getByRole('button', { name: 'Compare' }));
     await userEvent.click(body.getByRole('button', { name: 'Side by side' }));
     const left = within(await body.findByRole('region', { name: /— Approved \(#470\)$/ }));
     await expect(left.getByRole('button', { name: /^Thread 1: / })).toBeInTheDocument();

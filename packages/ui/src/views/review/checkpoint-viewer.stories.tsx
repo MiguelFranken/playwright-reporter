@@ -38,6 +38,7 @@ export const Changed: Story = {
   play: async ({ args }) => {
     const body = within(document.body);
     await body.findByRole('dialog');
+    await userEvent.click(body.getByRole('button', { name: 'Compare' }));
     await userEvent.click(body.getByRole('button', { name: 'Difference' }));
     await expect(body.getByText(/Identical pixels are black/)).toBeInTheDocument();
     await userEvent.click(body.getByRole('button', { name: 'Request changes' }));
@@ -137,6 +138,7 @@ export const InTheLibrary: Story = {
     const body = within(document.body);
     await body.findByRole('dialog');
     await expect(body.getByRole('group', { name: 'Comparison' })).toBeInTheDocument();
+    await userEvent.click(body.getByRole('button', { name: 'Compare' }));
     await userEvent.click(body.getByRole('button', { name: 'Side by side' }));
     await expect(await body.findByText(/^Approved/, { selector: 'figcaption' })).toBeInTheDocument();
     await userEvent.click(body.getByRole('button', { name: 'Approve' }));
@@ -216,6 +218,7 @@ export const SideBySideScrollsTogether: Story = {
   play: async () => {
     const body = within(document.body);
     await body.findByRole('dialog');
+    await userEvent.click(body.getByRole('button', { name: 'Compare' }));
     await userEvent.click(body.getByRole('button', { name: 'Side by side' }));
     const [before, now] = await body.findAllByRole('region', { name: / — (Approved|This run)/ });
     const toggle = body.getByRole('button', { name: 'Scroll together' });
@@ -269,7 +272,83 @@ export const LibraryComparison: Story = {
   play: async () => {
     const body = within(document.body);
     await body.findByRole('dialog');
+    await userEvent.click(body.getByRole('button', { name: 'Compare' }));
     await userEvent.click(body.getByRole('button', { name: 'Side by side' }));
     await expect(body.getByText('main')).toBeInTheDocument();
+  },
+};
+
+/**
+ * The view first: the image, or how it changed. Comparing, the ways to compare
+ * follow it; M switches between the two, Shift+M to the next way of comparing.
+ */
+export const ImageOrCompare: Story = {
+  play: async () => {
+    const body = within(document.body);
+    await body.findByRole('dialog');
+    await expect(body.getByRole('button', { name: 'Compare' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(body.getByRole('button', { name: 'Changes' })).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(body.getByRole('button', { name: 'Slider' }));
+    await userEvent.click(body.getByRole('button', { name: 'Image' }));
+    await expect(body.queryByRole('group', { name: 'Comparison' })).toBeNull();
+    // Compare goes back to the comparison last picked.
+    await userEvent.click(body.getByRole('button', { name: 'Compare' }));
+    await expect(body.getByRole('button', { name: 'Slider' })).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.keyboard('{Shift>}m{/Shift}');
+    await expect(body.getByRole('button', { name: 'Difference' })).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.keyboard('m');
+    await expect(body.getByRole('button', { name: 'Image' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(body.queryByRole('group', { name: 'Comparison' })).toBeNull();
+  },
+};
+
+/** Every variant at once compares too: each screen with its own changes, beside its own reference, or over it. */
+export const CompareAllVariants: Story = {
+  args: { initial: { checkpointId: changed.id, variant: null } },
+  play: async () => {
+    const body = within(document.body);
+    await body.findByRole('dialog');
+    await expect(body.getByRole('button', { name: 'Changes' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(body.getByRole('region', { name: /, desktop, changes marked$/ })).toBeInTheDocument();
+    await expect(body.getByRole('region', { name: /, mobile, changes marked$/ })).toBeInTheDocument();
+    await userEvent.click(body.getByRole('button', { name: 'Side by side' }));
+    await expect(body.getAllByRole('region', { name: / — (desktop|mobile), (Approved|This run)/ })).toHaveLength(4);
+    await userEvent.click(body.getByRole('button', { name: 'Difference' }));
+    await expect(body.getAllByRole('region', { name: /, comparison$/ })).toHaveLength(2);
+  },
+};
+
+/**
+ * Every variant filling the stage: each screen under a caption bar ruled off
+ * like the toolbar, the screens meeting at a hairline, as tall as the stage.
+ */
+export const FillAllVariants: Story = {
+  args: { initial: { checkpointId: changed.id, variant: null }, frame: { preset: 'captured', width: 1280, height: 720, zoom: 'fit', fill: true } },
+  play: async () => {
+    const body = within(document.body);
+    await body.findByRole('dialog');
+    await userEvent.click(body.getByRole('button', { name: 'Image' }));
+    const stage = body.getByLabelText('Checkpoint screens');
+    const desktop = body.getByRole('region', { name: /desktop screen/ });
+    const mobile = body.getByRole('region', { name: /mobile screen/ });
+    await waitFor(() => expect(Math.abs(mobile.getBoundingClientRect().left - desktop.getBoundingClientRect().right - 1)).toBeLessThanOrEqual(1));
+    for (const screen of [desktop, mobile]) await expect(Math.abs(screen.getBoundingClientRect().bottom - stage.getBoundingClientRect().bottom)).toBeLessThanOrEqual(1);
+    await expect(stage.scrollHeight).toBeLessThanOrEqual(stage.clientHeight);
+    await expect(stage.scrollWidth).toBeLessThanOrEqual(stage.clientWidth);
+    await expect(body.getByText('desktop', { selector: 'figcaption span' }).closest('figcaption')).toHaveStyle({ height: '32px' });
+  },
+};
+
+/** Filling with every variant side by side: four screens, a hairline apart, each pair scrolling together. */
+export const FillAllVariantsSideBySide: Story = {
+  args: { initial: { checkpointId: changed.id, variant: null }, frame: { preset: 'captured', width: 1280, height: 720, zoom: 'fit', fill: true } },
+  play: async () => {
+    const body = within(document.body);
+    await body.findByRole('dialog');
+    await userEvent.click(body.getByRole('button', { name: 'Side by side' }));
+    const stage = body.getByLabelText('Checkpoint screens');
+    await waitFor(() => expect(body.getAllByRole('region', { name: / — (desktop|mobile), / })).toHaveLength(4));
+    await expect(stage.scrollWidth).toBeLessThanOrEqual(stage.clientWidth);
+    await expect(stage.scrollHeight).toBeLessThanOrEqual(stage.clientHeight);
   },
 };
