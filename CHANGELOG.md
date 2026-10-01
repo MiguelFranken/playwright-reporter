@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.75](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.74...v0.0.75) (2026-10-01)
+
+### Features
+
+* **library:** count flows, not images, and let the counts follow the filters ([#79](https://github.com/MiguelFranken/playwright-reporter/issues/79)) ([d0dae7a](https://github.com/MiguelFranken/playwright-reporter/commit/d0dae7a1ba6dcc4318748515e3c266b76215fd7e))
+
 ## [0.0.74](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.73...v0.0.74) (2026-10-01)
 
 ### Features
