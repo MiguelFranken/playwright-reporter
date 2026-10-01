@@ -199,7 +199,7 @@ export async function compare(pairs: readonly CapturePair[], opts: { plan?: bool
     const stale = (d: DiffRecord | undefined) => !d || (d.status === 'pending' && Date.now() - new Date(d.claimedAt ?? d.createdAt).getTime() > CLAIM_TTL_MS);
     for (const x of prepared) {
       if (x.p.base.attachment.status !== 'uploaded' || x.p.head.attachment.status !== 'uploaded') continue;
-      if (compatibilityOf(x.p.base, x.p.head).status === 'incompatible' && !opts.plan) continue;
+      // Incompatible captures are measured too: a person may want the numbers, labelled as what they are.
       for (const pair of [x.rawPair, x.effectivePair]) {
         if (!pair) continue;
         if (stale(diffs.get(pairKey(pair.projectId, pair.baseSha256, pair.headSha256, pair.optionsKey)))) toPlan.push(asPlanned(pair, x.p.base, x.p.head));

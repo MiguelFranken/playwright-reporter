@@ -18,6 +18,7 @@ import { previewRules, rulesOfCapture, setRules } from '../diff/ignore';
 import { decidePolicy, policyTargetsFor, visualAiSettings } from '../diff/policy';
 import { DEFAULT_CONTEXT_PADDING, loadSource, padRect, render, RenderError, type RenderSource } from '../diff/render';
 import { readCaptureBytes } from '../images';
+import { runCaptures } from '../diff/store';
 import { BudgetExceeded, reserve, settle, teamMonthlyLimit } from './budget';
 import { costCeiling, gatewayKey, modelFor, PRICE_VERSION } from './config';
 import { analysisAnswer, introText, MAX_CROPS_PER_ANALYSIS, MAX_OUTPUT_TOKENS, MAX_REGIONS_PER_ANALYSIS, PROMPT_TEXT_TOKENS, PROMPT_VERSION, regionText, SCHEMA_VERSION, SYSTEM_PROMPT, validateBoxes, type AnalysisAnswer } from './prompt';
@@ -396,7 +397,6 @@ export async function proactiveAnalyses(runId: string, captures: readonly (Captu
       skipped += captures.filter((c) => c.projectId === project.id).length;
       continue;
     }
-    const { runCaptures } = await import('../diff/store');
     const compared = (await runCaptures(runId)).filter((c) => c.projectId === project.id && c.diff?.status === 'done' && (c.diff.changedPixels ?? 0) > 0);
     for (const cap of compared) {
       if (created >= MAX_PROACTIVE_PER_RUN) {
@@ -413,8 +413,8 @@ export async function proactiveAnalyses(runId: string, captures: readonly (Captu
         const outcome = await createAnalysis({ projectId: project.id, teamId: project.teamId, projectSettings: project.settings, comparison: c as CreateInput['comparison'], trigger: 'proactive', userId: null });
         if (outcome.created) {
           created++;
-          if (analysisDriver() === 'inline') await runAnalysis(outcome.job.id, opts);
-          else if (analysisDriver() === 'after') await runAnalysis(outcome.job.id, opts);
+          // Proactive jobs run where they were created (a workflow step, or inline): there is no request to defer to.
+          if (analysisDriver() !== 'none') await runAnalysis(outcome.job.id, opts);
         } else skipped++;
       } catch (error) {
         skipped++;

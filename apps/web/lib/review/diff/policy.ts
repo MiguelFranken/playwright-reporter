@@ -9,10 +9,10 @@
  * then the most specific allow, then the default. Every write path checks
  * here, on the server, right before it acts.
  */
-import { eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { AI_MODES, resolvePolicy, type AiMode, type PolicyCapability, type PolicyDecision, type PolicyRule, type PolicyScope, type PolicyTarget } from '@miguelfranken/ui/lib/visual-diff';
 import { db } from '@/lib/db/drizzle';
-import { testCaseLinks, testCases, testSuites, tests } from '@/lib/db/schema';
+import { reviewCaptures, testCaseLinks, testCases, testSuites, tests } from '@/lib/db/schema';
 
 export interface VisualAiSettings {
   mode: AiMode;
@@ -114,8 +114,6 @@ export function decidePolicy(settings: Record<string, unknown> | null | undefine
 
 /** What a project's policy rules can name: its suites and (up to 500) tests with review captures. */
 export async function policyChoices(projectId: string): Promise<{ suites: { id: string; name: string }[]; tests: { id: string; title: string; file: string }[] }> {
-  const { reviewCaptures } = await import('@/lib/db/schema');
-  const { and, asc, sql } = await import('drizzle-orm');
   const [suites, testRows] = await Promise.all([
     db.select({ id: testSuites.id, name: testSuites.name }).from(testSuites).where(eq(testSuites.projectId, projectId)).orderBy(asc(testSuites.name)),
     db

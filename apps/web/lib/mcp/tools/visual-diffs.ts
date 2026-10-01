@@ -28,8 +28,6 @@ import {
   ignoreStates,
   matchesComparisonFilter,
   type IgnoreSummary,
-  type Rect,
-  type VisualDiffRegion,
 } from '@miguelfranken/ui/lib/visual-diff';
 import { signVisualRenderPath } from '@/lib/auth/artifact-url';
 import { baseUrl } from '@/lib/auth/config';
@@ -51,7 +49,6 @@ import {
 } from '@/lib/review/diff/comparison';
 import { DEFAULT_MAX_IMAGES, MAX_IMAGES, planImages, specQuery, describeMode, type PlannedImage } from '@/lib/review/diff/image-plan';
 import { DEFAULT_CONTEXT_PADDING, loadSource, render, RenderError, type RenderContext, type Rendered } from '@/lib/review/diff/render';
-import { CLAIM_TTL_MS } from '@/lib/review/diff/store';
 import { getStorage } from '@/lib/storage';
 import { artifactUrlTtlSeconds, inlineImageMaxBytes } from '../config';
 import { invalid, notFound, ToolError } from '../errors';
@@ -663,7 +660,3 @@ export const getVisualDiffImage = defineTool({
 });
 
 export const VISUAL_DIFF_TOOLS = [listVisualDiffs, getVisualDiff, getVisualDiffImage];
-
-/** Kept for callers that assemble a rectangle from a region: the padded box, in the side's pixels. */
-export type { Rect, VisualDiffRegion };
-export { CLAIM_TTL_MS };

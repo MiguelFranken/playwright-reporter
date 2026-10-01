@@ -10,6 +10,7 @@ import { ANALYSIS_HYPOTHESES, ANALYSIS_RECOMMENDATIONS, ANALYSIS_STATUSES, decod
 import { AnalysisError, analysisView, analysesOfPair, createAnalysis, decideSuggestion } from '@/lib/review/analysis/jobs';
 import { dispatchAnalysis } from '@/lib/review/analysis/dispatch';
 import { compare, resolvePair } from '@/lib/review/diff/comparison';
+import { IgnoreRevisionConflict } from '@/lib/review/diff/ignore';
 import { invalid, notFound, ToolError } from '../errors';
 import { commonParams, isUuid } from '../params';
 import { defineTool, output } from '../registry';
@@ -201,7 +202,6 @@ export const decideVisualSuggestion = defineTool({
         },
       };
     } catch (error) {
-      const { IgnoreRevisionConflict } = await import('@/lib/review/diff/ignore');
       if (error instanceof IgnoreRevisionConflict) throw new ToolError('REVISION_CONFLICT', error.message);
       throw mapError(error);
     }
