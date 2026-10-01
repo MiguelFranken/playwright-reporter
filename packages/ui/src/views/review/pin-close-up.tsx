@@ -4,7 +4,9 @@ import { useState } from 'react';
 import { cn } from '../../lib/cn';
 import type { ReviewImage } from '../../lib/review';
 import { closeUpWindow, type FractionAnchor, type ImageSize } from '../../lib/review-threads';
+import type { MarkupShape } from '../../lib/review-markup';
 import { CommentPin, type CommentPinState } from '../../patterns/comment-pin';
+import { MarkupShapes } from '../../patterns/markup-shapes';
 import { useImage } from '../../provider';
 import { UnavailableImage } from './review-frame';
 
@@ -17,6 +19,7 @@ import { UnavailableImage } from './review-frame';
 export function PinCloseUp({
   image,
   anchor,
+  markup,
   number,
   state = 'open',
   width = 440,
@@ -27,6 +30,8 @@ export function PinCloseUp({
   image: ReviewImage;
   /** Where the comment points, in fractions of this image. */
   anchor: FractionAnchor;
+  /** What was drawn with the comment, in fractions of this image: drawn instead of the area. */
+  markup?: readonly MarkupShape[] | null;
   number?: number;
   state?: CommentPinState;
   /** The close-up's box, in CSS pixels. */
@@ -73,7 +78,11 @@ export function PinCloseUp({
             : { width: '100%', height: 'auto' }
         }
       />
-      {area ? <div aria-hidden className="pointer-events-none absolute rounded-sm border-2 border-accent-solid bg-accent-solid/10" style={area} /> : null}
+      {markup?.length && view && size ? (
+        <div aria-hidden className="pointer-events-none absolute" style={{ left: -view.left * view.scale, top: -view.top * view.scale, width: size.width * view.scale, height: size.height * view.scale }}>
+          <MarkupShapes shapes={markup} dashed={state === 'outdated'} />
+        </div>
+      ) : area ? <div aria-hidden className="pointer-events-none absolute rounded-sm border-2 border-accent-solid bg-accent-solid/10" style={area} /> : null}
       {pin ? (
         <div aria-hidden className="pointer-events-none absolute -translate-y-full" style={pin}>
           <CommentPin number={number} state={state} tabIndex={-1} className="pointer-events-none animate-none" />

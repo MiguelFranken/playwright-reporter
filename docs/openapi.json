@@ -11494,6 +11494,107 @@
                             ],
                             "description": "In the page’s CSS pixels (pixels ÷ device scale factor), when the scale is known."
                           },
+                          "drawing": {
+                            "description": "What the reviewer drew with the comment, shape by shape; the anchor is then the area the drawing covers. The image attached with the thread shows it in the same colours.",
+                            "anyOf": [
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "tool": {
+                                      "type": "string",
+                                      "enum": [
+                                        "pen",
+                                        "highlighter",
+                                        "arrow",
+                                        "rect",
+                                        "ellipse"
+                                      ],
+                                      "description": "pen and highlighter: freehand strokes; arrow: from its start to its head; rect, ellipse: a box or an ellipse."
+                                    },
+                                    "color": {
+                                      "type": "string",
+                                      "enum": [
+                                        "red",
+                                        "orange",
+                                        "yellow",
+                                        "green",
+                                        "blue",
+                                        "purple"
+                                      ],
+                                      "description": "The colour it was drawn in: comments refer to shapes by it (\"the blue area should grow\")."
+                                    },
+                                    "pixels": {
+                                      "type": "object",
+                                      "properties": {
+                                        "x": {
+                                          "type": "number"
+                                        },
+                                        "y": {
+                                          "type": "number"
+                                        },
+                                        "w": {
+                                          "type": "number"
+                                        },
+                                        "h": {
+                                          "type": "number"
+                                        }
+                                      },
+                                      "required": [
+                                        "x",
+                                        "y",
+                                        "w",
+                                        "h"
+                                      ],
+                                      "additionalProperties": false,
+                                      "description": "The box the shape covers, in this image’s pixels."
+                                    },
+                                    "percent": {
+                                      "type": "object",
+                                      "properties": {
+                                        "x": {
+                                          "type": "number"
+                                        },
+                                        "y": {
+                                          "type": "number"
+                                        },
+                                        "w": {
+                                          "type": "number"
+                                        },
+                                        "h": {
+                                          "type": "number"
+                                        }
+                                      },
+                                      "required": [
+                                        "x",
+                                        "y",
+                                        "w",
+                                        "h"
+                                      ],
+                                      "additionalProperties": false,
+                                      "description": "The same box in percent of the image."
+                                    },
+                                    "text": {
+                                      "type": "string",
+                                      "description": "The shape in words, e.g. \"red arrow from (40, 60) to (300, 410) px\"."
+                                    }
+                                  },
+                                  "required": [
+                                    "tool",
+                                    "color",
+                                    "pixels",
+                                    "percent",
+                                    "text"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "placedOnRun": {
                             "type": [
                               "number",
@@ -12418,6 +12519,107 @@
                               "null"
                             ]
                           },
+                          "drawing": {
+                            "description": "What the reviewer drew with the comment, shape by shape; the anchor is then the area the drawing covers. The image attached with the thread shows it in the same colours.",
+                            "anyOf": [
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "tool": {
+                                      "type": "string",
+                                      "enum": [
+                                        "pen",
+                                        "highlighter",
+                                        "arrow",
+                                        "rect",
+                                        "ellipse"
+                                      ],
+                                      "description": "pen and highlighter: freehand strokes; arrow: from its start to its head; rect, ellipse: a box or an ellipse."
+                                    },
+                                    "color": {
+                                      "type": "string",
+                                      "enum": [
+                                        "red",
+                                        "orange",
+                                        "yellow",
+                                        "green",
+                                        "blue",
+                                        "purple"
+                                      ],
+                                      "description": "The colour it was drawn in: comments refer to shapes by it (\"the blue area should grow\")."
+                                    },
+                                    "pixels": {
+                                      "type": "object",
+                                      "properties": {
+                                        "x": {
+                                          "type": "number"
+                                        },
+                                        "y": {
+                                          "type": "number"
+                                        },
+                                        "w": {
+                                          "type": "number"
+                                        },
+                                        "h": {
+                                          "type": "number"
+                                        }
+                                      },
+                                      "required": [
+                                        "x",
+                                        "y",
+                                        "w",
+                                        "h"
+                                      ],
+                                      "additionalProperties": false,
+                                      "description": "The box the shape covers, in this image’s pixels."
+                                    },
+                                    "percent": {
+                                      "type": "object",
+                                      "properties": {
+                                        "x": {
+                                          "type": "number"
+                                        },
+                                        "y": {
+                                          "type": "number"
+                                        },
+                                        "w": {
+                                          "type": "number"
+                                        },
+                                        "h": {
+                                          "type": "number"
+                                        }
+                                      },
+                                      "required": [
+                                        "x",
+                                        "y",
+                                        "w",
+                                        "h"
+                                      ],
+                                      "additionalProperties": false,
+                                      "description": "The same box in percent of the image."
+                                    },
+                                    "text": {
+                                      "type": "string",
+                                      "description": "The shape in words, e.g. \"red arrow from (40, 60) to (300, 410) px\"."
+                                    }
+                                  },
+                                  "required": [
+                                    "tool",
+                                    "color",
+                                    "pixels",
+                                    "percent",
+                                    "text"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "conversation": {
                             "type": "array",
                             "items": {
@@ -12996,6 +13198,107 @@
                                     }
                                   ],
                                   "description": "In the page’s CSS pixels (pixels ÷ device scale factor), when the scale is known."
+                                },
+                                "drawing": {
+                                  "description": "What the reviewer drew with the comment, shape by shape; the anchor is then the area the drawing covers. The image attached with the thread shows it in the same colours.",
+                                  "anyOf": [
+                                    {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "tool": {
+                                            "type": "string",
+                                            "enum": [
+                                              "pen",
+                                              "highlighter",
+                                              "arrow",
+                                              "rect",
+                                              "ellipse"
+                                            ],
+                                            "description": "pen and highlighter: freehand strokes; arrow: from its start to its head; rect, ellipse: a box or an ellipse."
+                                          },
+                                          "color": {
+                                            "type": "string",
+                                            "enum": [
+                                              "red",
+                                              "orange",
+                                              "yellow",
+                                              "green",
+                                              "blue",
+                                              "purple"
+                                            ],
+                                            "description": "The colour it was drawn in: comments refer to shapes by it (\"the blue area should grow\")."
+                                          },
+                                          "pixels": {
+                                            "type": "object",
+                                            "properties": {
+                                              "x": {
+                                                "type": "number"
+                                              },
+                                              "y": {
+                                                "type": "number"
+                                              },
+                                              "w": {
+                                                "type": "number"
+                                              },
+                                              "h": {
+                                                "type": "number"
+                                              }
+                                            },
+                                            "required": [
+                                              "x",
+                                              "y",
+                                              "w",
+                                              "h"
+                                            ],
+                                            "additionalProperties": false,
+                                            "description": "The box the shape covers, in this image’s pixels."
+                                          },
+                                          "percent": {
+                                            "type": "object",
+                                            "properties": {
+                                              "x": {
+                                                "type": "number"
+                                              },
+                                              "y": {
+                                                "type": "number"
+                                              },
+                                              "w": {
+                                                "type": "number"
+                                              },
+                                              "h": {
+                                                "type": "number"
+                                              }
+                                            },
+                                            "required": [
+                                              "x",
+                                              "y",
+                                              "w",
+                                              "h"
+                                            ],
+                                            "additionalProperties": false,
+                                            "description": "The same box in percent of the image."
+                                          },
+                                          "text": {
+                                            "type": "string",
+                                            "description": "The shape in words, e.g. \"red arrow from (40, 60) to (300, 410) px\"."
+                                          }
+                                        },
+                                        "required": [
+                                          "tool",
+                                          "color",
+                                          "pixels",
+                                          "percent",
+                                          "text"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
                                 },
                                 "placedOnRun": {
                                   "type": [

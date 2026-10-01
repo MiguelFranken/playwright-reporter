@@ -21,6 +21,7 @@ import {
   type StoryboardMode,
 } from '@miguelfranken/ui/lib/review';
 import type { CommentEditInput, NewThreadInput, ReviewThreadView, ThreadReplyInput, ThreadStatusInput } from '@miguelfranken/ui/lib/review-threads';
+import { anchorForMarkup } from '@miguelfranken/ui/lib/review-markup';
 import type { IgnoreRect } from '@miguelfranken/ui/views/review/ignore-regions-editor';
 import { ReviewStoryboard, STORYBOARD_SIZE, type ReviewSelection } from '@miguelfranken/ui/views/review/review-storyboard';
 import { useShallowSearch } from '@/components/filters/url-filters';
@@ -75,7 +76,8 @@ function applyChange(flows: ReviewFlowView[], change: Change): ReviewFlowView[] 
           id: tempId,
           number: next,
           status: 'open',
-          anchor: input.anchor,
+          anchor: input.markup?.length ? (anchorForMarkup(input.markup) ?? input.anchor) : input.anchor,
+          markup: input.markup?.length ? input.markup : null,
           placement: 'exact',
           createdAt: now,
           pending: true,

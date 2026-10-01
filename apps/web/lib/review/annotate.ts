@@ -11,6 +11,7 @@
  */
 import sharp, { type Sharp } from 'sharp';
 import type { FractionAnchor, ImageSize, ThreadPlacement, ThreadStatus } from '@miguelfranken/ui/lib/review-threads';
+import { arrowHead, isStroke, MARKUP_INK, pairs, strokePath, type MarkupShape } from '@miguelfranken/ui/lib/review-markup';
 
 export interface PinSpec {
   number: number;
@@ -18,6 +19,8 @@ export interface PinSpec {
   placement: ThreadPlacement;
   /** In fractions of the image. */
   anchor: FractionAnchor;
+  /** What was drawn with the comment, in fractions of the image; drawn in its colours instead of the area. */
+  markup?: MarkupShape[] | null;
 }
 
 export interface EncodedImage {
@@ -110,15 +113,53 @@ function areaSvg(pin: PinSpec, x: number, y: number, w: number, h: number, weigh
   return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="${weight}" fill="${color}" fill-opacity="0.12" stroke="${color}" stroke-width="${weight}"${dash}/>`;
 }
 
-/** The overlay of every pin on an image of `width` × `height`, areas under pins, in number order. */
+/**
+ * A thread's drawing in the colours it was drawn in, the way the app draws it:
+ * strokes with round ends, a translucent highlighter, arrows with a head.
+ * `weight` is the pen's width in output pixels.
+ */
+function markupSvg(pin: PinSpec, toX: (f: number) => number, toY: (f: number) => number, weight: number): string {
+  const muted = pin.status === 'resolved' ? ' opacity="0.5"' : '';
+  const svg = (shape: MarkupShape) => {
+    const ink = MARKUP_INK[shape.color];
+    const pts = pairs(shape.points).map(([x, y]) => [toX(x), toY(y)] as const);
+    if (isStroke(shape.tool)) {
+      const d = strokePath(pts.flat(), 1);
+      const highlighter = shape.tool === 'highlighter';
+      return `<path d="${d}" fill="none" stroke="${ink}" stroke-width="${(highlighter ? weight * 4.5 : weight).toFixed(1)}" stroke-linecap="round" stroke-linejoin="round"${highlighter ? ' stroke-opacity="0.4"' : ''}/>`;
+    }
+    const [[x1, y1], [x2, y2]] = pts;
+    const stroke = `fill="none" stroke="${ink}" stroke-width="${weight.toFixed(1)}"`;
+    if (shape.tool === 'arrow') {
+      const head = arrowHead(x1, y1, x2, y2, weight * 4.5);
+      const [hx, hy] = [(head[1][0] + head[2][0]) / 2, (head[1][1] + head[2][1]) / 2];
+      return `<path d="M${x1.toFixed(1)} ${y1.toFixed(1)}L${hx.toFixed(1)} ${hy.toFixed(1)}" ${stroke} stroke-linecap="round"/><path d="M${head.map(([x, y]) => `${x.toFixed(1)} ${y.toFixed(1)}`).join('L')}Z" fill="${ink}" stroke="${ink}" stroke-width="${(weight / 2).toFixed(1)}" stroke-linejoin="round"/>`;
+    }
+    const x = Math.min(x1, x2);
+    const y = Math.min(y1, y2);
+    const w = Math.abs(x2 - x1);
+    const h = Math.abs(y2 - y1);
+    if (shape.tool === 'rect') return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="${weight.toFixed(1)}" ${stroke}/>`;
+    return `<ellipse cx="${(x + w / 2).toFixed(1)}" cy="${(y + h / 2).toFixed(1)}" rx="${(w / 2).toFixed(1)}" ry="${(h / 2).toFixed(1)}" ${stroke}/>`;
+  };
+  const shapes = pin.markup ?? [];
+  const marker = shapes.filter((s) => s.tool === 'highlighter').map(svg);
+  const ink = shapes.filter((s) => s.tool !== 'highlighter').map(svg);
+  // A white halo around the lines keeps them apart from the page, as the pins' ring does; a highlighter shows the page through it.
+  return `<g${muted}>${marker.join('')}${ink.length ? `<g filter="url(#halo)">${ink.join('')}</g>` : ''}</g>`;
+}
+
+/** The overlay of every pin on an image of `width` × `height`: drawings and areas under pins, in number order. */
 function overlaySvg(pins: readonly PinSpec[], width: number, height: number, origin = { x: 0, y: 0, w: 1, h: 1 }): Buffer {
   const radius = Math.round(Math.min(24, Math.max(14, width / 60)));
   const weight = Math.max(2, Math.round(radius / 5));
   const toX = (f: number) => ((f - origin.x) / origin.w) * width;
   const toY = (f: number) => ((f - origin.y) / origin.h) * height;
   const drawn = pins.filter((p) => p.anchor.kind !== 'image').sort((a, b) => a.number - b.number);
+  const pen = Math.max(2.5, Math.min(6, width / 320));
+  const drawings = drawn.filter((p) => p.markup?.length).map((p) => markupSvg(p, toX, toY, pen));
   const areas = drawn
-    .filter((p) => p.anchor.kind === 'area' && p.anchor.w != null && p.anchor.h != null)
+    .filter((p) => !p.markup?.length && p.anchor.kind === 'area' && p.anchor.w != null && p.anchor.h != null)
     .map((p) => areaSvg(p, toX(p.anchor.x), toY(p.anchor.y), (p.anchor.w! / origin.w) * width, (p.anchor.h! / origin.h) * height, weight));
   const marks = drawn.map((p) => {
     const x = Math.min(Math.max(toX(p.anchor.x), 0), width - radius * 2 - 2);
@@ -126,7 +167,7 @@ function overlaySvg(pins: readonly PinSpec[], width: number, height: number, ori
     return pinSvg(p, x, y, radius);
   });
   return Buffer.from(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><defs><filter id="shadow" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-color="#000" flood-opacity="0.45"/></filter></defs>${areas.join('')}${marks.join('')}</svg>`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><defs><filter id="shadow" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-color="#000" flood-opacity="0.45"/></filter><filter id="halo" x="-20%" y="-20%" width="140%" height="140%"><feMorphology in="SourceAlpha" operator="dilate" radius="1.5" result="grown"/><feFlood flood-color="#fff" flood-opacity="0.85"/><feComposite in2="grown" operator="in" result="ring"/><feMerge><feMergeNode in="ring"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>${drawings.join('')}${areas.join('')}${marks.join('')}</svg>`,
   );
 }
 

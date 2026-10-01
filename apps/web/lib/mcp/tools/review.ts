@@ -15,10 +15,11 @@ import sharp from 'sharp';
 import { z } from 'zod';
 import { checkpointLabel, describeDiff, matchesReviewFilter, REVIEW_DECISIONS, REVIEW_FILTERS } from '@miguelfranken/ui/lib/review';
 import { MAX_COMMENT_LENGTH, projectAnchor } from '@miguelfranken/ui/lib/review-threads';
+import { MARKUP_COLORS, MARKUP_TOOLS } from '@miguelfranken/ui/lib/review-markup';
 import { signCaptureImagePath } from '@/lib/auth/artifact-url';
 import { baseUrl } from '@/lib/auth/config';
 import { annotate, cropAround } from '@/lib/review/annotate';
-import { pinSpecs, readCaptureBytes, threadComments, threadPosition } from '@/lib/review/images';
+import { pinSpecs, readCaptureBytes, threadComments, threadDrawing, threadPosition } from '@/lib/review/images';
 import { createThread, ThreadError, type CaptureThread } from '@/lib/review/threads';
 import { db } from '@/lib/db/drizzle';
 import { runs } from '@/lib/db/schema';
@@ -41,6 +42,22 @@ const AUTO_CROPS = 6;
 // ---------------------------------------------------------------- threads, shared with review-threads.ts
 
 const box = z.object({ x: z.number(), y: z.number(), w: z.number().nullable(), h: z.number().nullable() });
+const bounds = z.object({ x: z.number(), y: z.number(), w: z.number(), h: z.number() });
+
+/** A shape drawn with a thread. */
+export const drawingOut = z
+  .array(
+    z.object({
+      tool: z.enum(MARKUP_TOOLS).describe('pen and highlighter: freehand strokes; arrow: from its start to its head; rect, ellipse: a box or an ellipse.'),
+      color: z.enum(MARKUP_COLORS).describe('The colour it was drawn in: comments refer to shapes by it ("the blue area should grow").'),
+      pixels: bounds.describe('The box the shape covers, in this image’s pixels.'),
+      percent: bounds.describe('The same box in percent of the image.'),
+      text: z.string().describe('The shape in words, e.g. "red arrow from (40, 60) to (300, 410) px".'),
+    }),
+  )
+  .nullable()
+  .optional()
+  .describe('What the reviewer drew with the comment, shape by shape; the anchor is then the area the drawing covers. The image attached with the thread shows it in the same colours.');
 
 /** An AI agent wrote the comment, for a person: `author` is then the agent's name. */
 export const agentOut = z
@@ -62,6 +79,7 @@ export const threadOut = z.object({
   pixels: box.nullable().describe('In this image’s pixels, from its top-left corner.'),
   percent: box.nullable().describe('In percent of the image’s width and height.'),
   css: box.nullable().describe('In the page’s CSS pixels (pixels ÷ device scale factor), when the scale is known.'),
+  drawing: drawingOut,
   placedOnRun: z.number().nullable(),
   placedOnCapture: z
     .string()
@@ -90,6 +108,7 @@ export function toThreadOut(t: CaptureThread, capture: ComparedCapture, url: str
     pixels: pos.pixels,
     percent: pos.percent,
     css: pos.css,
+    drawing: threadDrawing(t, capture),
     placedOnRun: t.originRunNumber,
     placedOnCapture: t.originCaptureId,
     comments: threadComments(t),
@@ -106,6 +125,7 @@ export function renderThread(md: { line(s: string): void }, t: z.infer<typeof th
     .filter(Boolean)
     .join(', ');
   md.line(`**#${t.number}** · ${position} · ${flags}`);
+  if (t.drawing?.length) md.line(`  - _drawn: ${t.drawing.map((d) => d.text).join('; ')}_`);
   for (const c of t.comments) {
     if (c.kind !== 'comment') md.line(`  - _${c.author ?? 'Someone'} ${c.kind === 'resolved' ? 'resolved it' : 'reopened it'}_`);
     else md.line(`  - ${commentBy(c)}: ${c.body.replace(/\s+/g, ' ')}`);
