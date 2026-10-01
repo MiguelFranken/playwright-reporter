@@ -333,6 +333,20 @@ export async function selectCheckpoints(where: SQL): Promise<Omit<CheckpointReco
 /** Captures by id, without their comparison. */
 export const capturesById = (ids: readonly string[]) => (ids.length ? selectCaptures(inArray(reviewCaptures.id, [...ids])) : Promise.resolve([]));
 
+/** The captures of a run's final attempts, without their comparison: what a run-to-run comparison pairs up. */
+export async function capturesOfRun(runId: string): Promise<(CaptureRecord & { checkpoint: Omit<CheckpointRecord, 'captures'> })[]> {
+  const cps = await selectCheckpoints(eq(reviewCheckpoints.runId, runId));
+  if (cps.length === 0) return [];
+  const byId = new Map(cps.map((c) => [c.id, c]));
+  const raw = await selectCaptures(
+    inArray(
+      reviewCaptures.checkpointId,
+      cps.map((c) => c.id),
+    ),
+  );
+  return raw.flatMap((c) => (byId.has(c.checkpointId) ? [{ ...c, checkpoint: byId.get(c.checkpointId)! }] : []));
+}
+
 /** The checkpoints of some results' final attempts, in order, with their compared captures. */
 export async function checkpointsWhere(where: SQL, context?: { runId: string; runStartedAt: Date }): Promise<CheckpointRecord[]> {
   const cps = await selectCheckpoints(where);

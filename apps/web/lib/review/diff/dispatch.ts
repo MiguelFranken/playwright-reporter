@@ -17,7 +17,7 @@ import { after } from 'next/server';
 import { start } from 'workflow/api';
 import type { ComparedCapture } from '../queries';
 import { approveWithinTolerance, measureDiff, needsPlanning, planCaptures, planRun } from './store';
-import { diffPairs, diffRun } from './workflow/diff.workflow';
+import { diffPairs, diffRun, measurePairs } from './workflow/diff.workflow';
 
 export type DiffDriver = 'workflow' | 'inline' | 'none';
 
@@ -46,6 +46,19 @@ export async function dispatchRun(runId: string) {
     const plan = await planRun(runId);
     await inline(plan.ids, runId);
   }
+}
+
+/**
+ * Measures comparisons already planned *without* approving anything: what a
+ * read (an agent asking for a comparison) may set off. A measurement is a
+ * fact about two images; approving a run's noise is a review decision, and
+ * the review paths (`dispatchRun`, `dispatchPairs`) are the ones that take it.
+ */
+export async function dispatchMeasurements(ids: readonly string[]) {
+  if (ids.length === 0) return;
+  const driver = diffDriver();
+  if (driver === 'workflow') await start(measurePairs, [[...ids]]);
+  else if (driver === 'inline') for (const id of ids) await measureDiff(id).catch(() => measureDiff(id));
 }
 
 /** Measures comparisons already planned. */
@@ -78,7 +91,13 @@ export function afterRunFinished(runId: string) {
  * died), once the page is sent.
  */
 export function afterCapturesShown(runId: string, captures: readonly ComparedCapture[]) {
-  if (!diffsEnabled() || !needsPlanning(captures)) return;
+  if (!diffsEnabled()) return;
+  // A comparison an agent had measured (without approving) may be within the tolerance already.
+  const due = captures.some((c) => c.status === 'changed' && c.withinTolerance && !c.decision);
+  if (!needsPlanning(captures)) {
+    if (due) later('approving shown captures', () => approveWithinTolerance(runId, captures));
+    return;
+  }
   later('planning shown captures', async () => {
     const plan = await planCaptures(captures);
     await dispatchPairs(plan.ids, runId);

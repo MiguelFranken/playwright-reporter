@@ -65,20 +65,29 @@ const DIGITS: Record<string, (keyof typeof SEGMENTS)[]> = {
   '9': ['a', 'b', 'c', 'd', 'f', 'g'],
 };
 
-function digitsPath(text: string, x: number, y: number, unit: number): string {
+/**
+ * Digits (and a `D`, for the `D1`, `D2`… labels of changed regions) as stroke
+ * paths on a 6 × 10 grid, `unit` pixels a cell, `9 * unit` apart.
+ */
+export function digitsPath(text: string, x: number, y: number, unit: number): string {
   const advance = 9 * unit;
+  const f = (n: number) => n.toFixed(1);
   return [...text]
-    .map((ch, i) =>
-      (DIGITS[ch] ?? [])
+    .map((ch, i) => {
+      const ox = x + i * advance;
+      if (ch === 'D') return `M${f(ox)} ${f(y)}L${f(ox)} ${f(y + 10 * unit)}M${f(ox)} ${f(y)}C${f(ox + 8 * unit)} ${f(y)} ${f(ox + 8 * unit)} ${f(y + 10 * unit)} ${f(ox)} ${f(y + 10 * unit)}`;
+      return (DIGITS[ch] ?? [])
         .map((s) => {
           const [x1, y1, x2, y2] = SEGMENTS[s];
-          const ox = x + i * advance;
-          return `M${(ox + x1 * unit).toFixed(1)} ${(y + y1 * unit).toFixed(1)}L${(ox + x2 * unit).toFixed(1)} ${(y + y2 * unit).toFixed(1)}`;
+          return `M${f(ox + x1 * unit)} ${f(y + y1 * unit)}L${f(ox + x2 * unit)} ${f(y + y2 * unit)}`;
         })
-        .join(''),
-    )
+        .join('');
+    })
     .join('');
 }
+
+/** `encode`, shared with the diff renderer: PNG while it fits, else JPEG at falling quality. */
+export { encode as encodeForModel };
 
 /**
  * One pin as SVG, its sharp bottom-left corner on `(px, py)`: a bubble with

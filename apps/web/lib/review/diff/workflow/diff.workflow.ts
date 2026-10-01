@@ -44,3 +44,14 @@ export async function diffPairs(diffIds: string[], runId: string) {
   const approved = await approveRun(runId);
   return { runId, measured, approved };
 }
+
+/**
+ * Measures comparisons already planned and approves nothing: an agent asked
+ * to see a pair of images (`get_visual_diff`). The run's review approves its
+ * noise when the run is shown or finishes, as it does today.
+ */
+export async function measurePairs(diffIds: string[]) {
+  'use workflow';
+  const measured = await measureAll(diffIds);
+  return { measured };
+}
