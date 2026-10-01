@@ -17,8 +17,10 @@ import {
   checkpointLabel,
   compareVariants,
   DEFAULT_FRAME,
-  fitZoom,
   frameFor,
+  fillFrames,
+  frameWithin,
+  shownZoom,
   type FrameSettings,
   NEEDS_REVIEW,
   type ReviewCaptureView,
@@ -318,11 +320,38 @@ export function CheckpointViewer({
   const comparedCapture = comparedThread ? (shown.find((c) => c.threads?.some((t) => t.id === comparedThread.id)) ?? null) : null;
   const threadComparing = Boolean(comparedThread && comparedCapture);
   const frames = (threadComparing ? [comparedCapture!] : comparing && current ? [current] : shown).map((c) => frameFor(frameSettings, c));
+  const fill = Boolean(frameSettings.fill);
+  // One plain screen needs no caption over it when it fills the stage: the toolbar already says what it is.
+  const captionless = effectiveStage === 'image' && !threadComparing && !requestCapture && shown.length === 1;
   const zoomFrames = threadComparing || (requestShown && !requestShown.onThisImage) || (comparing && effectiveStage === 'side-by-side') ? [frames[0], frames[0]] : frames;
-  // Room for the captions above the screens and the stage's padding.
-  // Room for the captions above the screens (and, comparing a thread, its banner and comment) and the stage's padding.
-  const fitHeight = stackedHeight == null ? stageSize.height - 48 : Math.max(240, stackedHeight * 0.75);
-  const zoom = frameSettings.zoom === 'fit' ? fitZoom(zoomFrames, { width: stageSize.width - 48, height: fitHeight - (threadComparing ? 300 : requestCapture ? 140 : 28) }) : frameSettings.zoom;
+  // What sits around the screens inside the stage: captions above them (and, comparing a thread, its banner and comment;
+  // leaving areas out, the help and the list below), the comparison's controls, the changes' minimap beside them.
+  const around = threadComparing
+    ? { above: 300, beside: 0 }
+    : requestCapture
+      ? { above: 140, beside: 0 }
+      : effectiveStage === 'ignore'
+        ? { above: 180, beside: 0 }
+        : effectiveStage === 'changes'
+          ? { above: 0, beside: 20 }
+          : effectiveStage === 'onion' || effectiveStage === 'difference'
+            ? { above: 40, beside: 0 }
+            : effectiveStage === 'slider' || (fill && captionless)
+              ? { above: 0, beside: 0 }
+              : { above: 28, beside: 0 };
+  // The room the screens have: the stage less its padding (none when they fill it). They never outgrow it, so the stage
+  // itself never scrolls.
+  const padding = fill ? 0 : 48;
+  const room = {
+    width: stageSize.width - padding - around.beside,
+    height: (stackedHeight == null ? stageSize.height - padding : Math.max(240, stackedHeight * 0.75)) - around.above,
+  };
+  // The largest zoom the width allows; the toolbar offers nothing above it.
+  const maxZoom = shownZoom(Infinity, zoomFrames, room);
+  const filled = fill ? fillFrames(frames, room) : null;
+  const zoom = filled?.zoom ?? shownZoom(frameSettings.zoom, zoomFrames, room);
+  // A screen longer than the room ends at its bottom edge and scrolls inside; filling, every screen is as tall as the room.
+  const screens = filled?.screens ?? frames.map((f) => frameWithin(f, room.height, zoom));
   const closeUpWidth = Math.min(640, Math.max(240, (stageSize.width - 48 - 24) / 2));
   const pending = new Set(pendingIds);
   const busy = shown.some((c) => pending.has(c.id));
@@ -580,6 +609,7 @@ export function CheckpointViewer({
       else if (e.key === 'ArrowDown') moveFlow(1);
       else if (e.key === 'ArrowUp') moveFlow(-1);
       else if (key === 'v') cycleVariant();
+      else if (key === 'f') setFrame({ ...frameSettings, fill: !fill });
       else if (key === 'm') cycleStage();
       else if (key === 'n' && regions.length) moveRegion(1);
       else if (key === 'p' && regions.length) moveRegion(-1);
@@ -750,7 +780,7 @@ export function CheckpointViewer({
             <div className="grid shrink-0 grow grid-cols-1 lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_20rem]">
               <section className="flex min-h-0 flex-col bg-surface" aria-label="Checkpoint image">
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-surface px-4 py-2">
-                  <FrameToolbar value={frameSettings} onChange={setFrame} captured={current ? captureViewport(current) : null} />
+                  <FrameToolbar value={frameSettings} onChange={setFrame} captured={current ? captureViewport(current) : null} maxZoom={stageSize.width > 0 ? maxZoom : undefined} />
                   <div className="flex items-center gap-3">
                     {effectiveStage === 'changes' && regions.length ? (
                       <div className="flex items-center gap-0.5" role="group" aria-label="Changes">
@@ -791,7 +821,12 @@ export function CheckpointViewer({
                   tabIndex={0}
                   aria-label="Checkpoint screens"
                   className={cn(
-                    'min-h-0 flex-1 overflow-auto p-6 outline-none transition-shadow duration-150 focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/25',
+                    'min-h-0 flex-1 outline-none transition-shadow duration-150 focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/25',
+                    // The screens fit; only a comparison while verifying, the summary after resolving and the editor's list below
+                    // the screen can run longer.
+                    verifying || (resolving && ended) || effectiveStage === 'ignore' ? 'overflow-auto' : 'overflow-hidden',
+                    // Filling, the screens lose their frame and run to the stage's edges.
+                    fill ? 'p-0 [&_[data-slot=screen-frame]]:rounded-none [&_[data-slot=screen-frame]]:shadow-none [&_[data-slot=screen-frame]]:ring-0' : 'p-6',
                     commenting && 'shadow-[inset_0_0_0_2px_var(--accent-solid)]',
                   )}
                 >
@@ -808,7 +843,7 @@ export function CheckpointViewer({
                       request={requestShown}
                       then={requestThen}
                       image={requestCapture.image}
-                      frame={frames[0]}
+                      frame={screens[0]}
                       zoom={zoom}
                       label={label}
                       currentLabel={`Now${requestCapture.runNumber ? ` · run #${requestCapture.runNumber}` : library ? '' : ' · this run'}`}
@@ -835,7 +870,7 @@ export function CheckpointViewer({
                       total={resolving ? resolving.items.length : toWalk.length}
                       captureId={comparedCapture.id}
                       image={comparedCapture.image}
-                      frame={frames[0]}
+                      frame={screens[0]}
                       zoom={zoom}
                       closeUpWidth={closeUpWidth}
                       label={label}
@@ -867,7 +902,7 @@ export function CheckpointViewer({
                     />
                   ) : current && effectiveStage === 'changes' && diff ? (
                     <div className="flex min-w-max justify-center">
-                      <DiffHighlight image={current.image} diff={diff} frame={frames[0]} zoom={zoom} alt={label} active={activeRegion} onActiveChange={setActiveRegion}>
+                      <DiffHighlight image={current.image} diff={diff} frame={screens[0]} zoom={zoom} alt={label} active={activeRegion} onActiveChange={setActiveRegion}>
                         {pinLayer(current, label)}
                       </DiffHighlight>
                     </div>
@@ -875,7 +910,7 @@ export function CheckpointViewer({
                     <IgnoreRegionsEditor
                       image={current.image}
                       imageSize={(measuredSize ?? ownSize)!}
-                      frame={frames[0]}
+                      frame={screens[0]}
                       zoom={zoom}
                       alt={label}
                       value={current.ignoreRegions ?? []}
@@ -906,7 +941,7 @@ export function CheckpointViewer({
                           <div ref={setSideBySideEl} className="flex min-w-max items-start justify-center gap-6">
                             {sides.map((side) => (
                               <figure key={side.key} className="flex flex-col gap-1.5">
-                                <figcaption className="flex items-center gap-2 text-label-s text-muted-foreground">
+                                <figcaption className="flex w-0 min-w-full items-center gap-2 overflow-hidden text-label-s whitespace-nowrap text-muted-foreground">
                                   {side.title}
                                   {side.note ? (
                                     <span className="inline-flex items-center gap-1 text-label-xs text-accent-text">
@@ -914,14 +949,14 @@ export function CheckpointViewer({
                                     </span>
                                   ) : null}
                                 </figcaption>
-                                <ScreenFrame image={side.image} frame={frames[0]} zoom={zoom} alt={`${label} — ${side.title}`} overlay={side.overlay ? () => side.overlay : undefined} />
+                                <ScreenFrame image={side.image} frame={screens[0]} zoom={zoom} alt={`${label} — ${side.title}`} overlay={side.overlay ? () => side.overlay : undefined} />
                               </figure>
                             ))}
                           </div>
                         );
                       })()
                     ) : (
-                      <div role="region" aria-label={`${label}, comparison`} tabIndex={0} className="mx-auto overflow-x-hidden overflow-y-auto rounded-md ring-1 ring-border outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40" style={{ width: frames[0].width * zoom, height: frames[0].height * zoom + (effectiveStage === 'slider' ? 0 : 40) }}>
+                      <div role="region" aria-label={`${label}, comparison`} tabIndex={0} className={cn('mx-auto overflow-x-hidden overflow-y-auto outline-none', fill ? null : 'rounded-md ring-1 ring-border', 'focus-visible:ring-[3px] focus-visible:ring-ring/40')} style={{ width: Math.round(screens[0].width * zoom), height: Math.round(screens[0].height * zoom) + around.above }}>
                         <ImageCompare current={current.image} reference={reference.image} mode={effectiveStage as CompareMode} referenceLabel={reference.label} currentLabel={library ? (current.compare || !current.runNumber ? 'This one' : `Run #${current.runNumber}`) : 'This run'} alt={label} />
                       </div>
                     )
@@ -929,16 +964,19 @@ export function CheckpointViewer({
                     <div className="flex min-w-max items-start justify-center gap-6">
                       {shown.map((c, i) => (
                         <figure key={c.id} className="flex flex-col gap-1.5">
-                          <figcaption className="flex items-center gap-2 text-label-s capitalize text-muted-foreground">
-                            {c.variant}
-                            <span className="normal-case tabular-nums">
-                              {frames[i].width} × {frames[i].height}
-                            </span>
-                            {shown.length > 1 && !library ? <ReviewStatusBadge status={c.status} /> : null}
-                          </figcaption>
+                          {/* As wide as its screen and no wider: a long caption is cut, never widening the row past the stage. */}
+                          {fill && captionless ? null : (
+                            <figcaption className="flex w-0 min-w-full items-center gap-2 overflow-hidden text-label-s whitespace-nowrap capitalize text-muted-foreground">
+                              {c.variant}
+                              <span className="normal-case tabular-nums">
+                                {frames[i].width} × {frames[i].height}
+                              </span>
+                              {shown.length > 1 && !library ? <ReviewStatusBadge status={c.status} /> : null}
+                            </figcaption>
+                          )}
                           <ScreenFrame
                             image={c.image}
-                            frame={frames[i]}
+                            frame={screens[i]}
                             zoom={zoom}
                             alt={`${label} — ${c.variant}`}
                             label={`${label}, ${c.variant} screen`}
@@ -1199,6 +1237,7 @@ const SHORTCUTS: [string[], string][] = [
   [['←', '→'], 'Previous / next checkpoint'],
   [['↑', '↓'], 'Previous / next test'],
   [['V'], 'Next variant'],
+  [['F'], 'Fill the space with the screens, or frame them again'],
   [['M'], 'Next comparison'],
   [['N', 'P'], 'Next / previous change'],
   [['A'], 'Approve and go to the next image to review'],
