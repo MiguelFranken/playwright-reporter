@@ -99,6 +99,7 @@ export interface LibraryBrowserProps {
   ignorePendingId?: string | null;
   onIgnorePreview?: (input: { captureId: string; regions: IgnoreRect[] }) => void;
   ignorePreview?: { pending: boolean; result: IgnorePreviewView | null; error?: string | null } | null;
+  analysis?: React.ComponentProps<typeof CheckpointViewer>['analysis'];
   emptyTitle?: string;
   emptyDescription?: React.ReactNode;
 }
@@ -147,6 +148,7 @@ export function LibraryBrowser({
   ignorePendingId,
   onIgnorePreview,
   ignorePreview,
+  analysis,
   emptyTitle = 'No screens yet',
   emptyDescription,
 }: LibraryBrowserProps) {
@@ -398,6 +400,7 @@ export function LibraryBrowser({
         ignorePendingId={ignorePendingId}
         onIgnorePreview={onIgnorePreview}
         ignorePreview={ignorePreview}
+        analysis={analysis}
         frame={frame ?? DEFAULT_FRAME}
         onFrameChange={onFrameChange}
         mode="library"

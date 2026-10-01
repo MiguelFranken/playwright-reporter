@@ -15847,6 +15847,889 @@
         }
       }
     },
+    "/projects/{team}/{project}/visual-diffs/{comparison}/analyses": {
+      "post": {
+        "operationId": "analyzeVisualDiff",
+        "summary": "Ask a model about a visual difference",
+        "description": "Starts one AI analysis of a comparison’s changed regions under the project’s policy and budget, or answers the earlier analysis of the same input. Poll `/visual-diff-analyses/{analysis}`. Needs the `write` scope.",
+        "tags": [
+          "Visual review"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "team",
+            "schema": {
+              "type": "string",
+              "description": "Team slug, as in the app URL (`/teams/<team>/…`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "project",
+            "schema": {
+              "type": "string",
+              "description": "Project slug, as in the app URL (`…/projects/<project>`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "comparison",
+            "schema": {
+              "type": "string",
+              "description": "Comparison id (`vc_…`): one pair of captures, as returned by `/visual-diffs`."
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "regionIds": {
+                    "description": "Up to 4 regions (ids or labels); default: the 4 largest changes.",
+                    "maxItems": 4,
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "purpose": {
+                    "description": "explain: observations and hypotheses only. suggest_ignore (default): also tight areas the model would leave out, for a person to accept.",
+                    "type": "string",
+                    "enum": [
+                      "explain",
+                      "suggest_ignore"
+                    ]
+                  },
+                  "idempotencyKey": {
+                    "description": "Your own key against retries: the same key answers the same job.",
+                    "type": "string",
+                    "maxLength": 120
+                  },
+                  "maxMicroUsd": {
+                    "description": "A cap below the project’s per-analysis limit, in micro-dollars (1,000,000 = $1).",
+                    "type": "integer",
+                    "minimum": 1000,
+                    "maximum": 9007199254740991
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "project": {
+                      "type": "string"
+                    },
+                    "analysisId": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "queued",
+                        "running",
+                        "done",
+                        "failed",
+                        "denied",
+                        "over_budget"
+                      ]
+                    },
+                    "model": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "finishedAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "summary": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "error": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "reservedMicroUsd": {
+                      "type": "number"
+                    },
+                    "actualMicroUsd": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "suggestions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "regionId": {
+                            "type": "string"
+                          },
+                          "regionLabel": {
+                            "type": "string"
+                          },
+                          "observation": {
+                            "type": "string"
+                          },
+                          "hypothesis": {
+                            "type": "string",
+                            "enum": [
+                              "dynamic_text",
+                              "time_dependent",
+                              "image_content",
+                              "layout_shift",
+                              "rendering_noise",
+                              "real_change",
+                              "unknown"
+                            ]
+                          },
+                          "alternatives": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "recommendation": {
+                            "type": "string",
+                            "enum": [
+                              "stabilize_in_repo",
+                              "investigate",
+                              "accept",
+                              "consider_ignore"
+                            ]
+                          },
+                          "uncertainty": {
+                            "type": "string",
+                            "enum": [
+                              "low",
+                              "medium",
+                              "high"
+                            ]
+                          },
+                          "proposedRects": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "x": {
+                                  "type": "number"
+                                },
+                                "y": {
+                                  "type": "number"
+                                },
+                                "width": {
+                                  "type": "number"
+                                },
+                                "height": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "x",
+                                "y",
+                                "width",
+                                "height"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "description": "Tight rectangles the model proposes leaving out, already checked against the region; empty unless it recommends considering a rule."
+                          },
+                          "effect": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "rawChangedPixels": {
+                                    "type": "number"
+                                  },
+                                  "suppressedPixels": {
+                                    "type": "number"
+                                  },
+                                  "remainingPixels": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "rawChangedPixels",
+                                  "suppressedPixels",
+                                  "remainingPixels"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "What the proposal would do, measured on the two images."
+                          },
+                          "decision": {
+                            "type": "string",
+                            "enum": [
+                              "open",
+                              "accepted",
+                              "rejected"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "regionId",
+                          "regionLabel",
+                          "observation",
+                          "hypothesis",
+                          "alternatives",
+                          "recommendation",
+                          "uncertainty",
+                          "proposedRects",
+                          "effect",
+                          "decision"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "retryAfterMs": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "created": {
+                      "description": "analyze_visual_diff: false when the same input was analysed before and that analysis is answered instead.",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "project",
+                    "analysisId",
+                    "status",
+                    "model",
+                    "createdAt",
+                    "finishedAt",
+                    "summary",
+                    "error",
+                    "reservedMicroUsd",
+                    "actualMicroUsd",
+                    "suggestions",
+                    "retryAfterMs"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters (`BAD_REQUEST`, `INVALID_ARGUMENT`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked token (`UNAUTHORIZED`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the required scope (`INSUFFICIENT_SCOPE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A test reference matches several tests (`AMBIGUOUS`; candidates in `details`), or an attachment is not available (`ARTIFACT_UNAVAILABLE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (`RATE_LIMITED`); see `Retry-After`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{team}/{project}/visual-diff-analyses/{analysis}": {
+      "get": {
+        "operationId": "getVisualDiffAnalysis",
+        "summary": "Get an AI analysis",
+        "description": "The state and result of an AI analysis: status, summary, and per region the observation, hypothesis, uncertainty, recommendation, proposed rectangles with their measured effect and a person’s decision.",
+        "tags": [
+          "Visual review"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "team",
+            "schema": {
+              "type": "string",
+              "description": "Team slug, as in the app URL (`/teams/<team>/…`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "project",
+            "schema": {
+              "type": "string",
+              "description": "Project slug, as in the app URL (`…/projects/<project>`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "analysis",
+            "schema": {
+              "type": "string",
+              "description": "Analysis id, as returned when it was created."
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "project": {
+                      "type": "string"
+                    },
+                    "analysisId": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "queued",
+                        "running",
+                        "done",
+                        "failed",
+                        "denied",
+                        "over_budget"
+                      ]
+                    },
+                    "model": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "finishedAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "summary": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "error": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "reservedMicroUsd": {
+                      "type": "number"
+                    },
+                    "actualMicroUsd": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "suggestions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "regionId": {
+                            "type": "string"
+                          },
+                          "regionLabel": {
+                            "type": "string"
+                          },
+                          "observation": {
+                            "type": "string"
+                          },
+                          "hypothesis": {
+                            "type": "string",
+                            "enum": [
+                              "dynamic_text",
+                              "time_dependent",
+                              "image_content",
+                              "layout_shift",
+                              "rendering_noise",
+                              "real_change",
+                              "unknown"
+                            ]
+                          },
+                          "alternatives": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "recommendation": {
+                            "type": "string",
+                            "enum": [
+                              "stabilize_in_repo",
+                              "investigate",
+                              "accept",
+                              "consider_ignore"
+                            ]
+                          },
+                          "uncertainty": {
+                            "type": "string",
+                            "enum": [
+                              "low",
+                              "medium",
+                              "high"
+                            ]
+                          },
+                          "proposedRects": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "x": {
+                                  "type": "number"
+                                },
+                                "y": {
+                                  "type": "number"
+                                },
+                                "width": {
+                                  "type": "number"
+                                },
+                                "height": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "x",
+                                "y",
+                                "width",
+                                "height"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "description": "Tight rectangles the model proposes leaving out, already checked against the region; empty unless it recommends considering a rule."
+                          },
+                          "effect": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "rawChangedPixels": {
+                                    "type": "number"
+                                  },
+                                  "suppressedPixels": {
+                                    "type": "number"
+                                  },
+                                  "remainingPixels": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "rawChangedPixels",
+                                  "suppressedPixels",
+                                  "remainingPixels"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "What the proposal would do, measured on the two images."
+                          },
+                          "decision": {
+                            "type": "string",
+                            "enum": [
+                              "open",
+                              "accepted",
+                              "rejected"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "regionId",
+                          "regionLabel",
+                          "observation",
+                          "hypothesis",
+                          "alternatives",
+                          "recommendation",
+                          "uncertainty",
+                          "proposedRects",
+                          "effect",
+                          "decision"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "retryAfterMs": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "created": {
+                      "description": "analyze_visual_diff: false when the same input was analysed before and that analysis is answered instead.",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "project",
+                    "analysisId",
+                    "status",
+                    "model",
+                    "createdAt",
+                    "finishedAt",
+                    "summary",
+                    "error",
+                    "reservedMicroUsd",
+                    "actualMicroUsd",
+                    "suggestions",
+                    "retryAfterMs"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters (`BAD_REQUEST`, `INVALID_ARGUMENT`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked token (`UNAUTHORIZED`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the required scope (`INSUFFICIENT_SCOPE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A test reference matches several tests (`AMBIGUOUS`; candidates in `details`), or an attachment is not available (`ARTIFACT_UNAVAILABLE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (`RATE_LIMITED`); see `Retry-After`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{team}/{project}/visual-diff-suggestions/{suggestion}/decision": {
+      "post": {
+        "operationId": "decideVisualSuggestion",
+        "summary": "Accept or reject an AI suggestion",
+        "description": "Records a person’s decision about one suggestion; accepting saves its rectangles as rules of the screen under the project’s policy and the rule revision check. Needs the `write` scope.",
+        "tags": [
+          "Visual review"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "team",
+            "schema": {
+              "type": "string",
+              "description": "Team slug, as in the app URL (`/teams/<team>/…`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "project",
+            "schema": {
+              "type": "string",
+              "description": "Project slug, as in the app URL (`…/projects/<project>`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "suggestion",
+            "schema": {
+              "type": "string",
+              "description": "Suggestion id, from the analysis."
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "decision": {
+                    "type": "string",
+                    "enum": [
+                      "accepted",
+                      "rejected"
+                    ]
+                  },
+                  "rects": {
+                    "description": "With accepted: the rectangles to save instead of the proposed ones (a person’s edit).",
+                    "maxItems": 5,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "x": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "y": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "width": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        },
+                        "height": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "x",
+                        "y",
+                        "width",
+                        "height"
+                      ]
+                    }
+                  },
+                  "expectedRevision": {
+                    "description": "The rule revision you read; refused when it moved.",
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "decision"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "project": {
+                      "type": "string"
+                    },
+                    "suggestionId": {
+                      "type": "string"
+                    },
+                    "decision": {
+                      "type": "string"
+                    },
+                    "ruleRevision": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "captureId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "project",
+                    "suggestionId",
+                    "decision",
+                    "ruleRevision",
+                    "captureId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters (`BAD_REQUEST`, `INVALID_ARGUMENT`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked token (`UNAUTHORIZED`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the required scope (`INSUFFICIENT_SCOPE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A test reference matches several tests (`AMBIGUOUS`; candidates in `details`), or an attachment is not available (`ARTIFACT_UNAVAILABLE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (`RATE_LIMITED`); see `Retry-After`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/projects/{team}/{project}/review-threads": {
       "get": {
         "operationId": "listReviewThreads",

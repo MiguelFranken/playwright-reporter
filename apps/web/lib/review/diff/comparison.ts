@@ -21,7 +21,7 @@ import { reviewCaptures, reviewCheckpoints, runs, testResults, tests } from '@/l
 import type { LibraryRefKey } from '@miguelfranken/ui/lib/library';
 import { libraryFlows } from '../library';
 import { capturesById, capturesOfRun, type CaptureRecord } from '../queries';
-import { diffDriver, diffsEnabled, dispatchMeasurements } from './dispatch';
+import { diffDriver, diffsEnabled, dispatchMeasurements } from './measure';
 import { EMPTY_RULES, rulesFor, type RuleSet } from './ignore';
 import { diffSettingsFor, diffsFor, identityKey, pairKey, pairOf, type DiffPair, type DiffRecord, type Identity } from './lookup';
 import { type VisualDiffSettings } from './settings';

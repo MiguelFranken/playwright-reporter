@@ -62,6 +62,7 @@ export function IgnoreRegionsEditor({
   preview,
   pending = false,
   maxRules = MAX_IGNORE_REGIONS,
+  prefill,
 }: {
   captureId: string;
   image: ReviewImage;
@@ -81,15 +82,19 @@ export function IgnoreRegionsEditor({
   preview?: { pending: boolean; result: IgnorePreviewView | null; error?: string | null } | null;
   pending?: boolean;
   maxRules?: number;
+  /** Rectangles drawn in as new rules when the editor opens (a suggestion to adjust). */
+  prefill?: readonly IgnoreRect[] | null;
 }) {
   const fromRules = (list: readonly IgnoreRule[]): Draft[] => list.map((r) => ({ key: r.id, id: r.id, x: r.x, y: r.y, width: r.width, height: r.height, reason: r.reason, category: r.category, active: r.active, existing: r }));
-  const [drafts, setDrafts] = useState<Draft[]>(() => fromRules(rules));
+  const withPrefill = (list: Draft[]): Draft[] => [...list, ...(prefill ?? []).map((r, i) => ({ key: `prefill-${i}`, ...r, id: null, reason: 'Proposed by an AI analysis', category: null, active: true, existing: null }))];
+  const [drafts, setDrafts] = useState<Draft[]>(() => withPrefill(fromRules(rules)));
   const [drawing, setDrawing] = useState<IgnoreRect | null>(null);
   const [reason, setReason] = useState('');
   const start = useRef<{ x: number; y: number } | null>(null);
   const surface = useRef<HTMLDivElement>(null);
   const helpId = useId();
-  useEffect(() => setDrafts(fromRules(rules)), [rules]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => setDrafts(withPrefill(fromRules(rules))), [rules, prefill]);
 
   const active = drafts.filter((d) => d.active !== false);
   const activeRects = active.map(({ x, y, width, height }) => ({ x, y, width, height }));

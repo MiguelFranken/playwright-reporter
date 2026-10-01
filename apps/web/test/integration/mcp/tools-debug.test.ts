@@ -261,7 +261,7 @@ describe.each(ERAS)('debug tools (%s)', (era) => {
     await regression(tenant);
     const client = await mcpClient({ token: (await createPat(tenant.adminUser)).token, era });
     const { prompts } = await client.listPrompts();
-    expect(prompts.map((p) => p.name)).toEqual(['triage_run', 'debug_test', 'investigate_flake', 'branch_check', 'fix_visual_feedback', 'organize_tests']);
+    expect(prompts.map((p) => p.name)).toEqual(['triage_run', 'debug_test', 'investigate_flake', 'branch_check', 'fix_visual_feedback', 'investigate_visual_diffs', 'organize_tests']);
     const fix = await client.getPrompt({ name: 'fix_visual_feedback', arguments: { branch: 'feature/sessions' } });
     const fixText = (fix.messages[0].content as { text: string }).text;
     expect(fixText).toContain('list_feedback_requests with branch "feature/sessions"');

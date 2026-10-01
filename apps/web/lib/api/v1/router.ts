@@ -45,6 +45,7 @@ import { getLibraryFlows, listLibrary, setLibraryReferenceTool } from '@/lib/mcp
 import { listFeedbackRequests } from '@/lib/mcp/tools/feedback';
 import { getVisualDiff, getVisualDiffImage, listVisualDiffs } from '@/lib/mcp/tools/visual-diffs';
 import { listVisualIgnoreRules, previewVisualIgnoreRules, setVisualIgnoreRules } from '@/lib/mcp/tools/visual-ignore';
+import { analyzeVisualDiff, decideVisualSuggestion, getVisualDiffAnalysis } from '@/lib/mcp/tools/visual-analysis';
 import type { ToolDef } from '@/lib/mcp/registry';
 import { authed } from '../base';
 import { fromTool } from '../from-tool';
@@ -422,6 +423,33 @@ export const router = {
       description: 'Replaces the rule set of the capture’s checkpoint and variant under a revision check (`expectedRevision`), with a reason; later runs are measured without those areas. Needs the `write` scope and the review permission; refused where the project’s policy denies it (`POLICY_DENIED`) or the revision moved (`REVISION_CONFLICT`).',
       tags: ['Visual review'],
       params: { capture: captureRef },
+    }),
+  },
+  visualAnalyses: {
+    create: fromTool(tool(analyzeVisualDiff), {
+      method: 'POST',
+      successStatus: 202,
+      path: `${P}/visual-diffs/{comparison}/analyses`,
+      summary: 'Ask a model about a visual difference',
+      description: 'Starts one AI analysis of a comparison’s changed regions under the project’s policy and budget, or answers the earlier analysis of the same input. Poll `/visual-diff-analyses/{analysis}`. Needs the `write` scope.',
+      tags: ['Visual review'],
+      params: { comparison: comparisonRef },
+    }),
+    get: fromTool(tool(getVisualDiffAnalysis), {
+      path: `${P}/visual-diff-analyses/{analysis}`,
+      summary: 'Get an AI analysis',
+      description: 'The state and result of an AI analysis: status, summary, and per region the observation, hypothesis, uncertainty, recommendation, proposed rectangles with their measured effect and a person’s decision.',
+      tags: ['Visual review'],
+      params: { analysis: z.string().describe('Analysis id, as returned when it was created.') },
+      omit: ['comparison'],
+    }),
+    decide: fromTool(tool(decideVisualSuggestion), {
+      method: 'POST',
+      path: `${P}/visual-diff-suggestions/{suggestion}/decision`,
+      summary: 'Accept or reject an AI suggestion',
+      description: 'Records a person’s decision about one suggestion; accepting saves its rectangles as rules of the screen under the project’s policy and the rule revision check. Needs the `write` scope.',
+      tags: ['Visual review'],
+      params: { suggestion: z.string().describe('Suggestion id, from the analysis.') },
     }),
   },
   reviewThreads: {

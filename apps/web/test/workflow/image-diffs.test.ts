@@ -49,7 +49,7 @@ describe('diffRun', () => {
     const t1 = new Date();
     const second = await runWith(db, tenant, await page({ x: 3, y: 3 }, 1), t1);
     const run = await start(diffRun, [second.id]);
-    expect(await run.returnValue).toEqual({ runId: second.id, measured: 1, approved: 1 });
+    expect(await run.returnValue).toEqual({ runId: second.id, measured: 1, approved: 1, analyses: 0 });
     expect(await capture(second.id, t1)).toMatchObject({ status: 'approved', decision: { source: 'tolerance' }, diff: { status: 'done', changedPixels: 0 } });
   });
 });

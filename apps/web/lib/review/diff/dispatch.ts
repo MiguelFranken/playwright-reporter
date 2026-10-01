@@ -16,19 +16,12 @@
 import { after } from 'next/server';
 import { start } from 'workflow/api';
 import type { ComparedCapture } from '../queries';
-import { approveWithinTolerance, measureDiff, needsPlanning, planCaptures, planRun } from './store';
-import { diffPairs, diffRun, measurePairs } from './workflow/diff.workflow';
+import { approveWithinTolerance, measureDiff, needsPlanning, planCaptures, planRun, runCaptures } from './store';
+import { proactiveAnalyses } from '../analysis/jobs';
+import { diffDriver, diffsEnabled, dispatchMeasurements, type DiffDriver } from './measure';
+import { diffPairs, diffRun } from './workflow/diff.workflow';
 
-export type DiffDriver = 'workflow' | 'inline' | 'none';
-
-export function diffDriver(env: Record<string, string | undefined> = process.env): DiffDriver {
-  const d = env.IMAGE_DIFF_DRIVER;
-  if (d === 'workflow' || d === 'inline' || d === 'none') return d;
-  if (env.VERCEL) return env.VERCEL_ENV === 'production' ? 'workflow' : 'none';
-  return 'workflow';
-}
-
-export const diffsEnabled = () => diffDriver() !== 'none';
+export { diffDriver, diffsEnabled, dispatchMeasurements, type DiffDriver };
 
 async function inline(ids: readonly string[], runId: string) {
   for (const id of ids) {
@@ -45,20 +38,8 @@ export async function dispatchRun(runId: string) {
   else if (driver === 'inline') {
     const plan = await planRun(runId);
     await inline(plan.ids, runId);
+    await proactiveAnalyses(runId, await runCaptures(runId));
   }
-}
-
-/**
- * Measures comparisons already planned *without* approving anything: what a
- * read (an agent asking for a comparison) may set off. A measurement is a
- * fact about two images; approving a run's noise is a review decision, and
- * the review paths (`dispatchRun`, `dispatchPairs`) are the ones that take it.
- */
-export async function dispatchMeasurements(ids: readonly string[]) {
-  if (ids.length === 0) return;
-  const driver = diffDriver();
-  if (driver === 'workflow') await start(measurePairs, [[...ids]]);
-  else if (driver === 'inline') for (const id of ids) await measureDiff(id).catch(() => measureDiff(id));
 }
 
 /** Measures comparisons already planned. */

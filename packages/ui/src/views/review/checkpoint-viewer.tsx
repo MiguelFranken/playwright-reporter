@@ -32,11 +32,12 @@ import { fixCommentsPrompt } from '../../lib/ai-handoff';
 import { openThreadCount, sortThreads, threadStage, type ReviewThreadView, type ThreadActions, type ThreadFilter } from '../../lib/review-threads';
 import { DebugWithAiMenu } from '../../patterns/debug-with-ai-menu';
 import { DiffHighlight, diffImageSize } from './diff-highlight';
+import { AnalysisPanel } from './analysis-panel';
 import { comparisonIdOf, DiffRegionList, VisualDiffAiActions } from './diff-regions';
 import { DiffSummary } from './diff-summary';
 import { COMPARE_MODE_LABELS, COMPARE_MODES, ImageCompare, type CompareMode } from './image-compare';
 import { IgnoreRegionsEditor, type IgnoreRect, type IgnoreRulesChange } from './ignore-regions-editor';
-import type { IgnorePreviewView, MaskPolicy } from '../../lib/visual-diff';
+import { regionId, type AiMode, type AnalysisView, type IgnorePreviewView, type MaskPolicy, type Rect } from '../../lib/visual-diff';
 import { FrameToolbar } from './frame-toolbar';
 import { PinLayer, type PinFocusRequest, type ThreadDraft } from './pin-layer';
 import { ScreenFrame } from './screen-frame';
@@ -69,6 +70,18 @@ export interface ReviewCommentsProps extends ThreadActions {
    * explains connecting one, and the project the prompt names.
    */
   assistant?: { setupHref: string; project?: string | null } | null;
+}
+
+/** The AI analysis of the open capture against its reference, as the host offers it. */
+export interface ViewerAnalysisProps {
+  allowed: boolean;
+  reason?: string | null;
+  mode?: AiMode | null;
+  analyses: readonly AnalysisView[];
+  pending?: boolean;
+  decidingId?: string | null;
+  onAnalyze?: (input: { captureId: string; baseCaptureId: string }) => void;
+  onDecide?: (input: { suggestionId: string; decision: 'accepted' | 'rejected'; rects?: Rect[]; captureId: string }) => void;
 }
 
 /** `changes`: this run's image with the measured changes marked; `ignore`: drawing the areas left out. */
@@ -180,6 +193,7 @@ export function CheckpointViewer({
   ignorePendingId,
   onIgnorePreview,
   ignorePreview,
+  analysis,
   comments = {},
 }: {
   flows: readonly ReviewFlowView[];
@@ -202,6 +216,8 @@ export function CheckpointViewer({
   onIgnorePreview?: (input: { captureId: string; regions: IgnoreRect[] }) => void;
   /** The answer to the last `onIgnorePreview`. */
   ignorePreview?: { pending: boolean; result: IgnorePreviewView | null; error?: string | null } | null;
+  /** The AI analysis of the open capture against its reference, when the host offers one. */
+  analysis?: ViewerAnalysisProps | null;
   comments?: ReviewCommentsProps;
 }) {
   const library = mode === 'library';
@@ -241,6 +257,8 @@ export function CheckpointViewer({
   const measuredSize = current && diff ? diffImageSize(current.image, diff) : null;
   // With rules applied, the raw measurement (before they left areas out) can be shown instead of the effective one.
   const [maskPolicy, setMaskPolicy] = useState<MaskPolicy>('effective');
+  // Rectangles a suggestion handed to the editor, drawn in before the person adjusts them.
+  const [prefill, setPrefill] = useState<Rect[] | null>(null);
   const rawAvailable = Boolean(diff?.raw && diff.raw.state === 'done' && diff.raw.changedPixels > 0);
   const shownDiff = diff && maskPolicy === 'raw' && diff.raw && diff.raw.state === 'done' ? { ...diff, changedPixels: diff.raw.changedPixels, ratio: diff.raw.ratio, regions: diff.raw.regions, overlayUrl: diff.raw.overlayUrl ?? null } : diff;
   const hasChanges = Boolean(current?.image.available && diff?.state === 'done' && (diff.changedPixels > 0 || diff.sizeChanged || rawAvailable) && measuredSize);
@@ -740,14 +758,19 @@ export function CheckpointViewer({
                       alt={label}
                       rules={current.ignore?.rules ?? []}
                       revision={current.ignore?.revision ?? 0}
+                      prefill={prefill}
                       pending={ignorePendingId === current.id}
                       onPreview={onIgnorePreview && reference ? (regions) => onIgnorePreview({ captureId: current.id, regions }) : undefined}
                       preview={onIgnorePreview && reference ? ignorePreview : null}
                       onSave={(change) => {
                         onIgnoreRegionsChange(change);
+                        setPrefill(null);
                         setStage('changes');
                       }}
-                      onCancel={() => setStage('changes')}
+                      onCancel={() => {
+                        setPrefill(null);
+                        setStage('changes');
+                      }}
                     />
                   ) : current && reference && effectiveStage !== 'image' ? (
                     effectiveStage === 'side-by-side' ? (
@@ -877,6 +900,28 @@ export function CheckpointViewer({
                     <p className="text-xs text-muted-foreground">Nothing to compare with yet: this is the first capture of this checkpoint.</p>
                   ) : null}
                   {current?.ignore?.ever ? <IgnoreNote capture={current} /> : null}
+                  {analysis && current && reference && hasChanges ? (
+                    <AnalysisPanel
+                      allowed={analysis.allowed}
+                      reason={analysis.reason}
+                      mode={analysis.mode}
+                      analyses={analysis.analyses}
+                      pending={analysis.pending}
+                      decidingId={analysis.decidingId}
+                      onAnalyze={analysis.onAnalyze ? () => analysis.onAnalyze!({ captureId: current.id, baseCaptureId: reference.captureId }) : undefined}
+                      onDecide={analysis.onDecide ? (input) => analysis.onDecide!({ ...input, captureId: current.id }) : undefined}
+                      onFocusRegion={(id) => {
+                        const i = regions.findIndex((r) => regionId(r) === id);
+                        if (i < 0) return;
+                        if (effectiveStage !== 'changes') setStage('changes');
+                        setActiveRegion(i);
+                      }}
+                      onEditRects={canIgnore ? (rects) => {
+                        setPrefill(rects);
+                        setStage('ignore');
+                      } : undefined}
+                    />
+                  ) : null}
                   {current?.staleTolerance ? (
                     <p role="note" className="flex items-start gap-1.5 rounded-md border border-info-border bg-info-subtle p-2 text-xs text-info-text">
                       <History aria-hidden className="mt-px size-3.5 shrink-0" />

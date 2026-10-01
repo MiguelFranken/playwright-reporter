@@ -135,6 +135,7 @@ export function ReviewStoryboard({
   ignorePendingId,
   onIgnorePreview,
   ignorePreview,
+  analysis,
   comments,
 }: {
   flows: readonly ReviewFlowView[];
@@ -179,6 +180,7 @@ export function ReviewStoryboard({
   ignorePendingId?: string | null;
   onIgnorePreview?: (input: { captureId: string; regions: IgnoreRect[] }) => void;
   ignorePreview?: { pending: boolean; result: IgnorePreviewView | null; error?: string | null } | null;
+  analysis?: React.ComponentProps<typeof CheckpointViewer>['analysis'];
   /** Comment threads on the images, in the viewer. */
   comments?: ReviewCommentsProps;
 }) {
@@ -421,6 +423,7 @@ export function ReviewStoryboard({
         ignorePendingId={ignorePendingId}
         onIgnorePreview={onIgnorePreview}
         ignorePreview={ignorePreview}
+        analysis={analysis}
         comments={comments}
       />
     </div>

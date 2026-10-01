@@ -48,6 +48,9 @@ also accepts `project`, `format` (`markdown` | `json`) and `maxChars`. See the R
 | [`list_visual_ignore_rules`](#list_visual_ignore_rules) | core | The rules that leave areas of review screens out of their pixel comparisons (a clock, a generated name), per checkpoint and variant: each rule’s rectangle, reason, who drew it on which image, whether it is switched on, and — for one capture — whether it still fits that image or is suspended, plus the revision history of the set. |
 | [`preview_visual_ignore_rules`](#preview_visual_ignore_rules) | core | What a set of rectangles would do to one comparison, measured now and saved nowhere: the raw changed pixels, how many the rectangles would leave out, how many would remain, and which measured regions they cover wholly or in part. |
 | [`set_visual_ignore_rules`](#set_visual_ignore_rules) | write | Replaces the rules that leave areas of a checkpoint’s variant out of its comparisons, under a revision check, with a reason: tight rectangles in the image’s pixels, each with why. |
+| [`analyze_visual_diff`](#analyze_visual_diff) | write | Starts one AI analysis of a comparison’s changed regions, paid for by the reporter under the project’s policy and monthly budget: what each region shows (a random name, a clock, a real change), how sure the model is, and — on request — tight rectangles it would leave out, measured for their effect, waiting for a person to accept. |
+| [`get_visual_diff_analysis`](#get_visual_diff_analysis) | core | The state and result of an AI analysis: its status, the model’s summary, and per region the observation, hypothesis, uncertainty, recommendation, proposed rectangles with their measured effect, and whether a person accepted or rejected each. |
+| [`decide_visual_suggestion`](#decide_visual_suggestion) | write | Records a person’s decision about one suggestion. |
 | [`list_library`](#list_library) | core | The visual documentation of the product: the branches and pull requests kept in the library (and the default branch), which run of each is shown — the newest, or a pinned one — and how many of the newest run’s images still wait for review. |
 | [`get_library_flows`](#get_library_flows) | core | The screens of a branch or pull request as the library shows them — every checkpoint as the newest run on it captured it, so partial runs never hide what they skipped: each flow (test) with its test cases and their priority, its checkpoints in journey order, and each variant’s capture id and review state (waiting for changes, ready to verify, needs review, updated, approved). |
 | [`set_library_reference`](#set_library_reference) | write | Keep a branch or pull request in the library (a long-lived pull request can stay browsable while it is open), pin the run that documents it, make it the default, name it — or take it out. |
@@ -876,6 +879,59 @@ Replaces the rules that leave areas of a checkpoint’s variant out of its compa
 | `reason` | string |  | Why the set changed, for the history. |
 
 Structured output fields: `project`, `captureId`, `revision`, `rules`, `remeasured`, `truncated`.
+
+## analyze_visual_diff
+
+**Ask a model about a visual difference** · toolset `write` · **writes**
+
+Starts one AI analysis of a comparison’s changed regions, paid for by the reporter under the project’s policy and monthly budget: what each region shows (a random name, a clock, a real change), how sure the model is, and — on request — tight rectangles it would leave out, measured for their effect, waiting for a person to accept. The same input is analysed once. Only when the user asked for it; it changes nothing by itself. Poll with get_visual_diff_analysis.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+| `comparison` | string | yes | The comparisonId. |
+| `regionIds` | string[] |  | Up to 4 regions (ids or labels); default: the 4 largest changes. |
+| `purpose` | `"explain"` \| `"suggest_ignore"` |  | explain: observations and hypotheses only. suggest_ignore (default): also tight areas the model would leave out, for a person to accept. |
+| `idempotencyKey` | string |  | Your own key against retries: the same key answers the same job. |
+| `maxMicroUsd` | integer (1000–9007199254740991) |  | A cap below the project’s per-analysis limit, in micro-dollars (1,000,000 = $1). |
+
+Structured output fields: `project`, `analysisId`, `status`, `model`, `createdAt`, `finishedAt`, `summary`, `error`, `reservedMicroUsd`, `actualMicroUsd`, `suggestions`, `retryAfterMs`, `created`, `truncated`.
+
+## get_visual_diff_analysis
+
+**Get an AI analysis of a visual difference** · toolset `core`
+
+The state and result of an AI analysis: its status, the model’s summary, and per region the observation, hypothesis, uncertainty, recommendation, proposed rectangles with their measured effect, and whether a person accepted or rejected each. By analysis id, or the newest for a comparison.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+| `analysis` | string |  | The analysisId from analyze_visual_diff. |
+| `comparison` | string |  | Instead: the comparisonId, for its newest analysis. |
+
+Structured output fields: `project`, `analysisId`, `status`, `model`, `createdAt`, `finishedAt`, `summary`, `error`, `reservedMicroUsd`, `actualMicroUsd`, `suggestions`, `retryAfterMs`, `created`, `truncated`.
+
+## decide_visual_suggestion
+
+**Accept or reject an AI suggestion** · toolset `write` · **writes**
+
+Records a person’s decision about one suggestion. Accepting saves its rectangles (or the given edit of them) as rules of the screen, source "AI suggestion", under the project’s policy and the rule revision check; rejecting keeps it as history. Only when the user decided — a suggestion is never accepted on their behalf.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+| `suggestion` | string | yes | The suggestion id, from the analysis. |
+| `decision` | `"accepted"` \| `"rejected"` | yes |  |
+| `rects` | object[] |  | With accepted: the rectangles to save instead of the proposed ones (a person’s edit). |
+| `expectedRevision` | integer (0–9007199254740991) |  | The rule revision you read; refused when it moved. |
+
+Structured output fields: `project`, `suggestionId`, `decision`, `ruleRevision`, `captureId`, `truncated`.
 
 ## list_library
 
