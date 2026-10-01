@@ -1,6 +1,6 @@
 'use client';
 
-import { Bookmark, CircleDashed, Images, Layers, ListFilter, MessageSquare, PanelLeft, Search, X } from 'lucide-react';
+import { Bookmark, CircleDashed, Images, Layers, ListChecks, ListFilter, MessageSquare, PanelLeft, Search, X } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '../../components/button';
 import { Input } from '../../components/input';
@@ -21,6 +21,7 @@ import {
   type LibraryViewConfig,
   type LibraryViewDef,
 } from '../../lib/library-views';
+import { defaultFeedbackScope, feedbackQueue, feedbackScopeCounts, flowsWithFeedback, type FeedbackItem, type FeedbackScope } from '../../lib/feedback-queue';
 import { buildReviewTree, DEFAULT_FRAME, folderId, folderPathOf, inFolder, variantsOf, type FrameSettings, type ReviewDecisionInput, type ReviewFlowView, type ReviewGrouping } from '../../lib/review';
 import { CheckpointViewer, type ReviewCommentsProps, type ReviewSelection } from '../review/checkpoint-viewer';
 import type { IgnoreRect } from '../review/ignore-regions-editor';
@@ -96,6 +97,13 @@ export interface LibraryBrowserProps {
   /** Saves the areas a screen leaves out of comparisons, in the viewer. */
   onIgnoreRegionsChange?: (input: { captureId: string; regions: IgnoreRect[] }) => void;
   ignorePendingId?: string | null;
+  /**
+   * Going through the open feedback one item after another (`verify`,
+   * `waiting` or `all` of it), or `null`; uncontrolled when absent. The
+   * viewer shows the items, so the selection follows them.
+   */
+  resolving?: FeedbackScope | null;
+  onResolvingChange?: (next: FeedbackScope | null) => void;
   emptyTitle?: string;
   emptyDescription?: React.ReactNode;
 }
@@ -142,6 +150,8 @@ export function LibraryBrowser({
   pendingIds,
   onIgnoreRegionsChange,
   ignorePendingId,
+  resolving: resolvingProp,
+  onResolvingChange,
   emptyTitle = 'No screens yet',
   emptyDescription,
 }: LibraryBrowserProps) {
@@ -153,6 +163,9 @@ export function LibraryBrowser({
   const [selection, setSelectionState] = useControlled<ReviewSelection | null>(selectionProp, onSelectionChange, null);
   const [size, setSize] = useControlled<number>(sizeProp, onSizeChange, STORYBOARD_SIZE.default);
   const [inbox, setInbox] = useState(false);
+  const [resolving, setResolving] = useControlled<FeedbackScope | null>(resolvingProp, onResolvingChange, null);
+  // The feedback being gone through, kept as it was when it started: resolving an item does not take it off the count.
+  const [queue, setQueue] = useState<FeedbackItem[] | null>(null);
   const [editor, setEditor] = useState<{ mode: 'create' | 'edit'; id?: string; name: string; config: LibraryViewConfig } | null>(null);
   // Below the wide layout the rail folds away, so the flows are not a screen of lists down.
   const [railOpen, setRailOpen] = useState(false);
@@ -197,14 +210,55 @@ export function LibraryBrowser({
   const [pinned, setPinned] = useState<readonly string[] | null>(null);
   const setSelection = (next: ReviewSelection | null) => {
     if (next && !pinned) setPinned(ordered.map((f) => f.resultId));
-    if (!next) setPinned(null);
+    if (!next) {
+      setPinned(null);
+      // Closing the viewer ends going through the feedback.
+      if (resolving) setResolving(null);
+      setQueue(null);
+    }
     setSelectionState(next);
   };
+  const feedbackCountsInScope = useMemo(() => feedbackScopeCounts(inScope), [inScope]);
+  const resolveQueue = resolving ? queue : null;
   const viewerFlows = useMemo(() => {
+    // Going through feedback, the viewer steps through the screens that carry some, as they are now.
+    if (resolveQueue?.length) return flowsWithFeedback(byVariant, resolveQueue);
     if (!pinned) return ordered;
     const all = new Map(byVariant.map((f) => [f.resultId, f]));
     return pinned.flatMap((id) => all.get(id) ?? []);
-  }, [pinned, ordered, byVariant]);
+  }, [resolveQueue, pinned, ordered, byVariant]);
+
+  /** Shows a piece of feedback: its screen and variant, and its thread. */
+  const goToItem = (item: FeedbackItem) => {
+    const next = { checkpointId: item.checkpointId, variant: item.variant };
+    if (item.number == null) return setSelectionState(next);
+    if (onOpenThread) onOpenThread(next, item.number);
+    else {
+      setSelectionState(next);
+      comments.onOpenThreadChange?.(item.number);
+    }
+  };
+  /** Starts going through the feedback of `among` (the flows on screen by default), at its first item. */
+  const startResolving = (scope: FeedbackScope = defaultFeedbackScope(feedbackCountsInScope), among: readonly ReviewFlowView[] = inScope) => {
+    const items = feedbackQueue(among, scope);
+    setInbox(false);
+    if (!items.length && !selection) {
+      setResolving(null);
+      setQueue(null);
+      return;
+    }
+    setQueue(items);
+    setResolving(scope);
+    const here = selection && items.find((i) => i.checkpointId === selection.checkpointId && (!selection.variant || i.variant === selection.variant));
+    const first = here ?? items[0];
+    if (first) goToItem(first);
+  };
+  // A link that says to go through feedback (`resolve=verify`) starts there, on the screen it names if that has some.
+  useEffect(() => {
+    if (resolving && !queue) startResolving(resolving);
+    // Only when going through feedback starts from outside.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolving, queue]);
 
   const [reveal, setReveal] = useState<{ checkpointId: string } | null>(null);
   const lastSelection = useRef(selection);
@@ -234,6 +288,19 @@ export function LibraryBrowser({
           setConfig({ ...config, filters: { ...config.filters, states: ['needs-review'] } });
         },
       },
+      ...(open
+        ? [
+            {
+              key: 'resolve',
+              label: 'Resolve feedback here',
+              icon: ListChecks,
+              onSelect: () => {
+                setFolder(target.id);
+                startResolving(defaultFeedbackScope(feedbackScopeCounts(below)), below);
+              },
+            },
+          ]
+        : []),
       {
         key: 'comments',
         label: open ? `Show ${open} open ${open === 1 ? 'comment' : 'comments'}` : 'No open comments',
@@ -340,6 +407,18 @@ export function LibraryBrowser({
                 <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find a test, case or checkpoint" aria-label="Find a test, case or checkpoint" className="h-8 w-full pl-8 sm:w-64" />
               </div>
               <FeedbackInboxButton flows={inScope} onClick={() => setInbox(true)} />
+              {feedbackCountsInScope.all ? (
+                <Button
+                  size="sm"
+                  variant={feedbackCountsInScope.verify ? 'default' : 'outline'}
+                  onClick={() => startResolving()}
+                  aria-label={`Resolve feedback: ${feedbackCountsInScope.verify ? `${feedbackCountsInScope.verify} to verify, ` : ''}${feedbackCountsInScope.all} open`}
+                  title="Go through the open feedback one by one: what changed since it was given first"
+                >
+                  <ListChecks /> Resolve feedback
+                  {feedbackCountsInScope.verify ? <span className="rounded-full bg-primary-foreground/20 px-1.5 text-label-xs tabular-nums">{feedbackCountsInScope.verify}</span> : null}
+                </Button>
+              ) : null}
               <LibraryFilterMenu config={config} onChange={setConfig} counts={counts} />
               <LibraryDisplayMenu config={config} onChange={setConfig} variants={variants}>
                 <SizeControl size={size} onLive={setLiveSize} onCommit={setSize} />
@@ -395,8 +474,19 @@ export function LibraryBrowser({
         onFrameChange={onFrameChange}
         mode="library"
         comments={comments}
+        resolve={
+          resolving && resolveQueue
+            ? {
+                items: resolveQueue,
+                scope: resolving,
+                counts: feedbackCountsInScope,
+                onScopeChange: (next) => startResolving(next),
+                onGo: goToItem,
+              }
+            : null
+        }
       />
-      <FeedbackInbox open={inbox} onOpenChange={setInbox} flows={inScope} now={comments.now} onOpenThread={openThread} />
+      <FeedbackInbox open={inbox} onOpenChange={setInbox} flows={inScope} now={comments.now} onOpenThread={openThread} onResolve={(scope) => startResolving(scope)} />
       <LibraryViewEditor
         open={editor !== null}
         onOpenChange={(open) => !open && setEditor(null)}
