@@ -1,7 +1,7 @@
 'use client';
 
 import { Check, ChevronLeft, ChevronRight, ExternalLink, Eye, EyeOff, Film, History, Keyboard, Link2, Link2Off, MessageSquareWarning, Route, X } from 'lucide-react';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Badge } from '../../components/badge';
 import { useSyncedScroll } from '../../hooks/use-synced-scroll';
 import { Button } from '../../components/button';
@@ -22,10 +22,12 @@ import {
   frameWithin,
   shownZoom,
   type FrameSettings,
+  type FrameSize,
   NEEDS_REVIEW,
   type ReviewCaptureView,
   type ReviewCheckpointView,
   type ReviewDecisionInput,
+  type ReviewDiffView,
   type ReviewFlowView,
   type ReviewImage,
   type StoryboardMode,
@@ -92,8 +94,13 @@ export interface ResolveFeedbackProps {
   onGo: (item: FeedbackItem) => void;
 }
 
-/** `changes`: this run's image with the measured changes marked; `ignore`: drawing the areas left out. */
-type StageMode = 'image' | 'changes' | 'ignore' | CompareMode;
+/** A comparison: `changes`, this run's image with the measured changes marked, or the two images put together. */
+type CompareStage = 'changes' | CompareMode;
+/** What the stage shows: the image, a comparison, or (`ignore`) the areas left out being drawn. */
+type StageMode = 'image' | 'ignore' | CompareStage;
+
+/** The height of a screen's caption bar when the screens fill the stage. */
+const PANE_BAR = 32;
 
 interface Position {
   flow: ReviewFlowView;
@@ -131,6 +138,22 @@ function referenceOf(capture: ReviewCaptureView): { captureId: string; image: Re
     return { captureId: capture.baseline.captureId, image: capture.baseline.image, label: `Approved${capture.baseline.runNumber ? ` (#${capture.baseline.runNumber})` : ''}`, same: capture.baseline.same };
   if (capture.previous) return { captureId: capture.previous.captureId, image: capture.previous.image, label: `Run #${capture.previous.runNumber}`, same: capture.previous.same };
   return null;
+}
+
+/** A screen on show with what it is compared with, and whether measured changes can be marked on it. */
+interface Compared {
+  capture: ReviewCaptureView;
+  reference: ReturnType<typeof referenceOf>;
+  diff: ReviewDiffView | null;
+  size: { width: number; height: number } | null;
+  changes: boolean;
+}
+
+function comparisonOf(capture: ReviewCaptureView): Compared {
+  const reference = referenceOf(capture);
+  const diff = reference ? (capture.diff ?? null) : null;
+  const size = diff ? diffImageSize(capture.image, diff) : null;
+  return { capture, reference, diff, size, changes: Boolean(capture.image.available && diff?.state === 'done' && (diff.changedPixels > 0 || diff.sizeChanged) && size) };
 }
 
 /** The threads of a capture placed on `referenceId` (the image shown beside it), drawn there where they were placed. */
@@ -182,7 +205,8 @@ function usePreloadNeighbours(all: readonly Position[], at: number) {
  * baseline, what was captured where and when, and the decision.
  *
  * Built for going through a run with the keyboard: ← → move between
- * checkpoints, ↑ ↓ between flows, V switches the variant, M the comparison,
+ * checkpoints, ↑ ↓ between flows, V switches the variant, M between the image
+ * and its comparison (Shift+M the way of comparing),
  * N and P step through the measured changes, A approves and moves on to the
  * next image that needs review, C pins comments on the screenshot. Controlled: the host owns the selection (it may live in the URL)
  * and records decisions.
@@ -235,7 +259,11 @@ export function CheckpointViewer({
   const pos = at >= 0 ? all[at] : null;
   usePreloadNeighbours(all, at);
   const [stage, setStage] = useState<StageMode>('changes');
+  // The comparison last picked: "Compare" goes back to it.
+  const [compareMode, setCompareMode] = useState<CompareStage>('changes');
   const [activeRegion, setActiveRegion] = useState<number | null>(null);
+  // Every variant at once, each screen's own selected change.
+  const [activeOf, setActiveOf] = useState<Readonly<Record<string, number>>>({});
   const [commenting, setCommenting] = useState(false);
   // What a click or drag does in comment mode, and the colour drawings are in: kept from one checkpoint to the next.
   const [tool, setTool] = useState<CommentTool>('pin');
@@ -247,7 +275,6 @@ export function CheckpointViewer({
   const [pinsHidden, setPinsHidden] = useState(false);
   // Side by side, the two screens scroll together unless the reviewer unlinks them.
   const [syncScroll, setSyncScroll] = useState(true);
-  const [sideBySideEl, setSideBySideEl] = useState<HTMLDivElement | null>(null);
   const [focus, setFocus] = useState<PinFocusRequest | null>(null);
   const [confirmApprove, setConfirmApprove] = useState(false);
   // Walking through the comments made on an earlier version: whether, which one, and how many were resolved on the way.
@@ -267,8 +294,13 @@ export function CheckpointViewer({
   const variant = selection?.variant ?? null;
   const shown = variant ? captures.filter((c) => c.variant === variant) : captures;
   const current = shown.length === 1 ? shown[0] : null;
-  const reference = current ? referenceOf(current) : null;
-  const diff = current && reference ? (current.diff ?? null) : null;
+  // Every screen on show with what it is compared with: one variant, or all of them side by side.
+  const compared = shown.map(comparisonOf);
+  const multi = compared.length > 1;
+  const canCompare = compared.some((x) => x.reference);
+  const anyChanges = compared.some((x) => x.changes);
+  const reference = current ? compared[0].reference : null;
+  const diff = current ? compared[0].diff : null;
   const deciding = Boolean(canDecide && onDecide);
   const onScreen = (it: FeedbackItem) => Boolean(pos && (it.checkpointId === pos.checkpoint.id || pos.checkpoint.aliases?.includes(it.checkpointId)) && (!variant || it.variant === variant));
   const hereItems = resolving ? resolving.items.filter(onScreen) : [];
@@ -278,25 +310,21 @@ export function CheckpointViewer({
   const itemIndex = item && resolving ? resolving.items.indexOf(item) : -1;
   const isDone = (it: FeedbackItem, done: ReadonlySet<string> = handled) => done.has(it.key) || feedbackItemDone(it, flows);
   const doneCount = resolving ? resolving.items.filter((i) => isDone(i)).length : 0;
-  const measuredSize = current && diff ? diffImageSize(current.image, diff) : null;
-  const hasChanges = Boolean(current?.image.available && diff?.state === 'done' && (diff.changedPixels > 0 || diff.sizeChanged) && measuredSize);
+  const measuredSize = current ? compared[0].size : null;
+  const hasChanges = Boolean(current && compared[0].changes);
   const regions = hasChanges ? diff!.regions : [];
   const ownSize = current?.image.width && current.image.height ? { width: current.image.width, height: current.image.height } : null;
   const canIgnore = Boolean(onIgnoreRegionsChange && canDecide && !current?.compare && current?.image.available && (measuredSize ?? ownSize));
-  const effectiveStage: StageMode = !current
-    ? 'image'
-    : stage === 'ignore'
-      ? canIgnore
-        ? 'ignore'
-        : 'image'
-      : stage === 'changes'
-        ? hasChanges
-          ? 'changes'
-          : 'image'
-        : reference && stage !== 'image'
-          ? stage
-          : 'image';
-  useSyncedScroll(sideBySideEl, '[data-slot="screen-frame"]', syncScroll && effectiveStage === 'side-by-side');
+  const effectiveStage: StageMode =
+    stage === 'ignore' ? (canIgnore ? 'ignore' : 'image') : stage === 'changes' ? (anyChanges ? 'changes' : 'image') : canCompare && stage !== 'image' ? stage : 'image';
+  const comparing = effectiveStage !== 'image' && effectiveStage !== 'ignore';
+  // What "Compare" opens: the comparison last picked, or side by side where nothing was measured to mark.
+  const compareStage: CompareStage = compareMode === 'changes' && !anyChanges ? 'side-by-side' : compareMode;
+  const compareModes: CompareStage[] = [...(anyChanges ? (['changes'] as const) : []), ...COMPARE_MODES];
+  const showStage = (next: StageMode) => {
+    setStage(next);
+    if (next !== 'image' && next !== 'ignore') setCompareMode(next);
+  };
   const [ownFrame, setOwnFrame] = useState<FrameSettings>(DEFAULT_FRAME);
   const frameSettings = frameProp ?? ownFrame;
   const setFrame = (next: FrameSettings) => {
@@ -307,7 +335,6 @@ export function CheckpointViewer({
   // Narrower than the side panel needs, the viewer scrolls as one page: the stage grows with its screens, so fitting them
   // follows the window's height rather than the stage's own.
   const stackedHeight = useStackedHeight();
-  const comparing = Boolean(current && effectiveStage !== 'image');
   const canComment = Boolean(comments.canComment && comments.onCreateThread);
   const threadGroups = shown.map((c) => ({ captureId: c.id, variant: c.variant, threads: c.threads ?? [] }));
   const shownThreads = threadGroups.flatMap((g) => g.threads);
@@ -324,11 +351,20 @@ export function CheckpointViewer({
   const requestThen = requestShown && !requestShown.onThisImage && requestReference && requestReference.captureId === requestShown.captureId ? requestReference.image : null;
   const comparedCapture = comparedThread ? (shown.find((c) => c.threads?.some((t) => t.id === comparedThread.id)) ?? null) : null;
   const threadComparing = Boolean(comparedThread && comparedCapture);
-  const frames = (threadComparing ? [comparedCapture!] : comparing && current ? [current] : shown).map((c) => frameFor(frameSettings, c));
+  // The frames on the stage, per screen on show: side by side, each beside its reference.
+  const paneFrames = (threadComparing ? [comparedCapture!] : requestCapture ? [requestCapture] : effectiveStage === 'ignore' && current ? [current] : shown).map((c) => {
+    const f = frameFor(frameSettings, c);
+    return effectiveStage === 'side-by-side' && referenceOf(c) && !threadComparing && !requestCapture ? [f, f] : [f];
+  });
+  const frames = paneFrames.flat();
   const fill = Boolean(frameSettings.fill);
   // One plain screen needs no caption over it when it fills the stage: the toolbar already says what it is.
   const captionless = effectiveStage === 'image' && !threadComparing && !requestCapture && shown.length === 1;
-  const zoomFrames = threadComparing || (requestShown && !requestShown.onThisImage) || (comparing && effectiveStage === 'side-by-side') ? [frames[0], frames[0]] : frames;
+  const zoomFrames = threadComparing || (requestShown && !requestShown.onThisImage) ? [frames[0], frames[0]] : frames;
+  // Filling, the screens meet at a hairline; framed, they stand apart.
+  const gap = fill && !threadComparing && !requestCapture ? 1 : 24;
+  // A screen's caption: a bar across its top when the screens fill the stage, a line above its frame otherwise.
+  const caption = fill ? PANE_BAR : 28;
   // What sits around the screens inside the stage: captions above them (and, comparing a thread, its banner and comment;
   // leaving areas out, the help and the list below), the comparison's controls, the changes' minimap beside them.
   const around = threadComparing
@@ -338,12 +374,12 @@ export function CheckpointViewer({
       : effectiveStage === 'ignore'
         ? { above: 180, beside: 0 }
         : effectiveStage === 'changes'
-          ? { above: 0, beside: 20 }
+          ? { above: multi ? caption : 0, beside: 20 * compared.filter((x) => x.changes).length }
           : effectiveStage === 'onion' || effectiveStage === 'difference'
-            ? { above: 40, beside: 0 }
-            : effectiveStage === 'slider' || (fill && captionless)
+            ? { above: 40 + (multi ? caption : 0), beside: 0 }
+            : (effectiveStage === 'slider' && !multi) || (fill && captionless)
               ? { above: 0, beside: 0 }
-              : { above: 28, beside: 0 };
+              : { above: caption, beside: 0 };
   // The room the screens have: the stage less its padding (none when they fill it). They never outgrow it, so the stage
   // itself never scrolls.
   const padding = fill ? 0 : 48;
@@ -352,11 +388,12 @@ export function CheckpointViewer({
     height: (stackedHeight == null ? stageSize.height - padding : Math.max(240, stackedHeight * 0.75)) - around.above,
   };
   // The largest zoom the width allows; the toolbar offers nothing above it.
-  const maxZoom = shownZoom(Infinity, zoomFrames, room);
-  const filled = fill ? fillFrames(frames, room) : null;
-  const zoom = filled?.zoom ?? shownZoom(frameSettings.zoom, zoomFrames, room);
+  const maxZoom = shownZoom(Infinity, zoomFrames, room, gap);
+  const filled = fill ? fillFrames(frames, room, gap) : null;
+  const zoom = filled?.zoom ?? shownZoom(frameSettings.zoom, zoomFrames, room, gap);
   // A screen longer than the room ends at its bottom edge and scrolls inside; filling, every screen is as tall as the room.
   const screens = filled?.screens ?? frames.map((f) => frameWithin(f, room.height, zoom));
+  const paneScreens = paneFrames.map((_, i) => screens.slice(paneFrames.slice(0, i).flat().length, paneFrames.slice(0, i + 1).flat().length));
   const closeUpWidth = Math.min(640, Math.max(240, (stageSize.width - 48 - 24) / 2));
   const pending = new Set(pendingIds);
   const busy = shown.some((c) => pending.has(c.id));
@@ -370,6 +407,7 @@ export function CheckpointViewer({
   const selectionKey = `${selection?.checkpointId}\u0000${selection?.variant}`;
   useEffect(() => {
     setActiveRegion(null);
+    setActiveOf({});
     setDraft(null);
     setComposing(false);
     setConfirmApprove(false);
@@ -510,7 +548,7 @@ export function CheckpointViewer({
     if (!listed.length) return;
     const i = listed.findIndex((t) => t.id === openThreadId);
     const next = listed[(i + delta + listed.length) % listed.length] ?? listed[0];
-    if (next.anchor.kind !== 'image' && !pinsOn) setStage('image');
+    if (next.anchor.kind !== 'image' && !pinsOn) showStage('image');
     openThread(next.id, { focus: true });
   };
   const toggleCommenting = (next = !commenting) => {
@@ -518,13 +556,13 @@ export function CheckpointViewer({
     if (!next) setDraft(null);
     else {
       // Pins go on the image as it was captured: the changes view, the plain image, or this run's side.
-      if (!pinsOn) setStage('image');
+      if (!pinsOn) showStage('image');
       setPinsHidden(false);
     }
   };
   const moveRegion = (delta: number) => {
     if (regions.length === 0) return;
-    if (effectiveStage !== 'changes') setStage('changes');
+    if (effectiveStage !== 'changes') showStage('changes');
     setActiveRegion((i) => (i == null ? (delta > 0 ? 0 : regions.length - 1) : (i + delta + regions.length) % regions.length));
   };
 
@@ -545,10 +583,12 @@ export function CheckpointViewer({
     const next = names[(names.indexOf(variant) + 1) % names.length];
     onSelectionChange({ checkpointId: pos.checkpoint.id, variant: next });
   };
-  const cycleStage = () => {
-    if (!reference) return;
-    const modes: StageMode[] = ['image', ...(hasChanges ? (['changes'] as const) : []), ...COMPARE_MODES];
-    setStage(modes[(modes.indexOf(effectiveStage) + 1) % modes.length]);
+  /** The image, or the comparison; `next`, the comparison after the one on show. */
+  const cycleStage = (next = false) => {
+    if (!canCompare) return;
+    setVerifying(false);
+    if (!next) showStage(comparing ? 'image' : compareStage);
+    else showStage(compareModes[(compareModes.indexOf(comparing ? (effectiveStage as CompareStage) : compareStage) + (comparing ? 1 : 0)) % compareModes.length]);
   };
 
   /** After a decision: the next image in order that still needs review. */
@@ -621,7 +661,7 @@ export function CheckpointViewer({
       else if (e.key === 'ArrowUp') moveFlow(-1);
       else if (key === 'v') cycleVariant();
       else if (key === 'f') setFrame({ ...frameSettings, fill: !fill });
-      else if (key === 'm') cycleStage();
+      else if (key === 'm') cycleStage(e.shiftKey);
       else if (key === 'n' && regions.length) moveRegion(1);
       else if (key === 'p' && regions.length) moveRegion(-1);
       else if (key === 'c' && canComment) toggleCommenting();
@@ -698,6 +738,129 @@ export function CheckpointViewer({
       />
     ) : null;
 
+  /** One screen on show, compared the way picked: its changes marked, beside its reference, or under it. */
+  const comparison = (x: Compared, at: readonly FrameSize[]) => {
+    const c = x.capture;
+    const name = multi ? `${label}, ${c.variant}` : label;
+    const variantName = multi ? <span className="capitalize">{c.variant}</span> : null;
+    const currentTitle = library ? (c.compare || !c.runNumber ? 'This one' : `Run #${c.runNumber}`) : 'This run';
+    // A screen of several with nothing to show this way: as it is, saying why.
+    const plain = (note: string) => (
+      <StagePane
+        key={c.id}
+        fill={fill}
+        caption={
+          <>
+            {variantName}
+            <span>{note}</span>
+          </>
+        }
+      >
+        <ScreenFrame image={c.image} frame={at[0]} zoom={zoom} alt={`${label} — ${c.variant}`} label={`${name} screen`} overlay={pinLayer(c, name) ? () => pinLayer(c, name) : undefined} />
+      </StagePane>
+    );
+    if (!x.reference) return plain('Nothing to compare with yet');
+    if (effectiveStage === 'changes') {
+      if (!x.changes || !x.diff) return plain(x.reference.same ? `Identical to ${x.reference.label.toLowerCase()}` : x.diff?.state === 'done' ? 'No changes measured' : 'Not measured yet');
+      const count = x.diff.regions.length;
+      return (
+        <StagePane
+          key={c.id}
+          fill={fill}
+          caption={
+            multi ? (
+              <>
+                {variantName}
+                <span className="tabular-nums">
+                  {count} {count === 1 ? 'change' : 'changes'}
+                </span>
+              </>
+            ) : null
+          }
+        >
+          <DiffHighlight
+            image={c.image}
+            diff={x.diff}
+            frame={at[0]}
+            zoom={zoom}
+            alt={name}
+            active={multi ? (activeOf[c.id] ?? null) : activeRegion}
+            onActiveChange={multi ? (i) => setActiveOf((a) => ({ ...a, [c.id]: i })) : setActiveRegion}
+            minimapLabel={multi ? `Where the changes are, ${c.variant}` : undefined}
+          >
+            {pinLayer(c, name)}
+          </DiffHighlight>
+        </StagePane>
+      );
+    }
+    if (effectiveStage === 'side-by-side') {
+      // A comment placed on the image shown on the left is drawn there, where it was placed; the right shows where it lands now.
+      const split = onReference(c.threads ?? [], x.reference.captureId);
+      const sides = [
+        {
+          key: 'reference',
+          title: x.reference.label,
+          note: split.here.length ? `${split.here.length} ${split.here.length === 1 ? 'comment' : 'comments'} made here` : null,
+          image: x.reference.image,
+          frame: at[0],
+          overlay: split.here.length ? pinLayer(c, `${name}, ${x.reference.label}`, { threads: split.here, origin: true }) : null,
+        },
+        { key: 'current', title: currentTitle, note: null, image: c.image, frame: at[1] ?? at[0], overlay: pinLayer(c, `${name}, ${currentTitle}`, { threads: split.rest, ghosts: split.ghosts }) },
+      ];
+      return (
+        <SyncedPanes key={c.id} fill={fill} enabled={syncScroll}>
+          {sides.map((side) => (
+            <StagePane
+              key={side.key}
+              fill={fill}
+              caption={
+                <>
+                  {variantName}
+                  {side.title}
+                  {side.note ? (
+                    <span className="inline-flex items-center gap-1 text-label-xs text-accent-text">
+                      <History aria-hidden className="size-3" /> {side.note}
+                    </span>
+                  ) : null}
+                </>
+              }
+            >
+              <ScreenFrame image={side.image} frame={side.frame} zoom={zoom} alt={`${label} — ${multi ? `${c.variant}, ` : ''}${side.title}`} overlay={side.overlay ? () => side.overlay : undefined} />
+            </StagePane>
+          ))}
+        </SyncedPanes>
+      );
+    }
+    // Slider, difference and overlay: the two images in one, its control (but the slider's) above it.
+    const control = effectiveStage === 'slider' ? 0 : 40;
+    return (
+      <StagePane
+        key={c.id}
+        fill={fill}
+        caption={
+          multi ? (
+            <>
+              {variantName}
+              <span>
+                {x.reference.label} vs. {currentTitle}
+              </span>
+            </>
+          ) : null
+        }
+      >
+        <div
+          role="region"
+          aria-label={`${name}, comparison`}
+          tabIndex={0}
+          className={cn('mx-auto overflow-x-hidden overflow-y-auto outline-none', fill ? null : 'rounded-md ring-1 ring-border', 'focus-visible:ring-[3px] focus-visible:ring-ring/40')}
+          style={{ width: Math.round(at[0].width * zoom), height: Math.round(at[0].height * zoom) + control }}
+        >
+          <ImageCompare current={c.image} reference={x.reference.image} mode={effectiveStage as CompareMode} referenceLabel={x.reference.label} currentLabel={currentTitle} alt={name} />
+        </div>
+      </StagePane>
+    );
+  };
+
   return (
     <Dialog open={Boolean(pos)} onOpenChange={(open) => !open && onSelectionChange(null)}>
       <DialogContent
@@ -737,28 +900,48 @@ export function CheckpointViewer({
                 ))}
                 {captures.length > 1 ? <ToggleGroupItem value="all">All</ToggleGroupItem> : null}
               </ToggleGroup>
-              {current && reference ? (
-                <ToggleGroup
-                  variant="segment"
-                  size="sm"
-                  value={verifying ? [] : [effectiveStage]}
-                  onValueChange={(v) => {
-                    // A comparison mode leaves the walk through the comments to verify.
-                    const next = v[0] ?? (verifying ? effectiveStage : null);
-                    if (!next) return;
-                    setVerifying(false);
-                    setStage(next as StageMode);
-                  }}
-                  aria-label="Comparison"
-                >
-                  <ToggleGroupItem value="image">Image</ToggleGroupItem>
-                  {hasChanges ? <ToggleGroupItem value="changes">Changes</ToggleGroupItem> : null}
-                  {COMPARE_MODES.map((m) => (
-                    <ToggleGroupItem key={m} value={m}>
-                      {COMPARE_MODE_LABELS[m]}
+              {canCompare ? (
+                // First what to look at — the screen, or how it changed — then, comparing, how the two are put together.
+                <div className="flex flex-wrap items-center gap-2">
+                  <ToggleGroup
+                    variant="segment"
+                    size="sm"
+                    value={verifying || effectiveStage === 'ignore' ? [] : [comparing ? 'compare' : 'image']}
+                    onValueChange={(v) => {
+                      // Either leaves the walk through the comments to verify.
+                      const next = v[0] ?? (verifying ? (comparing ? 'compare' : 'image') : null);
+                      if (!next) return;
+                      setVerifying(false);
+                      showStage(next === 'compare' ? compareStage : 'image');
+                    }}
+                    aria-label="View"
+                  >
+                    <ToggleGroupItem value="image" title={library ? 'The screen as the newest run captured it' : 'The screen as this run captured it'}>
+                      Image
                     </ToggleGroupItem>
-                  ))}
-                </ToggleGroup>
+                    <ToggleGroupItem value="compare" title="How the screen changed against what it is compared with (M)">
+                      Compare
+                    </ToggleGroupItem>
+                  </ToggleGroup>
+                  {comparing && !verifying ? (
+                    <ToggleGroup
+                      variant="segment"
+                      size="sm"
+                      value={[effectiveStage]}
+                      onValueChange={(v) => {
+                        if (v[0]) showStage(v[0] as CompareStage);
+                      }}
+                      aria-label="Comparison"
+                      className="animate-rise-in"
+                    >
+                      {compareModes.map((m) => (
+                        <ToggleGroupItem key={m} value={m}>
+                          {m === 'changes' ? 'Changes' : COMPARE_MODE_LABELS[m]}
+                        </ToggleGroupItem>
+                      ))}
+                    </ToggleGroup>
+                  ) : null}
+                </div>
               ) : null}
               <div className="ml-auto flex items-center gap-3">
                 <div className="flex items-center gap-0.5">
@@ -840,7 +1023,9 @@ export function CheckpointViewer({
                     // the screen can run longer.
                     verifying || (resolving && ended) || effectiveStage === 'ignore' ? 'overflow-auto' : 'overflow-hidden',
                     // Filling, the screens lose their frame and run to the stage's edges.
-                    fill ? 'p-0 [&_[data-slot=screen-frame]]:rounded-none [&_[data-slot=screen-frame]]:shadow-none [&_[data-slot=screen-frame]]:ring-0' : 'p-6',
+                    fill
+                      ? 'p-0 [&_[data-slot=diff-highlight]]:rounded-none [&_[data-slot=diff-highlight]]:shadow-none [&_[data-slot=diff-highlight]]:ring-0 [&_[data-slot=screen-frame]]:rounded-none [&_[data-slot=screen-frame]]:shadow-none [&_[data-slot=screen-frame]]:ring-0'
+                      : 'p-6',
                     commenting && 'shadow-[inset_0_0_0_2px_var(--accent-solid)]',
                   )}
                 >
@@ -914,12 +1099,6 @@ export function CheckpointViewer({
                         ) : null
                       }
                     />
-                  ) : current && effectiveStage === 'changes' && diff ? (
-                    <div className="flex min-w-max justify-center">
-                      <DiffHighlight image={current.image} diff={diff} frame={screens[0]} zoom={zoom} alt={label} active={activeRegion} onActiveChange={setActiveRegion}>
-                        {pinLayer(current, label)}
-                      </DiffHighlight>
-                    </div>
                   ) : current && effectiveStage === 'ignore' && onIgnoreRegionsChange ? (
                     <IgnoreRegionsEditor
                       image={current.image}
@@ -931,63 +1110,30 @@ export function CheckpointViewer({
                       pending={ignorePendingId === current.id}
                       onSave={(next) => {
                         onIgnoreRegionsChange({ captureId: current.id, regions: next });
-                        setStage('changes');
+                        showStage('changes');
                       }}
-                      onCancel={() => setStage('changes')}
+                      onCancel={() => showStage('changes')}
                     />
-                  ) : current && reference && effectiveStage !== 'image' ? (
-                    effectiveStage === 'side-by-side' ? (
-                      (() => {
-                        // A comment placed on the image shown on the left is drawn there, where it was placed; the right shows where it lands now.
-                        const split = onReference(current.threads ?? [], reference.captureId);
-                        const currentTitle = library ? (current.compare || !current.runNumber ? 'This one' : `Run #${current.runNumber}`) : 'This run';
-                        const sides = [
-                          {
-                            key: 'reference',
-                            title: reference.label,
-                            note: split.here.length ? `${split.here.length} ${split.here.length === 1 ? 'comment' : 'comments'} made here` : null,
-                            image: reference.image,
-                            overlay: split.here.length ? pinLayer(current, `${label}, ${reference.label}`, { threads: split.here, origin: true }) : null,
-                          },
-                          { key: 'current', title: currentTitle, note: null, image: current.image, overlay: pinLayer(current, `${label}, ${currentTitle}`, { threads: split.rest, ghosts: split.ghosts }) },
-                        ];
-                        return (
-                          <div ref={setSideBySideEl} className="flex min-w-max items-start justify-center gap-6">
-                            {sides.map((side) => (
-                              <figure key={side.key} className="flex flex-col gap-1.5">
-                                <figcaption className="flex w-0 min-w-full items-center gap-2 overflow-hidden text-label-s whitespace-nowrap text-muted-foreground">
-                                  {side.title}
-                                  {side.note ? (
-                                    <span className="inline-flex items-center gap-1 text-label-xs text-accent-text">
-                                      <History aria-hidden className="size-3" /> {side.note}
-                                    </span>
-                                  ) : null}
-                                </figcaption>
-                                <ScreenFrame image={side.image} frame={screens[0]} zoom={zoom} alt={`${label} — ${side.title}`} overlay={side.overlay ? () => side.overlay : undefined} />
-                              </figure>
-                            ))}
-                          </div>
-                        );
-                      })()
-                    ) : (
-                      <div role="region" aria-label={`${label}, comparison`} tabIndex={0} className={cn('mx-auto overflow-x-hidden overflow-y-auto outline-none', fill ? null : 'rounded-md ring-1 ring-border', 'focus-visible:ring-[3px] focus-visible:ring-ring/40')} style={{ width: Math.round(screens[0].width * zoom), height: Math.round(screens[0].height * zoom) + around.above }}>
-                        <ImageCompare current={current.image} reference={reference.image} mode={effectiveStage as CompareMode} referenceLabel={reference.label} currentLabel={library ? (current.compare || !current.runNumber ? 'This one' : `Run #${current.runNumber}`) : 'This run'} alt={label} />
-                      </div>
-                    )
+                  ) : comparing ? (
+                    <div className={cn(paneRow(fill), fill && 'mx-auto')}>{compared.map((x, i) => comparison(x, paneScreens[i]))}</div>
                   ) : (
-                    <div className="flex min-w-max items-start justify-center gap-6">
+                    <div className={cn(paneRow(fill), fill && 'mx-auto')}>
                       {shown.map((c, i) => (
-                        <figure key={c.id} className="flex flex-col gap-1.5">
-                          {/* As wide as its screen and no wider: a long caption is cut, never widening the row past the stage. */}
-                          {fill && captionless ? null : (
-                            <figcaption className="flex w-0 min-w-full items-center gap-2 overflow-hidden text-label-s whitespace-nowrap capitalize text-muted-foreground">
-                              {c.variant}
-                              <span className="normal-case tabular-nums">
-                                {frames[i].width} × {frames[i].height}
-                              </span>
-                              {shown.length > 1 && !library ? <ReviewStatusBadge status={c.status} /> : null}
-                            </figcaption>
-                          )}
+                        <StagePane
+                          key={c.id}
+                          fill={fill}
+                          caption={
+                            fill && captionless ? null : (
+                              <>
+                                <span className="capitalize">{c.variant}</span>
+                                <span className="tabular-nums">
+                                  {frames[i].width} × {frames[i].height}
+                                </span>
+                                {shown.length > 1 && !library ? <ReviewStatusBadge status={c.status} /> : null}
+                              </>
+                            )
+                          }
+                        >
                           <ScreenFrame
                             image={c.image}
                             frame={screens[i]}
@@ -996,7 +1142,7 @@ export function CheckpointViewer({
                             label={`${label}, ${c.variant} screen`}
                             overlay={pinLayer(c, `${label}, ${c.variant}`) ? () => pinLayer(c, `${label}, ${c.variant}`) : undefined}
                           />
-                        </figure>
+                        </StagePane>
                       ))}
                     </div>
                   )}
@@ -1047,7 +1193,7 @@ export function CheckpointViewer({
                         !current.request.onThisImage && reference && reference.captureId === current.request.captureId
                           ? () => {
                               setVerifying(false);
-                              setStage('side-by-side');
+                              showStage('side-by-side');
                             }
                           : undefined
                       }
@@ -1272,7 +1418,8 @@ const SHORTCUTS: [string[], string][] = [
   [['↑', '↓'], 'Previous / next test'],
   [['V'], 'Next variant'],
   [['F'], 'Fill the space with the screens, or frame them again'],
-  [['M'], 'Next comparison'],
+  [['M'], 'Image or comparison'],
+  [['⇧', 'M'], 'Next way of comparing'],
   [['N', 'P'], 'Next / previous change'],
   [['A'], 'Approve and go to the next image to review'],
   [['C'], 'Comment mode: click to pin, drag for an area'],
@@ -1334,6 +1481,42 @@ function ChangeRequestNote({ request, onPin, onCompare }: { request: NonNullable
           Compare with the version asked about
         </Button>
       ) : null}
+    </div>
+  );
+}
+
+/** A row of screens: apart, each framed, or — filling the stage — meeting at a hairline. */
+function paneRow(fill: boolean) {
+  return fill ? 'flex w-max items-stretch gap-px bg-border' : 'flex min-w-max items-start justify-center gap-6';
+}
+
+/**
+ * One screen of several on the stage, under its caption. Filling the stage, the
+ * caption is a bar across the screen's top, ruled off like the toolbar above it.
+ */
+function StagePane({ fill, caption, children }: { fill: boolean; caption: ReactNode; children: ReactNode }) {
+  if (caption == null) return fill ? <div className="bg-surface">{children}</div> : <>{children}</>;
+  return (
+    <figure className={cn('flex flex-col', fill ? 'bg-surface' : 'gap-1.5')}>
+      {/* As wide as its screen and no wider: a long caption is cut, never widening the row past the stage. */}
+      <figcaption
+        className={cn('flex w-0 min-w-full items-center gap-2 overflow-hidden text-label-s whitespace-nowrap text-muted-foreground', fill && 'shrink-0 border-b border-border px-3')}
+        style={fill ? { height: PANE_BAR } : undefined}
+      >
+        {caption}
+      </figcaption>
+      {children}
+    </figure>
+  );
+}
+
+/** A screen beside its reference, scrolling together while `enabled`. */
+function SyncedPanes({ fill, enabled, children }: { fill: boolean; enabled: boolean; children: ReactNode }) {
+  const [el, setEl] = useState<HTMLDivElement | null>(null);
+  useSyncedScroll(el, '[data-slot="screen-frame"]', enabled);
+  return (
+    <div ref={setEl} className={paneRow(fill)}>
+      {children}
     </div>
   );
 }

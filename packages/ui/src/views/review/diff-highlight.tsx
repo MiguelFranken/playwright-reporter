@@ -28,6 +28,7 @@ export function DiffHighlight({
   active,
   onActiveChange,
   overlay = true,
+  minimapLabel,
   children,
   className,
 }: {
@@ -40,6 +41,8 @@ export function DiffHighlight({
   onActiveChange: (index: number) => void;
   /** Paint the changed pixels; the boxes stay either way. */
   overlay?: boolean;
+  /** The name of the strip beside a long screen, when several screens are shown. */
+  minimapLabel?: string;
   /** More over the image, scrolling with it: comment pins. */
   children?: ReactNode;
   className?: string;
@@ -87,7 +90,7 @@ export function DiffHighlight({
           <UnavailableImage image={image} />
         )}
       </div>
-      {tall && size ? <ChangeMinimap diff={diff} imageHeight={size.height} height={height} active={active} onSelect={onActiveChange} /> : null}
+      {tall && size ? <ChangeMinimap diff={diff} imageHeight={size.height} height={height} active={active} onSelect={onActiveChange} label={minimapLabel} /> : null}
     </div>
   );
 }
@@ -103,16 +106,19 @@ export function ChangeMinimap({
   height,
   active,
   onSelect,
+  label = 'Where the changes are',
 }: {
   diff: ReviewDiffView;
   imageHeight: number;
   height: number;
   active: number | null;
   onSelect: (index: number) => void;
+  /** Its name, distinct for each of several screens. */
+  label?: string;
 }) {
   const pct = (y: number) => `${(y / imageHeight) * 100}%`;
   return (
-    <nav aria-label="Where the changes are" className="relative w-3 shrink-0 rounded-full bg-surface-sunken ring-1 ring-border" style={{ height }}>
+    <nav aria-label={label} className="relative w-3 shrink-0 rounded-full bg-surface-sunken ring-1 ring-border" style={{ height }}>
       {diff.shift?.inserted.map((b, i) => (
         <span key={`band-${i}`} aria-hidden className="absolute inset-x-0 bg-info-solid/40" style={{ top: pct(b.y), height: `max(2px, ${pct(b.height)})` }} />
       ))}
