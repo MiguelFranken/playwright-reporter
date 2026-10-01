@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.73](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.72...v0.0.73) (2026-10-01)
+
+### Bug Fixes
+
+* **auth:** send an ended session to /login before the page renders ([49a7694](https://github.com/MiguelFranken/playwright-reporter/commit/49a7694077952b00567b596e8987a3ab80f2acdf))
+
 ## [0.0.72](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.71...v0.0.72) (2026-10-01)
 
 ### Bug Fixes
