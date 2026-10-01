@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.76](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.75...v0.0.76) (2026-10-01)
+
+### Features
+
+* **review:** choose image or compare first, and compare every variant at once ([#81](https://github.com/MiguelFranken/playwright-reporter/issues/81)) ([f69a43f](https://github.com/MiguelFranken/playwright-reporter/commit/f69a43fb57391f0c0ab5d0c39ce86237b5e889a4))
+* **review:** draw on review images with a pen, highlighter, arrows and shapes ([#80](https://github.com/MiguelFranken/playwright-reporter/issues/80)) ([e36ce3b](https://github.com/MiguelFranken/playwright-reporter/commit/e36ce3bf86664aeb7f99aa0c562db3fd7207c92c))
+
 ## [0.0.75](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.74...v0.0.75) (2026-10-01)
 
 ### Features
