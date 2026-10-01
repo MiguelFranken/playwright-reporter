@@ -52,6 +52,25 @@ function fakeDictation({ spoken = 'Make the primary button a little larger', del
   };
 }
 
+/** A host that transcribes while it records: each word shows up as it is said, revised once at the end. */
+function liveDictation(words: string[], final: string): Dictation {
+  return {
+    start: async ({ onTranscript } = {}) => {
+      let said = 0;
+      const timer = setInterval(() => {
+        if (said < words.length) onTranscript?.(words.slice(0, ++said).join(' '));
+      }, 20);
+      return {
+        stop: async () => {
+          clearInterval(timer);
+          return final;
+        },
+        cancel: () => clearInterval(timer),
+      };
+    },
+  };
+}
+
 const withDictation = (dictation: Dictation) => (Story: () => React.ReactNode) => <DictationProvider dictation={dictation}>{Story()}</DictationProvider>;
 
 /** With dictation offered: the microphone records, and the transcript lands in the draft to be read before posting. */
@@ -68,6 +87,40 @@ export const Dictate: Story = {
     await waitFor(() => expect(box).toHaveValue('Header: Make the primary button a little larger'));
     await expect(box).toHaveFocus();
     await expect(args.onSubmit).not.toHaveBeenCalled();
+  },
+};
+
+/**
+ * Live dictation: the words appear in the box while they are spoken, after
+ * the draft, and the box cannot be typed in until the recording stops.
+ */
+export const LiveDictation: Story = {
+  args: { initialValue: 'Header:' },
+  decorators: [withDictation(liveDictation(['make', 'the', 'button', 'larger'], 'Make the button larger.'))],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const box = canvas.getByRole('textbox', { name: 'Comment' });
+    await userEvent.click(canvas.getByRole('button', { name: 'Dictate' }));
+    await waitFor(() => expect(box).toHaveValue('Header: make the button larger'));
+    await expect(box).toHaveAttribute('readonly');
+    await userEvent.click(canvas.getByRole('button', { name: 'Stop dictating' }));
+    await waitFor(() => expect(box).toHaveValue('Header: Make the button larger.'));
+    await expect(box).not.toHaveAttribute('readonly');
+  },
+};
+
+/** Escape during live dictation takes the live words back out. */
+export const CancelLiveDictation: Story = {
+  args: { initialValue: 'Keep this' },
+  decorators: [withDictation(liveDictation(['never', 'mind'], 'Never mind.'))],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const box = canvas.getByRole('textbox', { name: 'Comment' });
+    await userEvent.click(canvas.getByRole('button', { name: 'Dictate' }));
+    await waitFor(() => expect(box).toHaveValue('Keep this never mind'));
+    await userEvent.click(box);
+    await userEvent.keyboard('{Escape}');
+    await expect(box).toHaveValue('Keep this');
   },
 };
 

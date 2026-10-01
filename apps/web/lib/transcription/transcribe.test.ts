@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_TRANSCRIPTION_MODEL, transcriptionEnabled, transcriptionModel, transcriptionProvider } from './config';
+import {
+  DEFAULT_STREAMING_MODEL,
+  DEFAULT_TRANSCRIPTION_MODEL,
+  transcriptionEnabled,
+  transcriptionModel,
+  transcriptionProvider,
+  transcriptionStreaming,
+  transcriptionStreamingModel,
+} from './config';
 import { canDictate, OPENROUTER_BASE_URL, transcribeAudio } from './transcribe';
 
 afterEach(() => {
@@ -35,6 +43,19 @@ describe('dictation', () => {
     expect(transcriptionEnabled()).toBe(false);
     vi.stubEnv('OPENROUTER_API_KEY', 'sk-or-test');
     expect(transcriptionEnabled()).toBe(true);
+  });
+
+  it('streams on AI Gateway unless turned off, never on OpenRouter', () => {
+    vi.stubEnv('TRANSCRIPTION_PROVIDER', 'gateway');
+    vi.stubEnv('TRANSCRIPTION_STREAMING', '');
+    expect(transcriptionStreaming()).toBe(true);
+    vi.stubEnv('TRANSCRIPTION_STREAMING', 'false');
+    expect(transcriptionStreaming()).toBe(false);
+    vi.stubEnv('TRANSCRIPTION_STREAMING', '');
+    vi.stubEnv('TRANSCRIPTION_PROVIDER', 'openrouter');
+    expect(transcriptionStreaming()).toBe(false);
+    vi.stubEnv('TRANSCRIPTION_STREAMING_MODEL', '');
+    expect(transcriptionStreamingModel()).toBe(DEFAULT_STREAMING_MODEL);
   });
 
   it('uses the configured model, or the default', () => {

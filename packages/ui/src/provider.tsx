@@ -96,6 +96,15 @@ export interface DictationRecording {
   cancel: () => void;
 }
 
+export interface DictationOptions {
+  /**
+   * What has been said so far, each time it changes, from a host that
+   * transcribes while it records. It may revise earlier words; `stop`
+   * resolves with the final text.
+   */
+  onTranscript?: (text: string) => void;
+}
+
 /**
  * Speech to text for the text boxes that offer it. `start` opens the
  * microphone and resolves once it is listening; it rejects (with a message
@@ -103,7 +112,7 @@ export interface DictationRecording {
  * the design system only decides where the words go.
  */
 export interface Dictation {
-  start: () => Promise<DictationRecording>;
+  start: (options?: DictationOptions) => Promise<DictationRecording>;
 }
 
 const DictationContext = createContext<Dictation | null>(null);

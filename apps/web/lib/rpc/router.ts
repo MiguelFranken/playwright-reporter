@@ -47,8 +47,8 @@ import { casesOfTests } from '@/lib/review/cases';
 import { captureInProject, decide, MAX_DECISION_CAPTURES, ReviewError, runReview } from '@/lib/review/queries';
 import { toRunReviewData } from '@/lib/review/run-flows';
 import { pendingDiff, toDiffView } from '@/lib/review/view-model';
-import { MAX_AUDIO_BYTES } from '@/lib/transcription/config';
-import { canDictate, transcribeAudio } from '@/lib/transcription/transcribe';
+import { MAX_AUDIO_BYTES, transcriptionStreaming } from '@/lib/transcription/config';
+import { canDictate, streamingToken, transcribeAudio } from '@/lib/transcription/transcribe';
 
 /** How many runs or result rows one call may ask for; the live views ask in batches of these sizes. */
 export const MAX_RUN_IDS = 25;
@@ -312,6 +312,20 @@ export const appRouter = {
           throw new ORPCError('BAD_GATEWAY', { message: 'That could not be transcribed. Try again.' });
         }
       }),
+
+    /**
+     * A single-use secret for one live dictation, which the browser streams
+     * to AI Gateway itself. NOT_FOUND where dictation does not stream.
+     */
+    streamToken: authed.handler(async () => {
+      if (!canDictate(await getCurrentUser()) || !transcriptionStreaming()) throw new ORPCError('NOT_FOUND');
+      try {
+        return await streamingToken();
+      } catch (error) {
+        console.error('[dictation] streaming token failed', error);
+        throw new ORPCError('BAD_GATEWAY', { message: 'Live dictation is not available right now.' });
+      }
+    }),
   },
 
   admin: {
