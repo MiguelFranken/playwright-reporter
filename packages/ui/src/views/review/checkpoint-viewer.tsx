@@ -17,8 +17,10 @@ import {
   checkpointLabel,
   compareVariants,
   DEFAULT_FRAME,
-  fitZoom,
   frameFor,
+  fillFrames,
+  frameWithin,
+  shownZoom,
   type FrameSettings,
   NEEDS_REVIEW,
   type ReviewCaptureView,
@@ -39,6 +41,8 @@ import { FrameToolbar } from './frame-toolbar';
 import { PinLayer, type PinFocusRequest, type ThreadDraft } from './pin-layer';
 import { ScreenFrame } from './screen-frame';
 import { ThreadVerify, VerifyDone } from './thread-verify';
+import { RequestVerify, ResolveBar, ResolveDone } from './resolve-feedback';
+import { feedbackItemDone, type FeedbackItem, type FeedbackScope } from '../../lib/feedback-queue';
 import { ThreadList } from './thread-list';
 import { LibraryStateChip } from '../../patterns/library-state-chip';
 import { captureStates, type LibraryState } from '../../lib/library-views';
@@ -67,6 +71,23 @@ export interface ReviewCommentsProps extends ThreadActions {
    * explains connecting one, and the project the prompt names.
    */
   assistant?: { setupHref: string; project?: string | null } | null;
+}
+
+/**
+ * Going through open feedback one item after another, across screens and
+ * flows (the library's "Resolve feedback"): the items in order, which of them,
+ * and how the host shows an item that is on another screen.
+ */
+export interface ResolveFeedbackProps {
+  /** The feedback to go through, in order; kept while it is resolved, so the count holds still. */
+  items: readonly FeedbackItem[];
+  scope: FeedbackScope;
+  /** Open items per scope, as the flows are now. */
+  counts: Record<FeedbackScope, number>;
+  /** Another scope — or the same one, to go through what is still open again. */
+  onScopeChange: (next: FeedbackScope) => void;
+  /** Show an item on another screen: its checkpoint and variant, and its thread. */
+  onGo: (item: FeedbackItem) => void;
 }
 
 /** `changes`: this run's image with the measured changes marked; `ignore`: drawing the areas left out. */
@@ -163,6 +184,12 @@ function usePreloadNeighbours(all: readonly Position[], at: number) {
  * N and P step through the measured changes, A approves and moves on to the
  * next image that needs review, C pins comments on the screenshot. Controlled: the host owns the selection (it may live in the URL)
  * and records decisions.
+ *
+ * A screen with comments made on an earlier version opens on the first of
+ * them, compared with the screen as it is now: verifying needs no click.
+ * With `resolve`, the viewer goes through feedback instead of screens — every
+ * item opens that way, `[` `]` step through all of them, and resolving one
+ * moves on to the next, on whichever screen it is.
  */
 export function CheckpointViewer({
   flows,
@@ -177,6 +204,7 @@ export function CheckpointViewer({
   onIgnoreRegionsChange,
   ignorePendingId,
   comments = {},
+  resolve,
 }: {
   flows: readonly ReviewFlowView[];
   selection: ReviewSelection | null;
@@ -195,8 +223,11 @@ export function CheckpointViewer({
   /** The capture whose ignored areas are being saved. */
   ignorePendingId?: string | null;
   comments?: ReviewCommentsProps;
+  /** Going through open feedback, item by item; absent to go through screens. */
+  resolve?: ResolveFeedbackProps | null;
 }) {
   const library = mode === 'library';
+  const resolving = resolve ?? null;
   const all = useMemo(() => positions(flows), [flows]);
   const at = selection ? all.findIndex((p) => p.checkpoint.id === selection.checkpointId || p.checkpoint.aliases?.includes(selection.checkpointId)) : -1;
   const pos = at >= 0 ? all[at] : null;
@@ -218,6 +249,10 @@ export function CheckpointViewer({
   const [verifying, setVerifying] = useState(false);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [verified, setVerified] = useState<ReadonlySet<string>>(() => new Set());
+  // Resolving feedback: the item on show, the ones dealt with here (before the host catches up), and whether the end was reached.
+  const [itemKey, setItemKey] = useState<string | null>(null);
+  const [handled, setHandled] = useState<ReadonlySet<string>>(() => new Set());
+  const [finished, setFinished] = useState(false);
   const approveRef = useRef<HTMLButtonElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   // The dialog mounts its content in a portal after opening; state follows the element itself.
@@ -230,6 +265,14 @@ export function CheckpointViewer({
   const reference = current ? referenceOf(current) : null;
   const diff = current && reference ? (current.diff ?? null) : null;
   const deciding = Boolean(canDecide && onDecide);
+  const onScreen = (it: FeedbackItem) => Boolean(pos && (it.checkpointId === pos.checkpoint.id || pos.checkpoint.aliases?.includes(it.checkpointId)) && (!variant || it.variant === variant));
+  const hereItems = resolving ? resolving.items.filter(onScreen) : [];
+  // The end: every item gone through, or none in the scope.
+  const ended = Boolean(resolving && (finished || resolving.items.length === 0));
+  const item = resolving && !ended ? (hereItems.find((i) => i.key === itemKey) ?? hereItems.find((i) => i.number != null && i.number === comments.openThread) ?? hereItems[0] ?? null) : null;
+  const itemIndex = item && resolving ? resolving.items.indexOf(item) : -1;
+  const isDone = (it: FeedbackItem, done: ReadonlySet<string> = handled) => done.has(it.key) || feedbackItemDone(it, flows);
+  const doneCount = resolving ? resolving.items.filter((i) => isDone(i)).length : 0;
   const measuredSize = current && diff ? diffImageSize(current.image, diff) : null;
   const hasChanges = Boolean(current?.image.available && diff?.state === 'done' && (diff.changedPixels > 0 || diff.sizeChanged) && measuredSize);
   const regions = hasChanges ? diff!.regions : [];
@@ -267,15 +310,48 @@ export function CheckpointViewer({
   const verifyQueue = sortThreads(shownThreads.filter((t) => threadStage(t) === 'verify' || (t.id === verifyingId && t.placement === 'outdated')));
   // What is left to walk through: open and not resolved here yet, and the one on show.
   const toWalk = verifyQueue.filter((t) => (t.status === 'open' && !verified.has(t.id)) || t.id === verifyingId);
-  const comparedThread = verifying && verifyingId ? (verifyQueue.find((t) => t.id === verifyingId) ?? null) : null;
+  const resolveThread = item?.kind === 'thread' ? (shownThreads.find((t) => t.id === item.threadId) ?? null) : null;
+  const comparedThread = resolving ? (verifying ? resolveThread : null) : verifying && verifyingId ? (verifyQueue.find((t) => t.id === verifyingId) ?? null) : null;
+  // A change request nobody commented on, while resolving: the image asked about beside the screen now.
+  const requestCapture = resolving && verifying && item?.kind === 'request' ? (shown.find((c) => c.id === item.captureId) ?? null) : null;
+  const requestShown = requestCapture ? (requestCapture.request ?? { by: requestCapture.decision?.by ?? null, at: requestCapture.decision?.at ?? '', runNumber: requestCapture.decision?.runNumber ?? null, captureId: requestCapture.id, onThisImage: true }) : null;
+  const requestReference = requestCapture ? referenceOf(requestCapture) : null;
+  const requestThen = requestShown && !requestShown.onThisImage && requestReference && requestReference.captureId === requestShown.captureId ? requestReference.image : null;
   const comparedCapture = comparedThread ? (shown.find((c) => c.threads?.some((t) => t.id === comparedThread.id)) ?? null) : null;
   const threadComparing = Boolean(comparedThread && comparedCapture);
   const frames = (threadComparing ? [comparedCapture!] : comparing && current ? [current] : shown).map((c) => frameFor(frameSettings, c));
-  const zoomFrames = threadComparing || (comparing && effectiveStage === 'side-by-side') ? [frames[0], frames[0]] : frames;
-  // Room for the captions above the screens and the stage's padding.
-  // Room for the captions above the screens (and, comparing a thread, its banner and comment) and the stage's padding.
-  const fitHeight = stackedHeight == null ? stageSize.height - 48 : Math.max(240, stackedHeight * 0.75);
-  const zoom = frameSettings.zoom === 'fit' ? fitZoom(zoomFrames, { width: stageSize.width - 48, height: fitHeight - (threadComparing ? 300 : 28) }) : frameSettings.zoom;
+  const fill = Boolean(frameSettings.fill);
+  // One plain screen needs no caption over it when it fills the stage: the toolbar already says what it is.
+  const captionless = effectiveStage === 'image' && !threadComparing && !requestCapture && shown.length === 1;
+  const zoomFrames = threadComparing || (requestShown && !requestShown.onThisImage) || (comparing && effectiveStage === 'side-by-side') ? [frames[0], frames[0]] : frames;
+  // What sits around the screens inside the stage: captions above them (and, comparing a thread, its banner and comment;
+  // leaving areas out, the help and the list below), the comparison's controls, the changes' minimap beside them.
+  const around = threadComparing
+    ? { above: 300, beside: 0 }
+    : requestCapture
+      ? { above: 140, beside: 0 }
+      : effectiveStage === 'ignore'
+        ? { above: 180, beside: 0 }
+        : effectiveStage === 'changes'
+          ? { above: 0, beside: 20 }
+          : effectiveStage === 'onion' || effectiveStage === 'difference'
+            ? { above: 40, beside: 0 }
+            : effectiveStage === 'slider' || (fill && captionless)
+              ? { above: 0, beside: 0 }
+              : { above: 28, beside: 0 };
+  // The room the screens have: the stage less its padding (none when they fill it). They never outgrow it, so the stage
+  // itself never scrolls.
+  const padding = fill ? 0 : 48;
+  const room = {
+    width: stageSize.width - padding - around.beside,
+    height: (stackedHeight == null ? stageSize.height - padding : Math.max(240, stackedHeight * 0.75)) - around.above,
+  };
+  // The largest zoom the width allows; the toolbar offers nothing above it.
+  const maxZoom = shownZoom(Infinity, zoomFrames, room);
+  const filled = fill ? fillFrames(frames, room) : null;
+  const zoom = filled?.zoom ?? shownZoom(frameSettings.zoom, zoomFrames, room);
+  // A screen longer than the room ends at its bottom edge and scrolls inside; filling, every screen is as tall as the room.
+  const screens = filled?.screens ?? frames.map((f) => frameWithin(f, room.height, zoom));
   const closeUpWidth = Math.min(640, Math.max(240, (stageSize.width - 48 - 24) / 2));
   const pending = new Set(pendingIds);
   const busy = shown.some((c) => pending.has(c.id));
@@ -296,7 +372,27 @@ export function CheckpointViewer({
     setVerifying(false);
     setVerifyingId(null);
     setVerified(new Set());
+    setFinished(false);
+    // Comments made on an earlier version are what to look at first: the screen opens on them, unless a link names another thread.
+    if (resolving) return;
+    const linkedThread = comments.openThread != null ? shownThreads.find((t) => t.number === comments.openThread) : null;
+    const start = linkedThread ? (threadStage(linkedThread) === 'verify' ? linkedThread : null) : (verifyQueue.find((t) => t.status === 'open') ?? null);
+    if (start) {
+      setVerifying(true);
+      setVerifyingId(start.id);
+      setOpenThreadId(start.id);
+    }
+    // Only when another screen is shown, not on every revalidation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectionKey]);
+
+  // Resolving feedback, each item opens compared with what it was given on.
+  useEffect(() => {
+    if (!resolving || !item) return;
+    showItem(item);
+    // Only when another item is shown.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item?.key, selectionKey]);
 
   // A link to a thread (`thread=3`) opens it and brings its pin into view, once its checkpoint is shown.
   const linked = comments.openThread != null ? (shownThreads.find((t) => t.number === comments.openThread) ?? null) : null;
@@ -315,6 +411,52 @@ export function CheckpointViewer({
     if (opts.focus && id) setFocus((f) => ({ threadId: id, nonce: (f?.nonce ?? 0) + 1, ping: true }));
     comments.onOpenThreadChange?.(id ? (shownThreads.find((t) => t.id === id)?.number ?? null) : null);
   };
+  /** The item on show while resolving: its comparison, its thread open. */
+  const showItem = (it: FeedbackItem) => {
+    setVerifying(true);
+    setVerifyingId(it.threadId);
+    setCommenting(false);
+    setDraft(null);
+    setPinsHidden(false);
+    if (it.threadId) setOpenThreadId(it.threadId);
+  };
+  /** Shows an item, on this screen or (through the host) another. */
+  const go = (it: FeedbackItem) => {
+    setFinished(false);
+    setItemKey(it.key);
+    if (onScreen(it)) showItem(it);
+    else resolving?.onGo(it);
+  };
+  const stepItem = (delta: 1 | -1) => {
+    if (!resolving) return;
+    const items = resolving.items;
+    if (finished) {
+      if (delta < 0 && items.length) go(items[items.length - 1]);
+      return;
+    }
+    const next = items[(itemIndex >= 0 ? itemIndex : delta > 0 ? -1 : items.length) + delta];
+    if (next) go(next);
+    else if (delta > 0) setFinished(true);
+  };
+  /** After `from` was dealt with: the next item still open, wrapping round once; the end when none is. */
+  const goOnFrom = (from: FeedbackItem | null, done: ReadonlySet<string>) => {
+    if (!resolving) return;
+    const items = resolving.items;
+    const i = from ? items.indexOf(from) : -1;
+    const open = (it: FeedbackItem) => !isDone(it, done);
+    const next = items.slice(i + 1).find(open) ?? items.slice(0, Math.max(0, i)).find(open);
+    if (next) go(next);
+    else setFinished(true);
+  };
+  /** Another scope, or the same one from the start: the host pins the items again. */
+  const changeScope = (next: FeedbackScope) => {
+    setFinished(false);
+    setHandled(new Set());
+    setItemKey(null);
+    setVerifying(true);
+    resolving?.onScopeChange(next);
+  };
+
   /** Walks through the comments to verify, from `id` or the first; `null` stops. */
   const verify = (id?: string | null) => {
     if (id === null) {
@@ -322,6 +464,8 @@ export function CheckpointViewer({
       setVerifyingId(null);
       return;
     }
+    const asItem = resolving && id ? resolving.items.find((i) => i.threadId === id) : null;
+    if (asItem) return go(asItem);
     const start = id ? verifyQueue.find((t) => t.id === id) : verifyQueue.find((t) => t.status === 'open' && !verified.has(t.id));
     setVerifying(true);
     setVerifyingId(start?.id ?? null);
@@ -341,6 +485,12 @@ export function CheckpointViewer({
   const resolveVerified = () => {
     if (!comparedThread || !comparedCapture || comparedThread.status !== 'open') return;
     comments.onSetThreadStatus?.({ threadId: comparedThread.id, status: 'resolved', captureId: comparedCapture.id });
+    if (resolving) {
+      const done = item ? new Set(handled).add(item.key) : handled;
+      setHandled(done);
+      goOnFrom(item, done);
+      return;
+    }
     const done = new Set(verified).add(comparedThread.id);
     setVerified(done);
     // Resolved here, whether or not the host has caught up.
@@ -414,7 +564,14 @@ export function CheckpointViewer({
     if (!onDecide || ids.length === 0) return;
     setConfirmApprove(false);
     onDecide({ captureIds: ids, decision, ...(decision === 'approved' && resolveThreads ? { resolveThreads: true } : {}) });
-    if (decision === 'approved') advance(ids);
+    if (decision === 'approved' && resolving) {
+      // Approved: its change requests are done, and its comments too when they were resolved with it.
+      const approved = new Set(ids);
+      const done = new Set(handled);
+      for (const it of resolving.items) if (approved.has(it.captureId) && (it.kind === 'request' || resolveThreads)) done.add(it.key);
+      setHandled(done);
+      if (!item || done.has(item.key)) goOnFrom(item, done);
+    } else if (decision === 'approved') advance(ids);
     // Asking for changes with nothing pinned yet: point at what should change.
     else if (canComment && openCount === 0) toggleCommenting(true);
   };
@@ -444,13 +601,15 @@ export function CheckpointViewer({
       } else if (e.key === 'Escape' && verifying) {
         e.stopPropagation();
         verify(null);
-      } else if (verifying && (e.key === ']' || e.key === '[')) stepVerify(e.key === ']' ? 1 : -1);
+      } else if (resolving && (e.key === ']' || e.key === '[')) stepItem(e.key === ']' ? 1 : -1);
+      else if (verifying && (e.key === ']' || e.key === '[')) stepVerify(e.key === ']' ? 1 : -1);
       else if (verifying && key === 'e' && canComment && comparedThread?.status === 'open') resolveVerified();
       else if (e.key === 'ArrowRight') move(1);
       else if (e.key === 'ArrowLeft') move(-1);
       else if (e.key === 'ArrowDown') moveFlow(1);
       else if (e.key === 'ArrowUp') moveFlow(-1);
       else if (key === 'v') cycleVariant();
+      else if (key === 'f') setFrame({ ...frameSettings, fill: !fill });
       else if (key === 'm') cycleStage();
       else if (key === 'n' && regions.length) moveRegion(1);
       else if (key === 'p' && regions.length) moveRegion(-1);
@@ -458,6 +617,7 @@ export function CheckpointViewer({
       else if (e.key === ']') stepThread(1);
       else if (e.key === '[') stepThread(-1);
       else if (key === 'h' && shownThreads.length) setPinsHidden((h) => !h);
+      else if (key === 'o' && resolving && item) setVerifying((on) => !on);
       else if (key === 'o' && (verifying || verifyQueue.length)) verify(verifying ? null : (verifyQueue.find((t) => t.id === openThreadId)?.id ?? undefined));
       else if (key === 'e' && canComment && openThreadId && comments.onSetThreadStatus) {
         const t = shownThreads.find((x) => x.id === openThreadId);
@@ -603,12 +763,24 @@ export function CheckpointViewer({
                   <X />
                 </DialogClose>
               </div>
+              {resolving ? (
+                <ResolveBar
+                  className="basis-full"
+                  index={ended ? resolving.items.length : itemIndex}
+                  total={resolving.items.length}
+                  done={doneCount}
+                  scope={resolving.scope}
+                  counts={resolving.counts}
+                  onScopeChange={changeScope}
+                  onStep={stepItem}
+                />
+              ) : null}
             </header>
 
             <div className="grid shrink-0 grow grid-cols-1 lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_20rem]">
               <section className="flex min-h-0 flex-col bg-surface" aria-label="Checkpoint image">
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-surface px-4 py-2">
-                  <FrameToolbar value={frameSettings} onChange={setFrame} captured={current ? captureViewport(current) : null} />
+                  <FrameToolbar value={frameSettings} onChange={setFrame} captured={current ? captureViewport(current) : null} maxZoom={stageSize.width > 0 ? maxZoom : undefined} />
                   <div className="flex items-center gap-3">
                     {effectiveStage === 'changes' && regions.length ? (
                       <div className="flex items-center gap-0.5" role="group" aria-label="Changes">
@@ -649,18 +821,56 @@ export function CheckpointViewer({
                   tabIndex={0}
                   aria-label="Checkpoint screens"
                   className={cn(
-                    'min-h-0 flex-1 overflow-auto p-6 outline-none transition-shadow duration-150 focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/25',
+                    'min-h-0 flex-1 outline-none transition-shadow duration-150 focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/25',
+                    // The screens fit; only a comparison while verifying, the summary after resolving and the editor's list below
+                    // the screen can run longer.
+                    verifying || (resolving && ended) || effectiveStage === 'ignore' ? 'overflow-auto' : 'overflow-hidden',
+                    // Filling, the screens lose their frame and run to the stage's edges.
+                    fill ? 'p-0 [&_[data-slot=screen-frame]]:rounded-none [&_[data-slot=screen-frame]]:shadow-none [&_[data-slot=screen-frame]]:ring-0' : 'p-6',
                     commenting && 'shadow-[inset_0_0_0_2px_var(--accent-solid)]',
                   )}
                 >
-                  {verifying && comparedThread && comparedCapture ? (
+                  {resolving && ended ? (
+                    <ResolveDone
+                      resolved={doneCount}
+                      open={resolving.items.length - doneCount}
+                      scope={resolving.scope}
+                      onRestart={() => changeScope(resolving.scope)}
+                      onClose={() => onSelectionChange(null)}
+                    />
+                  ) : requestCapture && requestShown ? (
+                    <RequestVerify
+                      request={requestShown}
+                      then={requestThen}
+                      image={requestCapture.image}
+                      frame={screens[0]}
+                      zoom={zoom}
+                      label={label}
+                      currentLabel={`Now${requestCapture.runNumber ? ` · run #${requestCapture.runNumber}` : library ? '' : ' · this run'}`}
+                      index={Math.max(0, itemIndex)}
+                      total={resolving?.items.length ?? 1}
+                      onApprove={deciding ? approve : undefined}
+                      approving={busy}
+                      onPin={
+                        canComment
+                          ? () => {
+                              setVerifying(false);
+                              toggleCommenting(true);
+                            }
+                          : undefined
+                      }
+                      onSkip={() => stepItem(1)}
+                    />
+                  ) : verifying && comparedThread && comparedCapture ? (
                     <ThreadVerify
                       thread={comparedThread}
-                      index={Math.max(0, toWalk.indexOf(comparedThread))}
-                      total={toWalk.length}
+                      stage={comparedThread.placement === 'outdated' ? 'verify' : 'waiting'}
+                      currentRunNumber={comparedCapture.runNumber}
+                      index={resolving ? Math.max(0, itemIndex) : Math.max(0, toWalk.indexOf(comparedThread))}
+                      total={resolving ? resolving.items.length : toWalk.length}
                       captureId={comparedCapture.id}
                       image={comparedCapture.image}
-                      frame={frames[0]}
+                      frame={screens[0]}
                       zoom={zoom}
                       closeUpWidth={closeUpWidth}
                       label={label}
@@ -671,14 +881,14 @@ export function CheckpointViewer({
                       canModerate={comments.canModerate}
                       currentOverlay={pinLayer(comparedCapture, `${label}, now`)}
                       onResolve={comments.onSetThreadStatus ? resolveVerified : undefined}
-                      onStep={(d) => stepVerify(d)}
+                      onStep={(d) => (resolving ? stepItem(d) : stepVerify(d))}
                       onClose={() => verify(null)}
                       actions={comparedThread.status === 'open' ? aiMenu(comparedCapture.id, [comparedThread], { iconOnly: true, label: `Fix comment ${comparedThread.number} with AI` }) : null}
                       onReply={comments.onReply}
                       onEditComment={comments.onEditComment}
                       onDeleteComment={comments.onDeleteComment}
                     />
-                  ) : verifying ? (
+                  ) : verifying && !resolving ? (
                     <VerifyDone
                       count={verified.size}
                       onClose={() => verify(null)}
@@ -692,7 +902,7 @@ export function CheckpointViewer({
                     />
                   ) : current && effectiveStage === 'changes' && diff ? (
                     <div className="flex min-w-max justify-center">
-                      <DiffHighlight image={current.image} diff={diff} frame={frames[0]} zoom={zoom} alt={label} active={activeRegion} onActiveChange={setActiveRegion}>
+                      <DiffHighlight image={current.image} diff={diff} frame={screens[0]} zoom={zoom} alt={label} active={activeRegion} onActiveChange={setActiveRegion}>
                         {pinLayer(current, label)}
                       </DiffHighlight>
                     </div>
@@ -700,7 +910,7 @@ export function CheckpointViewer({
                     <IgnoreRegionsEditor
                       image={current.image}
                       imageSize={(measuredSize ?? ownSize)!}
-                      frame={frames[0]}
+                      frame={screens[0]}
                       zoom={zoom}
                       alt={label}
                       value={current.ignoreRegions ?? []}
@@ -731,7 +941,7 @@ export function CheckpointViewer({
                           <div ref={setSideBySideEl} className="flex min-w-max items-start justify-center gap-6">
                             {sides.map((side) => (
                               <figure key={side.key} className="flex flex-col gap-1.5">
-                                <figcaption className="flex items-center gap-2 text-label-s text-muted-foreground">
+                                <figcaption className="flex w-0 min-w-full items-center gap-2 overflow-hidden text-label-s whitespace-nowrap text-muted-foreground">
                                   {side.title}
                                   {side.note ? (
                                     <span className="inline-flex items-center gap-1 text-label-xs text-accent-text">
@@ -739,14 +949,14 @@ export function CheckpointViewer({
                                     </span>
                                   ) : null}
                                 </figcaption>
-                                <ScreenFrame image={side.image} frame={frames[0]} zoom={zoom} alt={`${label} — ${side.title}`} overlay={side.overlay ? () => side.overlay : undefined} />
+                                <ScreenFrame image={side.image} frame={screens[0]} zoom={zoom} alt={`${label} — ${side.title}`} overlay={side.overlay ? () => side.overlay : undefined} />
                               </figure>
                             ))}
                           </div>
                         );
                       })()
                     ) : (
-                      <div role="region" aria-label={`${label}, comparison`} tabIndex={0} className="mx-auto overflow-x-hidden overflow-y-auto rounded-md ring-1 ring-border outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40" style={{ width: frames[0].width * zoom, height: frames[0].height * zoom + (effectiveStage === 'slider' ? 0 : 40) }}>
+                      <div role="region" aria-label={`${label}, comparison`} tabIndex={0} className={cn('mx-auto overflow-x-hidden overflow-y-auto outline-none', fill ? null : 'rounded-md ring-1 ring-border', 'focus-visible:ring-[3px] focus-visible:ring-ring/40')} style={{ width: Math.round(screens[0].width * zoom), height: Math.round(screens[0].height * zoom) + around.above }}>
                         <ImageCompare current={current.image} reference={reference.image} mode={effectiveStage as CompareMode} referenceLabel={reference.label} currentLabel={library ? (current.compare || !current.runNumber ? 'This one' : `Run #${current.runNumber}`) : 'This run'} alt={label} />
                       </div>
                     )
@@ -754,16 +964,19 @@ export function CheckpointViewer({
                     <div className="flex min-w-max items-start justify-center gap-6">
                       {shown.map((c, i) => (
                         <figure key={c.id} className="flex flex-col gap-1.5">
-                          <figcaption className="flex items-center gap-2 text-label-s capitalize text-muted-foreground">
-                            {c.variant}
-                            <span className="normal-case tabular-nums">
-                              {frames[i].width} × {frames[i].height}
-                            </span>
-                            {shown.length > 1 && !library ? <ReviewStatusBadge status={c.status} /> : null}
-                          </figcaption>
+                          {/* As wide as its screen and no wider: a long caption is cut, never widening the row past the stage. */}
+                          {fill && captionless ? null : (
+                            <figcaption className="flex w-0 min-w-full items-center gap-2 overflow-hidden text-label-s whitespace-nowrap capitalize text-muted-foreground">
+                              {c.variant}
+                              <span className="normal-case tabular-nums">
+                                {frames[i].width} × {frames[i].height}
+                              </span>
+                              {shown.length > 1 && !library ? <ReviewStatusBadge status={c.status} /> : null}
+                            </figcaption>
+                          )}
                           <ScreenFrame
                             image={c.image}
-                            frame={frames[i]}
+                            frame={screens[i]}
                             zoom={zoom}
                             alt={`${label} — ${c.variant}`}
                             label={`${label}, ${c.variant} screen`}
@@ -1024,6 +1237,7 @@ const SHORTCUTS: [string[], string][] = [
   [['←', '→'], 'Previous / next checkpoint'],
   [['↑', '↓'], 'Previous / next test'],
   [['V'], 'Next variant'],
+  [['F'], 'Fill the space with the screens, or frame them again'],
   [['M'], 'Next comparison'],
   [['N', 'P'], 'Next / previous change'],
   [['A'], 'Approve and go to the next image to review'],
@@ -1032,7 +1246,7 @@ const SHORTCUTS: [string[], string][] = [
   [['[', ']'], 'Previous / next comment'],
   [['E'], 'Resolve or reopen the open comment'],
   [['H'], 'Hide or show the pins'],
-  [['O'], 'Verify the comments made on an earlier version'],
+  [['O'], 'Compare the comment with the version it was made on, or show the screen'],
   [['L'], 'Side by side: scroll both screens together, or apart'],
   [['Esc'], 'Leave comment mode, then close'],
 ];

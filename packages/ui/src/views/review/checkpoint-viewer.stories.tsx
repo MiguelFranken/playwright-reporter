@@ -89,6 +89,44 @@ export const ScreenSettings: Story = {
 };
 
 /**
+ * A zoom larger than the stage is wide is held at what fits the width, and a
+ * screen longer than the stage ends at its bottom edge: the stage never
+ * scrolls, the screen does.
+ */
+export const ZoomHeldAtTheWidth: Story = {
+  args: { initial: { checkpointId: changed.id, variant: 'desktop' }, frame: { preset: 'desktop', width: 1280, height: 720, zoom: 1.5 } },
+  play: async () => {
+    const body = within(document.body);
+    await body.findByRole('dialog');
+    await userEvent.click(body.getByRole('button', { name: 'Image' }));
+    const stage = body.getByLabelText('Checkpoint screens');
+    const screen = body.getByRole('region', { name: /desktop screen/ });
+    await waitFor(() => expect(screen.getBoundingClientRect().width).toBeLessThanOrEqual(stage.clientWidth - 48));
+    await expect(screen.getBoundingClientRect().bottom).toBeLessThanOrEqual(stage.getBoundingClientRect().bottom);
+    await expect(stage.scrollWidth).toBeLessThanOrEqual(stage.clientWidth);
+    await expect(stage.scrollHeight).toBeLessThanOrEqual(stage.clientHeight);
+    await expect(body.getByRole('combobox', { name: 'Zoom' })).not.toHaveTextContent('150%');
+  },
+};
+
+/** Filling, the screen loses its frame and spans the stage edge to edge; F turns it back into a framed screen. */
+export const FillTheStage: Story = {
+  args: { initial: { checkpointId: changed.id, variant: 'desktop' }, frame: { preset: 'captured', width: 1280, height: 720, zoom: 'fit', fill: true } },
+  play: async () => {
+    const body = within(document.body);
+    await body.findByRole('dialog');
+    await userEvent.click(body.getByRole('button', { name: 'Image' }));
+    const stage = body.getByLabelText('Checkpoint screens');
+    const screen = body.getByRole('region', { name: /desktop screen/ });
+    await waitFor(() => expect(Math.abs(screen.getBoundingClientRect().width - stage.clientWidth)).toBeLessThanOrEqual(1));
+    await expect(Math.abs(screen.getBoundingClientRect().height - stage.clientHeight)).toBeLessThanOrEqual(1);
+    await expect(stage.scrollHeight).toBeLessThanOrEqual(stage.clientHeight);
+    await expect(body.getByRole('button', { name: /Fill/ })).toHaveAttribute('aria-pressed', 'true');
+    await expect(body.getByRole('combobox', { name: 'Zoom' })).toBeDisabled();
+  },
+};
+
+/**
  * A library screen is the newest run's capture: it compares with the approved
  * screen (else the capture before it) and is decided about as in that run's
  * review.
@@ -128,9 +166,10 @@ export const InTheLibraryUnchanged: Story = {
 };
 
 /**
- * A comment made on an earlier version, in the library: the thread offers to
- * verify it — the spot as commented on beside the screen now, and "Fixed"
- * resolves it; with nothing left, the walk says so.
+ * A comment made on an earlier version, in the library: the screen opens on
+ * it — the spot as commented on beside the screen now, without a click — and
+ * "Fixed" resolves it; with nothing left, the walk says so. The thread offers
+ * the comparison again from the screen.
  */
 export const ComparesACommentWithItsVersion: Story = {
   args: {
@@ -143,7 +182,6 @@ export const ComparesACommentWithItsVersion: Story = {
     const body = within(document.body);
     await body.findByRole('dialog');
     await expect(body.getByText('Ready to verify')).toBeInTheDocument();
-    await userEvent.click(body.getByRole('button', { name: 'Verify thread 1 against the version commented on' }));
     const verify = await body.findByRole('group', { name: 'Verify comment 1' });
     await expect(within(verify).getByText(/Commented on · run #483/)).toBeInTheDocument();
     await expect(within(verify).getByText(/The order button should use the primary style/)).toBeInTheDocument();

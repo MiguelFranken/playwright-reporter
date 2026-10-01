@@ -182,11 +182,33 @@ describe('GET /demo', () => {
     });
   });
 
-  test('is reachable without a session: the proxy does not send it to /login', () => {
-    const response = proxy(new NextRequest('http://localhost:3000/demo'));
+  test('is reachable without a session: the proxy does not send it to /login', async () => {
+    const response = await proxy(new NextRequest('http://localhost:3000/demo'));
     expect(response.headers.get('location')).toBeNull();
     // A page next to it still is.
-    expect(proxy(new NextRequest('http://localhost:3000/demo/x')).headers.get('location')).toContain('/login');
+    expect((await proxy(new NextRequest('http://localhost:3000/demo/x'))).headers.get('location')).toContain('/login');
+  });
+});
+
+describe('the proxy, with a session cookie', () => {
+  test('lets a live session through and sends an ended one to /login before a page renders', async ({ db, tenant }) => {
+    enableDemo();
+    const demo = await createMember(db, tenant.team.id, 'viewer', { email: DEMO_EMAIL });
+    // Only the token: the cookie cache has lapsed, so the proxy reads the session.
+    const token = cookieHeader(await visitDemo())
+      .split('; ')
+      .filter((c) => c.includes('.session_token='))
+      .join('; ');
+    const open = () => proxy(new NextRequest('http://localhost:3000/admin', { headers: { cookie: token } }));
+
+    const live = await open();
+    expect(live.headers.get('location')).toBeNull();
+    expect(live.headers.getSetCookie().some((c) => c.includes('.session_data='))).toBe(true);
+
+    await db.delete(sessions).where(eq(sessions.userId, demo.id));
+    const ended = await open();
+    expect(new URL(ended.headers.get('location')!).pathname).toBe('/login');
+    expect(ended.headers.getSetCookie().some((c) => c.includes('.session_token=;'))).toBe(true);
   });
 });
 
