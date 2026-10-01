@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.71](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.70...v0.0.71) (2026-10-01)
+
+### Features
+
+* **library:** resolve feedback one item at a time, verify without a click ([#77](https://github.com/MiguelFranken/playwright-reporter/issues/77)) ([6bc8904](https://github.com/MiguelFranken/playwright-reporter/commit/6bc890478231ecf4f58ae8dcbd1d57380d584010))
+
 ## [0.0.70](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.69...v0.0.70) (2026-10-01)
 
 ### Features
