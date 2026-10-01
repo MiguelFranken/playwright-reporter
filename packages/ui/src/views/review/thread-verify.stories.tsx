@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, fn, userEvent, within } from 'storybook/test';
-import { fixedThread, movedAreaThread, NOW, VIEWER_ID, verifyFlows } from '../../fixtures/review-threads';
+import { fixedThread, movedAreaThread, NOW, totalsThread, VIEWER_ID, verifyFlows } from '../../fixtures/review-threads';
 import { ThreadVerify, VerifyDone } from './thread-verify';
 
 const capture = verifyFlows[0].checkpoints[1].captures.find((c) => c.variant === 'desktop')!;
@@ -47,6 +47,31 @@ export const Default: Story = {
     await expect(args.onStep).toHaveBeenCalledWith(1);
     await userEvent.click(canvas.getByRole('button', { name: 'Stop verifying' }));
     await expect(args.onClose).toHaveBeenCalled();
+  },
+};
+
+/**
+ * Resolving feedback goes through comments on screens that have not changed
+ * too: captured again and the same, the comment is not fixed yet — the spot
+ * once, as it is, and resolving is still a click away.
+ */
+export const Unchanged: Story = {
+  args: { thread: totalsThread, stage: 'waiting', currentRunNumber: 486, index: 2, total: 5 },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('group', { name: 'Comment 2, unchanged' })).toBeInTheDocument();
+    await expect(canvas.getByText(/Captured again in run #486, and the same as when the comment was made on run #483/)).toBeInTheDocument();
+    await expect(canvas.queryByRole('img', { name: /as commented on/ })).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: /Done — resolve/ }));
+    await expect(args.onResolve).toHaveBeenCalled();
+  },
+};
+
+/** Not captured again since the comment: the test has not run after the fix. */
+export const NotCapturedAgain: Story = {
+  args: { thread: totalsThread, stage: 'waiting', currentRunNumber: 483 },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByText(/Not captured again since the comment on run #483/)).toBeInTheDocument();
   },
 };
 
