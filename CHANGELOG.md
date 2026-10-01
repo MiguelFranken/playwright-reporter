@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.0.73](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.72...v0.0.73) (2026-10-01)
+
+### Bug Fixes
+
+* **auth:** send an ended session to /login before the page renders ([49a7694](https://github.com/MiguelFranken/playwright-reporter/commit/49a7694077952b00567b596e8987a3ab80f2acdf))
+
+## [0.0.72](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.71...v0.0.72) (2026-10-01)
+
+### Bug Fixes
+
+* **library:** the close button closes feedback opened from a link ([a2d3c43](https://github.com/MiguelFranken/playwright-reporter/commit/a2d3c43cba6abdb8beef9ce5244aae008bc90add))
+
+## [0.0.71](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.70...v0.0.71) (2026-10-01)
+
+### Features
+
+* **library:** resolve feedback one item at a time, verify without a click ([#77](https://github.com/MiguelFranken/playwright-reporter/issues/77)) ([6bc8904](https://github.com/MiguelFranken/playwright-reporter/commit/6bc890478231ecf4f58ae8dcbd1d57380d584010))
+
+## [0.0.70](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.69...v0.0.70) (2026-10-01)
+
+### Features
+
+* **review:** show dictated words while they are said ([#76](https://github.com/MiguelFranken/playwright-reporter/issues/76)) ([41b45fe](https://github.com/MiguelFranken/playwright-reporter/commit/41b45feca40b57e033e8485c78cb90e4b327f323))
+
+## [0.0.69](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.68...v0.0.69) (2026-10-01)
+
+### Features
+
+* **review:** dictate comments with speech to text ([#75](https://github.com/MiguelFranken/playwright-reporter/issues/75)) ([fa9fc76](https://github.com/MiguelFranken/playwright-reporter/commit/fa9fc760a5f2538aa2333234aa412b9f79e8cd03))
+
 ## [0.0.68](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.67...v0.0.68) (2026-09-30)
 
 ### Features

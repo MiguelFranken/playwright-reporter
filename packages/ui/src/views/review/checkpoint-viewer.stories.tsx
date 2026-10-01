@@ -149,9 +149,10 @@ export const InTheLibraryUnchanged: Story = {
 };
 
 /**
- * A comment made on an earlier version, in the library: the thread offers to
- * verify it — the spot as commented on beside the screen now, and "Fixed"
- * resolves it; with nothing left, the walk says so.
+ * A comment made on an earlier version, in the library: the screen opens on
+ * it — the spot as commented on beside the screen now, without a click — and
+ * "Fixed" resolves it; with nothing left, the walk says so. The thread offers
+ * the comparison again from the screen.
  */
 export const ComparesACommentWithItsVersion: Story = {
   args: {
@@ -164,7 +165,6 @@ export const ComparesACommentWithItsVersion: Story = {
     const body = within(document.body);
     await body.findByRole('dialog');
     await expect(body.getByText('Ready to verify')).toBeInTheDocument();
-    await userEvent.click(body.getByRole('button', { name: 'Verify thread 1 against the version commented on' }));
     const verify = await body.findByRole('group', { name: 'Verify comment 1' });
     await expect(within(verify).getByText(/Commented on · run #483/)).toBeInTheDocument();
     await expect(within(verify).getByText(/The order button should use the primary style/)).toBeInTheDocument();
