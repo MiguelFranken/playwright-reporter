@@ -88,3 +88,31 @@ export function Link(props: LinkProps) {
   const Host = useLink();
   return <Host {...props} />;
 }
+
+/** One recording in progress: stop it for its transcript, or throw it away. */
+export interface DictationRecording {
+  /** Ends the recording and resolves with what was said (empty when nothing was). */
+  stop: () => Promise<string>;
+  cancel: () => void;
+}
+
+/**
+ * Speech to text for the text boxes that offer it. `start` opens the
+ * microphone and resolves once it is listening; it rejects (with a message
+ * for the person) when the browser refuses. The host records and transcribes;
+ * the design system only decides where the words go.
+ */
+export interface Dictation {
+  start: () => Promise<DictationRecording>;
+}
+
+const DictationContext = createContext<Dictation | null>(null);
+
+/** Offers dictation to the composers below it; without one they show no microphone. */
+export function DictationProvider({ dictation, children }: { dictation: Dictation | null; children: ReactNode }) {
+  return <DictationContext.Provider value={dictation}>{children}</DictationContext.Provider>;
+}
+
+export function useDictation(): Dictation | null {
+  return useContext(DictationContext);
+}
