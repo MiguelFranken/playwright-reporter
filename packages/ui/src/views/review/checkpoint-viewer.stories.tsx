@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useState } from 'react';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
-import { diffStatesFlow, legacyFlow, libraryCompareFlows, longTextFlow, placeOrderFlow, reviewFlows, unavailableFlow } from '../../fixtures/review';
+import { diffStatesFlow, legacyFlow, libraryCompareFlows, longTextFlow, placeOrderFlow, reviewFlows, unavailableFlow, visualDiffFlow } from '../../fixtures/review';
 import { libraryFlows, NOW, toVerifyFlow, VIEWER_ID } from '../../fixtures/library-views';
 import { CheckpointViewer, type ReviewSelection } from './checkpoint-viewer';
 
@@ -233,5 +233,23 @@ export const LibraryComparison: Story = {
     await body.findByRole('dialog');
     await userEvent.click(body.getByRole('button', { name: 'Side by side' }));
     await expect(body.getByText('main')).toBeInTheDocument();
+  },
+};
+
+/**
+ * The regions of a measured change are listed as D1, D2… beside the image; picking one shows it, and the hand-off
+ * menus name the comparison of the two captures — "Investigate" reads only, "Fix cause" may change code.
+ */
+export const RegionsAndAiHandoff: Story = {
+  args: { flows: [visualDiffFlow], initial: { checkpointId: visualDiffFlow.checkpoints[0].id, variant: 'desktop' }, comments: { assistant: { setupHref: '#connect', project: 'acme/web' } } },
+  play: async () => {
+    const body = within(document.body);
+    await body.findByRole('dialog');
+    const list = body.getByRole('list', { name: 'Changed regions' });
+    await userEvent.click(within(list).getByRole('button', { name: /D1/ }));
+    await expect(within(list).getByRole('button', { name: /D1/ })).toHaveAttribute('aria-pressed', 'true');
+    await expect(body.getByText('Change 1 of 1')).toBeInTheDocument();
+    await expect(body.getByRole('button', { name: 'Investigate with AI' })).toBeInTheDocument();
+    await expect(body.getByRole('button', { name: 'Fix cause of D1 with AI' })).toBeInTheDocument();
   },
 };

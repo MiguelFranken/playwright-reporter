@@ -70,6 +70,59 @@ export function fixCommentsPrompt({ captureId, threads, project, screen }: { cap
 }
 
 /**
+ * A prompt that asks the assistant to find out why one screen looks different
+ * between two captures — read-only. Scoped by the comparison id (the two
+ * captures) and the project; the assistant reads the measurement, the regions
+ * and the images through the MCP server, and follows the checkpoint key into
+ * the repository it runs in. It changes nothing: observation, hypothesis and
+ * proven cause stay apart, and a changed screen is never an approval.
+ */
+export function investigateVisualDiffPrompt({ comparisonId, project, screen }: { comparisonId: string; project?: string | null; screen?: string | null }): string {
+  return (
+    `Use the ${MCP_SERVER_NAME} MCP server to investigate the visual difference in comparison ${comparisonId}${screen ? ` (${screen})` : ''}${project ? ` in project ${project}` : ''}.\n\n` +
+    `Call get_visual_diff with comparison "${comparisonId}" first: it names the base and head captures and their runs, the test and checkpoint key that produce the screen, ` +
+    'the measurement raw and with the checkpoint’s rules (areas left out) applied, and the changed regions D1, D2… Then call get_visual_diff_image with mode "annotated" and scope "overview" ' +
+    'to see where the regions are, and mode "pair" with the regionIds you want to read, then and now, at full resolution. Both runs may be green. ' +
+    'For each region keep apart what you observe (a different text at the same place), what you suspect (a random fixture name, a date or clock, another user, a sort order, a rendering difference, a real change) ' +
+    'and what the code in this repository proves: search for the checkpoint key, follow the test into its fixtures and data setup and into the UI that renders the region. ' +
+    'Change no code, no rules and no review decisions. Report per region, with the capture and run references, what you would change and where.'
+  );
+}
+
+/**
+ * A prompt that asks the assistant to fix the cause of a visual difference in
+ * the repository it runs in — a seeded fixture, a frozen clock, a stable
+ * sort — and to verify with the producing tests. It may not add rules that
+ * leave areas out, approve images or resolve threads: those are a person's.
+ */
+export function fixVisualDiffPrompt({ comparisonId, regionIds, project, screen }: { comparisonId: string; regionIds: readonly string[]; project?: string | null; screen?: string | null }): string {
+  const which = regionIds.length === 1 ? `region ${regionIds[0]}` : regionIds.length ? `regions ${regionIds.join(', ')}` : 'every changed region';
+  return (
+    `Use the ${MCP_SERVER_NAME} MCP server to find and fix the cause of the visual difference in comparison ${comparisonId}${screen ? ` (${screen})` : ''}${project ? ` in project ${project}` : ''}, ${which}.\n\n` +
+    `Call get_visual_diff with comparison "${comparisonId}", then get_visual_diff_image with mode "pair"${regionIds.length ? ` and regionIds ${JSON.stringify(regionIds)}` : ''} to read each region then and now ` +
+    '(mode "annotated" with scope "overview" shows where they are). Follow the checkpoint key to the test, its fixtures and the UI code in this repository. ' +
+    'Stabilise unintended randomness or time dependence at its source — a seeded fixture, a frozen clock, a stable sort — without changing test titles or checkpoint keys; treat a real UI regression as one and say so. ' +
+    'Re-run only the producing tests and compare the new captures with the base (get_visual_diff with base and head capture ids); two independent runs show stability, one does not. ' +
+    'Do not add rules that leave areas out, approve images or resolve threads unless I ask: say what you would propose instead. Report the files changed, the runs, and what stays uncertain.'
+  );
+}
+
+/**
+ * A prompt that asks the assistant to go through every screen of a run that
+ * looks different from the run before it (or from `baseRun`), both possibly
+ * green. Scoped by the run URL; the tools resolve it.
+ */
+export function investigateRunVisualDiffsPrompt({ runUrl, baseRun }: { runUrl: string; baseRun?: number | null }): string {
+  return (
+    `Use the ${MCP_SERVER_NAME} MCP server to investigate the visual differences of this run${baseRun ? ` against run #${baseRun}` : ' against the run before it'}: ${runUrl}\n\n` +
+    `Call list_visual_diffs with headRun set to this run${baseRun ? ` and baseRun ${baseRun}` : ' (baseRun defaults to the newest earlier run with captures on its branch)'}. ` +
+    'For each changed screen call get_visual_diff with its comparisonId, then get_visual_diff_image with mode "annotated" and scope "overview", and mode "pair" with regionIds to read what changed. ' +
+    'Both runs may be green: a changed screen is evidence, not a defect. Search this repository for each checkpoint key and follow the test into its fixtures and the UI code. ' +
+    'Group the screens by cause (random test data, time, a real change, rendering noise), say what the code proves and what stays a hypothesis, and change nothing yet.'
+  );
+}
+
+/**
  * Opens a new Claude Code terminal session with the prompt pre-filled; the user still presses Enter.
  *
  * verify: Claude Code documents `claude-cli://open?q=…` (v2.1.91+, `q` up to 5,000 characters,

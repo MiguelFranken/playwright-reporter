@@ -32,6 +32,7 @@ import { fixCommentsPrompt } from '../../lib/ai-handoff';
 import { openThreadCount, sortThreads, threadStage, type ReviewThreadView, type ThreadActions, type ThreadFilter } from '../../lib/review-threads';
 import { DebugWithAiMenu } from '../../patterns/debug-with-ai-menu';
 import { DiffHighlight, diffImageSize } from './diff-highlight';
+import { comparisonIdOf, DiffRegionList, VisualDiffAiActions } from './diff-regions';
 import { DiffSummary } from './diff-summary';
 import { COMPARE_MODE_LABELS, COMPARE_MODES, ImageCompare, type CompareMode } from './image-compare';
 import { IgnoreRegionsEditor, type IgnoreRect } from './ignore-regions-editor';
@@ -808,7 +809,31 @@ export function CheckpointViewer({
                     />
                   ) : null}
                   {current && reference && diff && !reference.same ? (
-                    <DiffSummary diff={diff} referenceLabel={reference.label} />
+                    <>
+                      <DiffSummary diff={diff} referenceLabel={reference.label} />
+                      {hasChanges ? (
+                        <DiffRegionList
+                          regions={regions}
+                          ignored={current.ignoreRegions ?? []}
+                          active={activeRegion}
+                          onSelect={(i) => {
+                            setVerifying(false);
+                            if (effectiveStage !== 'changes') setStage('changes');
+                            setActiveRegion(i);
+                          }}
+                        />
+                      ) : null}
+                      {assistant && hasChanges && comparisonIdOf(reference.captureId, current.id) ? (
+                        <VisualDiffAiActions
+                          comparisonId={comparisonIdOf(reference.captureId, current.id)!}
+                          regions={regions}
+                          active={activeRegion}
+                          project={assistant.project}
+                          screen={`${screenName} (${current.variant})`}
+                          setupHref={assistant.setupHref}
+                        />
+                      ) : null}
+                    </>
                   ) : current && reference ? (
                     <p className="text-xs text-muted-foreground">{reference.same ? `Identical to ${reference.label.toLowerCase()}.` : `Differs from ${reference.label.toLowerCase()}.`}</p>
                   ) : current ? (

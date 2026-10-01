@@ -152,6 +152,39 @@ export const placeOrderFlow: ReviewFlowView = {
   ],
 };
 
+/**
+ * A screen whose captures carry real-looking ids: the viewer builds a
+ * comparison id (`vc_…`) from the baseline's and this capture's, which the
+ * AI hand-off names. The booking name differs between the two runs.
+ */
+export const visualDiffFlow: ReviewFlowView = {
+  resultId: 'res-visual',
+  testId: 'test-visual',
+  title: 'books a workshop',
+  titlePath: ['Workshops', 'books a workshop'],
+  file: 'tests/workshops.spec.ts',
+  line: 12,
+  project: 'chromium',
+  outcome: 'passed',
+  resultHref: '#result-visual',
+  checkpoints: [
+    checkpoint('booking-summary', 'Booking summary', 0, [
+      {
+        ...capture('Booking summary', 'desktop', 'changed', { diff: measuredDiff([{ x: 420, y: 560, width: 360, height: 48, pixels: 5120 }], { width: 2560, height: 1440 }) }, { accent: '#e5484d' }),
+        id: '9f0e1d2c-3b4a-4596-8778-695a4b3c2d1e',
+        baseline: {
+          captureId: '3b1f5e8a-3c4d-4e6f-8a9b-0c1d2e3f4a5b',
+          image: image('Booking summary'),
+          runNumber: 480,
+          same: false,
+          approvedAt: ago(60 * 30).toISOString(),
+          approvedBy: 'Ada Lovelace',
+        },
+      },
+    ]),
+  ],
+};
+
 export const validationFlow: ReviewFlowView = {
   resultId: 'res-validation',
   testId: 'test-validation',

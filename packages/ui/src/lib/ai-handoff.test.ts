@@ -5,6 +5,9 @@ import {
   cursorPromptLink,
   debugPrompt,
   fixCommentsPrompt,
+  fixVisualDiffPrompt,
+  investigateRunVisualDiffsPrompt,
+  investigateVisualDiffPrompt,
   organizePrompt,
   PROMPT_HANDOFF_TARGETS,
   triagePrompt,
@@ -113,5 +116,33 @@ describe('fixCommentsPrompt', () => {
   it('reads one comment, or every open one', () => {
     expect(fixCommentsPrompt({ captureId: 'c', threads: [2] })).toContain('in comment #2 on this screenshot: capture c.');
     expect(fixCommentsPrompt({ captureId: 'c', threads: [] })).toContain('in the open comments on');
+  });
+});
+
+describe('visual diff prompts', () => {
+  it('investigating scopes to the comparison, walks the tools and changes nothing', () => {
+    const prompt = investigateVisualDiffPrompt({ comparisonId: 'vc_abc', project: 'acme/web', screen: 'Checkout › Summary (desktop)' });
+    expect(prompt).toContain('comparison vc_abc (Checkout › Summary (desktop)) in project acme/web.');
+    for (const tool of ['get_visual_diff', 'get_visual_diff_image']) expect(prompt).toContain(tool);
+    expect(prompt).toMatch(/Change no code, no rules and no review decisions/);
+    expect(prompt.match(/https?:\/\/\S+/g)).toBeNull();
+    expect(encodeURIComponent(prompt).length).toBeLessThanOrEqual(5_000);
+  });
+
+  it('fixing names the regions and leaves rules and approvals to a person', () => {
+    const prompt = fixVisualDiffPrompt({ comparisonId: 'vc_abc', regionIds: ['r1-2-3-4', 'r5-6-7-8'] });
+    expect(prompt).toContain('regions r1-2-3-4, r5-6-7-8.');
+    expect(prompt).toContain('regionIds ["r1-2-3-4","r5-6-7-8"]');
+    expect(prompt).toMatch(/Do not add rules that leave areas out, approve images or resolve threads/);
+    expect(fixVisualDiffPrompt({ comparisonId: 'vc_abc', regionIds: [] })).toContain('every changed region.');
+    expect(encodeURIComponent(prompt).length).toBeLessThanOrEqual(5_000);
+  });
+
+  it('a run’s prompt carries only the run URL', () => {
+    const prompt = investigateRunVisualDiffsPrompt({ runUrl: RUN_URL, baseRun: 127 });
+    expect(prompt).toContain(`against run #127: ${RUN_URL}`);
+    expect(prompt).toContain('list_visual_diffs');
+    expect(prompt.match(/https?:\/\/\S+/g)).toEqual([RUN_URL]);
+    expect(investigateRunVisualDiffsPrompt({ runUrl: RUN_URL })).toContain('against the run before it');
   });
 });

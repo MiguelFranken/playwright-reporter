@@ -11211,6 +11211,20 @@
                         }
                       ]
                     },
+                    "comparisonId": {
+                      "description": "The pair shown (the image compared with → this image) for get_visual_diff and get_visual_diff_image: every region, raw and effective numbers, and images in any mode.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "measuredComparisonId": {
+                      "description": "The pair the diff below was measured against, when it is another one.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "changedRegions": {
                       "type": "array",
                       "items": {

@@ -17,6 +17,7 @@ import { checkpointLabel, describeDiff, matchesReviewFilter, REVIEW_DECISIONS, R
 import { MAX_COMMENT_LENGTH, projectAnchor } from '@miguelfranken/ui/lib/review-threads';
 import { signCaptureImagePath } from '@/lib/auth/artifact-url';
 import { baseUrl } from '@/lib/auth/config';
+import { encodeComparisonId } from '@miguelfranken/ui/lib/visual-diff';
 import { annotate, cropAround } from '@/lib/review/annotate';
 import { pinSpecs, readCaptureBytes, threadComments, threadPosition } from '@/lib/review/images';
 import { createThread, ThreadError, type CaptureThread } from '@/lib/review/threads';
@@ -344,6 +345,8 @@ const getOutput = output({
     .optional()
     .describe('The image compared with — chosen by "against" — kept apart from what the pixel diff was measured against.'),
   diff: diffOut,
+  comparisonId: z.string().nullable().optional().describe('The pair shown (the image compared with → this image) for get_visual_diff and get_visual_diff_image: every region, raw and effective numbers, and images in any mode.'),
+  measuredComparisonId: z.string().nullable().optional().describe('The pair the diff below was measured against, when it is another one.'),
   changedRegions: z.array(z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number(), pixels: z.number() })).describe('The changed regions, in the image’s pixels, largest first (up to 10).'),
   note: z.string().nullable(),
   image: z
@@ -627,6 +630,8 @@ export const getReviewCheckpoint = defineTool({
           }
         : null,
       diff: diffData(capture),
+      comparisonId: reference ? encodeComparisonId(reference.id, capture.id) : null,
+      measuredComparisonId: measuredAgainst && measuredAgainst.id !== reference?.id ? encodeComparisonId(measuredAgainst.id, capture.id) : null,
       changedRegions: [...(capture.diff?.regions ?? [])].sort((a, b) => b.pixels - a.pixels).slice(0, 10),
       note: [...notes, hidden > 0 ? `${hidden} resolved thread${hidden === 1 ? '' : 's'} not shown (includeResolved).` : null].filter(Boolean).join(' ') || null,
       image: main?.out
@@ -659,6 +664,7 @@ export const getReviewCheckpoint = defineTool({
           ['Image link', d.imageUrl],
           ['With pins', threads.length ? (d.annotatedImageUrl ?? null) : null],
           ['Compared image', d.referenceUrl],
+          ['Comparison', d.comparisonId ? `${d.comparisonId} — get_visual_diff lists every region raw and effective; get_visual_diff_image shows them in any mode` : null],
         ]);
         if (d.attachments?.length) md.line(`Attached, in order: ${d.attachments.map((a, i) => `${i + 1}. ${a}`).join('; ')}.`);
         if (d.omittedImages?.length) md.line(`Not attached: ${d.omittedImages.join('; ')}. Ask with images "focus" and a thread, or a higher maxImages.`);
