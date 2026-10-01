@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useState } from 'react';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
-import { commentedCheckpointId, commentedFlows, flowWithThreads, NOW, uncommentedRequestFlows, uncommentedRequestHereFlows, verifyFlows, VIEWER_ID } from '../../fixtures/review-threads';
+import { commentedCheckpointId, commentedFlows, drawnFlows, flowWithThreads, NOW, uncommentedRequestFlows, uncommentedRequestHereFlows, verifyFlows, VIEWER_ID } from '../../fixtures/review-threads';
 import { CheckpointViewer, type ReviewSelection } from './checkpoint-viewer';
 
 const desktopCapture = commentedFlows[0].checkpoints[1].captures.find((c) => c.variant === 'desktop')!;
@@ -87,6 +87,42 @@ export const PinAComment: Story = {
     await expect(args.comments!.onCreateThread).toHaveBeenCalledWith(
       expect.objectContaining({ captureId: desktopCapture.id, body: 'Make the headline bolder', anchor: expect.objectContaining({ kind: 'point' }) }),
     );
+  },
+};
+
+/** C, 6 for the ellipse, a colour from the bar, a drag and a comment: a thread that carries the drawing. */
+export const DrawAComment: Story = {
+  play: async ({ args }) => {
+    const body = within(document.body);
+    await onTheScreen();
+    await userEvent.keyboard('c');
+    const toolbar = within(await body.findByRole('toolbar', { name: 'Comment tools' }));
+    await userEvent.keyboard('6');
+    await waitFor(() => expect(toolbar.getByRole('button', { name: 'Ellipse' })).toHaveAttribute('aria-pressed', 'true'));
+    await userEvent.click(toolbar.getByRole('button', { name: 'Blue' }));
+    const surface = await body.findByRole('application', { name: /Draw on .* with the ellipse/ });
+    const r = surface.getBoundingClientRect();
+    await userEvent.pointer([
+      { keys: '[MouseLeft>]', target: surface, coords: { clientX: r.left + 60, clientY: r.top + 80 } },
+      { target: surface, coords: { clientX: r.left + 160, clientY: r.top + 120 } },
+      { keys: '[/MouseLeft]', target: surface, coords: { clientX: r.left + 220, clientY: r.top + 160 } },
+    ]);
+    await expect(toolbar.getByRole('button', { name: 'Undo the last shape' })).toBeEnabled();
+    await userEvent.type(await body.findByRole('textbox', { name: 'New comment' }), 'The blue area should be larger{Enter}');
+    await expect(args.comments!.onCreateThread).toHaveBeenCalledWith(
+      expect.objectContaining({ captureId: desktopCapture.id, markup: [expect.objectContaining({ tool: 'ellipse', color: 'blue' })], anchor: expect.objectContaining({ kind: 'area' }) }),
+    );
+  },
+};
+
+/** A drawing already on the screen, and its colours beside its row in the list. */
+export const WithADrawing: Story = {
+  args: { flows: drawnFlows },
+  play: async () => {
+    const body = within(document.body);
+    await onTheScreen();
+    const list = within(body.getByRole('region', { name: /Comments/ }));
+    await expect(list.getByRole('button', { name: /^Thread 7: .*drawn in blue, yellow, red, green, purple/ })).toBeInTheDocument();
   },
 };
 

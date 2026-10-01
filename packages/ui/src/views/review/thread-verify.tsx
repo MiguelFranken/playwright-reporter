@@ -9,6 +9,8 @@ import { CommentPin } from '../../patterns/comment-pin';
 import { cn } from '../../lib/cn';
 import type { FrameSize, ReviewImage } from '../../lib/review';
 import type { FractionAnchor, ReviewThreadView, ThreadActions } from '../../lib/review-threads';
+import type { MarkupShape } from '../../lib/review-markup';
+import { MarkupShapes } from '../../patterns/markup-shapes';
 import { PinCloseUp } from './pin-close-up';
 import { ScreenFrame } from './screen-frame';
 import { ThreadView } from './thread-view';
@@ -16,11 +18,13 @@ import { ThreadView } from './thread-view';
 const pct = (n: number) => `${(n * 100).toFixed(3)}%`;
 
 /** The pin as it was placed on the version commented on: not interactive, the conversation is beside it. */
-function OriginMarker({ number, anchor }: { number: number; anchor: FractionAnchor }) {
+function OriginMarker({ number, anchor, markup }: { number: number; anchor: FractionAnchor; markup?: readonly MarkupShape[] | null }) {
   if (anchor.kind === 'image') return null;
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0">
-      {anchor.kind === 'area' && anchor.w != null && anchor.h != null ? (
+      {markup?.length ? (
+        <MarkupShapes shapes={markup} />
+      ) : anchor.kind === 'area' && anchor.w != null && anchor.h != null ? (
         <div className="absolute rounded-sm border-2 border-accent-solid bg-accent-solid/10" style={{ left: pct(anchor.x), top: pct(anchor.y), width: pct(anchor.w), height: pct(anchor.h) }} />
       ) : null}
       <div className="absolute -translate-y-full" style={{ left: pct(anchor.x), top: pct(anchor.y) }}>
@@ -191,7 +195,7 @@ export function ThreadVerify({
               <History aria-hidden className="size-3.5" /> {then}
             </figcaption>
             {origin ? (
-              <PinCloseUp image={origin.image} anchor={origin.anchor} number={thread.number} width={width} height={height} alt={`${label} — close-up of comment ${thread.number}, as commented on`} />
+              <PinCloseUp image={origin.image} anchor={origin.anchor} markup={origin.markup} number={thread.number} width={width} height={height} alt={`${label} — close-up of comment ${thread.number}, as commented on`} />
             ) : (
               <p className="flex items-center justify-center rounded-md bg-surface-sunken p-6 text-center text-label-s text-muted-foreground ring-1 ring-border" style={{ width, height }}>
                 The image this comment was made on is no longer stored.
@@ -200,7 +204,7 @@ export function ThreadVerify({
           </figure>
           <figure className="flex flex-col gap-1.5">
             <figcaption className="text-label-s text-muted-foreground">{currentLabel}</figcaption>
-            <PinCloseUp image={image} anchor={thread.anchor} number={thread.number} state="outdated" width={width} height={height} alt={`${label} — close-up of comment ${thread.number}, now`} />
+            <PinCloseUp image={image} anchor={thread.anchor} markup={thread.markup} number={thread.number} state="outdated" width={width} height={height} alt={`${label} — close-up of comment ${thread.number}, now`} />
           </figure>
         </div>
       ) : (
@@ -210,7 +214,7 @@ export function ThreadVerify({
               <History aria-hidden className="size-3.5" /> {then}
             </figcaption>
             {origin ? (
-              <ScreenFrame image={origin.image} frame={frame} zoom={zoom} alt={`${label} — the version commented on`} eager overlay={() => <OriginMarker number={thread.number} anchor={origin.anchor} />} />
+              <ScreenFrame image={origin.image} frame={frame} zoom={zoom} alt={`${label} — the version commented on`} eager overlay={() => <OriginMarker number={thread.number} anchor={origin.anchor} markup={origin.markup} />} />
             ) : (
               <div className="flex items-center justify-center rounded-md bg-surface-sunken p-6 text-center text-label-s text-muted-foreground ring-1 ring-border" style={{ width: frame.width * zoom, height: frame.height * zoom }}>
                 The image this comment was made on is no longer stored.

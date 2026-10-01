@@ -6,6 +6,7 @@
  */
 import { eq } from 'drizzle-orm';
 import { DEFAULT_AGENT_NAME, describeAnchor, toPixels, type ImageSize } from '@miguelfranken/ui/lib/review-threads';
+import { describeShape, markupToPixels, shapeBounds } from '@miguelfranken/ui/lib/review-markup';
 import { db } from '@/lib/db/drizzle';
 import { attachments } from '@/lib/db/schema';
 import { getStorage } from '@/lib/storage';
@@ -35,7 +36,7 @@ export async function readCaptureBytes(capture: Pick<CaptureRecord, 'attachment'
 export function pinSpecs(threads: readonly CaptureThread[], includeResolved = false): PinSpec[] {
   return threads
     .filter((t) => t.anchor.kind !== 'image' && (includeResolved || t.status === 'open'))
-    .map((t) => ({ number: t.number, status: t.status, placement: t.placement, anchor: t.position }));
+    .map((t) => ({ number: t.number, status: t.status, placement: t.placement, anchor: t.position, markup: t.positionMarkup }));
 }
 
 /** The size of the capture's image: recorded, else the thread's origin (for captures that recorded none). */
@@ -61,6 +62,28 @@ export function threadPosition(thread: CaptureThread, capture: Pick<CaptureRecor
     css,
     text: `${describeAnchor(px)} px${css ? `, CSS ${describeAnchor({ kind: a.kind, ...css })}` : ''}, ${round1(a.x * 100)}% across, ${round1(a.y * 100)}% down`,
   };
+}
+
+/**
+ * What was drawn with a thread, shape by shape, on a capture: the tool, the
+ * colour people refer to it by ("the blue area"), where it is in pixels and
+ * percent, and the same in words. `null` for a thread without a drawing.
+ */
+export function threadDrawing(thread: CaptureThread, capture: Pick<CaptureRecord, 'width' | 'height'>) {
+  if (!thread.positionMarkup?.length) return null;
+  const size = imageSizeOf(capture, thread.origin)!;
+  const px = markupToPixels(thread.positionMarkup, size);
+  return thread.positionMarkup.map((shape, i) => {
+    const f = shapeBounds(shape);
+    const p = shapeBounds(px[i]);
+    return {
+      tool: shape.tool,
+      color: shape.color,
+      pixels: { x: Math.round(p.x), y: Math.round(p.y), w: Math.round(p.w), h: Math.round(p.h) },
+      percent: { x: round1(f.x * 100), y: round1(f.y * 100), w: round1(f.w * 100), h: round1(f.h * 100) },
+      text: `${describeShape(px[i])} px`,
+    };
+  });
 }
 
 /** A thread's comments as a tool reports them: who (an agent, and for whom), when, what. */

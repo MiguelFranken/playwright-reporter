@@ -38,7 +38,9 @@ import { DiffSummary } from './diff-summary';
 import { COMPARE_MODE_LABELS, COMPARE_MODES, ImageCompare, type CompareMode } from './image-compare';
 import { IgnoreRegionsEditor, type IgnoreRect } from './ignore-regions-editor';
 import { FrameToolbar } from './frame-toolbar';
-import { PinLayer, type PinFocusRequest, type ThreadDraft } from './pin-layer';
+import { PinLayer, undoDraftShape, type PinFocusRequest, type ThreadDraft } from './pin-layer';
+import { MarkupToolbar } from './markup-toolbar';
+import { COMMENT_TOOLS, DEFAULT_MARKUP_COLOR, type CommentTool, type MarkupColor } from '../../lib/review-markup';
 import { ScreenFrame } from './screen-frame';
 import { ThreadVerify, VerifyDone } from './thread-verify';
 import { RequestVerify, ResolveBar, ResolveDone } from './resolve-feedback';
@@ -235,6 +237,9 @@ export function CheckpointViewer({
   const [stage, setStage] = useState<StageMode>('changes');
   const [activeRegion, setActiveRegion] = useState<number | null>(null);
   const [commenting, setCommenting] = useState(false);
+  // What a click or drag does in comment mode, and the colour drawings are in: kept from one checkpoint to the next.
+  const [tool, setTool] = useState<CommentTool>('pin');
+  const [color, setColor] = useState<MarkupColor>(DEFAULT_MARKUP_COLOR);
   const [draft, setDraft] = useState<ThreadDraft | null>(null);
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
   const [threadFilter, setThreadFilter] = useState<ThreadFilter>('open');
@@ -588,6 +593,12 @@ export function CheckpointViewer({
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
       if (target && (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT' || target.isContentEditable)) return;
+      // ⌘Z / Ctrl+Z takes back the last shape of the drawing being written.
+      if (commenting && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'z' && draft?.markup?.length) {
+        e.preventDefault();
+        setDraft(undoDraftShape(draft));
+        return;
+      }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       // Arrow keys inside a toggle group move between its options, and in the pin layer move its crosshair.
       if (e.key.startsWith('Arrow') && target?.closest('[data-slot="toggle-group"], [data-slot="pin-layer"], [data-slot="compare-split"]')) return;
@@ -614,6 +625,7 @@ export function CheckpointViewer({
       else if (key === 'n' && regions.length) moveRegion(1);
       else if (key === 'p' && regions.length) moveRegion(-1);
       else if (key === 'c' && canComment) toggleCommenting();
+      else if (commenting && /^[1-6]$/.test(e.key)) setTool(COMMENT_TOOLS[Number(e.key) - 1]);
       else if (e.key === ']') stepThread(1);
       else if (e.key === '[') stepThread(-1);
       else if (key === 'h' && shownThreads.length) setPinsHidden((h) => !h);
@@ -660,6 +672,8 @@ export function CheckpointViewer({
         renderActions={(t) => (t.status === 'open' ? aiMenu(capture.id, [t], { iconOnly: true, label: `Fix comment ${t.number} with AI` }) : null)}
         label={name}
         commenting={commenting && canComment && !on?.origin}
+        tool={tool}
+        color={color}
         showResolved={threadFilter !== 'open'}
         hidden={pinsHidden}
         openThreadId={openThreadId}
@@ -778,7 +792,7 @@ export function CheckpointViewer({
             </header>
 
             <div className="grid shrink-0 grow grid-cols-1 lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_20rem]">
-              <section className="flex min-h-0 flex-col bg-surface" aria-label="Checkpoint image">
+              <section className="relative flex min-h-0 flex-col bg-surface" aria-label="Checkpoint image">
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-surface px-4 py-2">
                   <FrameToolbar value={frameSettings} onChange={setFrame} captured={current ? captureViewport(current) : null} maxZoom={stageSize.width > 0 ? maxZoom : undefined} />
                   <div className="flex items-center gap-3">
@@ -987,6 +1001,25 @@ export function CheckpointViewer({
                     </div>
                   )}
                 </div>
+                {commenting && canComment && pinsOn && !verifying ? (
+                  // Over the bottom of the screens, the way a drawing tool's bar floats: always at hand, never in the layout.
+                  <div className="pointer-events-none absolute inset-x-0 bottom-4 z-40 flex justify-center px-4">
+                    <MarkupToolbar
+                      className="pointer-events-auto"
+                      tool={tool}
+                      onToolChange={setTool}
+                      color={color}
+                      onColorChange={(next) => {
+                        setColor(next);
+                        // Picking a colour means drawing in it.
+                        if (tool === 'pin') setTool('pen');
+                      }}
+                      shapes={draft?.markup?.length ?? 0}
+                      onUndo={() => setDraft(undoDraftShape(draft))}
+                      onClose={() => toggleCommenting(false)}
+                    />
+                  </div>
+                ) : null}
               </section>
 
               <aside className="flex min-h-0 flex-col gap-5 overflow-auto border-t border-border p-4 lg:border-t-0 lg:border-l" aria-label="Checkpoint details">
@@ -1083,6 +1116,7 @@ export function CheckpointViewer({
                     }}
                     onHighlight={(id) => (id ? setFocus((f) => ({ threadId: id, nonce: (f?.nonce ?? 0) + 1, ping: true, scroll: false })) : undefined)}
                     commenting={commenting}
+                    commentTool={tool}
                     onCommentingChange={canComment ? toggleCommenting : undefined}
                     composing={composing}
                     onComposingChange={setComposing}
@@ -1189,7 +1223,7 @@ export function CheckpointViewer({
                     <Keyboard className="size-3.5" /> Keyboard shortcuts
                   </summary>
                   <ul className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-                    {SHORTCUTS.filter(([keys]) => (deciding || keys[0] !== 'A') && (canComment || !['C', 'R', 'E'].includes(keys[0]))).map(([keys, what]) => (
+                    {SHORTCUTS.filter(([keys]) => (deciding || keys[0] !== 'A') && (canComment || !['C', 'R', 'E', '1–6', '⌘Z'].includes(keys[0]))).map(([keys, what]) => (
                       <li key={what} className="contents">
                         <span className="flex gap-1">
                           {keys.map((k) => (
@@ -1242,6 +1276,8 @@ const SHORTCUTS: [string[], string][] = [
   [['N', 'P'], 'Next / previous change'],
   [['A'], 'Approve and go to the next image to review'],
   [['C'], 'Comment mode: click to pin, drag for an area'],
+  [['1–6'], 'Comment mode: pin, pen, highlighter, arrow, rectangle, ellipse'],
+  [['⌘Z'], 'Comment mode: undo the last shape drawn'],
   [['R'], 'Comment on the whole image'],
   [['[', ']'], 'Previous / next comment'],
   [['E'], 'Resolve or reopen the open comment'],

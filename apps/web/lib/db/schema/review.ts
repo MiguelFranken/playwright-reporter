@@ -3,6 +3,7 @@ import { boolean, check, index, integer, jsonb, pgEnum, pgTable, real, text, tim
 import { REVIEW_DECISIONS, type DecisionSource, type DiffRegion, type DiffShift, type DiffState } from '@miguelfranken/ui/lib/review';
 import { ANCHOR_KINDS, COMMENT_KINDS, COMMENT_SOURCES, THREAD_STATUSES } from '@miguelfranken/ui/lib/review-threads';
 import type { LibraryViewConfig } from '@miguelfranken/ui/lib/library-views';
+import type { MarkupShape } from '@miguelfranken/ui/lib/review-markup';
 import { users } from './auth';
 import { attachments, projects, runs, testAttempts, testResults, tests } from './reporting';
 
@@ -256,6 +257,8 @@ export const reviewThreads = pgTable(
     y: real('y').notNull().default(0),
     w: real('w'),
     h: real('h'),
+    /** A drawing with the comment (pen, arrows, boxes, in colours), in the origin image's pixels; the anchor is the area it covers. */
+    markup: jsonb('markup').$type<MarkupShape[]>(),
     status: reviewThreadStatusEnum('status').notNull().default('open'),
     resolvedAt: timestamp('resolved_at', { withTimezone: true }),
     resolvedBy: uuid('resolved_by').references(() => users.id, { onDelete: 'set null' }),

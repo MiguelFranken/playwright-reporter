@@ -9,6 +9,7 @@
  */
 import type { ReviewCaseRef, ReviewCaptureView, ReviewCheckpointView, ReviewDiffView, ReviewFlowView, ReviewImage, ReviewStatus } from '@miguelfranken/ui/lib/review';
 import { projectAnchor, type ReviewCommentView, type ReviewThreadView } from '@miguelfranken/ui/lib/review-threads';
+import { projectMarkup } from '@miguelfranken/ui/lib/review-markup';
 import { displayableAvatar } from '@/lib/avatars';
 import type { DiffRecord } from './diff/lookup';
 import { traceViewerUrl } from '@/lib/trace-viewer/url';
@@ -52,6 +53,7 @@ export function toThreadView(t: CaptureThread): ReviewThreadView {
           checkpointId: t.originImage.checkpointId,
           image: toReviewImage({ attachment: t.originImage.attachment, thumbnail: null, width: t.origin.width > 1 ? t.origin.width : null, height: t.origin.height > 1 ? t.origin.height : null }),
           anchor: projectAnchor(t.anchor, t.origin, t.origin),
+          markup: t.markup ? projectMarkup(t.markup, t.origin, t.origin) : null,
         }
       : null;
   return {
@@ -59,6 +61,7 @@ export function toThreadView(t: CaptureThread): ReviewThreadView {
     number: t.number,
     status: t.status,
     anchor: t.position,
+    markup: t.positionMarkup,
     placement: t.placement,
     originRunNumber: t.originRunNumber,
     origin,

@@ -56,6 +56,7 @@ export async function createReviewThread(ref: Ref, input: NewThreadInput): Promi
       projectId: access.project.id,
       captureId: String(input.captureId),
       anchor: input.anchor,
+      markup: input.markup ?? null,
       imageSize: input.imageSize,
       body: String(input.body ?? ''),
       author: { userId: access.user.id, source: 'app' },

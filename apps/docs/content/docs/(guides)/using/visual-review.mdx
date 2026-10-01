@@ -118,6 +118,8 @@ to it: the steps it was captured in, the URL, the viewport, and a link to the mo
 | <kbd>N</kbd> <kbd>P</kbd> | Next / previous measured change |
 | <kbd>A</kbd> | Approve, and go to the next image that needs review |
 | <kbd>C</kbd> | Comment mode: click to pin a comment, drag to mark an area |
+| <kbd>1</kbd> – <kbd>6</kbd> | In comment mode: pin, pen, highlighter, arrow, rectangle, ellipse |
+| <kbd>⌘</kbd> <kbd>Z</kbd> | In comment mode: take back the last shape drawn |
 | <kbd>R</kbd> | Comment on the whole image |
 | <kbd>[</kbd> <kbd>]</kbd> | Previous / next comment |
 | <kbd>E</kbd> | Resolve or reopen the open comment |
@@ -165,6 +167,14 @@ and click a spot to drop a numbered pin, or drag to mark an area; write what sho
 Hover a pin to read its thread, click it to keep it open, reply under it, and resolve it with ✓ once it is done. From
 the keyboard, focus the screenshot in comment mode, press <kbd>Enter</kbd> for a crosshair, move it with the arrow keys
 and press <kbd>Enter</kbd> again. **Comment on the whole image** starts a thread without a pin.
+
+When a pin or an area does not say it, draw. Comment mode puts a tool bar over the screenshot: a **pen**, a
+**highlighter**, an **arrow**, a **rectangle** and an **ellipse**, in six named colours — red, orange, yellow, green,
+blue and purple. Every shape you draw before posting joins the same comment, so one thread can say "the blue area
+should be larger, the yellow one smaller" with both areas drawn; the comment's pin sits at the corner of what you drew.
+Like pins, drawings follow the image into later runs, dashed where the image changed since. AI assistants see them
+too: over MCP and the REST API a thread lists its drawing shape by shape, with its colour and where it is, and the
+images they are sent show it in the same colours.
 
 The panel beside the image lists every thread by its number — open ones first, with **Resolved** and **All** a click
 away — and a row opens its pin. The storyboard shows how many comments are open on each screen. A thread's number stays

@@ -22,7 +22,9 @@ import {
   type ThreadActions,
   type ThreadFilter,
 } from '../../lib/review-threads';
+import { COMMENT_TOOL_HINTS, markupColors, MARKUP_COLOR_LABELS, type CommentTool } from '../../lib/review-markup';
 import { CommentComposer } from '../../patterns/comment-composer';
+import { MarkupSwatch } from '../../patterns/markup-shapes';
 import { ProfileAvatar } from '../../patterns/profile-avatar';
 import { ThreadView } from './thread-view';
 
@@ -44,6 +46,8 @@ export interface ThreadListProps extends ThreadActions {
   onHighlight?: (threadId: string | null) => void;
   /** Comment mode is on (the button reads "Commenting"). */
   commenting?: boolean;
+  /** The tool comment mode places comments with, for its hint. */
+  commentTool?: CommentTool;
   onCommentingChange?: (next: boolean) => void;
   /** The whole-image composer is open. */
   composing?: boolean;
@@ -81,6 +85,7 @@ export function ThreadList({
   onOpenThreadChange,
   onHighlight,
   commenting = false,
+  commentTool = 'pin',
   onCommentingChange,
   composing = false,
   onComposingChange,
@@ -142,7 +147,7 @@ export function ThreadList({
 
       {commenting ? (
         <p className="animate-rise-in rounded-md bg-accent-subtle px-2.5 py-2 text-label-xs text-accent-text">
-          Click the screenshot to pin a comment, or drag to mark an area. <Kbd>Esc</Kbd> to stop.
+          {COMMENT_TOOL_HINTS[commentTool]} <Kbd>Esc</Kbd> to stop.
         </p>
       ) : null}
 
@@ -284,6 +289,8 @@ function ThreadRow({
   // The newest reply, when an agent wrote it: what it says it changed is what a reviewer checks next.
   const last = answers.at(-1);
   const agentReply = last && isAgentComment(last) ? last : null;
+  // The colours drawn with it: a comment saying "the blue area" is found by its swatch.
+  const inks = markupColors(thread.markup);
   return (
     <div
       className={cn(
@@ -321,6 +328,14 @@ function ThreadRow({
           {first && isAgentComment(first) ? <span className="shrink-0">agent</span> : null}
           <span aria-hidden>·</span>
           <span className="shrink-0">{thread.pending ? 'Posting…' : formatRelative(first?.at ?? thread.createdAt, { now })}</span>
+          {inks.length ? (
+            <span className="ms-auto flex shrink-0 items-center gap-0.5" title={`Drawn in ${inks.map((c) => MARKUP_COLOR_LABELS[c].toLowerCase()).join(', ')}`}>
+              <span className="sr-only">, drawn in {inks.map((c) => MARKUP_COLOR_LABELS[c].toLowerCase()).join(', ')}</span>
+              {inks.map((c) => (
+                <MarkupSwatch key={c} color={c} className="size-2" />
+              ))}
+            </span>
+          ) : null}
         </span>
         <span className="mt-0.5 line-clamp-2 text-sm text-pretty break-words">{first?.body ?? ''}</span>
         {agentReply ? (
