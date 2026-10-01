@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.74](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.73...v0.0.74) (2026-10-01)
+
+### Features
+
+* **review:** fit the viewer's screens into the stage, never scroll it ([#78](https://github.com/MiguelFranken/playwright-reporter/issues/78)) ([51e5aab](https://github.com/MiguelFranken/playwright-reporter/commit/51e5aabe9f5800d20c7bc7508e11fd0add6ea975))
+
 ## [0.0.73](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.72...v0.0.73) (2026-10-01)
 
 ### Bug Fixes
