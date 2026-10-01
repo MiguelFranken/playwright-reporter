@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
+import { DictationProvider, type Dictation } from '../provider';
 import { CommentComposer } from './comment-composer';
 
 const meta = {
@@ -37,3 +38,91 @@ export const CancelWithEscape: Story = {
 export const Compact: Story = { args: { compact: true, label: 'Reply', submitLabel: 'Reply', placeholder: 'Reply…', onCancel: undefined } };
 
 export const Posting: Story = { args: { pending: true, initialValue: 'Primary button please' } };
+
+/** A host whose microphone hears `spoken`, after `delay` ms of transcribing. */
+function fakeDictation({ spoken = 'Make the primary button a little larger', delay = 0, refuse }: { spoken?: string; delay?: number; refuse?: string } = {}): Dictation {
+  return {
+    start: async () => {
+      if (refuse) throw new Error(refuse);
+      return {
+        stop: () => new Promise((resolve) => setTimeout(() => resolve(spoken), delay)),
+        cancel: () => {},
+      };
+    },
+  };
+}
+
+const withDictation = (dictation: Dictation) => (Story: () => React.ReactNode) => <DictationProvider dictation={dictation}>{Story()}</DictationProvider>;
+
+/** With dictation offered: the microphone records, and the transcript lands in the draft to be read before posting. */
+export const Dictate: Story = {
+  args: { initialValue: 'Header:' },
+  decorators: [withDictation(fakeDictation())],
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Dictate' }));
+    await expect(canvas.getByRole('status')).toHaveTextContent('Listening');
+    await expect(canvas.getByRole('button', { name: 'Comment' })).toBeDisabled();
+    await userEvent.click(canvas.getByRole('button', { name: 'Stop dictating' }));
+    const box = canvas.getByRole('textbox', { name: 'Comment' });
+    await waitFor(() => expect(box).toHaveValue('Header: Make the primary button a little larger'));
+    await expect(box).toHaveFocus();
+    await expect(args.onSubmit).not.toHaveBeenCalled();
+  },
+};
+
+/** Recording: the microphone turns into a stop button. */
+export const Listening: Story = {
+  decorators: [withDictation(fakeDictation())],
+  play: async ({ canvasElement }) => {
+    await userEvent.click(within(canvasElement).getByRole('button', { name: 'Dictate' }));
+    await expect(within(canvasElement).getByRole('button', { name: 'Stop dictating' })).toBeVisible();
+  },
+};
+
+/** Waiting for the transcript. */
+export const Transcribing: Story = {
+  decorators: [withDictation(fakeDictation({ delay: 60_000 }))],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Dictate' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Stop dictating' }));
+    await expect(canvas.getByRole('button', { name: 'Transcribing' })).toBeDisabled();
+    await expect(canvas.getByRole('status')).toHaveTextContent('Transcribing…');
+  },
+};
+
+/** Escape throws the recording away, and keeps the draft and the composer. */
+export const CancelDictation: Story = {
+  args: { initialValue: 'Keep this' },
+  decorators: [withDictation(fakeDictation())],
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Dictate' }));
+    await userEvent.click(canvas.getByRole('textbox', { name: 'Comment' }));
+    await userEvent.keyboard('{Escape}');
+    await expect(args.onCancel).not.toHaveBeenCalled();
+    await expect(canvas.getByRole('button', { name: 'Dictate' })).toBeEnabled();
+    await expect(canvas.getByRole('textbox', { name: 'Comment' })).toHaveValue('Keep this');
+  },
+};
+
+/** The browser refused the microphone: the reason shows where the hint was. */
+export const MicrophoneRefused: Story = {
+  decorators: [withDictation(fakeDictation({ refuse: 'Allow the microphone for this site to dictate.' }))],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Dictate' }));
+    await expect(canvas.getByRole('status')).toHaveTextContent('Allow the microphone for this site to dictate.');
+  },
+};
+
+/** A reply box with dictation: the microphone sits beside the send button. */
+export const CompactDictation: Story = {
+  args: { ...Compact.args },
+  decorators: [withDictation(fakeDictation({ refuse: 'Allow the microphone for this site to dictate.' }))],
+  play: async ({ canvasElement }) => {
+    await userEvent.click(within(canvasElement).getByRole('button', { name: 'Dictate' }));
+    await expect(within(canvasElement).getByRole('status')).toBeVisible();
+  },
+};

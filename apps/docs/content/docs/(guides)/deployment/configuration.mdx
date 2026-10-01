@@ -48,6 +48,18 @@ description: Every environment variable of the app.
 | `MCP_ALLOWED_HOSTS` | Extra `Host` values behind a reverse proxy. |
 | `PAT_DEFAULT_TTL_DAYS`, `PAT_MAX_TTL_DAYS` | Personal access token lifetime offered and allowed, `90` and `365` days. |
 
+## Dictation
+
+A microphone in the comment box records what is said and turns it into text through
+[Vercel AI Gateway](https://vercel.com/docs/ai-gateway/modalities/speech-to-text), billed to the gateway's owner.
+It is off by default, and the demo account never gets it.
+
+| Variable | |
+| --- | --- |
+| `TRANSCRIPTION_ENABLED` | `true` offers dictation to signed-in people. |
+| `TRANSCRIPTION_MODEL` | A gateway transcription model, `openai/gpt-4o-mini-transcribe`. |
+| `AI_GATEWAY_API_KEY` | Authenticates with AI Gateway. Not needed on Vercel, which uses the deployment's OIDC token. |
+
 ## Storage
 
 See [Artifact storage](/docs/deployment/storage) for `STORAGE_DRIVER`, `STORAGE_LOCAL_DIR`, `BLOB_READ_WRITE_TOKEN` and

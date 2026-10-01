@@ -21,6 +21,7 @@
     "mcp:docs": "DATABASE_URL=${DATABASE_URL:-postgres://docs@localhost/docs} NODE_OPTIONS=--conditions=react-server nub scripts/gen-mcp-docs.ts"
   },
   "dependencies": {
+    "@ai-sdk/gateway": "^4.0.101",
     "@aws-sdk/client-s3": "^3.1139.0",
     "@aws-sdk/lib-storage": "^3.1139.0",
     "@aws-sdk/s3-request-presigner": "^3.1139.0",
@@ -37,6 +38,7 @@
     "@vercel/blob": "^2.8.0",
     "@vercel/speed-insights": "^2.0.0",
     "@workflow/world-postgres": "^4.3.7",
+    "ai": "^7.0.123",
     "better-auth": "1.7.5",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",

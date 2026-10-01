@@ -47,6 +47,8 @@ import { casesOfTests } from '@/lib/review/cases';
 import { captureInProject, decide, MAX_DECISION_CAPTURES, ReviewError, runReview } from '@/lib/review/queries';
 import { toRunReviewData } from '@/lib/review/run-flows';
 import { pendingDiff, toDiffView } from '@/lib/review/view-model';
+import { MAX_AUDIO_BYTES } from '@/lib/transcription/config';
+import { canDictate, transcribeAudio } from '@/lib/transcription/transcribe';
 
 /** How many runs or result rows one call may ask for; the live views ask in batches of these sizes. */
 export const MAX_RUN_IDS = 25;
@@ -282,6 +284,34 @@ export const appRouter = {
         : null;
       return { diff: diffsEnabled() ? diff : null, status: capture.status, decision };
     }),
+  },
+
+  dictation: {
+    /**
+     * A comment's recording as text, for the composer to add to the draft.
+     * Answers NOT_FOUND where the deployment does not offer dictation, as if
+     * the procedure were not there.
+     */
+    transcribe: authed
+      .input(
+        z.object({
+          audio: z
+            .file()
+            .min(1)
+            .max(MAX_AUDIO_BYTES, 'That recording is too long.')
+            .refine((file) => file.type === '' || file.type.startsWith('audio/'), 'Not a recording.'),
+        }),
+      )
+      .handler(async ({ input, signal }) => {
+        if (!canDictate(await getCurrentUser())) throw new ORPCError('NOT_FOUND');
+        const audio = new Uint8Array(await input.audio.arrayBuffer());
+        try {
+          return { text: await transcribeAudio(audio, signal) };
+        } catch (error) {
+          console.error('[dictation] transcription failed', error);
+          throw new ORPCError('BAD_GATEWAY', { message: 'That could not be transcribed. Try again.' });
+        }
+      }),
   },
 
   admin: {
