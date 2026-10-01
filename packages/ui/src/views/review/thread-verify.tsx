@@ -1,11 +1,12 @@
 'use client';
 
-import { Check, ChevronLeft, ChevronRight, CircleCheckBig, History, MessageSquareReply, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, CircleCheckBig, History, MessageSquare, MessageSquareReply, X } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '../../components/button';
 import { Kbd } from '../../components/kbd';
 import { SegmentedControl } from '../../components/segmented-control';
 import { CommentPin } from '../../patterns/comment-pin';
+import { cn } from '../../lib/cn';
 import type { FrameSize, ReviewImage } from '../../lib/review';
 import type { FractionAnchor, ReviewThreadView, ThreadActions } from '../../lib/review-threads';
 import type { MarkupShape } from '../../lib/review-markup';
@@ -38,6 +39,14 @@ export type VerifyLayout = 'close-up' | 'screens';
 
 export interface ThreadVerifyProps extends Pick<ThreadActions, 'onReply' | 'onEditComment' | 'onDeleteComment'> {
   thread: ReviewThreadView;
+  /**
+   * `verify`: made on an earlier version, the screen changed since — the two
+   * side by side. `waiting`: the screen still shows the pixels it was made on
+   * (resolving feedback goes through those too) — the spot once, as it is.
+   */
+  stage?: 'verify' | 'waiting';
+  /** The run the screen as it is now was captured in: whether it was captured again since the comment. */
+  currentRunNumber?: number | null;
   /** Where it is in the comments to verify: `index` of `total`. */
   index: number;
   total: number;
@@ -79,6 +88,8 @@ export interface ThreadVerifyProps extends Pick<ThreadActions, 'onReply' | 'onEd
  */
 export function ThreadVerify({
   thread,
+  stage = 'verify',
+  currentRunNumber,
   index,
   total,
   captureId,
@@ -112,23 +123,35 @@ export function ThreadVerify({
   const [replying, setReplying] = useState(false);
   const origin = thread.origin;
   const resolved = thread.status === 'resolved';
+  const waiting = stage === 'waiting';
+  const madeOn = thread.originRunNumber ? `run #${thread.originRunNumber}` : null;
+  const recaptured = Boolean(currentRunNumber && thread.originRunNumber && currentRunNumber > thread.originRunNumber);
   const then = `Commented on${thread.originRunNumber ? ` · run #${thread.originRunNumber}` : ''}`;
   const width = Math.max(240, Math.round(closeUpWidth));
   const height = Math.round(width * 0.62);
 
   return (
-    <div className="flex min-w-max flex-col items-center gap-4" role="group" aria-label={`Verify comment ${thread.number}`}>
-      <header className="flex w-full max-w-5xl flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-info-border bg-info-subtle px-3 py-2 text-info-text">
-        <History aria-hidden className="size-4 shrink-0" />
+    <div className="flex min-w-max flex-col items-center gap-4" role="group" aria-label={waiting ? `Comment ${thread.number}, unchanged` : `Verify comment ${thread.number}`}>
+      <header
+        className={cn(
+          'flex w-full max-w-5xl flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border px-3 py-2',
+          waiting ? 'border-border bg-surface-sunken text-foreground' : 'border-info-border bg-info-subtle text-info-text',
+        )}
+      >
+        {waiting ? <MessageSquare aria-hidden className="size-4 shrink-0 text-muted-foreground" /> : <History aria-hidden className="size-4 shrink-0" />}
         <div className="min-w-0 flex-1">
           <p className="text-label-m">
-            Verify comment {thread.number}
+            {waiting ? `Comment ${thread.number}` : `Verify comment ${thread.number}`}
             {total > 1 ? <span className="ml-1.5 text-label-s tabular-nums">({index + 1} of {total})</span> : null}
           </p>
-          <p className="text-label-xs">
+          <p className={cn('text-label-xs', waiting && 'text-muted-foreground')}>
             {resolved
               ? 'Resolved.'
-              : `Made on ${thread.originRunNumber ? `run #${thread.originRunNumber}` : 'an earlier version'}; the screen has changed since. Was it fixed?`}
+              : waiting
+                ? recaptured
+                  ? `Captured again in run #${currentRunNumber}, and the same as when the comment was made${madeOn ? ` on ${madeOn}` : ''}: not fixed yet.`
+                  : `Not captured again since the comment${madeOn ? ` on ${madeOn}` : ''}. Run the test after the fix — or resolve it if it is done.`
+                : `Made on ${madeOn ?? 'an earlier version'}; the screen has changed since. Was it fixed?`}
           </p>
         </div>
         <SegmentedControl
@@ -138,7 +161,7 @@ export function ThreadVerify({
           onValueChange={(v) => setLayout(v as VerifyLayout)}
           items={[
             { value: 'close-up', label: 'Close-up' },
-            { value: 'screens', label: 'Whole screens' },
+            { value: 'screens', label: waiting ? 'Whole screen' : 'Whole screens' },
           ]}
         />
         {total > 1 && onStep ? (
@@ -156,7 +179,16 @@ export function ThreadVerify({
         </Button>
       </header>
 
-      {layout === 'close-up' ? (
+      {waiting ? (
+        <figure className="flex flex-col gap-1.5">
+          <figcaption className="text-label-s text-muted-foreground">{currentLabel}</figcaption>
+          {layout === 'close-up' ? (
+            <PinCloseUp image={image} anchor={thread.anchor} number={thread.number} width={width} height={height} alt={`${label} — close-up of comment ${thread.number}`} />
+          ) : (
+            <ScreenFrame image={image} frame={frame} zoom={zoom} alt={`${label} — now`} eager overlay={currentOverlay ? () => currentOverlay : undefined} />
+          )}
+        </figure>
+      ) : layout === 'close-up' ? (
         <div className="flex items-start justify-center gap-6">
           <figure className="flex flex-col gap-1.5">
             <figcaption className="flex items-center gap-1.5 text-label-s text-muted-foreground">
@@ -196,20 +228,20 @@ export function ThreadVerify({
         </div>
       )}
 
-      <div className="flex w-full flex-col gap-3 rounded-lg border border-border bg-popover p-3 shadow-e1" style={{ maxWidth: layout === 'close-up' ? width * 2 + 24 : 720 }}>
+      <div className="flex w-full flex-col gap-3 rounded-lg border border-border bg-popover p-3 shadow-e1" style={{ maxWidth: layout === 'close-up' ? (waiting ? Math.max(width, 480) : width * 2 + 24) : 720 }}>
         {canComment && !resolved ? (
           <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Was it fixed?">
             {onResolve ? (
-              <Button size="sm" onClick={onResolve} aria-keyshortcuts="E">
-                <Check /> Fixed — resolve
-                <Kbd aria-hidden className="ml-0.5 h-4 min-w-4 bg-primary-foreground/20 text-[10px] text-primary-foreground">
+              <Button size="sm" variant={waiting ? 'outline' : 'default'} onClick={onResolve} aria-keyshortcuts="E">
+                <Check /> {waiting ? 'Done — resolve' : 'Fixed — resolve'}
+                <Kbd aria-hidden className={cn('ml-0.5 h-4 min-w-4 text-[10px]', waiting ? '' : 'bg-primary-foreground/20 text-primary-foreground')}>
                   E
                 </Kbd>
               </Button>
             ) : null}
             {onReply ? (
               <Button size="sm" variant="outline" aria-pressed={replying} onClick={() => setReplying(true)}>
-                <MessageSquareReply /> Not yet — reply
+                <MessageSquareReply /> {waiting ? 'Reply' : 'Not yet — reply'}
               </Button>
             ) : null}
             {total > 1 && onStep ? (

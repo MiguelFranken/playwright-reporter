@@ -399,13 +399,18 @@ export const ZOOM_LEVELS = [0.25, 0.33, 0.5, 0.67, 0.75, 1, 1.25, 1.5] as const;
  * How the viewer frames an image: a screen of `width` × `height` CSS pixels
  * the capture is scaled into (by width) and scrolls in, shown at `zoom`.
  * `captured` uses each capture's own viewport; `fit` picks the zoom that
- * shows the whole frame.
+ * shows the whole frame. The viewer never shows a frame wider than it has
+ * room for, nor taller: a zoom above what fits the width is held at it, and a
+ * frame taller than the space ends there and scrolls inside. `fill` drops
+ * the frame altogether: the screens span the whole space, edge to edge, at
+ * the zoom that fits their width — a desktop capture on a small laptop.
  */
 export interface FrameSettings {
   preset: FramePreset;
   width: number;
   height: number;
   zoom: number | 'fit';
+  fill?: boolean;
 }
 
 export const DEFAULT_FRAME: FrameSettings = { preset: 'captured', width: 1280, height: 720, zoom: 'fit' };
@@ -416,12 +421,41 @@ export function frameFor(settings: FrameSettings, capture: Parameters<typeof cap
   return { width: Math.max(160, Math.round(settings.width)), height: Math.max(160, Math.round(settings.height)) };
 }
 
+const MIN_ZOOM = 0.1;
+
+/** The largest zoom at which frames side by side (with `gap` between them) fit into `available` CSS pixels of width. */
+export function widthZoom(frames: readonly FrameSize[], available: number, gap = 24): number {
+  if (frames.length === 0 || available <= 0) return 1;
+  // The gaps between the screens stay their size at any zoom.
+  const width = frames.reduce((sum, f) => sum + f.width, 0);
+  return Math.max(MIN_ZOOM, (available - gap * (frames.length - 1)) / width);
+}
+
 /** The zoom that fits frames side by side (with `gap` between them) into the space available. */
 export function fitZoom(frames: readonly FrameSize[], available: FrameSize, gap = 24): number {
   if (frames.length === 0 || available.width <= 0 || available.height <= 0) return 1;
-  const width = frames.reduce((sum, f) => sum + f.width, 0) + gap * (frames.length - 1);
   const height = Math.max(...frames.map((f) => f.height));
-  return Math.max(0.1, Math.min(1, available.width / width, available.height / height));
+  return Math.max(MIN_ZOOM, Math.min(1, widthZoom(frames, available.width, gap), available.height / height));
+}
+
+/**
+ * The zoom a frame is shown at: `fit`, else the zoom asked for, held at the
+ * largest that fits the width — the space never scrolls sideways.
+ */
+export function shownZoom(zoom: FrameSettings['zoom'], frames: readonly FrameSize[], available: FrameSize, gap = 24): number {
+  return zoom === 'fit' ? fitZoom(frames, available, gap) : Math.min(zoom, widthZoom(frames, available.width, gap));
+}
+
+/** Screens spanning the whole space: as wide as it is at the zoom that fits their width (gaps included), and as tall. */
+export function fillFrames(frames: readonly FrameSize[], available: FrameSize, gap = 24): { zoom: number; screens: FrameSize[] } {
+  const zoom = widthZoom(frames, available.width, gap);
+  return { zoom, screens: frames.map((f) => (available.height > 0 ? { width: f.width, height: Math.max(24, Math.floor(available.height)) / zoom } : f)) };
+}
+
+/** A frame cut to the `height` CSS pixels there is room for at `zoom`: a longer screen ends at the space's edge and scrolls inside. */
+export function frameWithin(frame: FrameSize, height: number, zoom: number): FrameSize {
+  if (height <= 0) return frame;
+  return { width: frame.width, height: Math.max(24 / zoom, Math.min(frame.height, Math.floor(height) / zoom)) };
 }
 
 /**
@@ -448,8 +482,9 @@ export interface ReviewFolder {
   path: string[];
   flows: ReviewFlowView[];
   children: ReviewFolder[];
-  /** Over this folder and everything below it. */
+  /** Flows in this folder and everything below it. */
   total: number;
+  /** Of those, the flows with a screen that still needs review. */
   needsReview: number;
 }
 
@@ -465,7 +500,11 @@ export function folderPathOf(flow: ReviewFlowView, grouping: ReviewGrouping): st
 
 export const folderId = (path: readonly string[]) => path.join(' / ');
 
-/** The flows as a tree of folders, in the order they come. Counts cover every capture below a folder. */
+/**
+ * The flows as a tree of folders, in the order they come. Counts are flows,
+ * the unit people browse and act on: how many screens a flow captures (and in
+ * how many variants) says nothing about how much there is to look at.
+ */
 export function buildReviewTree(flows: readonly ReviewFlowView[], grouping: ReviewGrouping): ReviewFolder[] {
   const roots: ReviewFolder[] = [];
   const index = new Map<string, ReviewFolder>();
@@ -483,11 +522,11 @@ export function buildReviewTree(flows: readonly ReviewFlowView[], grouping: Revi
     const path = folderPathOf(flow, grouping);
     const folder = node(path);
     folder.flows.push(flow);
-    const captures = flow.checkpoints.flatMap((c) => c.captures);
+    const waits = flow.checkpoints.some((c) => c.captures.some((cap) => NEEDS_REVIEW.includes(cap.status)));
     for (let i = 1; i <= path.length; i++) {
       const f = index.get(folderId(path.slice(0, i)))!;
-      f.total += captures.length;
-      f.needsReview += captures.filter((c) => NEEDS_REVIEW.includes(c.status)).length;
+      f.total++;
+      if (waits) f.needsReview++;
     }
   }
   // Unlinked tests last: the curated suites are what people browse first.

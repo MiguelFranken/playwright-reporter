@@ -11,6 +11,7 @@ import {
   type LibraryViewConfig,
   type LibraryViewDef,
 } from '@miguelfranken/ui/lib/library-views';
+import { parseFeedbackScope } from '@miguelfranken/ui/lib/feedback-queue';
 import type { ReviewFlowView } from '@miguelfranken/ui/lib/review';
 import { LibraryBrowser } from '@miguelfranken/ui/views/library/library-browser';
 import type { ReviewSelection } from '@miguelfranken/ui/views/review/review-storyboard';
@@ -21,8 +22,8 @@ import { deleteLibraryView, saveLibraryView } from '@/app/(app)/teams/[team]/pro
 /**
  * The library bound to the URL — the view (`view`), what differs from it
  * (`state`, `priority`, `group`, `sort`, `variant`), the search, the folder,
- * and the open checkpoint and thread (`cp`, `v`, `thread`), so any of it can
- * be linked to — and to the actions: comments, deciding about screens (a
+ * the open checkpoint and thread (`cp`, `v`, `thread`), and going through the
+ * feedback (`resolve`), so any of it can be linked to — and to the actions: comments, deciding about screens (a
  * folder's from the tree, one in the viewer) and the areas they leave out, and the person's own views.
  */
 export function UrlLibraryBrowser({
@@ -77,7 +78,9 @@ export function UrlLibraryBrowser({
   });
 
   const clearedView = Object.fromEntries(LIBRARY_VIEW_PARAMS.map((k) => [k, null]));
-  const showView = (next: LibraryViewDef) => set({ ...clearedView, view: next.id === 'all' ? null : next.id, folder: null });
+  // A view's link carries only what differs from it: the filters carried over from the view left behind.
+  const showView = (next: LibraryViewDef, nextConfig: LibraryViewConfig) =>
+    set({ ...clearedView, ...viewConfigToParams(nextConfig, next.config), view: next.id === 'all' ? null : next.id, folder: null });
   const setConfig = (next: LibraryViewConfig) => set({ ...viewConfigToParams(next, base), view: activeView.id === 'all' ? null : activeView.id });
 
   const saveView = (input: { name: string; config: LibraryViewConfig }) => {
@@ -136,6 +139,8 @@ export function UrlLibraryBrowser({
         set({ cp: next?.checkpointId ?? null, v: next?.variant ?? null, ...(elsewhere ? { thread: null } : {}) });
       }}
       onOpenThread={(next, thread) => set({ cp: next.checkpointId, v: next.variant, thread: String(thread) })}
+      resolving={parseFeedbackScope(params.get('resolve'))}
+      onResolvingChange={(scope) => set({ resolve: scope })}
       size={view?.size}
       onSizeChange={(size) => setView({ size })}
       frame={view?.frame}
