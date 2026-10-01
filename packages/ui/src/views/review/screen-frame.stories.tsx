@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { expect, waitFor } from 'storybook/test';
+import { expect, fireEvent, userEvent, waitFor, within } from 'storybook/test';
 import { legacyFlow, placeOrderFlow, unavailableFlow } from '../../fixtures/review';
 import { UiProvider, type ImageComponent } from '../../provider';
 import { ScreenFrame } from './screen-frame';
@@ -18,6 +18,32 @@ type Story = StoryObj<typeof meta>;
 
 /** A full-page desktop capture on a laptop-shaped screen: scroll inside it to read the page. */
 export const Desktop: Story = {};
+
+/**
+ * In a storyboard the wheel scrolls the page, not the screen under the
+ * pointer; the bar at the screen's edge, a wheel with ⌥ / Alt held, and the
+ * arrow keys scroll the screen.
+ */
+export const PageFirst: Story = {
+  args: { wheel: 'page' },
+  play: async ({ canvasElement }) => {
+    const frame = within(canvasElement).getByRole('region', { name: /Checkout filled in/ });
+    const scroller = frame.firstElementChild as HTMLElement;
+    await waitFor(() => expect(canvasElement.querySelector('[data-slot="screen-scroll-thumb"]')).not.toBeNull());
+    // A plain wheel is the page's: the frame does not take it.
+    await expect(fireEvent.wheel(scroller, { deltaY: 200 })).toBe(true);
+    await expect(scroller.scrollTop).toBe(0);
+    // Held ⌥ / Alt, it is the screen's.
+    await expect(fireEvent.wheel(scroller, { deltaY: 200, altKey: true })).toBe(false);
+    await waitFor(() => expect(scroller.scrollTop).toBeGreaterThan(0));
+    const before = scroller.scrollTop;
+    frame.focus();
+    await userEvent.keyboard('{ArrowDown}');
+    await expect(scroller.scrollTop).toBeGreaterThan(before);
+    await userEvent.keyboard('{Home}');
+    await expect(scroller.scrollTop).toBe(0);
+  },
+};
 
 /** A phone is portrait, whatever the image is. */
 export const Mobile: Story = { args: { image: tall[1].image, frame: { width: 390, height: 844 }, zoom: 0.5, alt: 'Checkout filled in — mobile' } };
