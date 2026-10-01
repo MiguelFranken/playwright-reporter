@@ -39,7 +39,7 @@ import type { IgnoreRect, IgnoreRulesChange } from './ignore-regions-editor';
 import { approveFolderAction, ReviewTree } from './review-tree';
 import { SCREEN_ZOOM_VAR } from './screen-frame';
 import { SizeControl, STORYBOARD_SIZE } from './size-control';
-import { needsReviewIds, StoryboardRows } from './storyboard-rows';
+import { folderApproval, needsReviewIds, StoryboardRows } from './storyboard-rows';
 
 export type { ReviewSelection };
 
@@ -224,7 +224,7 @@ export function ReviewStoryboard({
   );
   const counts = useMemo(() => countStatuses(flows, variant), [flows, variant]);
   const total = counts.approved + counts.changes_requested + counts.changed + counts.new;
-  const searchedCounts = useMemo(() => countStatuses(searched), [searched]);
+  const flowsToReview = useMemo(() => searched.filter((f) => needsReviewIds([f]).length > 0).length, [searched]);
   const pending = useMemo(() => new Set(pendingIds), [pendingIds]);
   const ordered = useMemo(() => sections.flatMap((s) => s.flows), [sections]);
   // Where the viewer was when it closed: the rows scroll there if it is out of view.
@@ -393,12 +393,12 @@ export function ReviewStoryboard({
                 setGrouping(g);
                 setFolder(null);
               }}
-              total={searchedCounts.approved + searchedCounts.changes_requested + searchedCounts.changed + searchedCounts.new}
-              needsReview={searchedCounts.changed + searchedCounts.new}
+              total={searched.length}
+              needsReview={flowsToReview}
               showNeedsReview={!library}
               folderActions={
                 canDecide && onDecide && !library
-                  ? (target) => [approveFolderAction(target, needsReviewIds(searched.filter((f) => inFolder(f, grouping, target.id))), (ids) => onDecide({ captureIds: ids, decision: 'approved' }), pending)]
+                  ? (target) => [approveFolderAction(target, folderApproval(searched.filter((f) => inFolder(f, grouping, target.id))), (ids) => onDecide({ captureIds: ids, decision: 'approved' }), pending)]
                   : undefined
               }
             />

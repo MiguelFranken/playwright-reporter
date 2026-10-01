@@ -118,6 +118,8 @@ to it: the steps it was captured in, the URL, the viewport, and a link to the mo
 | <kbd>N</kbd> <kbd>P</kbd> | Next / previous measured change |
 | <kbd>A</kbd> | Approve, and go to the next image that needs review |
 | <kbd>C</kbd> | Comment mode: click to pin a comment, drag to mark an area |
+| <kbd>1</kbd> – <kbd>6</kbd> | In comment mode: pin, pen, highlighter, arrow, rectangle, ellipse |
+| <kbd>⌘</kbd> <kbd>Z</kbd> | In comment mode: take back the last shape drawn |
 | <kbd>R</kbd> | Comment on the whole image |
 | <kbd>[</kbd> <kbd>]</kbd> | Previous / next comment |
 | <kbd>E</kbd> | Resolve or reopen the open comment |
@@ -166,6 +168,14 @@ Hover a pin to read its thread, click it to keep it open, reply under it, and re
 the keyboard, focus the screenshot in comment mode, press <kbd>Enter</kbd> for a crosshair, move it with the arrow keys
 and press <kbd>Enter</kbd> again. **Comment on the whole image** starts a thread without a pin.
 
+When a pin or an area does not say it, draw. Comment mode puts a tool bar over the screenshot: a **pen**, a
+**highlighter**, an **arrow**, a **rectangle** and an **ellipse**, in six named colours — red, orange, yellow, green,
+blue and purple. Every shape you draw before posting joins the same comment, so one thread can say "the blue area
+should be larger, the yellow one smaller" with both areas drawn; the comment's pin sits at the corner of what you drew.
+Like pins, drawings follow the image into later runs, dashed where the image changed since. AI assistants see them
+too: over MCP and the REST API a thread lists its drawing shape by shape, with its colour and where it is, and the
+images they are sent show it in the same colours.
+
 The panel beside the image lists every thread by its number — open ones first, with **Resolved** and **All** a click
 away — and a row opens its pin. The storyboard shows how many comments are open on each screen. A thread's number stays
 the same, and a link to it (`…/review?cp=…&v=desktop&thread=3`) opens the viewer at its pin.
@@ -173,9 +183,10 @@ the same, and a link to it (`…/review?cp=…&v=desktop&thread=3`) opens the vi
 A thread belongs to the image — the checkpoint and variant — not to one run. While it is open it shows on later runs'
 captures too: where the pixels are the same, exactly where it was placed; where the image changed since, with a dashed
 pin that says it was placed on an earlier run. That is how a change request reaches the run that fixes it, and the
-reviewer resolves it there: **Compare with the version commented on** (or <kbd>O</kbd>) shows the image the comment was
-made on, with its pin and the comment, beside the screen as it is now, and resolves it from there. A screen that changed
-never resolves a comment by itself. Approving an image with open comments asks whether to resolve them. While a thread is open,
+reviewer resolves it there: a screen with such comments opens on the first of them — the image the comment was made
+on, with its pin and the comment, beside the screen as it is now — and **Fixed — resolve** (<kbd>E</kbd>) goes on to the
+next. <kbd>O</kbd> switches between that comparison and the screen. A screen that changed never resolves a comment by
+itself. Approving an image with open comments asks whether to resolve them. While a thread is open,
 the retention policy keeps the whole flow it was placed on — every checkpoint of that test in that run — unless an admin
 lets these visuals expire.
 
@@ -228,6 +239,17 @@ The loop: tests run and upload their screens; reviewers comment where something 
 in as many small commits as they like — and run just the affected tests; the changed screens turn **Ready to verify**,
 and the reviewer compares each with the version they commented on and resolves the comment. **Feedback** lists every
 open comment of the flows shown, what waits and what can be verified, and opens the viewer at its pin.
+
+**Resolve feedback** goes through that feedback one item after another, across screens and flows, in the order of the
+journeys — the flows shown, so a folder or a search narrows it (a folder's menu has **Resolve feedback here** too). Every
+comment opens compared with the version it was made on; **Fixed — resolve** (<kbd>E</kbd>) resolves it and moves on to
+the next, on whichever screen it is, **Not yet — reply** answers it, and <kbd>]</kbd> and <kbd>[</kbd> skip forward and
+back. The strip at the top counts how far you are and switches between **To verify** (screens that changed since their
+feedback — where it starts, when there are any), **Waiting** (feedback on screens that have not changed: the fix has not
+been run yet, or did not change the screen) and **All open**. A change request without a comment shows the image it was
+asked on beside the screen now, and approving the screen settles it. Resolving keeps the list it started with, so the
+count holds still; at the end it says what was resolved and offers to go through what is still open. The link keeps the
+mode (`/library?resolve=verify`).
 
 **Filter** narrows the flows by state and by test case [priority](/docs/using/test-cases#priority-in-the-library) — any
 value within one, every one that is set. A flow that passes shows its whole journey, with the screens that do not match

@@ -28,6 +28,7 @@ import {
   type ThreadPlacement,
   type ThreadStatus,
 } from '@miguelfranken/ui/lib/review-threads';
+import { anchorForMarkup, cleanMarkup, isFractionMarkup, markupToPixels, projectMarkup, type MarkupShape } from '@miguelfranken/ui/lib/review-markup';
 import { db } from '@/lib/db/drizzle';
 import { attachments, reviewCaptures, reviewComments, reviewThreads, runs, users, type Attachment } from '@/lib/db/schema';
 
@@ -62,6 +63,8 @@ export interface ThreadRecord {
   status: ThreadStatus;
   /** In the origin image's pixels. */
   anchor: ThreadAnchor;
+  /** What was drawn with the comment, in the origin image's pixels; `anchor` is then the area it covers. */
+  markup: MarkupShape[] | null;
   origin: ImageSize & { scale: number | null };
   originCaptureId: string | null;
   originSha256: string | null;
@@ -82,6 +85,8 @@ export interface ThreadRecord {
 export interface CaptureThread extends ThreadRecord {
   placement: ThreadPlacement;
   position: FractionAnchor;
+  /** The drawing where it falls on that image, in fractions of it. */
+  positionMarkup: MarkupShape[] | null;
 }
 
 /** What a capture needs for its threads to be chosen and placed. */
@@ -110,6 +115,7 @@ const threadColumns = {
   y: reviewThreads.y,
   w: reviewThreads.w,
   h: reviewThreads.h,
+  markup: reviewThreads.markup,
   originWidth: reviewThreads.originWidth,
   originHeight: reviewThreads.originHeight,
   originScale: reviewThreads.originScale,
@@ -141,6 +147,7 @@ function toThread(r: ThreadRow, comments: CommentRecord[]): ThreadRecord {
     number: r.number as number,
     status: r.status as ThreadStatus,
     anchor: { kind: r.anchorKind as ThreadAnchor['kind'], x: r.x as number, y: r.y as number, w: r.w as number | null, h: r.h as number | null },
+    markup: Array.isArray(r.markup) && r.markup.length ? (r.markup as MarkupShape[]) : null,
     origin: { width: r.originWidth as number, height: r.originHeight as number, scale: r.originScale as number | null },
     originCaptureId: r.originCaptureId as string | null,
     originSha256: r.originSha256 as string | null,
@@ -222,7 +229,12 @@ export function placeThread(thread: ThreadRecord, target: ThreadTarget, startedA
     return null;
   }
   const size = target.width && target.height ? { width: target.width, height: target.height } : null;
-  return { ...thread, placement: samePixels ? 'exact' : 'outdated', position: projectAnchor(thread.anchor, thread.origin, size) };
+  return {
+    ...thread,
+    placement: samePixels ? 'exact' : 'outdated',
+    position: projectAnchor(thread.anchor, thread.origin, size),
+    positionMarkup: thread.markup ? projectMarkup(thread.markup, thread.origin, size) : null,
+  };
 }
 
 /** The threads each capture shows, in number order. */
@@ -284,11 +296,15 @@ export interface Author {
  * image (as a browser saw it) or, with `pixels`, in the capture's own pixels
  * (as a tool reads them off the image it was sent). A capture that recorded
  * no size takes `imageSize`, the size the browser loaded.
+ *
+ * With `markup` (a drawing, in fractions of the image) the thread's anchor is
+ * the area the drawing covers, whatever anchor was given.
  */
 export async function createThread(input: {
   projectId: string;
   captureId: string;
   anchor: FractionAnchor | ThreadAnchor;
+  markup?: MarkupShape[] | null;
   pixels?: boolean;
   imageSize?: ImageSize | null;
   body: string;
@@ -301,7 +317,13 @@ export async function createThread(input: {
   const given = input.imageSize && input.imageSize.width > 0 && input.imageSize.height > 0 ? { width: Math.round(input.imageSize.width), height: Math.round(input.imageSize.height) } : null;
   const size = recorded ?? given;
   let anchor: ThreadAnchor;
-  if (input.anchor.kind === 'image') anchor = { kind: 'image', x: 0, y: 0, w: null, h: null };
+  let markup: MarkupShape[] | null = null;
+  if (input.markup != null && !(Array.isArray(input.markup) && input.markup.length === 0)) {
+    if (!isFractionMarkup(input.markup)) throw new ThreadError('That drawing cannot be saved: it is outside the image, or too large.');
+    if (!size) throw new ThreadError('The image’s size is unknown, so a drawing cannot be placed on it. Comment on the whole image instead.');
+    markup = markupToPixels(cleanMarkup(input.markup), size);
+    anchor = toPixels(anchorForMarkup(input.markup)!, size);
+  } else if (input.anchor.kind === 'image') anchor = { kind: 'image', x: 0, y: 0, w: null, h: null };
   else if (!size) throw new ThreadError('The image’s size is unknown, so a pin cannot be placed on it. Comment on the whole image instead.');
   else if (input.pixels) {
     const a = input.anchor;
@@ -339,6 +361,7 @@ export async function createThread(input: {
       y: anchor.y,
       w: anchor.w ?? null,
       h: anchor.h ?? null,
+      markup,
       createdBy: input.author.userId,
     });
     await tx.insert(reviewComments).values({ id: randomUUID(), threadId: id, projectId: input.projectId, userId: input.author.userId, kind: 'comment', body, source: input.author.source, agentName: input.author.agentName ?? null });

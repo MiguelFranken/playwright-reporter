@@ -73,6 +73,35 @@ describe('threads', () => {
     await expect(createThread({ projectId: randomUUID(), captureId: capture.id, anchor: { kind: 'image', x: 0, y: 0 }, body: 'x', author })).rejects.toThrow('not in this project');
   });
 
+  test('stores a drawing in the image’s pixels, anchored to the area it covers, and follows the image', async ({ tenant }) => {
+    const { capture } = await runWith(tenant, sha('a'), minutesAgo(5));
+    const author = { userId: tenant.adminUser.id, source: 'app' as const };
+    const markup = [
+      { tool: 'ellipse' as const, color: 'blue' as const, points: [0.1, 0.1, 0.3, 0.2] },
+      { tool: 'pen' as const, color: 'yellow' as const, points: [0.5, 0.5, 0.6, 0.55] },
+    ];
+    // The anchor given is ignored: a drawing's thread points at what it covers.
+    const thread = await createThread({ projectId: tenant.project.id, captureId: capture.id, anchor: { kind: 'point', x: 0.9, y: 0.9 }, markup, body: 'The blue area should be larger', author });
+    expect(thread.anchor).toEqual({ kind: 'area', x: 256, y: 400, w: 1280, h: 1800 });
+    expect(thread.markup).toEqual([
+      { tool: 'ellipse', color: 'blue', points: [256, 400, 768, 800] },
+      { tool: 'pen', color: 'yellow', points: [1280, 2000, 1536, 2200] },
+    ]);
+
+    const later = await runWith(tenant, sha('b'), minutesAgo(3));
+    const [shown] = later.capture.threads;
+    expect(shown.placement).toBe('outdated');
+    expect(shown.positionMarkup?.[0]).toMatchObject({ tool: 'ellipse', color: 'blue' });
+    expect(shown.positionMarkup?.[0].points[0]).toBeCloseTo(0.1);
+
+    await expect(
+      createThread({ projectId: tenant.project.id, captureId: capture.id, anchor: { kind: 'point', x: 0.5, y: 0.5 }, markup: [{ tool: 'pen', color: 'pink' as 'red', points: [0.1, 0.1] }], body: 'x', author }),
+    ).rejects.toThrow('cannot be saved');
+    await expect(
+      createThread({ projectId: tenant.project.id, captureId: capture.id, anchor: { kind: 'point', x: 0.5, y: 0.5 }, markup: [{ tool: 'arrow', color: 'red', points: [0.1, 0.1, 1.4, 0.2] }], body: 'x', author }),
+    ).rejects.toThrow('cannot be saved');
+  });
+
   test('carries open threads into later runs, outdated where the image changed; resolved ones stay where they were', async ({ tenant }) => {
     const author = { userId: tenant.adminUser.id, source: 'app' as const };
     const first = await runWith(tenant, sha('a'), minutesAgo(10));

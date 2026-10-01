@@ -1,6 +1,6 @@
 {
-  "id": "01652837-dd18-4c52-a0c6-53141d6e35f0",
-  "prevId": "a14047eb-a649-4e26-b34b-20c7bf9b674b",
+  "id": "3cc71413-bd59-487d-bec1-77f858764173",
+  "prevId": "6be57661-b4e1-4a59-b7a2-a4e10b3a0266",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -6190,6 +6190,12 @@
         "h": {
           "name": "h",
           "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "markup": {
+          "name": "markup",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": false
         },

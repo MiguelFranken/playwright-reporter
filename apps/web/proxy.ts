@@ -1,12 +1,19 @@
-import { getSessionCookie } from 'better-auth/cookies';
+import { getCookieCache, getSessionCookie } from 'better-auth/cookies';
 import { NextResponse, type NextRequest } from 'next/server';
-import { COOKIE_PREFIX } from '@/lib/auth/config';
+import { auth } from '@/lib/auth/auth';
+import { authSecret, COOKIE_PREFIX } from '@/lib/auth/config';
 
 /**
- * Optimistic cookie check only — no database, no session validation. This is
- * *not* a security boundary: every page, action and route handler re-checks
- * through `lib/auth/access.ts`. Its job is to send signed-out visitors to
- * `/login` instead of rendering a shell they cannot use.
+ * Sends visitors without a session to `/login` before a page renders. This is
+ * *not* the security boundary: every page, action and route handler re-checks
+ * through `lib/auth/access.ts`. It is what keeps a page from streaming a shell
+ * whose Suspense boundaries then each redirect to `/login`, which shows as a
+ * flash of an error page before the browser follows the redirect.
+ *
+ * A session cookie alone does not say the session is still there: it outlives
+ * an expired or revoked one. The signed cookie cache (`session_data`, five
+ * minutes) does, and costs no query; once it has lapsed, the session is read
+ * once and the refreshed cookie cache goes back with the response.
  *
  * Paths that never need the check are kept out by `config.matcher`, so the
  * proxy does not run for them at all; this list holds the public *pages*.
@@ -18,15 +25,33 @@ const PUBLIC = [
   /^\/demo$/,
 ];
 
-export function proxy(request: NextRequest) {
+/** The cookies a stale session leaves behind, with and without the `__Secure-` prefix. */
+const SESSION_COOKIES = ['session_token', 'session_data'].flatMap((name) => [`${COOKIE_PREFIX}.${name}`, `__Secure-${COOKIE_PREFIX}.${name}`]);
+
+function toLogin(request: NextRequest) {
+  const login = new URL('/login', request.url);
+  login.searchParams.set('next', request.nextUrl.pathname + request.nextUrl.search);
+  return NextResponse.redirect(login);
+}
+
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (PUBLIC.some((re) => re.test(pathname))) return NextResponse.next();
-  if (!getSessionCookie(request, { cookiePrefix: COOKIE_PREFIX })) {
-    const login = new URL('/login', request.url);
-    login.searchParams.set('next', pathname + request.nextUrl.search);
-    return NextResponse.redirect(login);
+  if (!getSessionCookie(request, { cookiePrefix: COOKIE_PREFIX })) return toLogin(request);
+  if (await getCookieCache(request, { cookiePrefix: COOKIE_PREFIX, secret: authSecret() })) return NextResponse.next();
+
+  const { headers, response: session } = await auth.api.getSession({ headers: request.headers, returnHeaders: true });
+  if (!session) {
+    const response = toLogin(request);
+    // A `__Secure-` cookie is only replaced by one that is `Secure` as well.
+    for (const name of SESSION_COOKIES) {
+      if (request.cookies.has(name)) response.cookies.set(name, '', { path: '/', maxAge: 0, secure: name.startsWith('__Secure-') });
+    }
+    return response;
   }
-  return NextResponse.next();
+  const response = NextResponse.next();
+  for (const cookie of headers.getSetCookie()) response.headers.append('set-cookie', cookie);
+  return response;
 }
 
 /**

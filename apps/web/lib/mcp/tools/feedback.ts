@@ -11,14 +11,14 @@ import { defaultLibraryRef, getLibraryReference, libraryFlows } from '@/lib/revi
 import { libraryRefParam, type LibraryRefKey } from '@miguelfranken/ui/lib/library';
 import { defaultBranch } from '@/lib/db/queries/mcp';
 import { feedbackRequests, producingTests, type FeedbackRequest } from '@/lib/review/feedback-requests';
-import { threadComments, threadPosition } from '@/lib/review/images';
+import { threadComments, threadDrawing, threadPosition } from '@/lib/review/images';
 import { capturesById, runReview, type ComparedCapture } from '@/lib/review/queries';
 import { invalid } from '../errors';
 import { branchParam, commonParams, cursorParam, runParam } from '../params';
 import { defineTool, output } from '../registry';
 import { link } from '../render/markdown';
 import { resolveRun } from '../resolve';
-import { agentOut, commentBy, reviewUrl } from './review';
+import { agentOut, commentBy, drawingOut, reviewUrl } from './review';
 
 const MAX_LIMIT = 200;
 
@@ -59,6 +59,7 @@ const requestOut = z.object({
     .describe('The image the request was made on, when the current one is newer: compare the two with get_review_checkpoint against "origin".'),
   percent: box.nullable().describe('Where the pin points on the current image, in percent (threads with a pin).'),
   position: z.string().nullable().describe('The pin’s position in words, pixels and CSS pixels.'),
+  drawing: drawingOut,
   conversation: z.array(z.object({ kind: z.string(), author: z.string().nullable(), agent: agentOut, via: z.string(), at: z.string(), body: z.string() })).describe('The whole thread, oldest first.'),
   requestedBy: z.string().nullable().optional().describe('Who asked for changes (capture requests).'),
   requestedAt: z.string().nullable().optional(),
@@ -167,6 +168,7 @@ export const listFeedbackRequests = defineTool({
         original: r.original ? { captureId: r.original.captureId, run: r.original.run, url: originCp && r.original.run ? url(r, r.original.captureId, originCp, r.original.run, t?.number ?? null) : null } : null,
         percent: pos?.percent ?? null,
         position: pos ? pos.text : null,
+        drawing: t ? threadDrawing(t, capture) : null,
         conversation: t ? threadComments(t) : [],
         ...(r.decision ? { requestedBy: r.decision.by, requestedAt: r.decision.at.toISOString() } : {}),
       };
@@ -201,6 +203,7 @@ export const listFeedbackRequests = defineTool({
           const orig = r.original ? `; made on run #${r.original.run ?? '?'} (capture ${r.original.captureId})` : '';
           md.line(`- **${r.checkpoint.title}** (\`${r.checkpoint.key}\`, ${r.variant}) ${what} · ${r.stage === 'verify' ? 'changed since — verify' : 'waiting for a fix'} · now: run #${r.current.run}, capture ${r.current.captureId}${orig} · ${link('open', r.current.url)}`);
           if (r.position) md.line(`  - at ${r.position}`);
+          if (r.drawing?.length) md.line(`  - drawn: ${r.drawing.map((d) => d.text).join('; ')}`);
           for (const c of r.conversation) if (c.kind === 'comment') md.line(`  - ${commentBy(c)}: ${c.body.replace(/\s+/g, ' ')}`);
           if (r.kind === 'capture') md.line(`  - ${r.requestedBy ?? 'Someone'} asked for changes without saying what: look at the image${r.original ? ' as it was' : ''} with get_review_checkpoint.`);
         }

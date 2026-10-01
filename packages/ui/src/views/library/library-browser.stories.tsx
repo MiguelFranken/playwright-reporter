@@ -1,7 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/react';
+import { startTransition, useState } from 'react';
 import { expect, fn, spyOn, userEvent, waitFor, within } from 'storybook/test';
-import { allViews, libraryFlows, manyLibraryFlows, NOW, savedViews, VIEWER_ID } from '../../fixtures/library-views';
+import { allViews, libraryFlows, manyLibraryFlows, NOW, savedViews, VIEWER_ID, waitingFlow } from '../../fixtures/library-views';
+import type { FeedbackScope } from '../../lib/feedback-queue';
 import { BUILT_IN_VIEWS, DEFAULT_LIBRARY_VIEW } from '../../lib/library-views';
+import type { ReviewSelection } from '../review/checkpoint-viewer';
 import { LibraryBrowser } from './library-browser';
 
 const meta = {
@@ -63,6 +66,140 @@ export const ToFix: Story = {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole('heading', { level: 2, name: /High/ })).toBeInTheDocument();
     await expect(canvas.queryByRole('article', { name: /places an order/ })).toBeNull();
+  },
+};
+
+/**
+ * Filters set on top of a view hold everywhere: the views count what each
+ * would show with them, the folders how many of their flows pass, and
+ * picking another view keeps the filter it leaves open.
+ */
+export const CountsFollowTheFilters: Story = {
+  args: { activeViewId: 'all', config: { ...DEFAULT_LIBRARY_VIEW, filters: { states: [], priorities: ['critical'] } } },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const shown = canvas.getAllByRole('article').length;
+    const views = within(canvas.getByRole('navigation', { name: 'Views' }));
+    await expect(views.getByRole('button', { name: /^All flows/ })).toHaveTextContent(new RegExp(`${shown}$`));
+    const tree = within(canvas.getByRole('navigation', { name: 'Folders' }));
+    await expect(tree.getByRole('button', { name: /All suites/ })).toHaveTextContent(new RegExp(`${shown}$`));
+    await userEvent.click(views.getByRole('button', { name: /^To fix/ }));
+    await expect(args.onActiveViewChange).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'to-fix' }),
+      expect.objectContaining({ filters: { states: ['waiting'], priorities: ['critical'] } }),
+    );
+  },
+};
+
+/** The selection and the open thread kept the way the app keeps them in the URL. */
+function Hosted(props: React.ComponentProps<typeof LibraryBrowser>) {
+  const [selection, setSelection] = useState<ReviewSelection | null>(null);
+  const [thread, setThread] = useState<number | null>(null);
+  return (
+    <LibraryBrowser
+      {...props}
+      selection={selection}
+      onSelectionChange={(next) => {
+        props.onSelectionChange?.(next);
+        setSelection(next);
+      }}
+      onOpenThread={(next, n) => {
+        props.onOpenThread?.(next, n);
+        setSelection(next);
+        setThread(n);
+      }}
+      comments={{ ...props.comments, openThread: thread, onOpenThreadChange: setThread }}
+    />
+  );
+}
+
+/**
+ * Resolve feedback: what changed since it was given first, one comment after
+ * another, compared with the version it was made on. E resolves it and goes
+ * on; the end says so; the strip switches to all open feedback, and the next
+ * item on another screen is the host's to show.
+ */
+export const ResolvesFeedback: Story = {
+  args: { onResolvingChange: fn() },
+  render: (args) => <Hosted {...args} />,
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const body = within(document.body);
+    await userEvent.click(canvas.getByRole('button', { name: /^Resolve feedback: 1 to verify/ }));
+    await expect(args.onResolvingChange).toHaveBeenCalledWith('verify');
+    const bar = within(await body.findByRole('group', { name: 'Resolving feedback' }));
+    await expect(bar.getByText('1 of 1')).toBeInTheDocument();
+    await expect(await body.findByRole('group', { name: 'Verify comment 1' })).toBeInTheDocument();
+    await userEvent.keyboard('e');
+    await expect(args.comments!.onSetThreadStatus).toHaveBeenCalledWith(expect.objectContaining({ threadId: 'thread-verify', status: 'resolved' }));
+    await expect(await body.findByText('All feedback resolved')).toBeInTheDocument();
+    await userEvent.click(bar.getByRole('radio', { name: /^All open, / }));
+    await expect(args.onResolvingChange).toHaveBeenCalledWith('all');
+    await expect(await body.findByRole('group', { name: 'Verify comment 1' })).toBeInTheDocument();
+    await userEvent.keyboard(']');
+    await expect(args.onOpenThread).toHaveBeenCalledWith({ checkpointId: waitingFlow.checkpoints[0].id, variant: 'desktop' }, 2);
+    await expect(await body.findByRole('group', { name: 'Comment 2, unchanged' })).toBeInTheDocument();
+    await userEvent.click(body.getByRole('button', { name: 'Close' }));
+    await expect(args.onResolvingChange).toHaveBeenLastCalledWith(null);
+    await waitFor(() => expect(body.queryByRole('dialog')).toBeNull());
+  },
+};
+
+/**
+ * Held in the URL, as the app does: what is open and the feedback being gone
+ * through change in a transition (Next.js applies a new query string in one),
+ * so they arrive a render after what the browser keeps itself.
+ */
+function UrlHosted({ resolving: initialResolving, ...props }: React.ComponentProps<typeof LibraryBrowser>) {
+  const [selection, setSelection] = useState<ReviewSelection | null>(null);
+  const [resolving, setResolving] = useState<FeedbackScope | null>(initialResolving ?? null);
+  const [thread, setThread] = useState<number | null>(null);
+  const later = (update: () => void) => startTransition(update);
+  return (
+    <LibraryBrowser
+      {...props}
+      selection={selection}
+      onSelectionChange={(next) => later(() => setSelection(next))}
+      resolving={resolving}
+      onResolvingChange={(next) => {
+        props.onResolvingChange?.(next);
+        later(() => setResolving(next));
+      }}
+      onOpenThread={(next, n) => later(() => (setSelection(next), setThread(n)))}
+      comments={{ ...props.comments, openThread: thread, onOpenThreadChange: (n) => later(() => setThread(n)) }}
+    />
+  );
+}
+
+/** A link into the feedback (`resolve=waiting`) opens it; the close button closes it, and it stays closed. */
+export const ClosesFeedbackFromALink: Story = {
+  args: { resolving: 'waiting', onResolvingChange: fn() },
+  render: (args) => <UrlHosted {...args} />,
+  play: async ({ args }) => {
+    const body = within(document.body);
+    await expect(await body.findByRole('group', { name: 'Resolving feedback' })).toBeInTheDocument();
+    await userEvent.click(body.getByRole('button', { name: 'Close' }));
+    await expect(args.onResolvingChange).toHaveBeenLastCalledWith(null);
+    await waitFor(() => expect(body.queryByRole('dialog')).toBeNull());
+    await new Promise((r) => setTimeout(r, 300));
+    await expect(body.queryByRole('dialog')).toBeNull();
+    await expect(args.onResolvingChange).toHaveBeenLastCalledWith(null);
+  },
+};
+
+/** The feedback inbox goes through what it lists, one by one. */
+export const ResolvesFromTheInbox: Story = {
+  args: { onResolvingChange: fn() },
+  render: (args) => <Hosted {...args} />,
+  play: async ({ canvasElement, args }) => {
+    const body = within(document.body);
+    await userEvent.click(within(canvasElement).getByRole('button', { name: /^Open feedback:/ }));
+    const sheet = within(await body.findByRole('dialog', { name: /Open feedback/ }));
+    await userEvent.click(sheet.getByRole('radio', { name: /^Waiting for changes/ }));
+    await userEvent.click(sheet.getByRole('button', { name: /Go through them one by one/ }));
+    await expect(args.onResolvingChange).toHaveBeenCalledWith('waiting');
+    await expect(args.onOpenThread).toHaveBeenCalledWith({ checkpointId: waitingFlow.checkpoints[0].id, variant: 'desktop' }, 2);
+    await expect(await body.findByRole('group', { name: 'Comment 2, unchanged' })).toBeInTheDocument();
   },
 };
 
@@ -166,7 +303,7 @@ export const FolderMenu: Story = {
     const canvas = within(canvasElement);
     const body = within(document.body);
     await userEvent.pointer({ keys: '[MouseRight]', target: canvas.getByRole('button', { name: /All suites/ }) });
-    const approve = await body.findByRole('menuitem', { name: /^Approve \d+ images?$/ });
+    const approve = await body.findByRole('menuitem', { name: /^Approve \d+ flows?$/ });
     await userEvent.click(approve);
     const dialog = await body.findByRole('dialog', { name: /^Approve/ });
     await userEvent.click(within(dialog).getByRole('button', { name: /^Approve/ }));

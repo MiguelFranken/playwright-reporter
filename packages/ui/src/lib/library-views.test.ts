@@ -4,13 +4,17 @@ import {
   captureStates,
   DEFAULT_LIBRARY_VIEW,
   describeViewConfig,
+  facetedLibraryCounts,
+  filterRefinement,
   flowPriority,
+  flowsByFolder,
   flowState,
   groupLibraryFlows,
   libraryCounts,
   matchesLibraryFilters,
   matchingCheckpointIds,
   normalizeViewConfig,
+  refineFilters,
   sameViewConfig,
   sortLibraryFlows,
   viewConfigFromParams,
@@ -121,6 +125,35 @@ describe('filters', () => {
     expect(counts.states).toMatchObject({ waiting: 1, verify: 1, updated: 1, approved: 2, 'needs-review': 0 });
     expect(counts.priorities).toMatchObject({ high: 1, low: 1, none: 1 });
     expect(counts.comments).toBe(2);
+  });
+});
+
+describe('counts that follow the filters', () => {
+  const high = flow('high', [cap('h1', { status: 'changed' })], { priority: 'high', suite: ['Booking', 'Gift'] });
+  const highDone = flow('high-done', [cap('h2')], { priority: 'high', suite: ['Booking'] });
+  const low = flow('low', [cap('l1', { status: 'new' }), cap('l2', { status: 'new' })], { priority: 'low', suite: ['Account'] });
+
+  test('a refinement is what differs from the view; a view as saved refines nothing', () => {
+    expect(filterRefinement({ states: ['waiting'], priorities: ['high'] }, { states: ['waiting'], priorities: [] })).toEqual({ priorities: ['high'] });
+    expect(filterRefinement({ states: ['waiting'], priorities: [] }, { states: ['waiting'], priorities: [] })).toEqual({});
+    expect(filterRefinement({ states: [], priorities: [] }, { states: ['waiting'], priorities: [] })).toEqual({ states: [] });
+  });
+
+  test('a view keeps the categories it sets and takes the refinement in the others', () => {
+    expect(refineFilters({ states: ['waiting'], priorities: [] }, { priorities: ['high'], states: ['approved'] })).toEqual({ states: ['waiting'], priorities: ['high'] });
+    expect(refineFilters({ states: [], priorities: [] }, {})).toEqual({ states: [], priorities: [] });
+  });
+
+  test('each filter option counts flows given the other category', () => {
+    const counts = facetedLibraryCounts([high, highDone, low], { states: ['needs-review'], priorities: ['high'] });
+    // Needs review among the high priority flows; the priorities among the flows that need review.
+    expect(counts.states['needs-review']).toBe(1);
+    expect(counts.states.approved).toBe(1);
+    expect(counts.priorities).toMatchObject({ high: 1, low: 1 });
+  });
+
+  test('counts flows below each folder, not the screens in them', () => {
+    expect(Object.fromEntries(flowsByFolder([high, highDone, low], 'suite'))).toEqual({ '': 3, Booking: 2, 'Booking / Gift': 1, Account: 1 });
   });
 });
 

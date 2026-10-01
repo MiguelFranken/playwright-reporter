@@ -26,6 +26,12 @@ export type RowSection = Pick<LibrarySection, 'id' | 'path' | 'flows' | 'state' 
 export const needsReviewIds = (list: readonly ReviewFlowView[]) =>
   list.flatMap((f) => f.checkpoints.flatMap((c) => c.captures.filter((cap) => NEEDS_REVIEW.includes(cap.status)).map((cap) => cap.id)));
 
+/** What approving these flows covers: their screens that need review, and how many flows those are in. */
+export const folderApproval = (list: readonly ReviewFlowView[]) => {
+  const perFlow = list.map((f) => needsReviewIds([f]));
+  return { captureIds: perFlow.flat(), flows: perFlow.filter((ids) => ids.length > 0).length };
+};
+
 type RowItem = { kind: 'heading'; key: string; section: RowSection; first: boolean } | { kind: 'flow'; key: string; flow: ReviewFlowView; first: boolean };
 
 /** How far past the screen rows stay rendered, in rows: what a quick scroll reaches before the next frame. */
@@ -364,7 +370,7 @@ function CheckpointColumn({
           const from = library ? (c.runNumber ? (flowRun && c.runNumber !== flowRun ? c.runNumber : null) : earlier) : null;
           return (
             <div key={c.id} className="flex flex-col gap-1.5">
-              {/* A click opens the viewer; the wheel scrolls the screen. The label above is the keyboard way in. */}
+              {/* A click opens the viewer; the bar at the screen's edge scrolls it. The label above is the keyboard way in. */}
               <div onClick={() => open(c.variant)} className="relative cursor-zoom-in">
                 <CommentCountBadge count={f.open} outdated={f.outdated} />
                 <ScreenFrame
@@ -374,6 +380,8 @@ function CheckpointColumn({
                   live
                   alt={`${label} — ${c.variant}`}
                   scroll={scroll}
+                  // Many screens on one page: the wheel scrolls the page, the bar at a screen's edge scrolls the screen.
+                  wheel="page"
                   label={`${label}, ${c.variant} screen`}
                   // Outside the view's filter: the screen steps back, its labels stay readable.
                   className={cn('transition-opacity', dimmed && 'opacity-40 hover:opacity-100')}

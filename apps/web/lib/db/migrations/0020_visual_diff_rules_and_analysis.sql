@@ -1,3 +1,17 @@
+CREATE TABLE "review_ignore_revisions" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"project_id" uuid NOT NULL,
+	"test_id" uuid NOT NULL,
+	"checkpoint_name" text NOT NULL,
+	"variant" text NOT NULL,
+	"revision" integer NOT NULL,
+	"rules" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"reason" text,
+	"source" text DEFAULT 'app' NOT NULL,
+	"changed_by" uuid,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE "ai_budget_periods" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"team_id" uuid NOT NULL,
@@ -70,6 +84,12 @@ CREATE TABLE "visual_analysis_suggestions" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+ALTER TABLE "review_decisions" ADD COLUMN "provenance" jsonb;--> statement-breakpoint
+ALTER TABLE "review_ignore_regions" ADD COLUMN "rules" jsonb;--> statement-breakpoint
+ALTER TABLE "review_ignore_regions" ADD COLUMN "revision" integer DEFAULT 1 NOT NULL;--> statement-breakpoint
+ALTER TABLE "review_ignore_revisions" ADD CONSTRAINT "review_ignore_revisions_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "review_ignore_revisions" ADD CONSTRAINT "review_ignore_revisions_test_id_tests_id_fk" FOREIGN KEY ("test_id") REFERENCES "public"."tests"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "review_ignore_revisions" ADD CONSTRAINT "review_ignore_revisions_changed_by_users_id_fk" FOREIGN KEY ("changed_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "ai_budget_periods" ADD CONSTRAINT "ai_budget_periods_team_id_teams_id_fk" FOREIGN KEY ("team_id") REFERENCES "public"."teams"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "ai_budget_periods" ADD CONSTRAINT "ai_budget_periods_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "ai_usage_ledger" ADD CONSTRAINT "ai_usage_ledger_team_id_teams_id_fk" FOREIGN KEY ("team_id") REFERENCES "public"."teams"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -83,6 +103,8 @@ ALTER TABLE "visual_analysis_jobs" ADD CONSTRAINT "visual_analysis_jobs_created_
 ALTER TABLE "visual_analysis_suggestions" ADD CONSTRAINT "visual_analysis_suggestions_job_id_visual_analysis_jobs_id_fk" FOREIGN KEY ("job_id") REFERENCES "public"."visual_analysis_jobs"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "visual_analysis_suggestions" ADD CONSTRAINT "visual_analysis_suggestions_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "visual_analysis_suggestions" ADD CONSTRAINT "visual_analysis_suggestions_decided_by_users_id_fk" FOREIGN KEY ("decided_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+CREATE UNIQUE INDEX "review_ignore_revisions_identity_idx" ON "review_ignore_revisions" USING btree ("test_id","checkpoint_name","variant","revision");--> statement-breakpoint
+CREATE INDEX "review_ignore_revisions_project_idx" ON "review_ignore_revisions" USING btree ("project_id","created_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "ai_budget_periods_team_idx" ON "ai_budget_periods" USING btree ("team_id","period") WHERE "ai_budget_periods"."project_id" is null;--> statement-breakpoint
 CREATE UNIQUE INDEX "ai_budget_periods_project_idx" ON "ai_budget_periods" USING btree ("team_id","project_id","period") WHERE "ai_budget_periods"."project_id" is not null;--> statement-breakpoint
 CREATE INDEX "ai_usage_ledger_job_idx" ON "ai_usage_ledger" USING btree ("job_id","kind");--> statement-breakpoint

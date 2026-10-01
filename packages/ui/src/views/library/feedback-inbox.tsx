@@ -1,6 +1,6 @@
 'use client';
 
-import { Bot, History, MessageSquare, MessagesSquare } from 'lucide-react';
+import { Bot, History, ListChecks, MessageSquare, MessagesSquare } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Button } from '../../components/button';
 import { SegmentedControl } from '../../components/segmented-control';
@@ -9,6 +9,7 @@ import { LibraryStateChip } from '../../patterns/library-state-chip';
 import { ProfileAvatar } from '../../patterns/profile-avatar';
 import { cn } from '../../lib/cn';
 import { formatRelative } from '../../lib/format';
+import type { FeedbackScope } from '../../lib/feedback-queue';
 import { flowPriority } from '../../lib/library-views';
 import { checkpointLabel, type ReviewFlowView } from '../../lib/review';
 import { commentAuthorName, isAgentComment, openingComment, replies, type ReviewThreadView } from '../../lib/review-threads';
@@ -51,7 +52,7 @@ type InboxFilter = 'all' | 'waiting' | 'verify';
  * Every open comment of the flows on screen in one list, so nobody has to
  * find them screen by screen: what still waits for a change, and what was
  * made on an earlier version and is ready to verify. A row opens the viewer
- * at its pin.
+ * at its pin; "Go through them one by one" resolves the ones listed in turn.
  */
 export function FeedbackInbox({
   open,
@@ -59,12 +60,15 @@ export function FeedbackInbox({
   flows,
   now,
   onOpenThread,
+  onResolve,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   flows: readonly ReviewFlowView[];
   now?: Date;
   onOpenThread: (item: InboxItem) => void;
+  /** Resolve the feedback listed, one item after another. */
+  onResolve?: (scope: FeedbackScope) => void;
 }) {
   const items = useMemo(() => inboxItems(flows), [flows]);
   const [filter, setFilter] = useState<InboxFilter>('all');
@@ -93,6 +97,11 @@ export function FeedbackInbox({
                 { value: 'verify', label: `To verify ${verify}`, 'aria-label': `Ready to verify, ${verify}` },
               ]}
             />
+          ) : null}
+          {onResolve && shown.length ? (
+            <Button size="sm" className="self-start" onClick={() => onResolve(filter)}>
+              <ListChecks /> Go through them one by one
+            </Button>
           ) : null}
         </SheetHeader>
         <ol className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2" aria-label="Open comments">

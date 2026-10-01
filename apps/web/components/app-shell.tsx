@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { cache } from 'react';
 import { Suspense } from 'react';
 import { AppBreadcrumbs, BreadcrumbsSkeleton } from '@/components/app-breadcrumbs';
+import { AppDictationProvider, EnableDictation } from '@/components/dictation';
 import {
   AppSidebar,
   SidebarNav,
@@ -19,6 +20,8 @@ import { requireUser } from '@/lib/auth/access';
 import { roleCan } from '@/lib/auth/permissions';
 import { parseWorkspace } from '@miguelfranken/ui/lib/nav';
 import { WORKSPACE_COOKIE } from '@/lib/workspace-cookie';
+import { transcriptionStreaming } from '@/lib/transcription/config';
+import { canDictate } from '@/lib/transcription/transcribe';
 import { listAllTeams, listMyTeams, listProjectsForTeams } from '@/lib/db/queries/teams';
 
 /**
@@ -108,7 +111,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <BreadcrumbsSlot />
             </Suspense>
           </header>
-          <div className="mx-auto flex w-full max-w-[112rem] flex-1 flex-col gap-6 p-4 md:p-6 lg:p-8">{children}</div>
+          <div className="mx-auto flex w-full max-w-[112rem] flex-1 flex-col gap-6 p-4 md:p-6 lg:p-8">
+            <AppDictationProvider>{children}</AppDictationProvider>
+          </div>
+          <Suspense fallback={null}>
+            <DictationSlot />
+          </Suspense>
         </SidebarInset>
       </SidebarProvider>
     </TooltipProvider>
@@ -128,6 +136,12 @@ async function NavSlot() {
 async function AccountSlot() {
   const { user } = await shellData();
   return <UserMenu user={{ name: user.name, email: user.email, image: user.image, isSuperadmin: user.isSuperadmin }} />;
+}
+
+/** Turns on the composers' microphone once the session is known, for whoever the deployment lets dictate. */
+async function DictationSlot() {
+  const { user } = await shellData();
+  return canDictate(user) ? <EnableDictation live={transcriptionStreaming()} /> : null;
 }
 
 async function BreadcrumbsSlot() {

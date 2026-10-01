@@ -6,6 +6,10 @@ import {
   describeDiff,
   diffMagnitude,
   fitZoom,
+  fillFrames,
+  frameWithin,
+  shownZoom,
+  widthZoom,
   flattenFolders,
   folderPathOf,
   formatChangedShare,
@@ -41,6 +45,33 @@ describe('fitZoom', () => {
     expect(fitZoom([{ width: 1280, height: 720 }], { width: 640, height: 2000 })).toBe(0.5);
     expect(fitZoom([{ width: 390, height: 844 }], { width: 2000, height: 422 })).toBe(0.5);
     expect(fitZoom([{ width: 100, height: 100 }], { width: 2000, height: 2000 })).toBe(1);
+  });
+});
+
+describe('shownZoom', () => {
+  const desktop = { width: 1280, height: 720 };
+  it('holds a zoom asked for at what fits the width, gaps included', () => {
+    expect(widthZoom([desktop, desktop], 2584)).toBe(1);
+    expect(widthZoom([desktop, { width: 390, height: 844 }], 859)).toBe(0.5);
+    expect(shownZoom(1.5, [desktop], { width: 1600, height: 400 })).toBe(1.25);
+    expect(shownZoom(0.5, [desktop], { width: 1600, height: 400 })).toBe(0.5);
+  });
+  it('fits the whole screen for fit', () => {
+    expect(shownZoom('fit', [desktop], { width: 1600, height: 360 })).toBe(0.5);
+  });
+});
+
+describe('fillFrames', () => {
+  it('spans the whole space: its width at the zoom that fits, its full height', () => {
+    expect(fillFrames([{ width: 1280, height: 720 }], { width: 1920, height: 900 })).toEqual({ zoom: 1.5, screens: [{ width: 1280, height: 600 }] });
+  });
+});
+
+describe('frameWithin', () => {
+  it('ends a screen longer than the room at its edge', () => {
+    expect(frameWithin({ width: 390, height: 844 }, 500, 1.25)).toEqual({ width: 390, height: 400 });
+    expect(frameWithin({ width: 390, height: 844 }, 2000, 1)).toEqual({ width: 390, height: 844 });
+    expect(frameWithin({ width: 390, height: 844 }, 0, 1)).toEqual({ width: 390, height: 844 });
   });
 });
 
