@@ -401,13 +401,16 @@ export const ZOOM_LEVELS = [0.25, 0.33, 0.5, 0.67, 0.75, 1, 1.25, 1.5] as const;
  * `captured` uses each capture's own viewport; `fit` picks the zoom that
  * shows the whole frame. The viewer never shows a frame wider than it has
  * room for, nor taller: a zoom above what fits the width is held at it, and a
- * frame taller than the space ends there and scrolls inside.
+ * frame taller than the space ends there and scrolls inside. `fill` drops
+ * the frame altogether: the screens span the whole space, edge to edge, at
+ * the zoom that fits their width — a desktop capture on a small laptop.
  */
 export interface FrameSettings {
   preset: FramePreset;
   width: number;
   height: number;
   zoom: number | 'fit';
+  fill?: boolean;
 }
 
 export const DEFAULT_FRAME: FrameSettings = { preset: 'captured', width: 1280, height: 720, zoom: 'fit' };
@@ -441,6 +444,12 @@ export function fitZoom(frames: readonly FrameSize[], available: FrameSize, gap 
  */
 export function shownZoom(zoom: FrameSettings['zoom'], frames: readonly FrameSize[], available: FrameSize, gap = 24): number {
   return zoom === 'fit' ? fitZoom(frames, available, gap) : Math.min(zoom, widthZoom(frames, available.width, gap));
+}
+
+/** Screens spanning the whole space: as wide as it is at the zoom that fits their width (gaps included), and as tall. */
+export function fillFrames(frames: readonly FrameSize[], available: FrameSize, gap = 24): { zoom: number; screens: FrameSize[] } {
+  const zoom = widthZoom(frames, available.width, gap);
+  return { zoom, screens: frames.map((f) => (available.height > 0 ? { width: f.width, height: Math.max(24, Math.floor(available.height)) / zoom } : f)) };
 }
 
 /** A frame cut to the `height` CSS pixels there is room for at `zoom`: a longer screen ends at the space's edge and scrolls inside. */

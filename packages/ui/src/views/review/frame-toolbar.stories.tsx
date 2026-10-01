@@ -4,12 +4,13 @@ import { expect, fn, screen, userEvent, waitFor, within } from 'storybook/test';
 import { DEFAULT_FRAME, type FrameSettings } from '../../lib/review';
 import { FrameToolbar } from './frame-toolbar';
 
-function Hosted(props: { initial?: FrameSettings; captured?: { width: number; height: number } | null; onChange?: (next: FrameSettings) => void }) {
+function Hosted(props: { initial?: FrameSettings; captured?: { width: number; height: number } | null; maxZoom?: number; onChange?: (next: FrameSettings) => void }) {
   const [value, setValue] = useState(props.initial ?? DEFAULT_FRAME);
   return (
     <FrameToolbar
       value={value}
       captured={props.captured}
+      maxZoom={props.maxZoom}
       onChange={(next) => {
         setValue(next);
         props.onChange?.(next);
@@ -42,6 +43,18 @@ export const Default: Story = {
     await userEvent.click(await screen.findByRole('option', { name: '50%' }));
     await expect(args.onChange).toHaveBeenLastCalledWith(expect.objectContaining({ zoom: 0.5 }));
     await waitFor(() => expect(screen.queryByRole('listbox')).not.toBeInTheDocument());
+  },
+};
+
+/** "Fill" takes the frame away; the zoom then follows from the space's width, so it cannot be picked. */
+export const Fill: Story = {
+  args: { maxZoom: 1.37 },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: /Fill/ }));
+    await expect(args.onChange).toHaveBeenLastCalledWith(expect.objectContaining({ fill: true }));
+    await expect(canvas.getByRole('button', { name: /Fill/ })).toHaveAttribute('aria-pressed', 'true');
+    await expect(canvas.getByRole('combobox', { name: 'Zoom' })).toHaveTextContent('137%');
   },
 };
 

@@ -6,6 +6,7 @@ import {
   describeDiff,
   diffMagnitude,
   fitZoom,
+  fillFrames,
   frameWithin,
   shownZoom,
   widthZoom,
@@ -57,6 +58,12 @@ describe('shownZoom', () => {
   });
   it('fits the whole screen for fit', () => {
     expect(shownZoom('fit', [desktop], { width: 1600, height: 360 })).toBe(0.5);
+  });
+});
+
+describe('fillFrames', () => {
+  it('spans the whole space: its width at the zoom that fits, its full height', () => {
+    expect(fillFrames([{ width: 1280, height: 720 }], { width: 1920, height: 900 })).toEqual({ zoom: 1.5, screens: [{ width: 1280, height: 600 }] });
   });
 });
 

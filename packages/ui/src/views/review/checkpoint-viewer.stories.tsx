@@ -109,6 +109,23 @@ export const ZoomHeldAtTheWidth: Story = {
   },
 };
 
+/** Filling, the screen loses its frame and spans the stage edge to edge; F turns it back into a framed screen. */
+export const FillTheStage: Story = {
+  args: { initial: { checkpointId: changed.id, variant: 'desktop' }, frame: { preset: 'captured', width: 1280, height: 720, zoom: 'fit', fill: true } },
+  play: async () => {
+    const body = within(document.body);
+    await body.findByRole('dialog');
+    await userEvent.click(body.getByRole('button', { name: 'Image' }));
+    const stage = body.getByLabelText('Checkpoint screens');
+    const screen = body.getByRole('region', { name: /desktop screen/ });
+    await waitFor(() => expect(Math.abs(screen.getBoundingClientRect().width - stage.clientWidth)).toBeLessThanOrEqual(1));
+    await expect(Math.abs(screen.getBoundingClientRect().height - stage.clientHeight)).toBeLessThanOrEqual(1);
+    await expect(stage.scrollHeight).toBeLessThanOrEqual(stage.clientHeight);
+    await expect(body.getByRole('button', { name: /Fill/ })).toHaveAttribute('aria-pressed', 'true');
+    await expect(body.getByRole('combobox', { name: 'Zoom' })).toBeDisabled();
+  },
+};
+
 /**
  * A library screen is the newest run's capture: it compares with the approved
  * screen (else the capture before it) and is decided about as in that run's

@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeftRight } from 'lucide-react';
+import { ArrowLeftRight, Maximize2 } from 'lucide-react';
 import { Button } from '../../components/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/select';
 import { cn } from '../../lib/cn';
@@ -18,7 +18,8 @@ const dimension =
  * applies to all of them, so a desktop capture can be read at phone width.
  * The height sets the screen's shape; a screen longer than the space there
  * is ends at its edge and scrolls inside, and no zoom above `maxZoom` — what
- * fits the width — is offered.
+ * fits the width — is offered. "Fill" takes the frame away: the screens
+ * span the whole space, edge to edge, and the zoom follows from its width.
  */
 export function FrameToolbar({
   value,
@@ -44,6 +45,9 @@ export function FrameToolbar({
   };
   // A level asked for while there was more room is kept, and read out as the zoom it is held at.
   const held = maxZoom != null && typeof value.zoom === 'number' && value.zoom > maxZoom + 0.001;
+  const fill = Boolean(value.fill);
+  // Filling, or held at the width, the zoom on show is the one the width allows.
+  const shownLabel = (fill || held) && maxZoom != null ? `${Math.round(maxZoom * 100)}%` : fill ? 'Fill' : null;
   const setSize = (patch: Partial<FrameSize>) => onChange({ ...value, preset: 'custom', ...size, ...patch });
 
   return (
@@ -117,10 +121,11 @@ export function FrameToolbar({
         <Select
           items={ZOOM_ITEMS}
           value={String(value.zoom)}
+          disabled={fill}
           onValueChange={(next) => next && onChange({ ...value, zoom: next === 'fit' ? 'fit' : Number(next) })}
         >
           <SelectTrigger size="sm" className="min-w-22 text-label-s tabular-nums" aria-label="Zoom">
-            <SelectValue>{(v: string) => (held ? `${Math.round(maxZoom! * 100)}%` : (ZOOM_ITEMS.find((z) => z.value === v)?.label ?? v))}</SelectValue>
+            <SelectValue>{(v: string) => shownLabel ?? ZOOM_ITEMS.find((z) => z.value === v)?.label ?? v}</SelectValue>
           </SelectTrigger>
           <SelectContent align="start" className="min-w-28">
             {ZOOM_ITEMS.map((z) => (
@@ -131,6 +136,15 @@ export function FrameToolbar({
           </SelectContent>
         </Select>
       </div>
+      <Button
+        variant={fill ? 'secondary' : 'ghost'}
+        size="sm"
+        aria-pressed={fill}
+        title="Fill the space with the screens, edge to edge (F)"
+        onClick={() => onChange({ ...value, fill: !fill })}
+      >
+        <Maximize2 /> Fill
+      </Button>
     </div>
   );
 }
