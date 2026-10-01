@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.70](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.69...v0.0.70) (2026-10-01)
+
+### Features
+
+* **review:** show dictated words while they are said ([#76](https://github.com/MiguelFranken/playwright-reporter/issues/76)) ([41b45fe](https://github.com/MiguelFranken/playwright-reporter/commit/41b45feca40b57e033e8485c78cb90e4b327f323))
+
 ## [0.0.69](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.68...v0.0.69) (2026-10-01)
 
 ### Features
