@@ -78,6 +78,26 @@ export const PROMPTS: PromptDef[] = [
     },
   },
   {
+    name: 'investigate_visual_diffs',
+    title: 'Investigate visual differences between two runs',
+    description: 'Find out why screens look different between two runs that may both be green, region by region, down to the test and code that produce them — without changing anything.',
+    args: z.object({
+      project,
+      head: z.string().optional().describe('The run looked at, e.g. "#81" (default: the latest run with review captures).'),
+      base: z.string().optional().describe('The run compared against (default: the newest earlier run with captures on the same branch).'),
+      fix: z.string().optional().describe('"yes" to also fix unintended randomness or time dependence in this repository. Default: investigate and report only.'),
+    }),
+    text: (a) => {
+      const pair = `${a.head ? `headRun "${a.head}"` : 'the latest run'}${a.base ? ` against baseRun "${a.base}"` : ''}`;
+      return `Investigate the visual differences${scope(a)} between ${pair} with the playwright-reporter tools, in this workspace.
+1. Call list_visual_diffs with ${pair}${a.project ? ` and project "${a.project}"` : ''}. Every row is one screen (test, checkpoint, variant) with the exact base and head captures and a comparisonId. Both runs may be green: a changed screen is evidence, not a defect.
+2. For each changed screen, call get_visual_diff with its comparisonId: the producing test (file, title path, checkpoint key, step), raw changed pixels, what the checkpoint's rules left out, and the regions D1, D2… Then get_visual_diff_image with mode "annotated" and scope "overview" to see where the regions are, and mode "pair" with regionIds to read each region then and now at full resolution. Use "highlight", "mask", "difference" or "onion" only when a pair does not explain a change.
+3. For each region write down the observation (what differs, where), the hypothesis (a random fixture name, a date or clock, another user, a sort order, a rendering difference, a real change) and what would prove it. Search this repository for the checkpoint key, follow the test into its fixtures and data setup and into the UI code that renders the region, and name the cause only when the code shows it.
+4. Report per screen and region: observation, cause (proven or hypothesis, with the evidence missing), the files involved, and your recommendation — stabilise a fixture or clock in the repository, treat as a real regression, accept, or consider leaving a tightly bounded area out (say which rectangle and why). Give the reviewUrl of each screen.
+${a.fix === 'yes' ? '5. Fix the unintended randomness or time dependence you proved, at the source (a seeded fixture, a frozen clock, a stable sort), without changing test titles or checkpoint keys. Re-run only the producing tests, then compare the new captures with the base captures (get_visual_diff with base and head capture ids). Two independent new runs show stability; one does not. Do not add rules that leave areas out, approve images or resolve threads: those are a person’s call.' : 'Change no code, no rules and no review decisions: this is an investigation. Say what you would change and where.'}`;
+    },
+  },
+  {
     name: 'organize_tests',
     title: 'Organize tests into test cases',
     description: 'Sort the Playwright tests no test case covers yet into existing or new cases and suites.',

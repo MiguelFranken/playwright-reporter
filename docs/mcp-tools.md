@@ -42,6 +42,9 @@ also accepts `project`, `format` (`markdown` | `json`) and `maxChars`. See the R
 | [`list_review_threads`](#list_review_threads) | core | The comment threads people (or assistants) pinned on a run’s review images — change requests at a spot or an area of a screenshot — per image, by the number on the pin, with where each points (pixels, percent, CSS pixels) and the conversation. |
 | [`comment_on_review`](#comment_on_review) | write | Pin a comment thread on a review image — at a spot or an area (in percent of the image), or about the whole image — or reply to a thread by its number. |
 | [`resolve_review_thread`](#resolve_review_thread) | write | Mark a comment thread on a review image resolved — or open again — by the image and the number on its pin, with an optional closing note. |
+| [`list_visual_diffs`](#list_visual_diffs) | core | Which review screens look different between two runs (or two branches / pull requests in the library), test by test — even when every test passed. |
+| [`get_visual_diff`](#get_visual_diff) | core | One visual comparison in detail: the exact base and head captures and their runs, the test and checkpoint that produce the screen (file, title path, checkpoint key, step, URL), how the two were captured, and the measurement — raw changed pixels, what the checkpoint’s rules left out, what remains — with every changed region as D1, D2… (stable ids, rectangles in image pixels, which rules touch it). |
+| [`get_visual_diff_image`](#get_visual_diff_image) | debug | The pictures of one visual comparison, in the mode that reads best: the head with the regions boxed and numbered (annotated), base and head of one region side by side at full resolution so a changed name or price can be read (pair, with regionIds), the changed pixels painted red (highlight), the threshold mask, the colour difference, the two faded over each other (onion), or a plain crop. |
 | [`list_library`](#list_library) | core | The visual documentation of the product: the branches and pull requests kept in the library (and the default branch), which run of each is shown — the newest, or a pinned one — and how many of the newest run’s images still wait for review. |
 | [`get_library_flows`](#get_library_flows) | core | The screens of a branch or pull request as the library shows them — every checkpoint as the newest run on it captured it, so partial runs never hide what they skipped: each flow (test) with its test cases and their priority, its checkpoints in journey order, and each variant’s capture id and review state (waiting for changes, ready to verify, needs review, updated, approved). |
 | [`set_library_reference`](#set_library_reference) | write | Keep a branch or pull request in the library (a long-lived pull request can stay browsable while it is open), pin the run that documents it, make it the default, name it — or take it out. |
@@ -744,6 +747,79 @@ Mark a comment thread on a review image resolved — or open again — by the im
 
 Structured output fields: `project`, `thread`, `status`, `changed`, `url`, `truncated`.
 
+## list_visual_diffs
+
+**List visual differences between two runs** · toolset `core`
+
+Which review screens look different between two runs (or two branches / pull requests in the library), test by test — even when every test passed. For each screen: the exact base and head captures, whether they are identical, changed, not measured yet, only in one run or incompatible, the changed pixels before and after the checkpoint’s rules left areas out, and a comparisonId to pass to get_visual_diff and get_visual_diff_image. Measures pairs nobody measured yet; pending ones say so (ask again). Decides nothing.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+| `headRun` | integer (–9007199254740991) \| string |  | The run looked at (default: the latest run with review captures). Exactly one of the run pair or the library pair. |
+| `baseRun` | integer (–9007199254740991) \| string |  | The run compared against (default: the newest earlier run with captures on the head run’s branch). |
+| `headBranch` | string |  | Library mode: the branch looked at, every screen as its newest run shows it. |
+| `headPullRequest` | integer (–9007199254740991) |  | Library mode: a pull request looked at. |
+| `baseBranch` | string |  | Library mode: the branch compared against (default: the library’s default reference). |
+| `basePullRequest` | integer (–9007199254740991) |  |  |
+| `status` | `"changed"` \| `"all"` \| `"identical"` \| `"undetermined"` \| `"added"` \| `"not_captured"` \| `"incompatible"` |  | changed (default: changed and not measured yet), all, identical, undetermined, added, not_captured or incompatible. |
+| `test` | string |  | Part of a test title or file. |
+| `variant` | string |  | Only this variant, e.g. "desktop". |
+| `ignore` | `"active"` \| `"ever"` \| `"applied"` \| `"suppressed"` \| `"fully-suppressed"` \| `"needs-review"` |  | Only screens whose rules (areas left out) are: active, ever, applied, suppressed, fully-suppressed or needs-review. |
+| `limit` | integer (1–100) |  | Rows per page (default 50). |
+| `cursor` | string |  | Opaque cursor from a previous response, for the next page. Keep the other filters unchanged. |
+
+Structured output fields: `project`, `mode`, `base`, `head`, `counts`, `comparisons`, `nextCursor`, `note`, `truncated`.
+
+## get_visual_diff
+
+**Get a visual difference** · toolset `core`
+
+One visual comparison in detail: the exact base and head captures and their runs, the test and checkpoint that produce the screen (file, title path, checkpoint key, step, URL), how the two were captured, and the measurement — raw changed pixels, what the checkpoint’s rules left out, what remains — with every changed region as D1, D2… (stable ids, rectangles in image pixels, which rules touch it). Pass a region id to get_visual_diff_image to look at it. States no cause: a changed name is an observation, not yet randomness.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+| `comparison` | string |  | The comparisonId from list_visual_diffs. |
+| `base` | string |  | Instead of comparison: the capture id compared against. |
+| `head` | string |  | Instead of comparison: the capture id looked at. |
+| `policy` | `"raw"` \| `"effective"` |  | Whose regions to list: raw (default, before any rule left areas out) or effective (with the active rules). |
+| `regionCursor` | string |  | From a previous answer, for the next page of regions. |
+| `limit` | integer (1–200) |  | Regions per page (default 25). |
+
+Structured output fields: `project`, `comparisonId`, `revision`, `base`, `head`, `test`, `checkpoint`, `variant`, `capture`, `compatibility`, `comparisonStatus`, `calculationState`, `byteIdentical`, `rawChangedPixels`, `ignoredChangedPixels`, `effectiveChangedPixels`, `totalPixels`, `rawChangedPercent`, `effectiveChangedPercent`, `ignoredAreaPixels`, `sizeChanged`, `contentMoved`, `threshold`, `ignoreRuleRevision`, `rules`, `regions`, `regionsComplete`, `nextRegionCursor`, `retryAfterMs`, `reviewUrl`, `interpretation`, `note`, `truncated`.
+
+## get_visual_diff_image
+
+**Get images of a visual difference** · toolset `debug`
+
+The pictures of one visual comparison, in the mode that reads best: the head with the regions boxed and numbered (annotated), base and head of one region side by side at full resolution so a changed name or price can be read (pair, with regionIds), the changed pixels painted red (highlight), the threshold mask, the colour difference, the two faded over each other (onion), or a plain crop. Long regions come tiled, never shrunk; one image per call is described in images[] with the rectangle it shows. Start with annotated + overview, then pair for the regions you care about.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+| `comparison` | string | yes | The comparisonId. |
+| `revision` | string |  | From get_visual_diff: the call fails with REVISION_CONFLICT if the rules or settings changed since. |
+| `mode` | `"annotated"` \| `"pair"` \| `"highlight"` \| `"mask"` \| `"difference"` \| `"onion"` \| `"base"` \| `"head"` |  | annotated (default): head with regions boxed D1, D2…; pair: base and head of each region, readable; highlight: changed pixels painted; mask: white where changed; difference: colour difference; onion: head faded over base; base / head: as they are. |
+| `scope` | `"overview"` \| `"regions"` \| `"crop"` |  | overview (whole image, scaled down), regions (each region at full resolution with context; default for pair), crop (one rectangle). |
+| `regionIds` | string[] |  | With scope regions: which regions (ids or labels like "D2"). Default: the first ones in order. |
+| `order` | `"reading"` \| `"largest"` |  | Which regions come first without regionIds: reading order (default) or the most changed pixels. |
+| `crop` | object |  |  |
+| `policy` | `"raw"` \| `"effective"` |  | raw (default) or effective: whose changed pixels highlight/mask paint and whose regions are boxed. |
+| `showIgnored` | boolean |  | Hatch the areas left out on annotated images. Default true. |
+| `contextPadding` | integer (0–400) |  | Context around a region, in CSS pixels (default 24). |
+| `maxImages` | integer (1–8) |  | At most this many images (default 3). Regions that do not fit are named in nextRegionIds. |
+| `maxBytes` | integer (16384–9007199254740991) |  | Per image; the server has its own ceiling. |
+| `delivery` | `"inline"` \| `"links"` |  | inline (default): the images attached. links: short-lived signed links instead (what the REST API returns). |
+
+Structured output fields: `project`, `comparisonId`, `revision`, `mode`, `scope`, `policy`, `images`, `omitted`, `nextRegionIds`, `warnings`, `retryAfterMs`, `truncated`.
+
 ## list_library
 
 **List the library** · toolset `core`
@@ -810,6 +886,7 @@ Structured output fields: `project`, `reference`, `kept`, `url`, `truncated`.
 | `investigate_flake` | `project?`, `test` | Decide whether a test is flaky or broken, classify the defect, and propose a stabilisation. |
 | `branch_check` | `project?`, `branch` | Compare a branch’s latest run with the base branch and get a go / no-go. |
 | `fix_visual_feedback` | `project?`, `branch?`, `pullRequest?`, `reply?` | Work through every open request on a branch’s screenshots: trace each to its code, fix it, re-run only the producing tests, and check the new images against the originals. |
+| `investigate_visual_diffs` | `project?`, `head?`, `base?`, `fix?` | Find out why screens look different between two runs that may both be green, region by region, down to the test and code that produce them — without changing anything. |
 | `organize_tests` | `project?`, `search?` | Sort the Playwright tests no test case covers yet into existing or new cases and suites. |
 
 ## Resources
