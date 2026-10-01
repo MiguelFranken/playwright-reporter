@@ -51,14 +51,17 @@ description: Every environment variable of the app.
 ## Dictation
 
 A microphone in the comment box records what is said and turns it into text through
-[Vercel AI Gateway](https://vercel.com/docs/ai-gateway/modalities/speech-to-text), billed to the gateway's owner.
+[Vercel AI Gateway](https://vercel.com/docs/ai-gateway/modalities/speech-to-text) or
+[OpenRouter](https://openrouter.ai/docs/guides/overview/multimodal/stt), billed to whoever owns the key.
 It is off by default, and the demo account never gets it.
 
 | Variable | |
 | --- | --- |
 | `TRANSCRIPTION_ENABLED` | `true` offers dictation to signed-in people. |
-| `TRANSCRIPTION_MODEL` | A gateway transcription model, `openai/gpt-4o-mini-transcribe`. |
+| `TRANSCRIPTION_PROVIDER` | `gateway` (default) or `openrouter`. |
+| `TRANSCRIPTION_MODEL` | The provider's transcription model, `openai/gpt-4o-mini-transcribe`. |
 | `AI_GATEWAY_API_KEY` | Authenticates with AI Gateway. Not needed on Vercel, which uses the deployment's OIDC token. |
+| `OPENROUTER_API_KEY` | Required with `openrouter`; without it no microphone is offered. |
 
 ## Storage
 
