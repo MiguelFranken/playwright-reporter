@@ -1,6 +1,6 @@
 'use client';
 
-import { useQueries, useQueryClient } from '@tanstack/react-query';
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useOptimistic, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import {
@@ -21,7 +21,8 @@ import {
   type StoryboardMode,
 } from '@miguelfranken/ui/lib/review';
 import type { CommentEditInput, NewThreadInput, ReviewThreadView, ThreadReplyInput, ThreadStatusInput } from '@miguelfranken/ui/lib/review-threads';
-import type { IgnoreRect } from '@miguelfranken/ui/views/review/ignore-regions-editor';
+import { IGNORE_FILTERS, type IgnoreFilter } from '@miguelfranken/ui/lib/visual-diff';
+import type { IgnoreRect, IgnoreRulesChange } from '@miguelfranken/ui/views/review/ignore-regions-editor';
 import { ReviewStoryboard, STORYBOARD_SIZE, type ReviewSelection } from '@miguelfranken/ui/views/review/review-storyboard';
 import { useShallowSearch } from '@/components/filters/url-filters';
 import {
@@ -34,7 +35,7 @@ import {
   setReviewThreadStatus,
 } from '@/app/(app)/teams/[team]/projects/[project]/review/actions';
 import { applyDecision, patchCaptures } from '@/lib/review/patch-flows';
-import { captureDiffQuery } from '@/lib/rpc/queries';
+import { captureDiffQuery, ignorePreviewQuery } from '@/lib/rpc/queries';
 
 /** What changes at once, before the revalidated page confirms it. */
 type Change =
@@ -230,10 +231,10 @@ export function useReviewActions({
   const live = useLiveDiffs({ team, project }, flows, selection);
   const withLiveFlows = useMemo(() => withLive(flows, live), [flows, live]);
   const [optimistic, addChange] = useOptimistic(withLiveFlows, applyChange);
-  const onIgnoreRegionsChange = (input: { captureId: string; regions: IgnoreRect[] }) => {
+  const onIgnoreRegionsChange = (input: IgnoreRulesChange) => {
     setIgnorePendingId(input.captureId);
     startTransition(async () => {
-      const res = await saveIgnoreRegions({ team, project }, input);
+      const res = await saveIgnoreRegions({ team, project }, { captureId: input.captureId, regions: input.rules, reason: input.reason, expectedRevision: input.expectedRevision });
       setIgnorePendingId(null);
       if (!res.ok) {
         toast.error(res.message);
@@ -241,9 +242,32 @@ export function useReviewActions({
       }
       // The old measurement no longer applies; the viewer asks for the new one.
       queryClient.removeQueries({ queryKey: captureDiffQuery({ team, project }, input.captureId).queryKey });
-      toast.success(input.regions.length ? 'Areas saved. Measuring again…' : 'Nothing is left out any more. Measuring again…');
+      const active = input.rules.filter((r) => r.active !== false).length;
+      toast.success(active ? `${active} ${active === 1 ? 'area' : 'areas'} saved (revision ${res.revision}). Measuring again…` : 'Nothing is left out any more. Measuring again…');
     });
   };
+  // What the rectangles drawn in the editor would leave out, measured on the server as they change.
+  const [previewRequest, setPreviewRequest] = useState<{ captureId: string; regions: IgnoreRect[] } | null>(null);
+  const previewCapture = previewRequest ? flows.flatMap((f) => f.checkpoints.flatMap((c) => c.captures)).find((c) => c.id === previewRequest.captureId) : null;
+  const previewQuery = useQuery({ ...ignorePreviewQuery({ team, project }, previewRequest?.captureId ?? '', previewRequest?.regions ?? [], previewCapture?.compare?.captureId), enabled: Boolean(previewRequest) });
+  const measured = previewQuery.data;
+  const ignorePreview = previewRequest
+    ? {
+        pending: previewQuery.isFetching,
+        result: measured
+          ? {
+              rawChangedPixels: measured.rawChangedPixels,
+              suppressedPixels: measured.suppressedPixels,
+              remainingPixels: measured.effectiveChangedPixels,
+              remainingRegions: measured.remainingRegions,
+              ignoredAreaPercent: measured.totalPixels ? Math.round((measured.ignoredAreaPixels / measured.totalPixels) * 100_000) / 1000 : 0,
+              sizeChanged: measured.sizeChanged,
+            }
+          : null,
+        error: previewQuery.error ? previewQuery.error.message || 'The preview could not be measured.' : null,
+      }
+    : null;
+  const onIgnorePreview = (input: { captureId: string; regions: IgnoreRect[] }) => setPreviewRequest(input);
 
   const ref = { team, project };
   const onDecide = (input: ReviewDecisionInput) => {
@@ -290,7 +314,7 @@ export function useReviewActions({
       commentAction({ type: 'delete', input }, () => deleteReviewComment(ref, { commentId: input.commentId }));
     },
   };
-  return { flows: optimistic, pendingIds, onDecide, onIgnoreRegionsChange, ignorePendingId, comments };
+  return { flows: optimistic, pendingIds, onDecide, onIgnoreRegionsChange, ignorePendingId, onIgnorePreview, ignorePreview, comments };
 }
 
 /**
@@ -361,8 +385,10 @@ export function UrlReviewStoryboard({
   const selection = syncUrl ? urlSelection : local;
   const sortParam = params.get('sort');
   const sort = (REVIEW_SORTS as readonly string[]).includes(sortParam ?? '') ? (sortParam as ReviewSort) : undefined;
+  const ignoreParam = params.get('ignore');
+  const ignoreFilter = (IGNORE_FILTERS as readonly string[]).includes(ignoreParam ?? '') ? (ignoreParam as IgnoreFilter) : null;
   const [localThread, setLocalThread] = useState<number | null>(null);
-  const { flows: optimistic, pendingIds, onDecide, onIgnoreRegionsChange, ignorePendingId, comments } = useReviewActions({
+  const { flows: optimistic, pendingIds, onDecide, onIgnoreRegionsChange, ignorePendingId, onIgnorePreview, ignorePreview, comments } = useReviewActions({
     team,
     project,
     flows,
@@ -413,8 +439,12 @@ export function UrlReviewStoryboard({
       mode={mode}
       sort={syncUrl ? sort : undefined}
       onSortChange={syncUrl ? (next) => set({ sort: next === 'sequence' ? null : next }) : undefined}
+      ignoreFilter={syncUrl ? ignoreFilter : undefined}
+      onIgnoreFilterChange={syncUrl ? (next) => set({ ignore: next }) : undefined}
       onIgnoreRegionsChange={canDecide && mode !== 'library' ? onIgnoreRegionsChange : undefined}
       ignorePendingId={ignorePendingId}
+      onIgnorePreview={canDecide && mode !== 'library' ? onIgnorePreview : undefined}
+      ignorePreview={ignorePreview}
       comments={comments}
     />
   );

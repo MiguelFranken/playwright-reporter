@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, type ReactNode } from 'react';
 import { cn } from '../../lib/cn';
-import type { FrameSize, ReviewDiffView, ReviewImage } from '../../lib/review';
+import type { DiffRegion, FrameSize, ReviewDiffView, ReviewImage } from '../../lib/review';
 import { DiffMarks } from './diff-summary';
 import { UnavailableImage } from './review-frame';
 
@@ -28,6 +28,7 @@ export function DiffHighlight({
   active,
   onActiveChange,
   overlay = true,
+  ignored,
   children,
   className,
 }: {
@@ -40,6 +41,8 @@ export function DiffHighlight({
   onActiveChange: (index: number) => void;
   /** Paint the changed pixels; the boxes stay either way. */
   overlay?: boolean;
+  /** Areas left out of the comparison, hatched over the image so a change inside one reads as left out, not as missed. */
+  ignored?: readonly Pick<DiffRegion, 'x' | 'y' | 'width' | 'height'>[];
   /** More over the image, scrolling with it: comment pins. */
   children?: ReactNode;
   className?: string;
@@ -80,6 +83,7 @@ export function DiffHighlight({
               // eslint-disable-next-line @next/next/no-img-element
               <img src={diff.overlayUrl} alt="" aria-hidden draggable={false} className="pointer-events-none absolute inset-0 block h-full w-full opacity-80" />
             ) : null}
+            {size && ignored?.length ? <DiffMarks regions={ignored} width={size.width} height={size.height} kind="ignore" /> : null}
             {size ? <DiffMarks regions={diff.regions} width={size.width} height={size.height} active={active} numbered onSelect={onActiveChange} /> : null}
             {children}
           </div>

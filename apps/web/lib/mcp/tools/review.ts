@@ -17,7 +17,7 @@ import { checkpointLabel, describeDiff, matchesReviewFilter, REVIEW_DECISIONS, R
 import { MAX_COMMENT_LENGTH, projectAnchor } from '@miguelfranken/ui/lib/review-threads';
 import { signCaptureImagePath } from '@/lib/auth/artifact-url';
 import { baseUrl } from '@/lib/auth/config';
-import { encodeComparisonId } from '@miguelfranken/ui/lib/visual-diff';
+import { encodeComparisonId, IGNORE_FILTERS, ignoreStates, matchesIgnoreFilter } from '@miguelfranken/ui/lib/visual-diff';
 import { annotate, cropAround } from '@/lib/review/annotate';
 import { pinSpecs, readCaptureBytes, threadComments, threadPosition } from '@/lib/review/images';
 import { createThread, ThreadError, type CaptureThread } from '@/lib/review/threads';
@@ -140,6 +140,7 @@ const listInput = z.object({
     .describe('needs-review (default: changed and new images), all, changed, new, changes_requested or approved.'),
   test: z.string().optional().describe('Part of a test title or file, to narrow the list.'),
   variant: z.string().optional().describe('Only this variant, e.g. "desktop" or "mobile".'),
+  ignore: z.enum(IGNORE_FILTERS).optional().describe('Only images whose rules (areas left out of the comparison) are: active, ever, applied, suppressed, fully-suppressed or needs-review.'),
 });
 
 const diffOut = z
@@ -166,6 +167,10 @@ const captureOut = z.object({
   autoApproved: z.boolean().describe('Approved by the project’s diff tolerance, not by a person.'),
   diff: diffOut.describe('The measured pixel comparison, when there is one.'),
   openThreads: z.number().optional().describe('Open comment threads on the image: see them pinned with get_review_checkpoint.'),
+  ignore: z
+    .object({ active: z.number(), applied: z.number(), suspended: z.number(), rawChangedPixels: z.number().nullable(), suppressedPixels: z.number().nullable(), states: z.array(z.enum(IGNORE_FILTERS)) })
+    .optional()
+    .describe('The checkpoint’s rules (areas left out) and what they did here; absent when none was ever saved.'),
 });
 
 function diffData(c: ComparedCapture): z.infer<typeof diffOut> {
@@ -244,7 +249,7 @@ export const listReviewCheckpoints = defineTool({
               steps: cp.stepPath,
               url: cp.url,
               captures: captures
-                .filter((c) => matchesReviewFilter(c.status, filter))
+                .filter((c) => matchesReviewFilter(c.status, filter) && matchesIgnoreFilter(c.ignore, args.ignore))
                 .map((c) => ({
                   captureId: c.id,
                   variant: c.variant,
@@ -255,6 +260,7 @@ export const listReviewCheckpoints = defineTool({
                   autoApproved: c.decision?.source === 'tolerance',
                   diff: diffData(c),
                   openThreads: c.threads.filter((t) => t.status === 'open').length,
+                  ...(c.ignore.ever ? { ignore: { active: c.ignore.active, applied: c.ignore.applied, suspended: c.ignore.suspended, rawChangedPixels: c.ignore.rawChangedPixels, suppressedPixels: c.ignore.suppressedPixels, states: [...ignoreStates(c.ignore)] } } : {}),
                 })),
             };
           })

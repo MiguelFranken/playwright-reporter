@@ -302,6 +302,25 @@ export interface IgnoreRule extends Rect {
   geometry: IgnoreGeometry | null;
 }
 
+/** What a caller may say about a rule it saves: a rectangle, and optionally the id to keep, a reason, a category and whether it is on. */
+export interface IgnoreRuleInput extends Rect {
+  id?: string | null;
+  reason?: string | null;
+  category?: IgnoreCategory | null;
+  active?: boolean;
+}
+
+/** What rectangles would do to a comparison, measured on the two images and saved nowhere. */
+export interface IgnorePreviewView {
+  rawChangedPixels: number;
+  suppressedPixels: number;
+  remainingPixels: number;
+  remainingRegions: number;
+  /** The rectangles' share of the image, in percent. */
+  ignoredAreaPercent: number;
+  sizeChanged: boolean;
+}
+
 /**
  * Whether a rule applies to an image:
  * - `valid`: drawn on an image of the same size (or on this one).

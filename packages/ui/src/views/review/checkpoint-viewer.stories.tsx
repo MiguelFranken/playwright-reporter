@@ -201,10 +201,10 @@ export const LeaveOutAreas: Story = {
     const body = within(document.body);
     await body.findByRole('dialog');
     await expect(body.getByText(/1 area is left out of the comparison/)).toBeInTheDocument();
-    await userEvent.click(body.getByRole('button', { name: 'Leave out areas' }));
+    await userEvent.click(body.getByRole('button', { name: /Leave out areas/ }));
     await userEvent.click(await body.findByRole('button', { name: 'Remove area 1' }));
     await userEvent.click(body.getByRole('button', { name: 'Save and measure again' }));
-    await expect(args.onIgnoreRegionsChange).toHaveBeenCalledWith({ captureId: changed.captures[1].id, regions: [] });
+    await expect(args.onIgnoreRegionsChange).toHaveBeenCalledWith({ captureId: changed.captures[1].id, rules: [], reason: null, expectedRevision: 2 });
   },
 };
 
@@ -251,5 +251,23 @@ export const RegionsAndAiHandoff: Story = {
     await expect(body.getByText('Change 1 of 1')).toBeInTheDocument();
     await expect(body.getByRole('button', { name: 'Investigate with AI' })).toBeInTheDocument();
     await expect(body.getByRole('button', { name: 'Fix cause of D1 with AI' })).toBeInTheDocument();
+  },
+};
+
+/** A screen with a rule: the changes can be shown with the rule applied or raw, and the editor lists the rule with its reason. */
+export const RulesRawAndEffective: Story = {
+  args: { initial: { checkpointId: changed.id, variant: 'mobile' }, onIgnorePreview: fn(), ignorePreview: { pending: false, result: { rawChangedPixels: 15_400, suppressedPixels: 9_600, remainingPixels: 5_800, remainingRegions: 1, ignoredAreaPercent: 2.8, sizeChanged: false } } },
+  play: async ({ args }) => {
+    const body = within(document.body);
+    await body.findByRole('dialog');
+    await expect(body.getByText(/1 area is left out of the comparison/)).toBeInTheDocument();
+    await userEvent.click(body.getByRole('button', { name: 'Raw' }));
+    await expect(body.getByText('2 changes')).toBeInTheDocument();
+    await userEvent.click(body.getByRole('button', { name: 'With rules' }));
+    await expect(body.getByText('1 change')).toBeInTheDocument();
+    await userEvent.click(body.getByRole('button', { name: /Leave out areas/ }));
+    await expect(body.getByLabelText('Reason for area 1')).toHaveValue('The order time is live.');
+    await waitFor(() => expect(args.onIgnorePreview).toHaveBeenCalled());
+    await expect(body.getByText(/5,800 remaining/)).toBeInTheDocument();
   },
 };

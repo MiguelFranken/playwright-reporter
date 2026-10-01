@@ -111,3 +111,19 @@ export function decidePolicy(settings: Record<string, unknown> | null | undefine
   if (capability === 'ai' && !decision.rule && !defaultAllowed) return { ...decision, reason: 'AI analysis is off for this project (Settings → Visual comparison).' };
   return decision;
 }
+
+/** What a project's policy rules can name: its suites and (up to 500) tests with review captures. */
+export async function policyChoices(projectId: string): Promise<{ suites: { id: string; name: string }[]; tests: { id: string; title: string; file: string }[] }> {
+  const { reviewCaptures } = await import('@/lib/db/schema');
+  const { and, asc, sql } = await import('drizzle-orm');
+  const [suites, testRows] = await Promise.all([
+    db.select({ id: testSuites.id, name: testSuites.name }).from(testSuites).where(eq(testSuites.projectId, projectId)).orderBy(asc(testSuites.name)),
+    db
+      .select({ id: tests.id, title: tests.title, titlePath: tests.titlePath, file: tests.file })
+      .from(tests)
+      .where(and(eq(tests.projectId, projectId), sql`exists (select 1 from ${reviewCaptures} rc where rc.test_id = ${tests.id})`))
+      .orderBy(asc(tests.file), asc(tests.title))
+      .limit(500),
+  ]);
+  return { suites, tests: testRows.map((t) => ({ id: t.id, title: t.titlePath.join(' › ') || t.title, file: t.file })) };
+}

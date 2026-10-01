@@ -4241,6 +4241,24 @@
             },
             "allowEmptyValue": true,
             "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "ignore",
+            "schema": {
+              "description": "Only images whose rules (areas left out of the comparison) are: active, ever, applied, suppressed, fully-suppressed or needs-review.",
+              "type": "string",
+              "enum": [
+                "active",
+                "ever",
+                "applied",
+                "suppressed",
+                "fully-suppressed",
+                "needs-review"
+              ]
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
           }
         ],
         "responses": {
@@ -4439,6 +4457,56 @@
                                       "openThreads": {
                                         "description": "Open comment threads on the image: see them pinned with get_review_checkpoint.",
                                         "type": "number"
+                                      },
+                                      "ignore": {
+                                        "description": "The checkpoint’s rules (areas left out) and what they did here; absent when none was ever saved.",
+                                        "type": "object",
+                                        "properties": {
+                                          "active": {
+                                            "type": "number"
+                                          },
+                                          "applied": {
+                                            "type": "number"
+                                          },
+                                          "suspended": {
+                                            "type": "number"
+                                          },
+                                          "rawChangedPixels": {
+                                            "type": [
+                                              "number",
+                                              "null"
+                                            ]
+                                          },
+                                          "suppressedPixels": {
+                                            "type": [
+                                              "number",
+                                              "null"
+                                            ]
+                                          },
+                                          "states": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "string",
+                                              "enum": [
+                                                "active",
+                                                "ever",
+                                                "applied",
+                                                "suppressed",
+                                                "fully-suppressed",
+                                                "needs-review"
+                                              ]
+                                            }
+                                          }
+                                        },
+                                        "required": [
+                                          "active",
+                                          "applied",
+                                          "suspended",
+                                          "rawChangedPixels",
+                                          "suppressedPixels",
+                                          "states"
+                                        ],
+                                        "additionalProperties": false
                                       }
                                     },
                                     "required": [

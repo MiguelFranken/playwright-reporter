@@ -1,6 +1,6 @@
 'use client';
 
-import { ListFilter, RotateCcw, Save, SlidersHorizontal, X } from 'lucide-react';
+import { EyeOff, ListFilter, RotateCcw, Save, SlidersHorizontal, X } from 'lucide-react';
 import { useId } from 'react';
 import { Button } from '../../components/button';
 import {
@@ -40,6 +40,7 @@ import {
   type LibraryViewConfig,
 } from '../../lib/library-views';
 import { CASE_PRIORITIES, CASE_PRIORITY_LABELS, type CasePriority } from '../../lib/test-cases';
+import { IGNORE_FILTER_HINTS, IGNORE_FILTER_LABELS, IGNORE_FILTERS, type IgnoreFilter } from '../../lib/visual-diff';
 import { toneText } from '../../lib/tone';
 import { PriorityIcon } from '../test-cases/case-badges';
 
@@ -80,10 +81,25 @@ export function LibraryFilterMenu({ config, onChange, counts }: { config: Librar
             </DropdownMenuCheckboxItem>
           ))}
         </DropdownMenuGroup>
+        {Object.values(counts.ignore ?? {}).some((n) => n > 0) || config.filters.ignore?.length ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Areas left out</DropdownMenuLabel>
+              {IGNORE_FILTERS.map((s) => (
+                <DropdownMenuCheckboxItem key={s} checked={(config.filters.ignore ?? []).includes(s)} onCheckedChange={() => set({ ignore: toggle(config.filters.ignore ?? [], s) })} closeOnClick={false} title={IGNORE_FILTER_HINTS[s]}>
+                  <EyeOff className="size-4 text-muted-foreground" />
+                  <span className="flex-1">{IGNORE_FILTER_LABELS[s]}</span>
+                  <span className="text-label-xs text-muted-foreground tabular-nums">{counts.ignore?.[s] ?? 0}</span>
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuGroup>
+          </>
+        ) : null}
         {active ? (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => set({ states: [], priorities: [] })}>
+            <DropdownMenuItem onClick={() => set({ states: [], priorities: [], ignore: [] })}>
               <X /> Clear filters
             </DropdownMenuItem>
           </>
@@ -113,6 +129,7 @@ export function LibraryFilterChips({ config, onChange }: { config: LibraryViewCo
       {config.filters.priorities.length
         ? chip('priorities', 'Priority', config.filters.priorities.map((p: CasePriority) => (p === 'none' ? 'None' : CASE_PRIORITY_LABELS[p])).join(', '), () => set({ priorities: [] }))
         : null}
+      {config.filters.ignore?.length ? chip('ignore', 'Areas left out', config.filters.ignore.map((s: IgnoreFilter) => IGNORE_FILTER_LABELS[s]).join(', '), () => set({ ignore: [] })) : null}
     </>
   );
 }

@@ -1,8 +1,9 @@
 'use client';
 
-import { ArrowDownWideNarrow, Check, Images, Search } from 'lucide-react';
+import { ArrowDownWideNarrow, Check, EyeOff, Images, Search } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '../../components/button';
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '../../components/dropdown-menu';
 import { Input } from '../../components/input';
 import { ToggleGroup, ToggleGroupItem } from '../../components/toggle-group';
 import { EmptyState } from '../../patterns/empty-state';
@@ -32,8 +33,9 @@ import {
   type StoryboardMode,
 } from '../../lib/review';
 import { toneSolid } from '../../lib/tone';
+import { IGNORE_FILTER_HINTS, IGNORE_FILTER_LABELS, IGNORE_FILTERS, matchesIgnoreFilter, type IgnoreFilter, type IgnorePreviewView } from '../../lib/visual-diff';
 import { CheckpointViewer, type ReviewCommentsProps, type ReviewSelection } from './checkpoint-viewer';
-import type { IgnoreRect } from './ignore-regions-editor';
+import type { IgnoreRect, IgnoreRulesChange } from './ignore-regions-editor';
 import { approveFolderAction, ReviewTree } from './review-tree';
 import { SCREEN_ZOOM_VAR } from './screen-frame';
 import { SizeControl, STORYBOARD_SIZE } from './size-control';
@@ -53,9 +55,9 @@ function useControlled<T>(value: T | undefined, onChange: ((v: T) => void) | und
  * The flows and checkpoints the filters leave, each checkpoint keeping only the matching variants.
  * What a filter leaves whole is returned as it came, so a row whose flow is untouched does not render again.
  */
-export function filterFlows(flows: readonly ReviewFlowView[], filter: ReviewFilter, variant: string | null, query: string): ReviewFlowView[] {
+export function filterFlows(flows: readonly ReviewFlowView[], filter: ReviewFilter, variant: string | null, query: string, ignore: IgnoreFilter | null = null): ReviewFlowView[] {
   const q = query.trim().toLowerCase();
-  const keep = (cap: ReviewCaptureView) => (!variant || cap.variant === variant) && matchesReviewFilter(cap.status, filter);
+  const keep = (cap: ReviewCaptureView) => (!variant || cap.variant === variant) && matchesReviewFilter(cap.status, filter) && matchesIgnoreFilter(cap.ignore, ignore);
   const out: ReviewFlowView[] = [];
   for (const f of flows) {
     if (
@@ -127,8 +129,12 @@ export function ReviewStoryboard({
   mode = 'review',
   sort: sortProp,
   onSortChange,
+  ignoreFilter: ignoreFilterProp,
+  onIgnoreFilterChange,
   onIgnoreRegionsChange,
   ignorePendingId,
+  onIgnorePreview,
+  ignorePreview,
   comments,
 }: {
   flows: readonly ReviewFlowView[];
@@ -166,8 +172,13 @@ export function ReviewStoryboard({
   /** Journey order, or the most changed tests first. */
   sort?: ReviewSort;
   onSortChange?: (next: ReviewSort) => void;
-  onIgnoreRegionsChange?: (input: { captureId: string; regions: IgnoreRect[] }) => void;
+  /** Only screens whose rules (areas left out) are in this state; `null` for every screen. */
+  ignoreFilter?: IgnoreFilter | null;
+  onIgnoreFilterChange?: (next: IgnoreFilter | null) => void;
+  onIgnoreRegionsChange?: (input: IgnoreRulesChange) => void;
   ignorePendingId?: string | null;
+  onIgnorePreview?: (input: { captureId: string; regions: IgnoreRect[] }) => void;
+  ignorePreview?: { pending: boolean; result: IgnorePreviewView | null; error?: string | null } | null;
   /** Comment threads on the images, in the viewer. */
   comments?: ReviewCommentsProps;
 }) {
@@ -182,6 +193,8 @@ export function ReviewStoryboard({
   const [folder, setFolder] = useControlled<string | null>(folderProp, onFolderChange, null);
   const [size, setSize] = useControlled<number>(sizeProp, onSizeChange, STORYBOARD_SIZE.default);
   const [sort, setSort] = useControlled<ReviewSort>(sortProp, onSortChange, 'sequence');
+  const [ignoreFilter, setIgnoreFilter] = useControlled<IgnoreFilter | null>(ignoreFilterProp, onIgnoreFilterChange, null);
+  const hasRules = useMemo(() => flows.some((f) => f.checkpoints.some((c) => c.captures.some((cap) => cap.ignore?.ever))), [flows]);
   const measured = useMemo(() => flows.some((f) => f.checkpoints.some((c) => c.captures.some((cap) => cap.diff?.state === 'done'))), [flows]);
   // Dragging the size slider scales the screens through a CSS variable, set at most once a frame, instead of
   // re-rendering every row; the rows render again once, when the slider lets go.
@@ -193,7 +206,7 @@ export function ReviewStoryboard({
 
   const variants = useMemo(() => variantsOf(flows), [flows]);
   const effectiveFilter = toolbar && !library ? filter : 'all';
-  const searched = useMemo(() => filterFlows(flows, 'all', variant, toolbar ? query : ''), [flows, variant, query, toolbar]);
+  const searched = useMemo(() => filterFlows(flows, 'all', variant, toolbar ? query : '', toolbar ? ignoreFilter : null), [flows, variant, query, toolbar, ignoreFilter]);
   const folders = useMemo(() => buildReviewTree(searched, grouping), [searched, grouping]);
   const visible = useMemo(
     () => filterFlows(searched, effectiveFilter, null, '').filter((f) => !tree || inFolder(f, grouping, folder)),
@@ -332,6 +345,26 @@ export function ReviewStoryboard({
                 <ArrowDownWideNarrow /> Most changed first
               </Button>
             ) : null}
+            {hasRules || ignoreFilter ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger render={<Button variant={ignoreFilter ? 'secondary' : 'outline'} size="sm" aria-label="Filter by areas left out" />}>
+                  <EyeOff /> {ignoreFilter ? IGNORE_FILTER_LABELS[ignoreFilter] : 'Areas left out'}
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-72">
+                  {IGNORE_FILTERS.map((f) => (
+                    <DropdownMenuCheckboxItem key={f} checked={ignoreFilter === f} onCheckedChange={() => setIgnoreFilter(ignoreFilter === f ? null : f)} title={IGNORE_FILTER_HINTS[f]}>
+                      {IGNORE_FILTER_LABELS[f]}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                  {ignoreFilter ? (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => setIgnoreFilter(null)}>Every screen</DropdownMenuItem>
+                    </>
+                  ) : null}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
             <SizeControl size={size} onLive={setLiveSize} onCommit={setSize} />
             <div className="relative">
               <Search aria-hidden className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -386,6 +419,8 @@ export function ReviewStoryboard({
         mode={mode}
         onIgnoreRegionsChange={onIgnoreRegionsChange}
         ignorePendingId={ignorePendingId}
+        onIgnorePreview={onIgnorePreview}
+        ignorePreview={ignorePreview}
         comments={comments}
       />
     </div>

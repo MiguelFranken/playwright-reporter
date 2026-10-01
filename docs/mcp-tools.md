@@ -642,6 +642,7 @@ A run's review checkpoints — the named screenshots its tests capture at their 
 | `status` | `"needs-review"` \| `"all"` \| `"changed"` \| `"new"` \| `"changes_requested"` \| `"approved"` |  | needs-review (default: changed and new images), all, changed, new, changes_requested or approved. |
 | `test` | string |  | Part of a test title or file, to narrow the list. |
 | `variant` | string |  | Only this variant, e.g. "desktop" or "mobile". |
+| `ignore` | `"active"` \| `"ever"` \| `"applied"` \| `"suppressed"` \| `"fully-suppressed"` \| `"needs-review"` |  | Only images whose rules (areas left out of the comparison) are: active, ever, applied, suppressed, fully-suppressed or needs-review. |
 
 Structured output fields: `project`, `run`, `reviewUrl`, `counts`, `tests`, `truncated`.
 

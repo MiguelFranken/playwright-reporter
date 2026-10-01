@@ -38,7 +38,7 @@ export const Create: Story = {
     await userEvent.click(dialog.getByRole('button', { name: 'Create view' }));
     await expect(args.onSubmit).toHaveBeenCalledWith({
       name: 'Critical to verify',
-      config: { ...DEFAULT_LIBRARY_VIEW, filters: { states: ['verify'], priorities: ['critical'] }, folders: 'file', variant: 'mobile' },
+      config: { ...DEFAULT_LIBRARY_VIEW, filters: { states: ['verify'], priorities: ['critical'], ignore: [] }, folders: 'file', variant: 'mobile' },
     });
   },
 };

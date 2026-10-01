@@ -47,7 +47,7 @@ export const FiltersFromTheMenu: Story = {
     const body = within(document.body);
     await userEvent.click(canvas.getByRole('button', { name: /^Filter/ }));
     await userEvent.click(await body.findByRole('menuitemcheckbox', { name: /Ready to verify/ }));
-    await expect(args.onConfigChange).toHaveBeenCalledWith(expect.objectContaining({ filters: { states: ['verify'], priorities: [] } }));
+    await expect(args.onConfigChange).toHaveBeenCalledWith(expect.objectContaining({ filters: expect.objectContaining({ states: ['verify'], priorities: [] }) }));
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(canvas.queryByRole('article', { name: /lists everything that is missing/ })).toBeNull());
     await expect(canvas.getByRole('article', { name: /places an order/ })).toBeInTheDocument();
@@ -81,7 +81,7 @@ export const SavesAView: Story = {
     await userEvent.click(dialog.getByRole('button', { name: /Waiting for changes/ }));
     await expect(dialog.getByText(/Shows/)).toHaveTextContent('Shows 1 of 4 flows');
     await userEvent.click(dialog.getByRole('button', { name: 'Create view' }));
-    await expect(args.onSaveView).toHaveBeenCalledWith({ name: 'By priority', config: expect.objectContaining({ group: 'priority', filters: { states: ['waiting'], priorities: [] } }) });
+    await expect(args.onSaveView).toHaveBeenCalledWith({ name: 'By priority', config: expect.objectContaining({ group: 'priority', filters: expect.objectContaining({ states: ['waiting'], priorities: [] }) }) });
     await waitFor(() => expect(within(document.body).queryByRole('dialog')).toBeNull());
     await waitFor(() => expect(document.querySelector('[data-base-ui-focus-guard]')).toBeNull());
   },
@@ -186,7 +186,7 @@ export const NothingMatches: Story = {
     const canvas = within(canvasElement);
     await expect(canvas.getByText('No flows match this view')).toBeInTheDocument();
     await userEvent.click(canvas.getByRole('button', { name: 'Clear filters' }));
-    await expect(args.onConfigChange).toHaveBeenCalledWith(expect.objectContaining({ filters: { states: [], priorities: [] } }));
+    await expect(args.onConfigChange).toHaveBeenCalledWith(expect.objectContaining({ filters: expect.objectContaining({ states: [], priorities: [] }) }));
   },
 };
 
