@@ -10,6 +10,7 @@
 import type { ReviewThreadView } from './review-threads';
 import type { CasePriority } from './test-cases';
 import type { Tone } from './tone';
+import type { IgnoreRule, IgnoreSummary, RuleValidity } from './visual-diff';
 
 /** What a reviewer records. */
 export const REVIEW_DECISIONS = ['approved', 'changes_requested'] as const;
@@ -181,6 +182,8 @@ export interface ReviewDiffView {
   /** Under the project's tolerance: the change is noise and was approved for the reviewer. */
   withinTolerance?: boolean;
   error?: string | null;
+  /** The same comparison before any rule left areas out, when rules apply and it is measured. */
+  raw?: { changedPixels: number; ratio: number; regions: DiffRegion[]; overlayUrl?: string | null; state: DiffState } | null;
 }
 
 /** `0.42%`, `< 0.01%`, `18%`: a changed share a reviewer can compare at a glance. */
@@ -260,12 +263,22 @@ export interface ReviewCaptureView {
   compare?: { captureId: string; image: ReviewImage; label: string; same: boolean } | null;
   /** How the image differs from the one the viewer compares it with, when measured. */
   diff?: ReviewDiffView | null;
-  /** Areas left out of the comparison (a clock, an ad), in this image's pixels. */
+  /** Areas left out of the comparison (a clock, an ad), in this image's pixels: the active rules that fit it. */
   ignoreRegions?: DiffRegion[];
+  /** The checkpoint's rules and what they did to this comparison. */
+  ignore?: ReviewIgnoreView | null;
+  /** A tolerance approval made under other rules: no longer counts, kept as history. */
+  staleTolerance?: ReviewDecisionView | null;
   /** Comment threads on the image: its own and the open ones placed on earlier captures of it. */
   threads?: ReviewThreadView[];
   /** The run it was captured in, where one flow shows several runs' images (the library). */
   runNumber?: number | null;
+}
+
+/** The rules of a checkpoint's variant as the viewer shows and edits them. */
+export interface ReviewIgnoreView extends IgnoreSummary {
+  rules: IgnoreRule[];
+  suspendedRules: { rule: IgnoreRule; validity: RuleValidity }[];
 }
 
 export interface ReviewCheckpointView {

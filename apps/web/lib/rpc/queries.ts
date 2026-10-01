@@ -45,6 +45,20 @@ export function captureDiffQuery(ref: ProjectRef, captureId: string, compareCapt
 }
 
 /**
+ * What rectangles drawn in the ignore editor would do to the open comparison.
+ * Each set of rectangles is its own entry; an answer never goes stale (the two
+ * images do not change), and a failure is shown, not retried.
+ */
+export function ignorePreviewQuery(ref: ProjectRef, captureId: string, regions: readonly { x: number; y: number; width: number; height: number }[], compareCaptureId?: string) {
+  return orpc.review.previewIgnore.queryOptions({
+    input: { ...ref, captureId, regions: [...regions], ...(compareCaptureId ? { compareCaptureId } : {}) },
+    staleTime: Infinity,
+    gcTime: 10 * 60_000,
+    retry: false,
+  });
+}
+
+/**
  * What a retention form would delete if saved as it is being edited. Each
  * set of fields is its own entry, so going back to values already previewed
  * answers from the cache; the previous answer stays on screen while the next

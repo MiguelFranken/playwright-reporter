@@ -44,6 +44,7 @@ import { commentOnReview, listReviewThreads, resolveReviewThread } from '@/lib/m
 import { getLibraryFlows, listLibrary, setLibraryReferenceTool } from '@/lib/mcp/tools/library';
 import { listFeedbackRequests } from '@/lib/mcp/tools/feedback';
 import { getVisualDiff, getVisualDiffImage, listVisualDiffs } from '@/lib/mcp/tools/visual-diffs';
+import { listVisualIgnoreRules, previewVisualIgnoreRules, setVisualIgnoreRules } from '@/lib/mcp/tools/visual-ignore';
 import type { ToolDef } from '@/lib/mcp/registry';
 import { authed } from '../base';
 import { fromTool } from '../from-tool';
@@ -397,6 +398,30 @@ export const router = {
       tags: ['Visual review'],
       params: { comparison: comparisonRef },
       fixedArgs: { delivery: 'links' },
+    }),
+  },
+  visualIgnoreRules: {
+    list: fromTool(tool(listVisualIgnoreRules), {
+      path: `${P}/visual-ignore-rules`,
+      summary: 'List the areas left out of comparisons',
+      description: 'The rules that leave areas of review screens out of their pixel comparisons, per checkpoint and variant, with each rule’s rectangle, reason, origin and state; with `capture`, checked against that image and with the set’s history.',
+      tags: ['Visual review'],
+    }),
+    preview: fromTool(tool(previewVisualIgnoreRules), {
+      method: 'POST',
+      readOnlyBody: true,
+      path: `${P}/visual-ignore-rules/preview`,
+      summary: 'Preview rules that leave areas out',
+      description: 'What a set of rectangles would do to one comparison, measured now and saved nowhere: raw changed pixels, how many the rectangles would leave out, how many remain, and which regions they cover. A read: no `write` scope needed.',
+      tags: ['Visual review'],
+    }),
+    set: fromTool(tool(setVisualIgnoreRules), {
+      method: 'PUT',
+      path: `${P}/review-captures/{capture}/ignore-rules`,
+      summary: 'Set the areas left out of a screen’s comparisons',
+      description: 'Replaces the rule set of the capture’s checkpoint and variant under a revision check (`expectedRevision`), with a reason; later runs are measured without those areas. Needs the `write` scope and the review permission; refused where the project’s policy denies it (`POLICY_DENIED`) or the revision moved (`REVISION_CONFLICT`).',
+      tags: ['Visual review'],
+      params: { capture: captureRef },
     }),
   },
   reviewThreads: {

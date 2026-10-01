@@ -134,6 +134,13 @@
       "when": 1790802586295,
       "tag": "0018_review_comment_agents",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1790892030130,
+      "tag": "0019_visual_ignore_rules",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,7 @@
 import { relations, sql } from 'drizzle-orm';
 import { boolean, check, index, integer, jsonb, pgEnum, pgTable, real, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { REVIEW_DECISIONS, type DecisionSource, type DiffRegion, type DiffShift, type DiffState } from '@miguelfranken/ui/lib/review';
+import type { IgnoreRule } from '@miguelfranken/ui/lib/visual-diff';
 import { ANCHOR_KINDS, COMMENT_KINDS, COMMENT_SOURCES, THREAD_STATUSES } from '@miguelfranken/ui/lib/review-threads';
 import type { LibraryViewConfig } from '@miguelfranken/ui/lib/library-views';
 import { users } from './auth';
@@ -136,6 +137,13 @@ export const reviewDecisions = pgTable(
      */
     source: text('source').$type<DecisionSource>().notNull().default('human'),
     comment: text('comment'),
+    /**
+     * For a tolerance approval: the measurement it rested on — the diff row,
+     * its options key (threshold and ignored areas) and the rule revision. A
+     * later rule change makes the approval stale, and the image is reviewed
+     * again. Null on a person's decision, and on approvals made before this.
+     */
+    provenance: jsonb('provenance').$type<{ diffId: string; optionsKey: string; ignoreRevision: number }>(),
     userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -202,7 +210,11 @@ export const imageDiffs = pgTable(
 
 /**
  * Areas of a checkpoint's image left out of its comparisons — a clock, a
- * rotating ad — in the image's pixels, per checkpoint and variant.
+ * rotating ad — per checkpoint and variant. `rules` is the current rule set
+ * with each rule's reason, source, the image it was drawn on and whether it
+ * is switched on; `regions` is the active rules' rectangles, written beside
+ * them, which the diff engine and older readers use. `revision` counts
+ * every change to the set; `review_ignore_revisions` keeps the history.
  */
 export const reviewIgnoreRegions = pgTable(
   'review_ignore_regions',
@@ -217,10 +229,42 @@ export const reviewIgnoreRegions = pgTable(
     checkpointName: text('checkpoint_name').notNull(),
     variant: text('variant').notNull(),
     regions: jsonb('regions').$type<Pick<DiffRegion, 'x' | 'y' | 'width' | 'height'>[]>().notNull().default([]),
+    /** Null for a row saved before rules had a history: its `regions` read as legacy rules. */
+    rules: jsonb('rules').$type<IgnoreRule[]>(),
+    revision: integer('revision').notNull().default(1),
     updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex('review_ignore_regions_identity_idx').on(t.testId, t.checkpointName, t.variant)],
+);
+
+/**
+ * Every state a checkpoint's rule set has been in: the whole set as of that
+ * revision, who changed it, why, and from where (the editor, an accepted AI
+ * suggestion, the API). Rules keep their ids across revisions, so the
+ * history of one rule is the revisions that hold it.
+ */
+export const reviewIgnoreRevisions = pgTable(
+  'review_ignore_revisions',
+  {
+    id: uuid('id').primaryKey(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    testId: uuid('test_id')
+      .notNull()
+      .references(() => tests.id, { onDelete: 'cascade' }),
+    checkpointName: text('checkpoint_name').notNull(),
+    variant: text('variant').notNull(),
+    revision: integer('revision').notNull(),
+    rules: jsonb('rules').$type<IgnoreRule[]>().notNull().default([]),
+    reason: text('reason'),
+    /** `app`, `mcp`, `api`, `ai_suggestion`, `migration`. */
+    source: text('source').notNull().default('app'),
+    changedBy: uuid('changed_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('review_ignore_revisions_identity_idx').on(t.testId, t.checkpointName, t.variant, t.revision), index('review_ignore_revisions_project_idx').on(t.projectId, t.createdAt)],
 );
 
 /**
@@ -384,3 +428,5 @@ export type ReviewCommentRow = typeof reviewComments.$inferSelect;
 export type LibraryReferenceRow = typeof libraryReferences.$inferSelect;
 export type LibraryViewRow = typeof libraryViews.$inferSelect;
 export type ImageDiffRow = typeof imageDiffs.$inferSelect;
+export type ReviewIgnoreRegionsRow = typeof reviewIgnoreRegions.$inferSelect;
+export type ReviewIgnoreRevisionRow = typeof reviewIgnoreRevisions.$inferSelect;

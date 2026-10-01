@@ -94,6 +94,12 @@ export function toDiffView(diff: DiffRecord, against: ReviewDiffView['against'],
   };
 }
 
+/** The raw measurement beside the effective one, when the rules changed what counts. */
+function withRaw(view: ReviewDiffView, raw: DiffRecord | null): ReviewDiffView {
+  if (!raw) return view;
+  return { ...view, raw: { state: raw.status, changedPixels: raw.changedPixels ?? 0, ratio: raw.ratio ?? 0, regions: raw.regions ?? [], overlayUrl: raw.status === 'done' && raw.overlayKey ? diffOverlayUrl(raw.id) : null } };
+}
+
 /** A comparison planned (or about to be) and not measured yet. */
 export const pendingDiff = (against: ReviewDiffView['against'], id = ''): ReviewDiffView => ({ id, state: 'pending', against, changedPixels: 0, totalPixels: 0, ratio: 0, sizeChanged: false, regions: [] });
 
@@ -133,8 +139,12 @@ export function toCaptureView(c: ComparedCapture): ReviewCaptureView {
             onThisImage: c.request.captureId === c.id || Boolean(c.request.sha256 && c.request.sha256 === c.sha256),
           }
         : null,
-    diff: c.diff && c.diffAgainst ? toDiffView(c.diff, c.diffAgainst, c.withinTolerance) : null,
+    diff: c.diff && c.diffAgainst ? withRaw(toDiffView(c.diff, c.diffAgainst, c.withinTolerance), c.rawDiff) : null,
     ignoreRegions: c.ignoreRegions.length ? c.ignoreRegions.map((r) => ({ ...r, pixels: 0 })) : undefined,
+    ignore: c.ignore.ever ? { ...c.ignore } : null,
+    staleTolerance: c.staleTolerance
+      ? { decision: c.staleTolerance.decision, by: c.staleTolerance.by, at: c.staleTolerance.createdAt.toISOString(), comment: c.staleTolerance.comment, runNumber: c.staleTolerance.runNumber, source: c.staleTolerance.source }
+      : null,
     threads: c.threads.map(toThreadView),
     runNumber: c.runNumber ?? null,
   };

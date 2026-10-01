@@ -45,6 +45,9 @@ also accepts `project`, `format` (`markdown` | `json`) and `maxChars`. See the R
 | [`list_visual_diffs`](#list_visual_diffs) | core | Which review screens look different between two runs (or two branches / pull requests in the library), test by test — even when every test passed. |
 | [`get_visual_diff`](#get_visual_diff) | core | One visual comparison in detail: the exact base and head captures and their runs, the test and checkpoint that produce the screen (file, title path, checkpoint key, step, URL), how the two were captured, and the measurement — raw changed pixels, what the checkpoint’s rules left out, what remains — with every changed region as D1, D2… (stable ids, rectangles in image pixels, which rules touch it). |
 | [`get_visual_diff_image`](#get_visual_diff_image) | debug | The pictures of one visual comparison, in the mode that reads best: the head with the regions boxed and numbered (annotated), base and head of one region side by side at full resolution so a changed name or price can be read (pair, with regionIds), the changed pixels painted red (highlight), the threshold mask, the colour difference, the two faded over each other (onion), or a plain crop. |
+| [`list_visual_ignore_rules`](#list_visual_ignore_rules) | core | The rules that leave areas of review screens out of their pixel comparisons (a clock, a generated name), per checkpoint and variant: each rule’s rectangle, reason, who drew it on which image, whether it is switched on, and — for one capture — whether it still fits that image or is suspended, plus the revision history of the set. |
+| [`preview_visual_ignore_rules`](#preview_visual_ignore_rules) | core | What a set of rectangles would do to one comparison, measured now and saved nowhere: the raw changed pixels, how many the rectangles would leave out, how many would remain, and which measured regions they cover wholly or in part. |
+| [`set_visual_ignore_rules`](#set_visual_ignore_rules) | write | Replaces the rules that leave areas of a checkpoint’s variant out of its comparisons, under a revision check, with a reason: tight rectangles in the image’s pixels, each with why. |
 | [`list_library`](#list_library) | core | The visual documentation of the product: the branches and pull requests kept in the library (and the default branch), which run of each is shown — the newest, or a pinned one — and how many of the newest run’s images still wait for review. |
 | [`get_library_flows`](#get_library_flows) | core | The screens of a branch or pull request as the library shows them — every checkpoint as the newest run on it captured it, so partial runs never hide what they skipped: each flow (test) with its test cases and their priority, its checkpoints in journey order, and each variant’s capture id and review state (waiting for changes, ready to verify, needs review, updated, approved). |
 | [`set_library_reference`](#set_library_reference) | write | Keep a branch or pull request in the library (a long-lived pull request can stay browsable while it is open), pin the run that documents it, make it the default, name it — or take it out. |
@@ -819,6 +822,59 @@ The pictures of one visual comparison, in the mode that reads best: the head wit
 | `delivery` | `"inline"` \| `"links"` |  | inline (default): the images attached. links: short-lived signed links instead (what the REST API returns). |
 
 Structured output fields: `project`, `comparisonId`, `revision`, `mode`, `scope`, `policy`, `images`, `omitted`, `nextRegionIds`, `warnings`, `retryAfterMs`, `truncated`.
+
+## list_visual_ignore_rules
+
+**List the areas left out of comparisons** · toolset `core`
+
+The rules that leave areas of review screens out of their pixel comparisons (a clock, a generated name), per checkpoint and variant: each rule’s rectangle, reason, who drew it on which image, whether it is switched on, and — for one capture — whether it still fits that image or is suspended, plus the revision history of the set. Pass the revision to set_visual_ignore_rules.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+| `capture` | string |  | One capture: the rules of its checkpoint and variant, each checked against this image, with the history of the set. |
+| `test` | string |  | Part of a test title or file. |
+| `status` | `"active"` \| `"all"` |  | active (default): sets with a rule switched on; all: every set ever saved. |
+| `limit` | integer (1–100) |  |  |
+| `cursor` | string |  | Opaque cursor from a previous response, for the next page. Keep the other filters unchanged. |
+
+Structured output fields: `project`, `counts`, `sets`, `nextCursor`, `truncated`.
+
+## preview_visual_ignore_rules
+
+**Preview rules that leave areas out** · toolset `core`
+
+What a set of rectangles would do to one comparison, measured now and saved nowhere: the raw changed pixels, how many the rectangles would leave out, how many would remain, and which measured regions they cover wholly or in part. Use it before proposing a rule; a rectangle that covers more than the dynamic text (a price beside a name) is too wide. A size change is never left out.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+| `comparison` | string | yes | The comparisonId whose two images the rectangles are tried on. |
+| `rules` | object[] | yes | The rectangles that would be left out, in the head image’s pixels. Tight: a name, not the row it is in. |
+
+Structured output fields: `project`, `comparisonId`, `revision`, `rawChangedPixels`, `suppressedPixels`, `remainingPixels`, `totalPixels`, `ignoredAreaPixels`, `ignoredAreaPercent`, `sizeChanged`, `regions`, `remainingRegions`, `warnings`, `truncated`.
+
+## set_visual_ignore_rules
+
+**Set the areas left out of a screen’s comparisons** · toolset `write` · **writes**
+
+Replaces the rules that leave areas of a checkpoint’s variant out of its comparisons, under a revision check, with a reason: tight rectangles in the image’s pixels, each with why. Later runs are measured without those areas; a tolerance approval that rested on the old rules is reviewed again. Only when the user asked for it — preview first with preview_visual_ignore_rules, and never to make a real change disappear.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+| `capture` | string | yes | The capture the rules are drawn on: its checkpoint and variant get the set, its image size is recorded on new rules. |
+| `rules` | object[] | yes | The whole set after the change: rules not listed are removed (kept in the history). An empty list removes every rule. |
+| `expectedRevision` | integer (0–9007199254740991) | yes | The revision you read (list_visual_ignore_rules or get_visual_diff). Refused when it moved. |
+| `reason` | string |  | Why the set changed, for the history. |
+
+Structured output fields: `project`, `captureId`, `revision`, `rules`, `remeasured`, `truncated`.
 
 ## list_library
 

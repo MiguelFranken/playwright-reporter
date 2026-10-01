@@ -39,6 +39,9 @@ import { runs } from '@/lib/db/schema';
 import { policyFromForm as artifactPolicyFromForm, retentionStats } from '@/lib/storage/retention';
 import { toRunHeaderData, toRunListItem } from '@/lib/view-models';
 import { requestComparison } from '@/lib/review/diff/compare';
+import { IgnoreRegionsError, parseIgnoreRegions, previewRules } from '@/lib/review/diff/ignore';
+import { diffSettingsFor } from '@/lib/review/diff/lookup';
+import { readCaptureBytes } from '@/lib/review/images';
 import { diffsEnabled, requestCaptureDiff } from '@/lib/review/diff/dispatch';
 import { needsPlanning } from '@/lib/review/diff/store';
 import { REVIEW_DECISIONS } from '@miguelfranken/ui/lib/review';
@@ -258,6 +261,36 @@ export const appRouter = {
      * viewer while it waits: a capture nobody measured yet is planned and
      * queued on the first call, and the viewer asks again until it is done.
      */
+    /**
+     * What rectangles drawn in the editor would do to the open capture's
+     * comparison, measured now on the two images and saved nowhere: the
+     * numbers the editor shows before anyone presses save.
+     */
+    previewIgnore: authed.input(project.extend({ captureId: z.string(), compareCaptureId: z.string().optional(), regions: z.array(z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() })).max(20) })).handler(async ({ input }) => {
+      if (!isUuid(input.captureId) || (input.compareCaptureId && !isUuid(input.compareCaptureId))) throw new ORPCError('NOT_FOUND');
+      const projectId = await readableProjectId(input.team, input.project);
+      const found = await captureInProject(projectId, input.captureId.toLowerCase());
+      if (!found) throw new ORPCError('NOT_FOUND');
+      const { capture } = found;
+      const reference = input.compareCaptureId ? (await captureInProject(projectId, input.compareCaptureId.toLowerCase()))?.capture : (capture.baseline?.capture ?? capture.previous?.capture ?? null);
+      if (!reference) throw new ORPCError('BAD_REQUEST', { message: 'Nothing to compare with.' });
+      let rects;
+      try {
+        rects = parseIgnoreRegions(input.regions);
+      } catch (error) {
+        throw new ORPCError('BAD_REQUEST', { message: (error as Error).message });
+      }
+      const [base, head] = await Promise.all([readCaptureBytes(reference), readCaptureBytes(capture)]);
+      if (!base || !head) throw new ORPCError('CONFLICT', { message: 'An image is not stored.' });
+      const settings = (await diffSettingsFor([projectId])).get(projectId)!;
+      try {
+        return await previewRules(Buffer.from(base.bytes), Buffer.from(head.bytes), rects, settings.threshold);
+      } catch (error) {
+        if (error instanceof IgnoreRegionsError) throw new ORPCError('CONFLICT', { message: error.message });
+        throw error;
+      }
+    }),
+
     diff: authed.input(project.extend({ captureId: z.string(), compareCaptureId: z.string().optional() })).handler(async ({ input }) => {
       if (!isUuid(input.captureId) || (input.compareCaptureId && !isUuid(input.compareCaptureId))) throw new ORPCError('NOT_FOUND');
       const projectId = await readableProjectId(input.team, input.project);
