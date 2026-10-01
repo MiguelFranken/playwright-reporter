@@ -20,6 +20,7 @@ import { requireUser } from '@/lib/auth/access';
 import { roleCan } from '@/lib/auth/permissions';
 import { parseWorkspace } from '@miguelfranken/ui/lib/nav';
 import { WORKSPACE_COOKIE } from '@/lib/workspace-cookie';
+import { transcriptionStreaming } from '@/lib/transcription/config';
 import { canDictate } from '@/lib/transcription/transcribe';
 import { listAllTeams, listMyTeams, listProjectsForTeams } from '@/lib/db/queries/teams';
 
@@ -140,7 +141,7 @@ async function AccountSlot() {
 /** Turns on the composers' microphone once the session is known, for whoever the deployment lets dictate. */
 async function DictationSlot() {
   const { user } = await shellData();
-  return canDictate(user) ? <EnableDictation /> : null;
+  return canDictate(user) ? <EnableDictation live={transcriptionStreaming()} /> : null;
 }
 
 async function BreadcrumbsSlot() {

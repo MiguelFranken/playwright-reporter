@@ -13,6 +13,9 @@ export type TranscriptionProvider = (typeof TRANSCRIPTION_PROVIDERS)[number];
  */
 export const DEFAULT_TRANSCRIPTION_MODEL = 'openai/gpt-4o-mini-transcribe';
 
+/** What AI Gateway streams with, as it is said. OpenRouter has no streaming transcription. */
+export const DEFAULT_STREAMING_MODEL = 'openai/gpt-realtime-whisper';
+
 /** Comments are short: two minutes is plenty, and a recording stops by itself there. */
 export const MAX_RECORDING_SECONDS = 120;
 
@@ -43,4 +46,18 @@ export function transcriptionEnabled() {
 /** The provider's model id, `vendor/model` on both. */
 export function transcriptionModel() {
   return process.env.TRANSCRIPTION_MODEL?.trim() || DEFAULT_TRANSCRIPTION_MODEL;
+}
+
+/**
+ * Whether the words appear while they are spoken: on AI Gateway unless
+ * `TRANSCRIPTION_STREAMING=false`. Otherwise the recording is transcribed
+ * once it stops.
+ */
+export function transcriptionStreaming() {
+  return transcriptionProvider() === 'gateway' && (process.env.TRANSCRIPTION_STREAMING ?? '').trim().toLowerCase() !== 'false';
+}
+
+/** The gateway's streaming model id. */
+export function transcriptionStreamingModel() {
+  return process.env.TRANSCRIPTION_STREAMING_MODEL?.trim() || DEFAULT_STREAMING_MODEL;
 }

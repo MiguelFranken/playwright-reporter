@@ -3,7 +3,14 @@ import { gateway } from '@ai-sdk/gateway';
 import { createOpenAI } from '@ai-sdk/openai';
 import { NoTranscriptGeneratedError, transcribe, type TranscriptionModel } from 'ai';
 import { isDemoUser } from '@/lib/auth/demo';
-import { openRouterApiKey, transcriptionEnabled, transcriptionModel, transcriptionProvider } from './config';
+import {
+  openRouterApiKey,
+  transcriptionEnabled,
+  transcriptionModel,
+  transcriptionProvider,
+  transcriptionStreaming,
+  transcriptionStreamingModel,
+} from './config';
 
 export const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 
@@ -48,4 +55,16 @@ export async function transcribeAudio(audio: Uint8Array, signal?: AbortSignal): 
  */
 export function canDictate(user: { email: string } | null | undefined): boolean {
   return transcriptionEnabled() && !!user && !isDemoUser(user);
+}
+
+/**
+ * A single-use secret the browser opens AI Gateway's streaming transcription
+ * with, for one recording: the gateway credential never leaves the server, and
+ * the audio goes straight from the browser to the gateway.
+ */
+export async function streamingToken(): Promise<{ token: string; model: string }> {
+  if (!transcriptionStreaming()) throw new Error('Streaming transcription is off.');
+  const model = transcriptionStreamingModel();
+  const { token } = await gateway.experimental_transcription.getToken({ model, expiresAfterSeconds: 60 });
+  return { token, model };
 }

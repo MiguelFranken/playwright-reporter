@@ -11,6 +11,7 @@ type DictationState = { kind: 'idle' } | { kind: 'starting' } | { kind: 'recordi
 
 /** What was said, after what is already written: on the same line, a space apart. */
 function appendDictated(draft: string, spoken: string, maxLength: number) {
+  if (!spoken) return draft;
   const head = draft.replace(/\s+$/, '');
   return (head ? `${head} ${spoken}` : spoken).slice(0, maxLength);
 }
@@ -21,7 +22,8 @@ function appendDictated(draft: string, spoken: string, maxLength: number) {
  * posting; the host adds the comment (optimistically) and reports `pending`.
  *
  * When the host offers dictation (`DictationProvider`), a microphone records
- * what is said and adds its transcript to the draft, to be read before posting.
+ * what is said and adds its transcript to the draft, to be read before posting
+ * — word by word while it is said, where the host transcribes live.
  */
 export function CommentComposer({
   onSubmit,
@@ -61,6 +63,8 @@ export function CommentComposer({
   const recording = useRef<DictationRecording | null>(null);
   // Bumped whenever a dictation is given up, so a microphone that opens late is closed again.
   const attempt = useRef(0);
+  // The draft as it was when the dictation started: live words are shown after it, and a cancel restores it.
+  const before = useRef('');
   const busy = dictating.kind === 'starting' || dictating.kind === 'recording' || dictating.kind === 'transcribing';
 
   // A composer that closes mid-sentence lets go of the microphone.
@@ -75,9 +79,14 @@ export function CommentComposer({
   const startDictating = async () => {
     if (!dictation) return;
     const mine = ++attempt.current;
+    before.current = value;
     setDictating({ kind: 'starting' });
     try {
-      const started = await dictation.start();
+      const started = await dictation.start({
+        onTranscript: (text) => {
+          if (attempt.current === mine && recording.current !== null) setValue(appendDictated(before.current, text.trim(), maxLength));
+        },
+      });
       if (attempt.current !== mine) return started.cancel();
       recording.current = started;
       setDictating({ kind: 'recording' });
@@ -96,11 +105,12 @@ export function CommentComposer({
       // Escape while it was being transcribed threw the recording away.
       if (recording.current !== current) return;
       recording.current = null;
-      if (spoken) setValue((draft) => appendDictated(draft, spoken, maxLength));
+      setValue(spoken ? appendDictated(before.current, spoken, maxLength) : before.current);
       setDictating(spoken ? { kind: 'idle' } : { kind: 'failed', message: 'Nothing was heard. Try again.' });
       ref.current?.focus();
     } catch (error) {
       if (recording.current !== current) return;
+      // Words shown live stay: they are what was heard, even if the last of it was lost.
       recording.current = null;
       setDictating({ kind: 'failed', message: error instanceof Error ? error.message : 'That could not be transcribed.' });
     }
@@ -110,6 +120,7 @@ export function CommentComposer({
     attempt.current++;
     recording.current?.cancel();
     recording.current = null;
+    setValue(before.current);
     setDictating({ kind: 'idle' });
   };
 
@@ -173,6 +184,9 @@ export function CommentComposer({
           }}
           placeholder={placeholder}
           maxLength={maxLength}
+          // The dictation writes here while it runs; typing would be overwritten.
+          readOnly={busy}
+          aria-busy={busy || undefined}
           rows={1}
           // eslint-disable-next-line jsx-a11y/no-autofocus
           autoFocus={autoFocus}
