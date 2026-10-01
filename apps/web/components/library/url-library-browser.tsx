@@ -78,7 +78,9 @@ export function UrlLibraryBrowser({
   });
 
   const clearedView = Object.fromEntries(LIBRARY_VIEW_PARAMS.map((k) => [k, null]));
-  const showView = (next: LibraryViewDef) => set({ ...clearedView, view: next.id === 'all' ? null : next.id, folder: null });
+  // A view's link carries only what differs from it: the filters carried over from the view left behind.
+  const showView = (next: LibraryViewDef, nextConfig: LibraryViewConfig) =>
+    set({ ...clearedView, ...viewConfigToParams(nextConfig, next.config), view: next.id === 'all' ? null : next.id, folder: null });
   const setConfig = (next: LibraryViewConfig) => set({ ...viewConfigToParams(next, base), view: activeView.id === 'all' ? null : activeView.id });
 
   const saveView = (input: { name: string; config: LibraryViewConfig }) => {

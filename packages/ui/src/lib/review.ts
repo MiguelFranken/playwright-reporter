@@ -482,8 +482,9 @@ export interface ReviewFolder {
   path: string[];
   flows: ReviewFlowView[];
   children: ReviewFolder[];
-  /** Over this folder and everything below it. */
+  /** Flows in this folder and everything below it. */
   total: number;
+  /** Of those, the flows with a screen that still needs review. */
   needsReview: number;
 }
 
@@ -499,7 +500,11 @@ export function folderPathOf(flow: ReviewFlowView, grouping: ReviewGrouping): st
 
 export const folderId = (path: readonly string[]) => path.join(' / ');
 
-/** The flows as a tree of folders, in the order they come. Counts cover every capture below a folder. */
+/**
+ * The flows as a tree of folders, in the order they come. Counts are flows,
+ * the unit people browse and act on: how many screens a flow captures (and in
+ * how many variants) says nothing about how much there is to look at.
+ */
 export function buildReviewTree(flows: readonly ReviewFlowView[], grouping: ReviewGrouping): ReviewFolder[] {
   const roots: ReviewFolder[] = [];
   const index = new Map<string, ReviewFolder>();
@@ -517,11 +522,11 @@ export function buildReviewTree(flows: readonly ReviewFlowView[], grouping: Revi
     const path = folderPathOf(flow, grouping);
     const folder = node(path);
     folder.flows.push(flow);
-    const captures = flow.checkpoints.flatMap((c) => c.captures);
+    const waits = flow.checkpoints.some((c) => c.captures.some((cap) => NEEDS_REVIEW.includes(cap.status)));
     for (let i = 1; i <= path.length; i++) {
       const f = index.get(folderId(path.slice(0, i)))!;
-      f.total += captures.length;
-      f.needsReview += captures.filter((c) => NEEDS_REVIEW.includes(c.status)).length;
+      f.total++;
+      if (waits) f.needsReview++;
     }
   }
   // Unlinked tests last: the curated suites are what people browse first.

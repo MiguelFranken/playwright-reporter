@@ -69,6 +69,28 @@ export const ToFix: Story = {
   },
 };
 
+/**
+ * Filters set on top of a view hold everywhere: the views count what each
+ * would show with them, the folders how many of their flows pass, and
+ * picking another view keeps the filter it leaves open.
+ */
+export const CountsFollowTheFilters: Story = {
+  args: { activeViewId: 'all', config: { ...DEFAULT_LIBRARY_VIEW, filters: { states: [], priorities: ['critical'] } } },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const shown = canvas.getAllByRole('article').length;
+    const views = within(canvas.getByRole('navigation', { name: 'Views' }));
+    await expect(views.getByRole('button', { name: /^All flows/ })).toHaveTextContent(new RegExp(`${shown}$`));
+    const tree = within(canvas.getByRole('navigation', { name: 'Folders' }));
+    await expect(tree.getByRole('button', { name: /All suites/ })).toHaveTextContent(new RegExp(`${shown}$`));
+    await userEvent.click(views.getByRole('button', { name: /^To fix/ }));
+    await expect(args.onActiveViewChange).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'to-fix' }),
+      expect.objectContaining({ filters: { states: ['waiting'], priorities: ['critical'] } }),
+    );
+  },
+};
+
 /** The selection and the open thread kept the way the app keeps them in the URL. */
 function Hosted(props: React.ComponentProps<typeof LibraryBrowser>) {
   const [selection, setSelection] = useState<ReviewSelection | null>(null);
@@ -281,7 +303,7 @@ export const FolderMenu: Story = {
     const canvas = within(canvasElement);
     const body = within(document.body);
     await userEvent.pointer({ keys: '[MouseRight]', target: canvas.getByRole('button', { name: /All suites/ }) });
-    const approve = await body.findByRole('menuitem', { name: /^Approve \d+ images?$/ });
+    const approve = await body.findByRole('menuitem', { name: /^Approve \d+ flows?$/ });
     await userEvent.click(approve);
     const dialog = await body.findByRole('dialog', { name: /^Approve/ });
     await userEvent.click(within(dialog).getByRole('button', { name: /^Approve/ }));
