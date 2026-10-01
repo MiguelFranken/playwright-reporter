@@ -1,7 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { useState } from 'react';
+import { startTransition, useState } from 'react';
 import { expect, fn, spyOn, userEvent, waitFor, within } from 'storybook/test';
 import { allViews, libraryFlows, manyLibraryFlows, NOW, savedViews, VIEWER_ID, waitingFlow } from '../../fixtures/library-views';
+import type { FeedbackScope } from '../../lib/feedback-queue';
 import { BUILT_IN_VIEWS, DEFAULT_LIBRARY_VIEW } from '../../lib/library-views';
 import type { ReviewSelection } from '../review/checkpoint-viewer';
 import { LibraryBrowser } from './library-browser';
@@ -119,6 +120,48 @@ export const ResolvesFeedback: Story = {
     await userEvent.click(body.getByRole('button', { name: 'Close' }));
     await expect(args.onResolvingChange).toHaveBeenLastCalledWith(null);
     await waitFor(() => expect(body.queryByRole('dialog')).toBeNull());
+  },
+};
+
+/**
+ * Held in the URL, as the app does: what is open and the feedback being gone
+ * through change in a transition (Next.js applies a new query string in one),
+ * so they arrive a render after what the browser keeps itself.
+ */
+function UrlHosted({ resolving: initialResolving, ...props }: React.ComponentProps<typeof LibraryBrowser>) {
+  const [selection, setSelection] = useState<ReviewSelection | null>(null);
+  const [resolving, setResolving] = useState<FeedbackScope | null>(initialResolving ?? null);
+  const [thread, setThread] = useState<number | null>(null);
+  const later = (update: () => void) => startTransition(update);
+  return (
+    <LibraryBrowser
+      {...props}
+      selection={selection}
+      onSelectionChange={(next) => later(() => setSelection(next))}
+      resolving={resolving}
+      onResolvingChange={(next) => {
+        props.onResolvingChange?.(next);
+        later(() => setResolving(next));
+      }}
+      onOpenThread={(next, n) => later(() => (setSelection(next), setThread(n)))}
+      comments={{ ...props.comments, openThread: thread, onOpenThreadChange: (n) => later(() => setThread(n)) }}
+    />
+  );
+}
+
+/** A link into the feedback (`resolve=waiting`) opens it; the close button closes it, and it stays closed. */
+export const ClosesFeedbackFromALink: Story = {
+  args: { resolving: 'waiting', onResolvingChange: fn() },
+  render: (args) => <UrlHosted {...args} />,
+  play: async ({ args }) => {
+    const body = within(document.body);
+    await expect(await body.findByRole('group', { name: 'Resolving feedback' })).toBeInTheDocument();
+    await userEvent.click(body.getByRole('button', { name: 'Close' }));
+    await expect(args.onResolvingChange).toHaveBeenLastCalledWith(null);
+    await waitFor(() => expect(body.queryByRole('dialog')).toBeNull());
+    await new Promise((r) => setTimeout(r, 300));
+    await expect(body.queryByRole('dialog')).toBeNull();
+    await expect(args.onResolvingChange).toHaveBeenLastCalledWith(null);
   },
 };
 

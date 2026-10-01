@@ -254,11 +254,12 @@ export function LibraryBrowser({
     if (first) goToItem(first);
   };
   // A link that says to go through feedback (`resolve=verify`) starts there, on the screen it names if that has some.
+  // Only when `resolving` changes: a host that keeps it in the URL hands the `null` of closing the viewer down a
+  // render after the queue is gone, and starting again in between would open the viewer that was just closed.
   useEffect(() => {
     if (resolving && !queue) startResolving(resolving);
-    // Only when going through feedback starts from outside.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resolving, queue]);
+  }, [resolving]);
 
   const [reveal, setReveal] = useState<{ checkpointId: string } | null>(null);
   const lastSelection = useRef(selection);
