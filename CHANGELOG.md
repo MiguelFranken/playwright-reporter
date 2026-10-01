@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.69](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.68...v0.0.69) (2026-10-01)
+
+### Features
+
+* **review:** dictate comments with speech to text ([#75](https://github.com/MiguelFranken/playwright-reporter/issues/75)) ([fa9fc76](https://github.com/MiguelFranken/playwright-reporter/commit/fa9fc760a5f2538aa2333234aa412b9f79e8cd03))
+
 ## [0.0.68](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.67...v0.0.68) (2026-09-30)
 
 ### Features
