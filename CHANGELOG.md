@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.72](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.71...v0.0.72) (2026-10-01)
+
+### Bug Fixes
+
+* **library:** the close button closes feedback opened from a link ([a2d3c43](https://github.com/MiguelFranken/playwright-reporter/commit/a2d3c43cba6abdb8beef9ce5244aae008bc90add))
+
 ## [0.0.71](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.70...v0.0.71) (2026-10-01)
 
 ### Features
