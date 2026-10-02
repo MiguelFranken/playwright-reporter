@@ -11,6 +11,7 @@ import type { DiffRegion, FrameSize, ReviewImage } from '../../lib/review';
 import { IGNORE_CATEGORY_LABELS, ruleValidity, type IgnorePreviewView, type IgnoreRule, type IgnoreRuleInput, type RuleValidity } from '../../lib/visual-diff';
 import { DiffMarks } from './diff-summary';
 import { UnavailableImage } from './review-frame';
+import { liveHeight, liveWidth } from './screen-frame';
 
 export type IgnoreRect = Pick<DiffRegion, 'x' | 'y' | 'width' | 'height'>;
 
@@ -63,6 +64,8 @@ export function IgnoreRegionsEditor({
   pending = false,
   maxRules = MAX_IGNORE_REGIONS,
   prefill,
+  live = false,
+  room = false,
 }: {
   captureId: string;
   image: ReviewImage;
@@ -84,6 +87,10 @@ export function IgnoreRegionsEditor({
   maxRules?: number;
   /** Rectangles drawn in as new rules when the editor opens (a suggestion to adjust). */
   prefill?: readonly IgnoreRect[] | null;
+  /** Sized by CSS from the viewer's stage (`SCREEN_ZOOM_VAR`), `zoom` otherwise; see `ScreenFrame`. */
+  live?: boolean;
+  /** Live, as tall as the room the stage gives it, whatever the zoom. */
+  room?: boolean;
 }) {
   const fromRules = (list: readonly IgnoreRule[]): Draft[] => list.map((r) => ({ key: r.id, id: r.id, x: r.x, y: r.y, width: r.width, height: r.height, reason: r.reason, category: r.category, active: r.active, existing: r }));
   const withPrefill = (list: Draft[]): Draft[] => [...list, ...(prefill ?? []).map((r, i) => ({ key: `prefill-${i}`, ...r, id: null, reason: 'Proposed by an AI analysis', category: null, active: true, existing: null }))];
@@ -137,7 +144,7 @@ export function IgnoreRegionsEditor({
         aria-describedby={helpId}
         tabIndex={0}
         className="relative shrink-0 overflow-x-hidden overflow-y-auto overscroll-contain rounded-md bg-surface shadow-e1 ring-1 ring-border outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
-        style={{ width, height }}
+        style={live ? { width: liveWidth(frame.width, zoom), height: liveHeight(frame.height, zoom, room) } : { width, height }}
       >
         {image.available ? (
           <div

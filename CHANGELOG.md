@@ -1,5 +1,66 @@
 # Changelog
 
+## [0.0.85](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.84...v0.0.85) (2026-10-02)
+
+### Performance Improvements
+
+* **review:** size the screens by CSS from the stage, so every motion lays them out right ([a1a60d4](https://github.com/MiguelFranken/playwright-reporter/commit/a1a60d444ca0cd1101f3efc81961367f263bdfa6))
+
+## [0.0.84](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.83...v0.0.84) (2026-10-02)
+
+### Performance Improvements
+
+* **review:** drag the side panel's edge without a render, and slide it open and closed ([997c7db](https://github.com/MiguelFranken/playwright-reporter/commit/997c7db364ba7e21b3aa5d34f37560aca25db574))
+* **review:** scale the screens on the compositor while the stage moves, and fit them once it stands ([40b939f](https://github.com/MiguelFranken/playwright-reporter/commit/40b939fec6c367c7c119af633ac476a5e3cb2cdf))
+
+## [0.0.83](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.82...v0.0.83) (2026-10-02)
+
+### Features
+
+* **review:** draw on review images without a comment, and erase drawings ([#88](https://github.com/MiguelFranken/playwright-reporter/issues/88)) ([77d9861](https://github.com/MiguelFranken/playwright-reporter/commit/77d98619d4b152e33b5410398f9b9333d46796cd))
+* **review:** move the comment bar by its grip, and ease its width ([458e795](https://github.com/MiguelFranken/playwright-reporter/commit/458e79580e9e745807ef60f4db7b4e3293c49466))
+
+### Bug Fixes
+
+* **review:** drop the blue border around the stage while commenting ([c63ac11](https://github.com/MiguelFranken/playwright-reporter/commit/c63ac113caf77e2c49698df0f458d2d7bc4e24e3))
+* **ui:** drop the outline every image carried ([6b2e71a](https://github.com/MiguelFranken/playwright-reporter/commit/6b2e71a4789f14f31fd2b9a92bff708669c9df98))
+
+## [0.0.82](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.81...v0.0.82) (2026-10-02)
+
+### Bug Fixes
+
+* **review:** keep Image or Compare until the reviewer switches ([c989805](https://github.com/MiguelFranken/playwright-reporter/commit/c989805e630f3f40b51838516d03e2effd5351d9))
+
+## [0.0.81](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.80...v0.0.81) (2026-10-02)
+
+### Features
+
+* **review:** feedback is resolved in the side panel, the screens get the stage ([#87](https://github.com/MiguelFranken/playwright-reporter/issues/87)) ([ed7d91b](https://github.com/MiguelFranken/playwright-reporter/commit/ed7d91b295c75af0cbc0c0dc3820ca894bed34a8))
+
+## [0.0.80](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.79...v0.0.80) (2026-10-02)
+
+### Features
+
+* **review:** choose what the viewer compares an image with ([#86](https://github.com/MiguelFranken/playwright-reporter/issues/86)) ([31193f2](https://github.com/MiguelFranken/playwright-reporter/commit/31193f2b4e73b635657b3862fdbfb721af33a065))
+
+## [0.0.79](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.78...v0.0.79) (2026-10-02)
+
+### Features
+
+* **review:** the checkpoint previews float over the screen ([#85](https://github.com/MiguelFranken/playwright-reporter/issues/85)) ([063596e](https://github.com/MiguelFranken/playwright-reporter/commit/063596ee4443e814fe690025581f5adea4e36843))
+
+## [0.0.78](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.77...v0.0.78) (2026-10-02)
+
+### Features
+
+* **review:** a foldable, resizable side panel and a floating comment bar ([#84](https://github.com/MiguelFranken/playwright-reporter/issues/84)) ([d7f09b0](https://github.com/MiguelFranken/playwright-reporter/commit/d7f09b0dc74ebdd14a49a45ef0ac3a9e75fca295))
+
+## [0.0.77](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.76...v0.0.77) (2026-10-02)
+
+### Features
+
+* **review:** the viewer's screen scrolls on under blurred bars ([#83](https://github.com/MiguelFranken/playwright-reporter/issues/83)) ([34e5d93](https://github.com/MiguelFranken/playwright-reporter/commit/34e5d93d45e50dd49cc9ff36e9156261f51a82a3))
+
 ## [0.0.76](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.75...v0.0.76) (2026-10-01)
 
 ### Features

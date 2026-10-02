@@ -12,7 +12,7 @@ import {
   type LibraryViewDef,
 } from '@miguelfranken/ui/lib/library-views';
 import { parseFeedbackScope } from '@miguelfranken/ui/lib/feedback-queue';
-import type { ReviewFlowView } from '@miguelfranken/ui/lib/review';
+import { parseCompareRule, type ReviewFlowView } from '@miguelfranken/ui/lib/review';
 import { LibraryBrowser } from '@miguelfranken/ui/views/library/library-browser';
 import type { ReviewSelection } from '@miguelfranken/ui/views/review/review-storyboard';
 import { useShallowSearch } from '@/components/filters/url-filters';
@@ -65,7 +65,7 @@ export function UrlLibraryBrowser({
   const cp = params.get('cp');
   const v = params.get('v');
   const selection = useMemo<ReviewSelection | null>(() => (cp ? { checkpointId: cp, variant: v } : null), [cp, v]);
-  const { flows: optimistic, comments, onDecide, pendingIds, onIgnoreRegionsChange, ignorePendingId, onIgnorePreview, ignorePreview, analysis } = useReviewActions({
+  const { flows: optimistic, comments, onDecide, pendingIds, onIgnoreRegionsChange, ignorePendingId, onIgnorePreview, ignorePreview, analysis, compareWith } = useReviewActions({
     team,
     project,
     flows,
@@ -76,6 +76,8 @@ export function UrlLibraryBrowser({
     canAnalyze: canDecide,
     openThread: Number(params.get('thread')) || null,
     onOpenThreadChange: (n) => set({ thread: n ? String(n) : null }),
+    compareRule: parseCompareRule(params.get('against')),
+    onCompareRuleChange: (next) => set({ against: next === 'auto' ? null : next }),
   });
 
   const clearedView = Object.fromEntries(LIBRARY_VIEW_PARAMS.map((k) => [k, null]));
@@ -146,6 +148,8 @@ export function UrlLibraryBrowser({
       onSizeChange={(size) => setView({ size })}
       frame={view?.frame}
       onFrameChange={(frame) => setView({ frame })}
+      panel={view?.panel}
+      onPanelChange={(panel) => setView({ panel })}
       comments={comments}
       onDecide={canDecide ? onDecide : undefined}
       pendingIds={pendingIds}
@@ -154,6 +158,7 @@ export function UrlLibraryBrowser({
       onIgnorePreview={canDecide ? onIgnorePreview : undefined}
       ignorePreview={ignorePreview}
       analysis={analysis}
+      compareWith={compareWith}
       emptyTitle={emptyTitle}
       emptyDescription={emptyDescription}
     />

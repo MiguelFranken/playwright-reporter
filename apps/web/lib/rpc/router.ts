@@ -53,9 +53,9 @@ import { needsPlanning } from '@/lib/review/diff/store';
 import { REVIEW_DECISIONS } from '@miguelfranken/ui/lib/review';
 import { afterCapturesShown } from '@/lib/review/diff/dispatch';
 import { casesOfTests } from '@/lib/review/cases';
-import { captureInProject, decide, MAX_DECISION_CAPTURES, ReviewError, runReview } from '@/lib/review/queries';
+import { captureInProject, compareTargetsOf, decide, MAX_DECISION_CAPTURES, ReviewError, runReview } from '@/lib/review/queries';
 import { toRunReviewData } from '@/lib/review/run-flows';
-import { pendingDiff, toDiffView } from '@/lib/review/view-model';
+import { pendingDiff, toCompareTargetView, toDiffView } from '@/lib/review/view-model';
 import { MAX_AUDIO_BYTES, transcriptionStreaming } from '@/lib/transcription/config';
 import { canDictate, streamingToken, transcribeAudio } from '@/lib/transcription/transcribe';
 
@@ -394,6 +394,19 @@ export const appRouter = {
         ? { decision: capture.decision.decision, by: capture.decision.by, at: capture.decision.createdAt.toISOString(), comment: capture.decision.comment, runNumber: capture.decision.runNumber, source: capture.decision.source }
         : null;
       return { diff: diffsEnabled() ? diff : null, status: capture.status, decision };
+    }),
+
+    /**
+     * What the viewer can compare a capture with besides its baseline: the
+     * last runs that captured the same screen, and the earlier images of it
+     * that still have open comments.
+     */
+    compareTargets: authed.input(project.extend({ captureId: z.string() })).handler(async ({ input }) => {
+      if (!isUuid(input.captureId)) throw new ORPCError('NOT_FOUND');
+      const projectId = await readableProjectId(input.team, input.project);
+      const found = await compareTargetsOf(projectId, input.captureId.toLowerCase());
+      if (!found) throw new ORPCError('NOT_FOUND');
+      return { targets: found.targets.map((t) => toCompareTargetView(t, found.sha256)) };
     }),
   },
 

@@ -127,18 +127,18 @@ export const ResolvesFeedback: Story = {
     const body = within(document.body);
     await userEvent.click(canvas.getByRole('button', { name: /^Resolve feedback: 1 to verify/ }));
     await expect(args.onResolvingChange).toHaveBeenCalledWith('verify');
-    const bar = within(await body.findByRole('group', { name: 'Resolving feedback' }));
+    const bar = within(await body.findByRole('region', { name: 'Resolving feedback' }));
     await expect(bar.getByText('1 of 1')).toBeInTheDocument();
-    await expect(await body.findByRole('group', { name: 'Verify comment 1' })).toBeInTheDocument();
+    await expect(await body.findByRole('region', { name: 'Verify comment 1' })).toBeInTheDocument();
     await userEvent.keyboard('e');
     await expect(args.comments!.onSetThreadStatus).toHaveBeenCalledWith(expect.objectContaining({ threadId: 'thread-verify', status: 'resolved' }));
     await expect(await body.findByText('All feedback resolved')).toBeInTheDocument();
     await userEvent.click(bar.getByRole('radio', { name: /^All open, / }));
     await expect(args.onResolvingChange).toHaveBeenCalledWith('all');
-    await expect(await body.findByRole('group', { name: 'Verify comment 1' })).toBeInTheDocument();
+    await expect(await body.findByRole('region', { name: 'Verify comment 1' })).toBeInTheDocument();
     await userEvent.keyboard(']');
     await expect(args.onOpenThread).toHaveBeenCalledWith({ checkpointId: waitingFlow.checkpoints[0].id, variant: 'desktop' }, 2);
-    await expect(await body.findByRole('group', { name: 'Comment 2, unchanged' })).toBeInTheDocument();
+    await expect(await body.findByRole('region', { name: 'Comment 2, unchanged' })).toBeInTheDocument();
     await userEvent.click(body.getByRole('button', { name: 'Close' }));
     await expect(args.onResolvingChange).toHaveBeenLastCalledWith(null);
     await waitFor(() => expect(body.queryByRole('dialog')).toBeNull());
@@ -177,13 +177,30 @@ export const ClosesFeedbackFromALink: Story = {
   render: (args) => <UrlHosted {...args} />,
   play: async ({ args }) => {
     const body = within(document.body);
-    await expect(await body.findByRole('group', { name: 'Resolving feedback' })).toBeInTheDocument();
+    await expect(await body.findByRole('region', { name: 'Resolving feedback' })).toBeInTheDocument();
     await userEvent.click(body.getByRole('button', { name: 'Close' }));
     await expect(args.onResolvingChange).toHaveBeenLastCalledWith(null);
     await waitFor(() => expect(body.queryByRole('dialog')).toBeNull());
     await new Promise((r) => setTimeout(r, 300));
     await expect(body.queryByRole('dialog')).toBeNull();
     await expect(args.onResolvingChange).toHaveBeenLastCalledWith(null);
+  },
+};
+
+/**
+ * Going through all open feedback: the screens fill the stage, then and now
+ * side by side, and the side panel holds the round — where you are, the
+ * comment on show with what to do about it, and every other thread to jump to.
+ */
+export const Resolving: Story = {
+  args: { resolving: 'all', onResolvingChange: fn() },
+  render: (args) => <UrlHosted {...args} />,
+  play: async () => {
+    const body = within(document.body);
+    const panel = within(await body.findByRole('region', { name: 'Resolving feedback' }));
+    await expect(await panel.findByRole('region', { name: 'Verify comment 1' })).toBeInTheDocument();
+    await expect(panel.getByRole('navigation', { name: 'Feedback in this round' })).toBeInTheDocument();
+    await expect(body.getByRole('region', { name: /the version commented on/ })).toBeInTheDocument();
   },
 };
 
@@ -199,7 +216,7 @@ export const ResolvesFromTheInbox: Story = {
     await userEvent.click(sheet.getByRole('button', { name: /Go through them one by one/ }));
     await expect(args.onResolvingChange).toHaveBeenCalledWith('waiting');
     await expect(args.onOpenThread).toHaveBeenCalledWith({ checkpointId: waitingFlow.checkpoints[0].id, variant: 'desktop' }, 2);
-    await expect(await body.findByRole('group', { name: 'Comment 2, unchanged' })).toBeInTheDocument();
+    await expect(await body.findByRole('region', { name: 'Comment 2, unchanged' })).toBeInTheDocument();
   },
 };
 

@@ -109,6 +109,19 @@ percentage. The page scrolls inside the screen. Compare every variant side by si
 side, with a slider, as a **Difference** (identical pixels turn black, every change lights up) or as an overlay. Next
 to it: the steps it was captured in, the URL, the viewport, and a link to the moment in the video.
 
+**Compare with** chooses the image a variant is compared with. **Automatic** uses the approved baseline, or the run
+before when nothing is approved yet. You can also pick one of these:
+
+- **Approved baseline** or **Run before**.
+- **Latest open comments**: the newest earlier image that still has unresolved comments, so you can check whether
+  they were fixed. Side by side, its pins sit where they were placed.
+- Any of the last ten runs that captured the screen. Every earlier image with open comments is listed too, however
+  old, with the number of open comments. Resolved comments are not counted.
+
+Your choice stays as you move from checkpoint to checkpoint, and it is part of the link (`against=previous`,
+`against=run:38`). Where it finds nothing, for example a run that did not capture this screen, the viewer says so
+and shows the automatic comparison. The difference to the chosen image is measured the first time you open it.
+
 | Key | Does |
 | --- | --- |
 | <kbd>←</kbd> <kbd>→</kbd> | Previous / next checkpoint |
@@ -118,8 +131,8 @@ to it: the steps it was captured in, the URL, the viewport, and a link to the mo
 | <kbd>N</kbd> <kbd>P</kbd> | Next / previous measured change |
 | <kbd>A</kbd> | Approve, and go to the next image that needs review |
 | <kbd>C</kbd> | Comment mode: click to pin a comment, drag to mark an area |
-| <kbd>1</kbd> – <kbd>6</kbd> | In comment mode: pin, pen, highlighter, arrow, rectangle, ellipse |
-| <kbd>⌘</kbd> <kbd>Z</kbd> | In comment mode: take back the last shape drawn |
+| <kbd>1</kbd> – <kbd>8</kbd> | In comment mode: pin, area, pen, highlighter, arrow, rectangle, ellipse, eraser |
+| <kbd>⌘</kbd> <kbd>Z</kbd> | In comment mode: take back the last shape drawn, or the last erasing |
 | <kbd>R</kbd> | Comment on the whole image |
 | <kbd>[</kbd> <kbd>]</kbd> | Previous / next comment |
 | <kbd>E</kbd> | Resolve or reopen the open comment |
@@ -163,18 +176,23 @@ work; point at what should change with comments.
 ### Comments
 
 Comments sit on the screenshot, where the change belongs, like comments in Figma. Press <kbd>C</kbd> (or **Comment**)
-and click a spot to drop a numbered pin, or drag to mark an area; write what should change and press <kbd>Enter</kbd>.
-Hover a pin to read its thread, click it to keep it open, reply under it, and resolve it with ✓ once it is done. From
-the keyboard, focus the screenshot in comment mode, press <kbd>Enter</kbd> for a crosshair, move it with the arrow keys
-and press <kbd>Enter</kbd> again. **Comment on the whole image** starts a thread without a pin.
+and, with the **pin**, click a spot to drop a numbered pin — or pick the **area** and drag over what you mean; write
+what should change and press <kbd>Enter</kbd>. Hover a pin to read its thread, click it to keep it open, reply under
+it, and resolve it with ✓ once it is done. From the keyboard, focus the screenshot in comment mode, press
+<kbd>Enter</kbd> for a crosshair, move it with the arrow keys and press <kbd>Enter</kbd> again (with the area, once at
+each corner). **Comment on the whole image** starts a thread without a pin.
 
-When a pin or an area does not say it, draw. Comment mode puts a tool bar over the screenshot: a **pen**, a
-**highlighter**, an **arrow**, a **rectangle** and an **ellipse**, in six named colours — red, orange, yellow, green,
-blue and purple. Every shape you draw before posting joins the same comment, so one thread can say "the blue area
-should be larger, the yellow one smaller" with both areas drawn; the comment's pin sits at the corner of what you drew.
-Like pins, drawings follow the image into later runs, dashed where the image changed since. AI assistants see them
-too: over MCP and the REST API a thread lists its drawing shape by shape, with its colour and where it is, and the
-images they are sent show it in the same colours.
+When a pin or an area does not say it, draw. Comment mode puts a tool bar over the screenshot: besides the pin and the
+area, a **pen**, a **highlighter**, an **arrow**, a **rectangle** and an **ellipse**, in six named colours — red,
+orange, yellow, green, blue and purple (the colours show while a drawing tool is picked). Drawings stand on their own:
+each shape is saved as you let go, with no comment to write, and everyone looking at the image sees it — so a comment
+can say "the blue area should be larger, the yellow one smaller" about what is drawn beside it. Lines are steadied as
+you draw; hold <kbd>Shift</kbd> to keep an arrow at 45° steps, or to draw a square or a circle. The **eraser** takes
+away a drawing you click, or every drawing you drag across: your own, or anyone's for a project admin. <kbd>⌘</kbd>
+<kbd>Z</kbd> takes back what you drew or erased. A drawing belongs to the pixels it was drawn on: it shows on every
+run with the same image, and stays with that version once the image changes. AI assistants see drawings too:
+`get_review_checkpoint` draws them on the image it sends, under the pins, and lists them shape by shape, with the
+colour, who drew it and where it is.
 
 The panel beside the image lists every thread by its number — open ones first, with **Resolved** and **All** a click
 away — and a row opens its pin. The storyboard shows how many comments are open on each screen. A thread's number stays

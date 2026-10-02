@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, type ReactNode } from 'react';
+import { liveHeight, liveWidth, ScaledLayer, SCREEN_ZOOM_VAR } from './screen-frame';
 import { cn } from '../../lib/cn';
 import type { DiffRegion, FrameSize, ReviewDiffView, ReviewImage } from '../../lib/review';
 import { DiffMarks } from './diff-summary';
@@ -28,8 +29,10 @@ export function DiffHighlight({
   active,
   onActiveChange,
   overlay = true,
-  ignored,
+  live = false,
+  room = false,
   minimapLabel,
+  ignored,
   children,
   className,
 }: {
@@ -38,14 +41,18 @@ export function DiffHighlight({
   frame: FrameSize;
   zoom: number;
   alt: string;
+  /** Sized by CSS from the viewer's stage (`SCREEN_ZOOM_VAR`), `zoom` otherwise; see `ScreenFrame`. */
+  live?: boolean;
+  /** Live, as tall as the room the stage gives it, whatever the zoom. */
+  room?: boolean;
   active: number | null;
   onActiveChange: (index: number) => void;
   /** Paint the changed pixels; the boxes stay either way. */
   overlay?: boolean;
-  /** Areas left out of the comparison, hatched over the image so a change inside one reads as left out, not as missed. */
-  ignored?: readonly Pick<DiffRegion, 'x' | 'y' | 'width' | 'height'>[];
   /** The name of the strip beside a long screen, when several screens are shown. */
   minimapLabel?: string;
+  /** Areas left out of the comparison, hatched over the image so a change inside one reads as left out, not as missed. */
+  ignored?: readonly Pick<DiffRegion, 'x' | 'y' | 'width' | 'height'>[];
   /** More over the image, scrolling with it: comment pins. */
   children?: ReactNode;
   className?: string;
@@ -56,6 +63,19 @@ export function DiffHighlight({
   const height = Math.max(24, Math.round(frame.height * zoom));
   const shownHeight = size ? (width * size.height) / size.width : height;
   const tall = shownHeight > height + 1;
+  const box = live ? { width: liveWidth(frame.width, zoom), height: liveHeight(frame.height, zoom, room) } : { width, height };
+  // The images are laid out once, at the frame's width, and scaled to the zoom: see `MOVING_ATTR` in `screen-frame`.
+  const scale = live ? `var(${SCREEN_ZOOM_VAR}, ${zoom})` : `${zoom}`;
+  const images = (
+    <>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={image.url} alt={alt} decoding="async" draggable={false} className="block h-auto w-full" />
+      {overlay && diff.overlayUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={diff.overlayUrl} alt="" aria-hidden draggable={false} className="pointer-events-none absolute inset-0 block h-full w-full opacity-80" />
+      ) : null}
+    </>
+  );
 
   useEffect(() => {
     const el = scroller.current;
@@ -76,16 +96,17 @@ export function DiffHighlight({
         aria-label={`${alt}, changes marked`}
         tabIndex={0}
         className="relative shrink-0 overflow-x-hidden overflow-y-auto overscroll-contain rounded-md bg-surface shadow-e1 ring-1 ring-border outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
-        style={{ width, height }}
+        style={box}
       >
         {image.available ? (
           <div className="relative">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={image.url} alt={alt} decoding="async" draggable={false} className="block h-auto w-full" />
-            {overlay && diff.overlayUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={diff.overlayUrl} alt="" aria-hidden draggable={false} className="pointer-events-none absolute inset-0 block h-full w-full opacity-80" />
-            ) : null}
+            {size ? (
+              <ScaledLayer width={frame.width} zoom={scale} aspect={size}>
+                {images}
+              </ScaledLayer>
+            ) : (
+              images
+            )}
             {size && ignored?.length ? <DiffMarks regions={ignored} width={size.width} height={size.height} kind="ignore" /> : null}
             {size ? <DiffMarks regions={diff.regions} width={size.width} height={size.height} active={active} numbered onSelect={onActiveChange} /> : null}
             {children}
@@ -94,7 +115,7 @@ export function DiffHighlight({
           <UnavailableImage image={image} />
         )}
       </div>
-      {tall && size ? <ChangeMinimap diff={diff} imageHeight={size.height} height={height} active={active} onSelect={onActiveChange} label={minimapLabel} /> : null}
+      {tall && size ? <ChangeMinimap diff={diff} imageHeight={size.height} height={box.height} active={active} onSelect={onActiveChange} label={minimapLabel} /> : null}
     </div>
   );
 }
@@ -114,7 +135,8 @@ export function ChangeMinimap({
 }: {
   diff: ReviewDiffView;
   imageHeight: number;
-  height: number;
+  /** As tall as the screen beside it: pixels, or the CSS length that sizes it. */
+  height: number | string;
   active: number | null;
   onSelect: (index: number) => void;
   /** Its name, distinct for each of several screens. */

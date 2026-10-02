@@ -22,6 +22,7 @@ import {
   REVIEW_STATUS_TONES,
   variantsOf,
   type FrameSettings,
+  type ReviewPanelSettings,
   type ReviewCheckpointView,
   type ReviewDecisionInput,
   type ReviewFilter,
@@ -35,6 +36,7 @@ import {
 import { toneSolid } from '../../lib/tone';
 import { IGNORE_FILTER_HINTS, IGNORE_FILTER_LABELS, IGNORE_FILTERS, matchesIgnoreFilter, type IgnoreFilter, type IgnorePreviewView } from '../../lib/visual-diff';
 import { CheckpointViewer, type ReviewCommentsProps, type ReviewSelection } from './checkpoint-viewer';
+import type { CompareWithProps } from './compare-target-picker';
 import type { IgnoreRect, IgnoreRulesChange } from './ignore-regions-editor';
 import { approveFolderAction, ReviewTree } from './review-tree';
 import { SCREEN_ZOOM_VAR } from './screen-frame';
@@ -119,6 +121,8 @@ export function ReviewStoryboard({
   onSizeChange,
   frame,
   onFrameChange,
+  panel,
+  onPanelChange,
   onDecide,
   pendingIds = [],
   canDecide = true,
@@ -137,6 +141,7 @@ export function ReviewStoryboard({
   ignorePreview,
   analysis,
   comments,
+  compareWith,
 }: {
   flows: readonly ReviewFlowView[];
   filter?: ReviewFilter;
@@ -159,6 +164,9 @@ export function ReviewStoryboard({
   /** The viewer's screen settings. */
   frame?: FrameSettings;
   onFrameChange?: (next: FrameSettings) => void;
+  /** The viewer's side panel: shown or folded, and how wide; uncontrolled when absent. */
+  panel?: ReviewPanelSettings | null;
+  onPanelChange?: (next: ReviewPanelSettings) => void;
   onDecide?: (input: ReviewDecisionInput) => void;
   pendingIds?: readonly string[];
   canDecide?: boolean;
@@ -183,6 +191,8 @@ export function ReviewStoryboard({
   analysis?: React.ComponentProps<typeof CheckpointViewer>['analysis'];
   /** Comment threads on the images, in the viewer. */
   comments?: ReviewCommentsProps;
+  /** What the viewer compares the open image with. */
+  compareWith?: CompareWithProps;
 }) {
   const library = mode === 'library';
   const hasNeedsReview = useMemo(() => flows.some((f) => f.checkpoints.some((c) => c.captures.some((cap) => NEEDS_REVIEW.includes(cap.status)))), [flows]);
@@ -418,6 +428,8 @@ export function ReviewStoryboard({
         canDecide={canDecide}
         frame={frame ?? DEFAULT_FRAME}
         onFrameChange={onFrameChange}
+        panel={panel}
+        onPanelChange={onPanelChange}
         mode={mode}
         onIgnoreRegionsChange={onIgnoreRegionsChange}
         ignorePendingId={ignorePendingId}
@@ -425,6 +437,7 @@ export function ReviewStoryboard({
         ignorePreview={ignorePreview}
         analysis={analysis}
         comments={comments}
+        compareWith={compareWith}
       />
     </div>
   );

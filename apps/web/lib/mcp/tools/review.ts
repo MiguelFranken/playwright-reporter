@@ -15,12 +15,12 @@ import sharp from 'sharp';
 import { z } from 'zod';
 import { checkpointLabel, describeDiff, matchesReviewFilter, REVIEW_DECISIONS, REVIEW_FILTERS } from '@miguelfranken/ui/lib/review';
 import { MAX_COMMENT_LENGTH, projectAnchor } from '@miguelfranken/ui/lib/review-threads';
-import { MARKUP_COLORS, MARKUP_TOOLS } from '@miguelfranken/ui/lib/review-markup';
+import { MARKUP_COLORS, MARKUP_TOOLS, type MarkupShape } from '@miguelfranken/ui/lib/review-markup';
 import { signCaptureImagePath } from '@/lib/auth/artifact-url';
 import { baseUrl } from '@/lib/auth/config';
 import { encodeComparisonId, IGNORE_FILTERS, ignoreStates, matchesIgnoreFilter } from '@miguelfranken/ui/lib/visual-diff';
 import { annotate, cropAround } from '@/lib/review/annotate';
-import { pinSpecs, readCaptureBytes, threadComments, threadDrawing, threadPosition } from '@/lib/review/images';
+import { captureDrawings, pinSpecs, readCaptureBytes, threadComments, threadDrawing, threadPosition } from '@/lib/review/images';
 import { createThread, ThreadError, type CaptureThread } from '@/lib/review/threads';
 import { db } from '@/lib/db/drizzle';
 import { runs } from '@/lib/db/schema';
@@ -388,6 +388,19 @@ const getOutput = output({
     .optional()
     .describe('A change request without a comment standing on this checkpoint: look at the image to see what should change.'),
   threads: z.array(threadOut).optional().describe('Comment threads on the image, by the numbers on its pins.'),
+  drawings: z
+    .array(
+      z.object({
+        tool: z.enum(MARKUP_TOOLS),
+        color: z.enum(MARKUP_COLORS),
+        by: z.string().nullable().describe('Who drew it.'),
+        at: z.string(),
+        pixels: rect.describe('The box it covers, in the image’s pixels.'),
+        text: z.string(),
+      }),
+    )
+    .optional()
+    .describe('Drawings on the image on their own, without a comment (pen, highlighter, arrow, box, ellipse): what a reviewer marked to show what they mean. Drawn on the attached image under the pins.'),
   attachments: z.array(z.string()).optional().describe('What each attached image is, in order.'),
   attachedImages: z
     .array(
@@ -432,11 +445,11 @@ async function cropRect(buf: Uint8Array, r: { x: number; y: number; width: numbe
 const asImage = (img: { data: Buffer; mimeType: string }): ImageContent => ({ type: 'image', data: img.data.toString('base64'), mimeType: img.mimeType });
 
 /** A capture as an inline image, scaled and re-encoded to fit; with pins when there are any. `null` when it cannot be read. */
-async function inlineCapture(capture: CaptureRecord, pins: Parameters<typeof annotate>[1]) {
+async function inlineCapture(capture: CaptureRecord, pins: Parameters<typeof annotate>[1], drawings: readonly MarkupShape[] = []) {
   const source = await readCaptureBytes(capture);
   if (!source) return null;
   try {
-    const out = await annotate(source.bytes, pins, { maxBytes: inlineImageMaxBytes() });
+    const out = await annotate(source.bytes, pins, { maxBytes: inlineImageMaxBytes(), drawings });
     return { image: asImage(out), out, bytes: source.bytes };
   } catch {
     // Not an image sharp can read (an SVG, a truncated file): as it is, when small enough.
@@ -539,6 +552,8 @@ export const getReviewCheckpoint = defineTool({
     const focus = args.thread != null ? capture.threads.find((t) => t.number === args.thread) : undefined;
     if (args.thread != null && !focus) throw notFound(`This image has no thread #${args.thread}.`, 'The threads are listed without "thread".');
     const pins = args.pins === false ? [] : pinSpecs(shownThreads, true);
+    // Drawings made on these pixels on their own, without a comment: drawn under the pins.
+    const drawings = args.pins === false ? [] : capture.drawings.map((d) => d.position);
     const compare = args.compare ?? true;
     const { comparison, missing } = await comparisonFor(capture, project.project.id, { against: args.against ?? 'auto', againstCapture: args.againstCapture, focus });
     const reference = comparison?.capture ?? null;
@@ -552,11 +567,11 @@ export const getReviewCheckpoint = defineTool({
     const own = { captureId: capture.id, run: found.runNumber };
 
     const wantsFull = mode === 'all';
-    const main = mode === 'none' ? null : await inlineCapture(capture, wantsFull ? pins : []);
+    const main = mode === 'none' ? null : await inlineCapture(capture, wantsFull ? pins : [], wantsFull ? drawings : []);
     if (main && wantsFull)
       add({
         image: main.image,
-        label: pins.length ? 'this run’s image, with the open threads pinned' : 'this run’s image',
+        label: pins.length ? `this run’s image, with the open threads pinned${drawings.length ? ' and its drawings' : ''}` : drawings.length ? 'this run’s image, with its drawings' : 'this run’s image',
         meta: { role: 'image', ...own, thread: null, region: null, source: main.out ? { x: 0, y: 0, w: main.out.source.width, h: main.out.source.height } : null, width: main.out?.width ?? null, height: main.out?.height ?? null },
       });
     else if (main && mode === 'focus') skip('this image in full (images "all")');
@@ -575,7 +590,7 @@ export const getReviewCheckpoint = defineTool({
     const threadCrop = async (t: CaptureThread, withCompared: boolean) => {
       const spec = pins.find((p) => p.number === t.number) ?? pinSpecs([t], true)[0];
       if (!spec || !main?.bytes) return;
-      const crop = await cropAround(main.bytes, spec, pins, { maxBytes: maxCropBytes }).catch(() => null);
+      const crop = await cropAround(main.bytes, spec, pins, { maxBytes: maxCropBytes, drawings }).catch(() => null);
       if (crop) add({ image: asImage(crop), label: `a close-up of #${t.number}`, meta: { role: 'thread-close-up', ...own, thread: t.number, region: null, source: crop.region, width: crop.width, height: crop.height } });
       if (!withCompared || !refImage?.bytes || !reference) return;
       const onOrigin = comparison?.role === 'origin' && t.originCaptureId === reference.id;
@@ -669,6 +684,7 @@ export const getReviewCheckpoint = defineTool({
       reviewUrl: reviewUrl(project.links, found.runNumber, capture),
       request: r ? { by: r.by, at: r.createdAt.toISOString(), run: r.runNumber, captureId: r.captureId, onThisImage: r.captureId === capture.id || Boolean(r.sha256 && r.sha256 === capture.sha256) } : null,
       threads,
+      ...(capture.drawings.length ? { drawings: captureDrawings(capture.drawings, capture) } : {}),
       attachments: attached.map((a) => a.label),
       attachedImages: attached.map((a, i) => ({ index: i + 1, ...a.meta })),
       ...(omitted.length ? { omittedImages: omitted } : {}),
@@ -699,6 +715,10 @@ export const getReviewCheckpoint = defineTool({
           for (const t of d.threads) renderThread(md, t, threadPosition(shownThreads.find((x) => x.number === t.number)!, capture).text);
           md.line('Pixels are the image’s (at its device scale), not CSS pixels. A changed image is evidence to check, not an approval: leave resolving to the reviewer, and reply with comment_on_review only when the user asked you to.');
         } else md.line('No open comment threads on this image.');
+        if (d.drawings?.length) {
+          md.heading(`Drawings (${d.drawings.length}) — drawn on the image, without a comment`, 3);
+          for (const x of d.drawings) md.line(`- ${x.text}${x.by ? ` — by ${x.by}` : ''}`);
+        }
         if (d.note) md.line(d.note);
       },
     };
