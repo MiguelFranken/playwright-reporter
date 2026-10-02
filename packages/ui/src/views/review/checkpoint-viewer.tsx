@@ -48,11 +48,12 @@ import { COMPARE_MODE_LABELS, COMPARE_MODES, ImageCompare, type CompareMode } fr
 import { CompareTargetPicker, type CompareWithProps } from './compare-target-picker';
 import { IgnoreRegionsEditor, type IgnoreRect } from './ignore-regions-editor';
 import { FrameToolbar } from './frame-toolbar';
-import { PinLayer, undoDraftShape, type PinFocusRequest, type ThreadDraft } from './pin-layer';
+import { PinLayer, type PinFocusRequest, type ThreadDraft } from './pin-layer';
 import { CommentBar } from './markup-toolbar';
 import { CheckpointDetails } from './checkpoint-details';
 import { PanelResizer } from './panel-resizer';
-import { COMMENT_TOOLS, DEFAULT_MARKUP_COLOR, type CommentTool, type MarkupColor } from '../../lib/review-markup';
+import { COMMENT_TOOLS, DEFAULT_MARKUP_COLOR, type CommentTool, type MarkupColor, type MarkupShape } from '../../lib/review-markup';
+import type { ImageSize } from '../../lib/review-threads';
 import { ScreenFrame } from './screen-frame';
 import { FeedbackThreadCard, OriginMarker, VerifyDone } from './thread-verify';
 import { FeedbackRequestCard, ResolveDone } from './resolve-feedback';
@@ -69,6 +70,13 @@ export interface ReviewSelection {
 }
 
 /** Comment threads in the viewer: who may do what, and what the host records. */
+/** A step undo can take back: shapes drawn on a capture, or drawings erased from it. */
+type DrawingStep = { kind: 'draw' | 'erase'; captureId: string; imageSize: ImageSize | null; drawings: { id: string; shape: MarkupShape }[] };
+/** How many steps undo keeps. */
+const MAX_UNDO = 50;
+/** An id for a drawing, chosen here so it can be erased before the page has caught up with it. */
+const newId = () => crypto.randomUUID();
+
 export interface ReviewCommentsProps extends ThreadActions {
   canComment?: boolean;
   /** May delete anybody's comment. */
@@ -288,6 +296,8 @@ export function CheckpointViewer({
   const [tool, setTool] = useState<CommentTool>('pin');
   const [color, setColor] = useState<MarkupColor>(DEFAULT_MARKUP_COLOR);
   const [draft, setDraft] = useState<ThreadDraft | null>(null);
+  // What was drawn and erased on this screen, newest last: undo takes it back.
+  const [drawHistory, setDrawHistory] = useState<DrawingStep[]>([]);
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
   const [threadFilter, setThreadFilter] = useState<ThreadFilter>('open');
   const [composing, setComposing] = useState(false);
@@ -503,6 +513,7 @@ export function CheckpointViewer({
     setActiveRegion(null);
     setActiveOf({});
     setDraft(null);
+    setDrawHistory([]);
     setComposing(false);
     setConfirmApprove(false);
     setOpenThreadId(null);
@@ -648,6 +659,28 @@ export function CheckpointViewer({
     if (next.anchor.kind !== 'image' && !pinsOn) showStage('image');
     openThread(next.id, { focus: true });
   };
+  /** Saves a shape drawn on a capture, and remembers it for undo. */
+  const draw = (captureId: string, shape: MarkupShape, imageSize: ImageSize | null) => {
+    if (!comments.onCreateDrawings) return;
+    const step: DrawingStep = { kind: 'draw', captureId, imageSize, drawings: [{ id: newId(), shape }] };
+    comments.onCreateDrawings({ captureId, drawings: step.drawings, imageSize });
+    setDrawHistory((h) => [...h.slice(-(MAX_UNDO - 1)), step]);
+  };
+  /** Erases drawings, and remembers them for undo. */
+  const erase = (captureId: string, gone: readonly { id: string; tool: MarkupShape['tool']; color: MarkupShape['color']; points: number[] }[], imageSize: ImageSize | null) => {
+    if (!comments.onDeleteDrawings || !gone.length) return;
+    comments.onDeleteDrawings({ drawingIds: gone.map((d) => d.id) });
+    const step: DrawingStep = { kind: 'erase', captureId, imageSize, drawings: gone.map((d) => ({ id: d.id, shape: { tool: d.tool, color: d.color, points: d.points } })) };
+    setDrawHistory((h) => [...h.slice(-(MAX_UNDO - 1)), step]);
+  };
+  /** Takes back the last shape drawn (erases it) or the last erasing (draws them again). */
+  const undoDrawing = () => {
+    const step = drawHistory.at(-1);
+    if (!step) return;
+    setDrawHistory((h) => h.slice(0, -1));
+    if (step.kind === 'draw') comments.onDeleteDrawings?.({ drawingIds: step.drawings.map((d) => d.id) });
+    else comments.onCreateDrawings?.({ captureId: step.captureId, imageSize: step.imageSize, drawings: step.drawings.map((d) => ({ id: newId(), shape: d.shape })) });
+  };
   const toggleCommenting = (next = !commenting) => {
     setCommenting(next);
     if (!next) setDraft(null);
@@ -730,10 +763,10 @@ export function CheckpointViewer({
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
       if (target && (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT' || target.isContentEditable)) return;
-      // ⌘Z / Ctrl+Z takes back the last shape of the drawing being written.
-      if (commenting && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'z' && draft?.markup?.length) {
+      // ⌘Z / Ctrl+Z takes back the last drawing drawn or erased.
+      if (commenting && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'z' && drawHistory.length) {
         e.preventDefault();
-        setDraft(undoDraftShape(draft));
+        undoDrawing();
         return;
       }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -764,7 +797,7 @@ export function CheckpointViewer({
       else if (key === 'c' && canComment) toggleCommenting();
       else if (key === 'i') setPanel({ open: !panel.open });
       else if (key === 'd') setDetailsOpen((o) => !o);
-      else if (commenting && /^[1-6]$/.test(e.key)) setTool(COMMENT_TOOLS[Number(e.key) - 1]);
+      else if (commenting && /^[1-9]$/.test(e.key) && Number(e.key) <= COMMENT_TOOLS.length) setTool(COMMENT_TOOLS[Number(e.key) - 1]);
       else if (e.key === ']') stepThread(1);
       else if (e.key === '[') stepThread(-1);
       else if (key === 'h' && shownThreads.length) setPinsHidden((h) => !h);
@@ -873,10 +906,14 @@ export function CheckpointViewer({
 
   /** The pins of one capture on its frame; `on` draws only some of its threads (the rest are on the image beside it). */
   const pinLayer = (capture: ReviewCaptureView, name: string, on?: { threads: readonly ReviewThreadView[]; ghosts?: readonly ReviewThreadView[]; origin?: boolean }) =>
-    pinsOn && (canComment || capture.threads?.length) ? (
+    pinsOn && (canComment || capture.threads?.length || capture.drawings?.length) ? (
       <PinLayer
         captureId={capture.id}
         threads={on?.threads ?? capture.threads ?? []}
+        // Drawings are on the pixels they were drawn on: not on the version commented on, beside it.
+        drawings={on ? undefined : capture.drawings}
+        onDraw={(shape, imageSize) => draw(capture.id, shape, imageSize)}
+        onErase={(gone) => erase(capture.id, gone, capture.image.width && capture.image.height ? { width: capture.image.width, height: capture.image.height } : null)}
         ghosts={on?.ghosts}
         onOrigin={on?.origin}
         renderActions={(t) => (t.status === 'open' ? aiMenu(capture.id, [t], { iconOnly: true, label: `Fix comment ${t.number} with AI` }) : null)}
@@ -1388,13 +1425,9 @@ export function CheckpointViewer({
                       tool={tool}
                       onToolChange={setTool}
                       color={color}
-                      onColorChange={(next) => {
-                        setColor(next);
-                        // Picking a colour means drawing in it.
-                        if (tool === 'pin') setTool('pen');
-                      }}
-                      shapes={draft?.markup?.length ?? 0}
-                      onUndo={() => setDraft(undoDraftShape(draft))}
+                      onColorChange={setColor}
+                      canUndo={drawHistory.length > 0}
+                      onUndo={undoDrawing}
                     />
                   </div>
                 ) : null}

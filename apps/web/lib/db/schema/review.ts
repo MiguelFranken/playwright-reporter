@@ -279,6 +279,39 @@ export const reviewThreads = pgTable(
 );
 
 /**
+ * A drawing on a review image, on its own — a stroke, a highlight, an arrow,
+ * a box or an ellipse somebody drew to show what they mean, without a
+ * comment. One row per shape, so each can be erased. It belongs to the
+ * image's identity and is shown on the capture it was drawn on and on every
+ * capture with the same pixels (`origin_sha256`); `shape` is in that image's
+ * pixels. The id is chosen by the browser, so a shape can be taken back
+ * before the page has caught up with it.
+ */
+export const reviewDrawings = pgTable(
+  'review_drawings',
+  {
+    id: uuid('id').primaryKey(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    testId: uuid('test_id')
+      .notNull()
+      .references(() => tests.id, { onDelete: 'cascade' }),
+    checkpointName: text('checkpoint_name').notNull(),
+    variant: text('variant').notNull(),
+    originCaptureId: uuid('origin_capture_id').references(() => reviewCaptures.id, { onDelete: 'set null' }),
+    originSha256: text('origin_sha256'),
+    /** The origin image's size, kept so the shape survives the capture's deletion. */
+    originWidth: integer('origin_width').notNull(),
+    originHeight: integer('origin_height').notNull(),
+    shape: jsonb('shape').$type<MarkupShape>().notNull(),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('review_drawings_identity_idx').on(t.testId, t.checkpointName, t.variant), index('review_drawings_origin_capture_idx').on(t.originCaptureId)],
+);
+
+/**
  * A comment in a thread, or an event in its history (`resolved`, `reopened`).
  * A deleted comment keeps its row (`deleted_at`) so the thread still reads.
  */

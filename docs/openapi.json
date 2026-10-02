@@ -11691,6 +11691,83 @@
                         "additionalProperties": false
                       }
                     },
+                    "drawings": {
+                      "description": "Drawings on the image on their own, without a comment (pen, highlighter, arrow, box, ellipse): what a reviewer marked to show what they mean. Drawn on the attached image under the pins.",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "tool": {
+                            "type": "string",
+                            "enum": [
+                              "pen",
+                              "highlighter",
+                              "arrow",
+                              "rect",
+                              "ellipse"
+                            ]
+                          },
+                          "color": {
+                            "type": "string",
+                            "enum": [
+                              "red",
+                              "orange",
+                              "yellow",
+                              "green",
+                              "blue",
+                              "purple"
+                            ]
+                          },
+                          "by": {
+                            "description": "Who drew it.",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "at": {
+                            "type": "string"
+                          },
+                          "pixels": {
+                            "type": "object",
+                            "properties": {
+                              "x": {
+                                "type": "number"
+                              },
+                              "y": {
+                                "type": "number"
+                              },
+                              "w": {
+                                "type": "number"
+                              },
+                              "h": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "x",
+                              "y",
+                              "w",
+                              "h"
+                            ],
+                            "additionalProperties": false,
+                            "description": "The box it covers, in the image’s pixels."
+                          },
+                          "text": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "tool",
+                          "color",
+                          "by",
+                          "at",
+                          "pixels",
+                          "text"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
                     "attachments": {
                       "description": "What each attached image is, in order.",
                       "type": "array",

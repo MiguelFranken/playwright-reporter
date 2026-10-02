@@ -13,6 +13,7 @@ import { getStorage } from '@/lib/storage';
 import { readAll } from '@/lib/mcp/tools/get-artifact';
 import type { CaptureRecord } from './queries';
 import type { CaptureThread } from './threads';
+import type { CaptureDrawing } from './drawings';
 import type { PinSpec } from './annotate';
 
 /** The most bytes read to re-encode an image: a full page at 2× is large, what goes out is scaled. */
@@ -82,6 +83,26 @@ export function threadDrawing(thread: CaptureThread, capture: Pick<CaptureRecord
       pixels: { x: Math.round(p.x), y: Math.round(p.y), w: Math.round(p.w), h: Math.round(p.h) },
       percent: { x: round1(f.x * 100), y: round1(f.y * 100), w: round1(f.w * 100), h: round1(f.h * 100) },
       text: `${describeShape(px[i])} px`,
+    };
+  });
+}
+
+/**
+ * The drawings on a capture, on their own, shape by shape: the tool, the
+ * colour, who drew it, and where it is in pixels, as words.
+ */
+export function captureDrawings(drawings: readonly CaptureDrawing[], capture: Pick<CaptureRecord, 'width' | 'height'>) {
+  return drawings.map((d) => {
+    const size = imageSizeOf(capture, d.origin)!;
+    const [px] = markupToPixels([d.position], size);
+    const p = shapeBounds(px);
+    return {
+      tool: d.position.tool,
+      color: d.position.color,
+      by: d.authorName,
+      at: d.createdAt.toISOString(),
+      pixels: { x: Math.round(p.x), y: Math.round(p.y), w: Math.round(p.w), h: Math.round(p.h) },
+      text: `${describeShape(px)} px`,
     };
   });
 }

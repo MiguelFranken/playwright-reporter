@@ -9,6 +9,8 @@ import { requestCaptureDiff } from '@/lib/review/diff/dispatch';
 import { IgnoreRegionsError, parseIgnoreRegions, setIgnoreRegions } from '@/lib/review/diff/ignore';
 import { captureInProject, decide, ReviewError } from '@/lib/review/queries';
 import { createThread, deleteComment, editComment, replyToThread, setThreadStatus, ThreadError } from '@/lib/review/threads';
+import { createDrawings, deleteDrawings, DrawingError } from '@/lib/review/drawings';
+import type { DeleteDrawingsInput, NewDrawingsInput } from '@miguelfranken/ui/lib/review-markup';
 
 type Ref = { team: string; project: string };
 
@@ -19,7 +21,7 @@ async function guarded<T>(run: () => Promise<T>): Promise<T | Denied> {
   try {
     return await run();
   } catch (error) {
-    if (error instanceof ReviewError || error instanceof ThreadError) return actionError(error.message);
+    if (error instanceof ReviewError || error instanceof ThreadError || error instanceof DrawingError) return actionError(error.message);
     throw error;
   }
 }
@@ -104,6 +106,39 @@ export async function deleteReviewComment(ref: Ref, input: { commentId: string }
   return guarded(async () => {
     // Deleting projects is what an admin can do and a member cannot: the same people moderate comments.
     const res = await deleteComment({ projectId: access.project.id, commentId: String(input.commentId), userId: access.user.id, moderate: access.can({ project: ['delete'] }) });
+    revalidate(ref);
+    return { ok: true as const, ...res };
+  });
+}
+
+/** Saves shapes drawn on a review image, on their own. Anyone who may comment may draw. */
+export async function createReviewDrawings(ref: Ref, input: NewDrawingsInput): Promise<{ ok: true; created: number } | Denied> {
+  const access = await projectForAction(ref.team, ref.project, { review: ['comment'] });
+  if (denied(access)) return access;
+  return guarded(async () => {
+    const res = await createDrawings({
+      projectId: access.project.id,
+      captureId: String(input.captureId),
+      drawings: Array.isArray(input.drawings) ? input.drawings : [],
+      imageSize: input.imageSize,
+      userId: access.user.id,
+    });
+    revalidate(ref);
+    return { ok: true as const, ...res };
+  });
+}
+
+/** Erases drawings: their author's own, or anyone's for a project admin (who moderates comments too). */
+export async function deleteReviewDrawings(ref: Ref, input: DeleteDrawingsInput): Promise<{ ok: true; deleted: number } | Denied> {
+  const access = await projectForAction(ref.team, ref.project, { review: ['comment'] });
+  if (denied(access)) return access;
+  return guarded(async () => {
+    const res = await deleteDrawings({
+      projectId: access.project.id,
+      drawingIds: Array.isArray(input.drawingIds) ? input.drawingIds.map(String) : [],
+      userId: access.user.id,
+      moderate: access.can({ project: ['delete'] }),
+    });
     revalidate(ref);
     return { ok: true as const, ...res };
   });

@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useState } from 'react';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
-import { commentedCheckpointId, commentedFlows, drawnFlows, flowWithThreads, NOW, uncommentedRequestFlows, uncommentedRequestHereFlows, verifyFlows, VIEWER_ID } from '../../fixtures/review-threads';
+import { commentedCheckpointId, commentedFlows, drawingsFlows, drawnFlows, flowWithThreads, NOW, uncommentedRequestFlows, uncommentedRequestHereFlows, verifyFlows, VIEWER_ID } from '../../fixtures/review-threads';
 import { CheckpointViewer, type ReviewSelection } from './checkpoint-viewer';
 
 const desktopCapture = commentedFlows[0].checkpoints[1].captures.find((c) => c.variant === 'desktop')!;
@@ -22,6 +22,8 @@ const comments = {
   onSetThreadStatus: fn(),
   onEditComment: fn(),
   onDeleteComment: fn(),
+  onCreateDrawings: fn(),
+  onDeleteDrawings: fn(),
   onOpenThreadChange: fn(),
 };
 
@@ -90,14 +92,15 @@ export const PinAComment: Story = {
   },
 };
 
-/** C, 6 for the ellipse, a colour from the bar, a drag and a comment: a thread that carries the drawing. */
-export const DrawAComment: Story = {
+/** C, 7 for the ellipse, a colour from the bar and a drag: the drawing is saved on its own, no comment opens; ⌘Z takes it back. */
+export const DrawAndUndo: Story = {
   play: async ({ args }) => {
     const body = within(document.body);
     await onTheScreen();
     await userEvent.keyboard('c');
     const toolbar = within(await body.findByRole('toolbar', { name: 'Comment tools' }));
-    await userEvent.keyboard('6');
+    await expect(toolbar.queryByRole('button', { name: 'Blue' })).toBeNull();
+    await userEvent.keyboard('7');
     await waitFor(() => expect(toolbar.getByRole('button', { name: 'Ellipse' })).toHaveAttribute('aria-pressed', 'true'));
     await userEvent.click(toolbar.getByRole('button', { name: 'Blue' }));
     const surface = await body.findByRole('application', { name: /Draw on .* with the ellipse/ });
@@ -107,11 +110,24 @@ export const DrawAComment: Story = {
       { target: surface, coords: { clientX: r.left + 160, clientY: r.top + 120 } },
       { keys: '[/MouseLeft]', target: surface, coords: { clientX: r.left + 220, clientY: r.top + 160 } },
     ]);
-    await expect(toolbar.getByRole('button', { name: 'Undo the last shape' })).toBeEnabled();
-    await userEvent.type(await body.findByRole('textbox', { name: 'New comment' }), 'The blue area should be larger{Enter}');
-    await expect(args.comments!.onCreateThread).toHaveBeenCalledWith(
-      expect.objectContaining({ captureId: desktopCapture.id, markup: [expect.objectContaining({ tool: 'ellipse', color: 'blue' })], anchor: expect.objectContaining({ kind: 'area' }) }),
+    await expect(args.comments!.onCreateDrawings).toHaveBeenCalledWith(
+      expect.objectContaining({ captureId: desktopCapture.id, drawings: [expect.objectContaining({ shape: expect.objectContaining({ tool: 'ellipse', color: 'blue' }) })] }),
     );
+    await expect(body.queryByRole('textbox', { name: 'New comment' })).toBeNull();
+    await expect(args.comments!.onCreateThread).not.toHaveBeenCalled();
+    const [{ drawings }] = (args.comments!.onCreateDrawings as ReturnType<typeof fn>).mock.lastCall!;
+    await waitFor(() => expect(toolbar.getByRole('button', { name: 'Undo' })).toBeEnabled());
+    await userEvent.click(toolbar.getByRole('button', { name: 'Undo' }));
+    await expect(args.comments!.onDeleteDrawings).toHaveBeenCalledWith({ drawingIds: [drawings[0].id] });
+  },
+};
+
+/** Drawings on their own beside the pins: an arrow, a highlight and a circle. */
+export const WithDrawings: Story = {
+  args: { flows: drawingsFlows },
+  play: async () => {
+    await onTheScreen();
+    await waitFor(() => expect(document.querySelector('[data-slot="pin-layer"] [data-slot="markup-shapes"]')).not.toBeNull());
   },
 };
 

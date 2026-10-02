@@ -1,8 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useState } from 'react';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
-import { drawingThread, NOW, reviewThreads, VIEWER_ID } from '../../fixtures/review-threads';
+import { drawingThread, NOW, reviewDrawings, reviewThreads, VIEWER_ID } from '../../fixtures/review-threads';
 import { placeOrderFlow } from '../../fixtures/review';
+import type { CommentTool, MarkupColor, ReviewDrawingView } from '../../lib/review-markup';
 import { MarkupToolbar } from './markup-toolbar';
 import { PinLayer, type ThreadDraft } from './pin-layer';
 import { ScreenFrame } from './screen-frame';
@@ -27,12 +28,23 @@ function OnAScreen(props: Omit<React.ComponentProps<typeof PinLayer>, 'openThrea
 const meta = {
   title: 'Views/Review/Comments/PinLayer',
   component: OnAScreen,
-  args: { captureId: tall.id, threads: reviewThreads, label: 'Checkout, desktop', now: NOW, viewerId: VIEWER_ID, canComment: true, onCreateThread: fn(), onReply: fn(), onSetThreadStatus: fn() },
+  args: { captureId: tall.id, threads: reviewThreads, label: 'Checkout, desktop', now: NOW, viewerId: VIEWER_ID, canComment: true, onCreateThread: fn(), onReply: fn(), onSetThreadStatus: fn(), onDraw: fn(), onErase: fn() },
   parameters: { layout: 'centered' },
 } satisfies Meta<typeof OnAScreen>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
+
+/** Presses and drags on the layer, in its own pixels. */
+async function drag(surface: HTMLElement, path: [number, number][]) {
+  const r = surface.getBoundingClientRect();
+  const at = ([x, y]: [number, number]) => ({ clientX: r.left + x, clientY: r.top + y });
+  await userEvent.pointer([
+    { keys: '[MouseLeft>]', target: surface, coords: at(path[0]) },
+    ...path.slice(1, -1).map((p) => ({ target: surface, coords: at(p) })),
+    { keys: '[/MouseLeft]', target: surface, coords: at(path.at(-1)!) },
+  ]);
+}
 
 /** Open pins (resolved ones hidden), an area, an outdated pin, and a count of the pins below the frame. */
 export const Default: Story = {
@@ -56,14 +68,61 @@ export const Commenting: Story = {
   },
 };
 
-export const Hidden: Story = {
-  args: { hidden: true },
-  play: async ({ canvasElement }) => {
-    await expect(within(canvasElement).queryAllByRole('button', { name: /^Thread/ })).toHaveLength(0);
+/** The pin tool drops a pin where it was pressed, even when the pointer slips. */
+export const PinIgnoresADrag: Story = {
+  args: { commenting: true, tool: 'pin' },
+  play: async ({ args, canvasElement }) => {
+    await drag(within(canvasElement).getByRole('application'), [
+      [100, 100],
+      [160, 140],
+      [220, 200],
+    ]);
+    const body = within(document.body);
+    await userEvent.type(await body.findByRole('textbox', { name: 'New comment' }), 'Here{Enter}');
+    await expect(args.onCreateThread).toHaveBeenCalledWith(expect.objectContaining({ anchor: expect.objectContaining({ kind: 'point' }) }));
   },
 };
 
-/** A drawing in four colours on the screen, its pin at the corner of the area it covers. */
+/** The area tool: a drag marks the area to comment on; a click alone marks nothing. */
+export const CommentOnAnArea: Story = {
+  args: { commenting: true, tool: 'area' },
+  play: async ({ args, canvasElement }) => {
+    const surface = within(canvasElement).getByRole('application', { name: /Comment on an area of Checkout/ });
+    await userEvent.click(surface);
+    const body = within(document.body);
+    await expect(body.queryByRole('textbox', { name: 'New comment' })).toBeNull();
+    await drag(surface, [
+      [80, 80],
+      [160, 120],
+      [240, 160],
+    ]);
+    await userEvent.type(await body.findByRole('textbox', { name: 'New comment' }), 'This block{Enter}');
+    await expect(args.onCreateThread).toHaveBeenCalledWith(expect.objectContaining({ anchor: expect.objectContaining({ kind: 'area' }), body: 'This block' }));
+  },
+};
+
+/** The area tool from the keyboard: Enter at one corner, the arrow keys, Enter at the other. */
+export const AreaFromTheKeyboard: Story = {
+  args: { commenting: true, tool: 'area' },
+  play: async ({ args, canvasElement }) => {
+    const surface = within(canvasElement).getByRole('application');
+    surface.focus();
+    await userEvent.keyboard('{Enter}{Enter}{Shift>}{ArrowRight}{ArrowDown}{/Shift}{Enter}');
+    const body = within(document.body);
+    await userEvent.type(await body.findByRole('textbox', { name: 'New comment' }), 'Here{Enter}');
+    await expect(args.onCreateThread).toHaveBeenCalledWith(expect.objectContaining({ anchor: expect.objectContaining({ kind: 'area' }) }));
+  },
+};
+
+export const Hidden: Story = {
+  args: { hidden: true, drawings: reviewDrawings },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).queryAllByRole('button', { name: /^Thread/ })).toHaveLength(0);
+    await expect(canvasElement.querySelector('[data-slot="markup-shapes"]')).toBeNull();
+  },
+};
+
+/** A comment that carries a drawing (made before drawings stood on their own), its pin at the corner of the area it covers. */
 export const WithADrawing: Story = {
   args: { threads: [...reviewThreads, drawingThread] },
   play: async ({ canvasElement }) => {
@@ -73,70 +132,120 @@ export const WithADrawing: Story = {
   },
 };
 
-/** With the pen: a stroke, then a comment, and the thread carries the drawing. */
+/** Drawings on their own beside the pins: an arrow, a highlight and a circle, with no pin of their own. */
+export const WithDrawings: Story = { args: { drawings: reviewDrawings } };
+
+/** With the pen: a stroke is saved as it is let go, and no comment opens. */
 export const DrawWithThePen: Story = {
   args: { commenting: true, tool: 'pen', color: 'blue' },
   play: async ({ args, canvasElement }) => {
     const surface = within(canvasElement).getByRole('application', { name: /Draw on Checkout, desktop with the pen/ });
-    const r = surface.getBoundingClientRect();
-    const at = (x: number, y: number) => ({ clientX: r.left + x, clientY: r.top + y });
-    await userEvent.pointer([
-      { keys: '[MouseLeft>]', target: surface, coords: at(40, 40) },
-      { target: surface, coords: at(80, 60) },
-      { target: surface, coords: at(140, 50) },
-      { keys: '[/MouseLeft]', target: surface, coords: at(180, 90) },
+    await drag(surface, [
+      [40, 40],
+      [60, 50],
+      [80, 60],
+      [110, 58],
+      [140, 50],
+      [180, 90],
     ]);
-    const body = within(document.body);
-    await userEvent.type(await body.findByRole('textbox', { name: 'New comment' }), 'The blue line should be straight{Enter}');
-    await expect(args.onCreateThread).toHaveBeenCalledWith(
-      expect.objectContaining({
-        captureId: tall.id,
-        body: 'The blue line should be straight',
-        anchor: expect.objectContaining({ kind: 'area' }),
-        markup: [expect.objectContaining({ tool: 'pen', color: 'blue' })],
-      }),
-    );
+    await expect(args.onDraw).toHaveBeenCalledWith(expect.objectContaining({ tool: 'pen', color: 'blue' }), expect.anything());
+    const [shape] = (args.onDraw as ReturnType<typeof fn>).mock.lastCall!;
+    // The stroke ends where the pointer let go, whatever the steadying held back.
+    await expect(shape.points.length).toBeGreaterThanOrEqual(4);
+    await expect(within(document.body).queryByRole('textbox', { name: 'New comment' })).toBeNull();
   },
 };
 
-/** An arrow and a box in one comment: the composer stays open while drawing the second shape. */
-export const DrawTwoShapes: Story = {
-  render: function Render(args) {
-    const [draft, setDraft] = useState<ThreadDraft | null>(null);
-    const [tool, setTool] = useState<'arrow' | 'rect'>('arrow');
-    return (
-      <div className="flex flex-col items-center gap-2">
-        <MarkupToolbar tool={tool} onToolChange={(t) => setTool(t as 'arrow' | 'rect')} color="green" onColorChange={() => {}} shapes={draft?.markup?.length ?? 0} />
-        <ScreenFrame
-          image={tall.image}
-          frame={{ width: 1280, height: 720 }}
-          zoom={0.5}
-          alt="Checkout — desktop"
-          overlay={() => <PinLayer {...args} commenting tool={tool} color="green" draft={draft} onDraftChange={setDraft} />}
-        />
-      </div>
-    );
+/** A press without a drag draws no arrow: nothing shows, nothing is saved. */
+export const AClickDrawsNoArrow: Story = {
+  args: { commenting: true, tool: 'arrow' },
+  play: async ({ args, canvasElement }) => {
+    await userEvent.click(within(canvasElement).getByRole('application'));
+    await expect(args.onDraw).not.toHaveBeenCalled();
+    await expect(canvasElement.querySelector('[data-slot="markup-shapes"]')).toBeNull();
   },
+};
+
+/** Held the way the viewer holds them: shapes drawn join the image, and the eraser takes the viewer's own away. */
+function Drawing(args: React.ComponentProps<typeof PinLayer>) {
+  const [drawings, setDrawings] = useState<ReviewDrawingView[]>(reviewDrawings);
+  const [tool, setTool] = useState<CommentTool>('arrow');
+  const [color, setColor] = useState<MarkupColor>('green');
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <MarkupToolbar tool={tool} onToolChange={setTool} color={color} onColorChange={setColor} />
+      <ScreenFrame
+        image={tall.image}
+        frame={{ width: 1280, height: 720 }}
+        zoom={0.5}
+        alt="Checkout — desktop"
+        overlay={() => (
+          <PinLayer
+            {...args}
+            commenting
+            tool={tool}
+            color={color}
+            drawings={drawings}
+            onDraw={(shape, size) => {
+              args.onDraw?.(shape, size);
+              setDrawings((d) => [...d, { ...shape, id: `new-${d.length}`, authorId: VIEWER_ID }]);
+            }}
+            onErase={(gone) => {
+              args.onErase?.(gone);
+              setDrawings((d) => d.filter((x) => !gone.includes(x)));
+            }}
+          />
+        )}
+      />
+    </div>
+  );
+}
+
+/** An arrow, then a box: each is saved on its own, and the colours show only for the drawing tools. */
+export const DrawShapes: Story = {
+  render: (args) => <Drawing {...args} />,
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
     const surface = canvas.getByRole('application');
-    const r = surface.getBoundingClientRect();
-    const at = (x: number, y: number) => ({ clientX: r.left + x, clientY: r.top + y });
-    await userEvent.pointer([
-      { keys: '[MouseLeft>]', target: surface, coords: at(60, 200) },
-      { target: surface, coords: at(120, 150) },
-      { keys: '[/MouseLeft]', target: surface, coords: at(160, 120) },
+    await drag(surface, [
+      [60, 200],
+      [120, 150],
+      [160, 120],
     ]);
-    const body = within(document.body);
-    await body.findByRole('textbox', { name: 'New comment' });
     await userEvent.click(canvas.getByRole('button', { name: 'Rectangle' }));
-    await userEvent.pointer([
-      { keys: '[MouseLeft>]', target: surface, coords: at(200, 60) },
-      { target: surface, coords: at(260, 100) },
-      { keys: '[/MouseLeft]', target: surface, coords: at(300, 140) },
+    await drag(surface, [
+      [200, 60],
+      [260, 100],
+      [300, 140],
     ]);
-    await userEvent.type(await body.findByRole('textbox', { name: 'New comment' }), 'Move it into the green box{Enter}');
-    const [input] = (args.onCreateThread as ReturnType<typeof fn>).mock.lastCall!;
-    await expect(input.markup.map((s: { tool: string }) => s.tool)).toEqual(['arrow', 'rect']);
+    await expect((args.onDraw as ReturnType<typeof fn>).mock.calls.map(([s]) => s.tool)).toEqual(['arrow', 'rect']);
+    await expect(within(document.body).queryByRole('textbox', { name: 'New comment' })).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: 'Area' }));
+    await expect(canvas.queryByRole('group', { name: 'Colour' })).toBeNull();
+  },
+};
+
+/** The eraser: a click on the viewer's arrow takes it away; Grace's circle stays, it is hers. */
+export const Erase: Story = {
+  render: (args) => <Drawing {...args} />,
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Eraser' }));
+    const surface = canvas.getByRole('application', { name: /Erase drawings/ });
+    const r = surface.getBoundingClientRect();
+    // The middle of the red arrow, from (0.3, 0.55) to (0.55, 0.36).
+    const mid = { clientX: r.left + r.width * 0.425, clientY: r.top + r.height * 0.455 };
+    await userEvent.pointer([
+      { keys: '[MouseLeft>]', target: surface, coords: mid },
+      { keys: '[/MouseLeft]', target: surface, coords: mid },
+    ]);
+    await expect(args.onErase).toHaveBeenCalledWith([expect.objectContaining({ id: 'drawing-1' })]);
+    // Across Grace's circle: not hers to erase.
+    const rim = { clientX: r.left + r.width * 0.52, clientY: r.top + r.height * 0.33 };
+    await userEvent.pointer([
+      { keys: '[MouseLeft>]', target: surface, coords: rim },
+      { keys: '[/MouseLeft]', target: surface, coords: rim },
+    ]);
+    await expect(args.onErase).toHaveBeenCalledTimes(1);
   },
 };

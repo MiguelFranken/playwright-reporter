@@ -196,9 +196,9 @@ export function simplifyStroke(points: readonly number[], epsilon: number): numb
 }
 
 /**
- * A stroke as a smooth SVG path through its points: straight to the first
- * midpoint, a quadratic curve through each point to the next midpoint. One
- * point is a dot (drawn with round caps).
+ * A stroke as a smooth SVG path through its points: a Catmull–Rom spline,
+ * written as cubic curves, so the line bends through every point it kept
+ * instead of turning at it. One point is a dot (drawn with round caps).
  */
 export function strokePath(points: readonly number[], digits = 4): string {
   const f = (n: number) => Number(n.toFixed(digits));
@@ -207,13 +207,86 @@ export function strokePath(points: readonly number[], digits = 4): string {
   if (pts.length === 1) return `M${f(pts[0][0])} ${f(pts[0][1])}L${f(pts[0][0])} ${f(pts[0][1])}`;
   if (pts.length === 2) return `M${f(pts[0][0])} ${f(pts[0][1])}L${f(pts[1][0])} ${f(pts[1][1])}`;
   let d = `M${f(pts[0][0])} ${f(pts[0][1])}`;
-  for (let i = 1; i < pts.length - 1; i++) {
-    const [x, y] = pts[i];
-    const [nx, ny] = pts[i + 1];
-    d += `Q${f(x)} ${f(y)} ${f((x + nx) / 2)} ${f((y + ny) / 2)}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [x0, y0] = pts[Math.max(0, i - 1)];
+    const [x1, y1] = pts[i];
+    const [x2, y2] = pts[i + 1];
+    const [x3, y3] = pts[Math.min(pts.length - 1, i + 2)];
+    d += `C${f(x1 + (x2 - x0) / 6)} ${f(y1 + (y2 - y0) / 6)} ${f(x2 - (x3 - x1) / 6)} ${f(y2 - (y3 - y1) / 6)} ${f(x2)} ${f(y2)}`;
   }
-  const [lx, ly] = pts[pts.length - 1];
-  return `${d}L${f(lx)} ${f(ly)}`;
+  return d;
+}
+
+/**
+ * How much a stroke's pointer is steadied as it is drawn (0 follows the
+ * pointer, 1 never moves): each point goes only part of the way from the
+ * last one to the pointer, the way Figma's pencil smooths a hand's jitter.
+ * The highlighter, drawn in long sweeps over text, is steadied more.
+ */
+export const STREAMLINE: Record<'pen' | 'highlighter', number> = { pen: 0.45, highlighter: 0.6 };
+
+/** The next point of a stroke steadied by `streamline`: from `last` toward `pointer`. */
+export function streamlinePoint(last: { x: number; y: number }, pointer: { x: number; y: number }, streamline: number): { x: number; y: number } {
+  const t = 1 - Math.min(0.95, Math.max(0, streamline));
+  return { x: last.x + (pointer.x - last.x) * t, y: last.y + (pointer.y - last.y) * t };
+}
+
+/**
+ * The end of a drag held with Shift, in screen pixels: an arrow turns to the
+ * nearest 45°, a box and an ellipse become a square and a circle.
+ */
+export function constrainDrag(tool: 'arrow' | 'rect' | 'ellipse', start: { x: number; y: number }, end: { x: number; y: number }): { x: number; y: number } {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  if (tool === 'arrow') {
+    const step = Math.PI / 4;
+    const angle = Math.round(Math.atan2(dy, dx) / step) * step;
+    const len = Math.hypot(dx, dy);
+    return { x: start.x + Math.cos(angle) * len, y: start.y + Math.sin(angle) * len };
+  }
+  const side = Math.max(Math.abs(dx), Math.abs(dy));
+  return { x: start.x + (dx < 0 ? -side : side), y: start.y + (dy < 0 ? -side : side) };
+}
+
+const segmentDistance = (px: number, py: number, ax: number, ay: number, bx: number, by: number) => {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len = dx * dx + dy * dy;
+  const t = len === 0 ? 0 : Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len));
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+};
+
+/**
+ * How far `at` is from a shape's ink, in the units of both — screen pixels,
+ * for the eraser. A stroke and an arrow are their lines, a box its outline,
+ * an ellipse its rim (measured along the ray from its centre, near enough
+ * for a pointer).
+ */
+export function shapeDistance(shape: MarkupShape, at: { x: number; y: number }): number {
+  const pts = pairs(shape.points);
+  if (isStroke(shape.tool) || shape.tool === 'arrow') {
+    if (pts.length === 1) return Math.hypot(at.x - pts[0][0], at.y - pts[0][1]);
+    let best = Infinity;
+    for (let i = 0; i + 1 < pts.length; i++) best = Math.min(best, segmentDistance(at.x, at.y, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1]));
+    return best;
+  }
+  const b = shapeBounds(shape);
+  if (shape.tool === 'rect') {
+    const [l, t, r, btm] = [b.x, b.y, b.x + b.w, b.y + b.h];
+    return Math.min(segmentDistance(at.x, at.y, l, t, r, t), segmentDistance(at.x, at.y, r, t, r, btm), segmentDistance(at.x, at.y, r, btm, l, btm), segmentDistance(at.x, at.y, l, btm, l, t));
+  }
+  const rx = b.w / 2;
+  const ry = b.h / 2;
+  const cx = b.x + rx;
+  const cy = b.y + ry;
+  const dx = at.x - cx;
+  const dy = at.y - cy;
+  if (rx === 0 || ry === 0) return segmentDistance(at.x, at.y, b.x, b.y, b.x + b.w, b.y + b.h);
+  const len = Math.hypot(dx, dy);
+  if (len === 0) return Math.min(rx, ry);
+  // Where the ray from the centre through the pointer meets the rim.
+  const k = 1 / Math.sqrt((dx * dx) / (rx * rx) + (dy * dy) / (ry * ry));
+  return Math.abs(len - len * k);
 }
 
 /** The three corners of an arrow's head at `(x2, y2)`, `size` long, for drawing it as a filled triangle. */
@@ -252,18 +325,61 @@ export function describeShape(shape: MarkupShape): string {
   return isStroke(shape.tool) ? `${what} over ${at}` : `${what} ${at}`;
 }
 
-/** What a click or drag on the image does in comment mode: drop a pin (or mark an area), or draw. */
-export const COMMENT_TOOLS = ['pin', ...MARKUP_TOOLS] as const;
+/**
+ * What a click or drag on the image does in comment mode: drop a pin, mark
+ * an area, draw, or erase what was drawn. Pins and areas start a comment;
+ * drawings stand on their own, for everyone looking at the image.
+ */
+export const COMMENT_TOOLS = ['pin', 'area', ...MARKUP_TOOLS, 'eraser'] as const;
 export type CommentTool = (typeof COMMENT_TOOLS)[number];
 
-export const COMMENT_TOOL_LABELS: Record<CommentTool, string> = { pin: 'Pin or area', ...MARKUP_TOOL_LABELS };
+export const COMMENT_TOOL_LABELS: Record<CommentTool, string> = { pin: 'Pin', area: 'Area', ...MARKUP_TOOL_LABELS, eraser: 'Eraser' };
+
+/** Whether a tool draws (and so has a colour). */
+export const isMarkupTool = (tool: CommentTool): tool is MarkupTool => (MARKUP_TOOLS as readonly string[]).includes(tool);
 
 /** What to do with each tool, as comment mode's hint says it. */
 export const COMMENT_TOOL_HINTS: Record<CommentTool, string> = {
-  pin: 'Click the screenshot to pin a comment, or drag to mark an area.',
-  pen: 'Draw on the screenshot. Every stroke joins the same comment.',
-  highlighter: 'Drag over what you mean to highlight it. Every stroke joins the same comment.',
-  arrow: 'Drag from where something is to where it should go.',
-  rect: 'Drag to draw a box. Use colours to tell areas apart in your comment.',
-  ellipse: 'Drag to circle something. Use colours to tell areas apart in your comment.',
+  pin: 'Click the screenshot to pin a comment.',
+  area: 'Drag over the screenshot to comment on an area.',
+  pen: 'Draw on the screenshot. Drawings are saved as you draw.',
+  highlighter: 'Drag over what you mean to highlight it.',
+  arrow: 'Drag from where something is to where it should go. Shift keeps it straight.',
+  rect: 'Drag to draw a box. Shift draws a square.',
+  ellipse: 'Drag to circle something. Shift draws a circle.',
+  eraser: 'Click a drawing, or drag across drawings, to erase them.',
 };
+
+/**
+ * A drawing on a review image, on its own: one shape somebody drew to show
+ * what they mean, without a comment. It is shown on the image it was drawn
+ * on and on every capture with the same pixels. Points are fractions of the
+ * image on show.
+ */
+export interface ReviewDrawingView extends MarkupShape {
+  id: string;
+  /** Who drew it, to say so and to let them erase it. */
+  authorId?: string | null;
+  authorName?: string | null;
+  createdAt?: string;
+  /** Saved optimistically, not confirmed yet. */
+  pending?: boolean;
+}
+
+/** Drawings to save on a capture, with ids the browser chose, so it can take them back before the page catches up. */
+export interface NewDrawingsInput {
+  captureId: string;
+  drawings: { id: string; shape: MarkupShape }[];
+  /** The image's size as the browser loaded it, for a capture that recorded none. */
+  imageSize?: ImageSize | null;
+}
+
+export interface DeleteDrawingsInput {
+  drawingIds: string[];
+}
+
+/** The most drawings one image keeps. */
+export const MAX_IMAGE_DRAWINGS = 500;
+
+/** Whether `value` is one shape views may send: a known tool and colour, points inside the image, within the limits. */
+export const isFractionShape = (value: unknown): value is MarkupShape => isFractionMarkup([value]);
