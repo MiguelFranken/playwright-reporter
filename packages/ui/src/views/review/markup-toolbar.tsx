@@ -110,3 +110,38 @@ export function MarkupToolbar({ tool, onToolChange, color, onColorChange, shapes
     </div>
   );
 }
+
+export interface CommentBarProps extends Omit<MarkupToolbarProps, 'onClose'> {
+  /** Comment mode is on: the bar shows its tools. */
+  commenting: boolean;
+  onCommentingChange: (next: boolean) => void;
+  /** Open comments on the screens on show, said on the folded bar. */
+  openCount?: number;
+}
+
+/**
+ * Commenting, at hand over the screenshot: folded, one button that turns
+ * comment mode on (C); unfolded, the tools to place and draw comments with,
+ * and the button that folds it again (Esc).
+ */
+export function CommentBar({ commenting, onCommentingChange, openCount = 0, className, ...tools }: CommentBarProps) {
+  if (commenting) return <MarkupToolbar {...tools} className={className} onClose={() => onCommentingChange(false)} />;
+  return (
+    <div data-slot="comment-bar" className={cn('flex animate-rise-in items-center rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-e3', className)}>
+      <Tooltip>
+        <TooltipTrigger render={<Button variant="ghost" size="sm" aria-pressed={false} aria-keyshortcuts="C" className="gap-2 px-3" onClick={() => onCommentingChange(true)} />}>
+          <MessageSquarePlus /> Comment
+          {openCount ? (
+            <span aria-hidden title={`${openCount} open`} className="rounded-full bg-accent-subtle px-1.5 text-label-xs text-accent-text tabular-nums">
+              {openCount}
+            </span>
+          ) : null}
+          <Kbd aria-hidden className="h-4 min-w-4 text-[10px]">
+            C
+          </Kbd>
+        </TooltipTrigger>
+        <TooltipContent side="top">Click to pin a comment, drag for an area, or draw on the screen</TooltipContent>
+      </Tooltip>
+    </div>
+  );
+}

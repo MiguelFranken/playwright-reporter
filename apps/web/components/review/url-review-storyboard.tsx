@@ -5,6 +5,9 @@ import { useCallback, useEffect, useMemo, useOptimistic, useState, useTransition
 import { toast } from 'sonner';
 import {
   DEFAULT_FRAME,
+  DEFAULT_REVIEW_PANEL,
+  reviewPanel,
+  type ReviewPanelSettings,
   parseReviewFilter,
   REVIEW_GROUPINGS,
   REVIEW_SORTS,
@@ -168,6 +171,8 @@ const SETTINGS_KEY = 'pwr.review.view';
 interface ViewSettings {
   size: number;
   frame: FrameSettings;
+  /** The viewer's side panel: shown or folded, and how wide. */
+  panel: ReviewPanelSettings;
 }
 
 /** The reviewer's screen size and viewer frame, kept in this browser; nothing breaks without storage. */
@@ -177,14 +182,14 @@ export function useViewSettings(): [ViewSettings | null, (next: Partial<ViewSett
     try {
       const saved = JSON.parse(window.localStorage.getItem(SETTINGS_KEY) ?? 'null') as Partial<ViewSettings> | null;
       const size = typeof saved?.size === 'number' ? Math.min(STORYBOARD_SIZE.max, Math.max(STORYBOARD_SIZE.min, saved.size)) : STORYBOARD_SIZE.default;
-      setSettings({ size, frame: { ...DEFAULT_FRAME, ...(saved?.frame ?? {}) } });
+      setSettings({ size, frame: { ...DEFAULT_FRAME, ...(saved?.frame ?? {}) }, panel: reviewPanel(saved?.panel) });
     } catch {
-      setSettings({ size: STORYBOARD_SIZE.default, frame: DEFAULT_FRAME });
+      setSettings({ size: STORYBOARD_SIZE.default, frame: DEFAULT_FRAME, panel: DEFAULT_REVIEW_PANEL });
     }
   }, []);
   const update = (patch: Partial<ViewSettings>) =>
     setSettings((current) => {
-      const next = { size: STORYBOARD_SIZE.default, frame: DEFAULT_FRAME, ...current, ...patch };
+      const next = { size: STORYBOARD_SIZE.default, frame: DEFAULT_FRAME, panel: DEFAULT_REVIEW_PANEL, ...current, ...patch };
       try {
         window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
       } catch {
@@ -410,6 +415,8 @@ export function UrlReviewStoryboard({
       onSizeChange={(size) => setView({ size })}
       frame={view?.frame}
       onFrameChange={(frame) => setView({ frame })}
+      panel={view?.panel}
+      onPanelChange={(panel) => setView({ panel })}
       emptyTitle={emptyTitle}
       emptyDescription={emptyDescription}
       mode={mode}

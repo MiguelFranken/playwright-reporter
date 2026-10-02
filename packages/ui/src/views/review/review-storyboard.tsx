@@ -21,6 +21,7 @@ import {
   REVIEW_STATUS_TONES,
   variantsOf,
   type FrameSettings,
+  type ReviewPanelSettings,
   type ReviewCheckpointView,
   type ReviewDecisionInput,
   type ReviewFilter,
@@ -117,6 +118,8 @@ export function ReviewStoryboard({
   onSizeChange,
   frame,
   onFrameChange,
+  panel,
+  onPanelChange,
   onDecide,
   pendingIds = [],
   canDecide = true,
@@ -152,6 +155,9 @@ export function ReviewStoryboard({
   /** The viewer's screen settings. */
   frame?: FrameSettings;
   onFrameChange?: (next: FrameSettings) => void;
+  /** The viewer's side panel: shown or folded, and how wide; uncontrolled when absent. */
+  panel?: ReviewPanelSettings | null;
+  onPanelChange?: (next: ReviewPanelSettings) => void;
   onDecide?: (input: ReviewDecisionInput) => void;
   pendingIds?: readonly string[];
   canDecide?: boolean;
@@ -383,6 +389,8 @@ export function ReviewStoryboard({
         canDecide={canDecide}
         frame={frame ?? DEFAULT_FRAME}
         onFrameChange={onFrameChange}
+        panel={panel}
+        onPanelChange={onPanelChange}
         mode={mode}
         onIgnoreRegionsChange={onIgnoreRegionsChange}
         ignorePendingId={ignorePendingId}

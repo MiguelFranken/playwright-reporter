@@ -145,6 +145,8 @@ export function UrlLibraryBrowser({
       onSizeChange={(size) => setView({ size })}
       frame={view?.frame}
       onFrameChange={(frame) => setView({ frame })}
+      panel={view?.panel}
+      onPanelChange={(panel) => setView({ panel })}
       comments={comments}
       onDecide={canDecide ? onDecide : undefined}
       pendingIds={pendingIds}

@@ -69,7 +69,7 @@ export const OpensOnTheCommentToVerify: Story = {
     await expect(await body.findByRole('group', { name: 'Verify comment 3' })).toBeInTheDocument();
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(body.queryByRole('group', { name: 'Verify comment 3' })).toBeNull());
-    await expect(body.getByRole('complementary', { name: 'Checkpoint details' })).toBeInTheDocument();
+    await expect(body.getByRole('complementary', { name: 'Review' })).toBeInTheDocument();
     await userEvent.keyboard('o');
     await expect(await body.findByRole('group', { name: 'Verify comment 3' })).toBeInTheDocument();
   },
@@ -288,5 +288,44 @@ export const UncommentedRequestOnThisImage: Story = {
     await expect(body.getByRole('note')).toHaveTextContent(/asked for changes to this image without saying what/);
     await userEvent.click(body.getByRole('button', { name: 'Pin what should change' }));
     await expect(await body.findByRole('application', { name: /Place a comment on/ })).toBeInTheDocument();
+  },
+};
+
+/** A host that keeps the open thread's number, the way the app keeps it in the link (`thread=1`). */
+function LinkedHost(props: React.ComponentProps<typeof Hosted>) {
+  const [openThread, setOpenThread] = useState<number | null>(null);
+  return (
+    <Hosted
+      {...props}
+      comments={{
+        ...props.comments,
+        openThread,
+        onOpenThreadChange: (n) => {
+          setOpenThread(n);
+          props.comments?.onOpenThreadChange?.(n);
+        },
+      }}
+    />
+  );
+}
+
+/**
+ * Every variant on show, each numbering its threads from 1: a click on the
+ * mobile screen's pin 1 opens that thread, not the desktop screen's — even
+ * once the host has put the number in the link.
+ */
+export const PinOnTheSecondScreenOpensItsOwnThread: Story = {
+  args: { initial: { checkpointId: commentedCheckpointId, variant: null } },
+  render: (args) => <LinkedHost {...args} />,
+  play: async ({ args }) => {
+    const body = within(document.body);
+    await onTheScreen();
+    await userEvent.click(body.getByRole('button', { name: 'Image' }));
+    const desktop = within(await body.findByRole('region', { name: /desktop screen/ }));
+    const mobile = within(body.getByRole('region', { name: /mobile screen/ }));
+    await userEvent.click(mobile.getByRole('button', { name: /^Thread 1: / }));
+    await expect(args.comments!.onOpenThreadChange).toHaveBeenCalledWith(1);
+    await waitFor(() => expect(mobile.getByRole('button', { name: /^Thread 1: / })).toHaveAttribute('aria-expanded', 'true'));
+    await expect(desktop.getByRole('button', { name: /^Thread 1: / })).toHaveAttribute('aria-expanded', 'false');
   },
 };
