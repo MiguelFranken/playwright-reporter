@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.85](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.84...v0.0.85) (2026-10-02)
+
+### Performance Improvements
+
+* **review:** size the screens by CSS from the stage, so every motion lays them out right ([a1a60d4](https://github.com/MiguelFranken/playwright-reporter/commit/a1a60d444ca0cd1101f3efc81961367f263bdfa6))
+
 ## [0.0.84](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.83...v0.0.84) (2026-10-02)
 
 ### Performance Improvements
