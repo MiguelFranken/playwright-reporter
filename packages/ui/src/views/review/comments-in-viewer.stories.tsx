@@ -47,7 +47,7 @@ async function onTheScreen() {
   const body = within(document.body);
   await body.findByRole('dialog');
   await userEvent.click(await body.findByRole('button', { name: 'Stop verifying' }));
-  await waitFor(() => expect(body.queryByRole('group', { name: /^Verify comment/ })).toBeNull());
+  await waitFor(() => expect(body.queryByRole('region', { name: /^Verify comment/ })).toBeNull());
 }
 
 /** Numbered pins on the screenshot, and every thread in the list beside it. */
@@ -66,12 +66,12 @@ export const OpensOnTheCommentToVerify: Story = {
   play: async () => {
     const body = within(document.body);
     await body.findByRole('dialog');
-    await expect(await body.findByRole('group', { name: 'Verify comment 3' })).toBeInTheDocument();
+    await expect(await body.findByRole('region', { name: 'Verify comment 3' })).toBeInTheDocument();
     await userEvent.keyboard('{Escape}');
-    await waitFor(() => expect(body.queryByRole('group', { name: 'Verify comment 3' })).toBeNull());
+    await waitFor(() => expect(body.queryByRole('region', { name: 'Verify comment 3' })).toBeNull());
     await expect(body.getByRole('complementary', { name: 'Review' })).toBeInTheDocument();
     await userEvent.keyboard('o');
-    await expect(await body.findByRole('group', { name: 'Verify comment 3' })).toBeInTheDocument();
+    await expect(await body.findByRole('region', { name: 'Verify comment 3' })).toBeInTheDocument();
   },
 };
 
@@ -197,7 +197,7 @@ export const ReadOnly: Story = {
   args: { canDecide: false, comments: { now: NOW } },
   play: async () => {
     const body = within(document.body);
-    await body.findByRole('dialog');
+    await onTheScreen();
     await expect(body.getByRole('radio', { name: 'Open, 5' })).toBeChecked();
     await expect(body.queryByRole('button', { name: 'Comment' })).toBeNull();
   },
@@ -238,16 +238,19 @@ export const VerifyTheFixes: Story = {
   args: { flows: verifyFlows },
   play: async ({ args }) => {
     const body = within(document.body);
-    await body.findByRole('dialog');
+    await onTheScreen();
     const list = within(body.getByRole('region', { name: /Comments/ }));
     await expect(list.getByText('2 comments to verify')).toBeInTheDocument();
     await expect(list.getByRole('list', { name: 'To verify' })).toBeInTheDocument();
     await expect(list.getByRole('list', { name: 'Waiting for a fix' })).toBeInTheDocument();
     await userEvent.click(list.getByRole('button', { name: 'Verify' }));
-    await expect(await body.findByText('Verify comment 1')).toBeInTheDocument();
+    // The screens fill the stage, then and now; the comment, and what to do about it, is in the side panel.
+    const panel = within(await body.findByRole('region', { name: 'Verifying comments' }));
+    await expect(await panel.findByRole('region', { name: 'Verify comment 1' })).toBeInTheDocument();
+    await expect(body.getByRole('region', { name: /the version commented on/ })).toBeInTheDocument();
     await userEvent.keyboard('e');
     await expect(args.comments!.onSetThreadStatus).toHaveBeenCalledWith({ threadId: 'thread-fixed', status: 'resolved', captureId: desktopCapture.id });
-    await expect(await body.findByText('Verify comment 3')).toBeInTheDocument();
+    await expect(await panel.findByRole('region', { name: 'Verify comment 3' })).toBeInTheDocument();
     await userEvent.keyboard('e');
     await expect(await body.findByText('Nothing left to verify')).toBeInTheDocument();
     await userEvent.click(body.getByRole('button', { name: 'Back to the screen' }));
@@ -260,7 +263,7 @@ export const FixWithAi: Story = {
   args: { flows: verifyFlows, comments: { ...comments, assistant: { setupHref: '#connect', project: 'acme/web' } } },
   play: async () => {
     const body = within(document.body);
-    await body.findByRole('dialog');
+    await onTheScreen();
     const list = within(body.getByRole('region', { name: /Comments/ }));
     await userEvent.click(list.getByRole('button', { name: 'Fix with AI' }));
     const item = await body.findByRole('menuitem', { name: 'Copy prompt' });
@@ -328,5 +331,25 @@ export const PinOnTheSecondScreenOpensItsOwnThread: Story = {
     await expect(args.comments!.onOpenThreadChange).toHaveBeenCalledWith(1);
     await waitFor(() => expect(mobile.getByRole('button', { name: /^Thread 1: / })).toHaveAttribute('aria-expanded', 'true'));
     await expect(desktop.getByRole('button', { name: /^Thread 1: / })).toHaveAttribute('aria-expanded', 'false');
+  },
+};
+
+/**
+ * Verifying with the screens filling the stage: then and now, half of it each,
+ * as tall as it is — what the comment says is in the side panel, not under them.
+ */
+export const VerifyFillsTheStage: Story = {
+  args: { flows: verifyFlows, frame: { preset: 'captured', width: 1280, height: 720, zoom: 'fit', fill: true } },
+  play: async () => {
+    const body = within(document.body);
+    await body.findByRole('dialog');
+    await expect(await body.findByRole('region', { name: 'Verify comment 1' })).toBeInTheDocument();
+    const stage = body.getByLabelText('Checkpoint screens');
+    const then = body.getByRole('region', { name: /the version commented on/ });
+    const now = body.getByRole('region', { name: /, now$/ });
+    await waitFor(() => expect(Math.abs(then.getBoundingClientRect().width - now.getBoundingClientRect().width)).toBeLessThanOrEqual(1));
+    // Once the side panel has opened and the stage has its width.
+    await waitFor(() => expect(then.getBoundingClientRect().width + now.getBoundingClientRect().width).toBeGreaterThan(stage.clientWidth - 4));
+    await waitFor(() => expect(Math.abs(now.getBoundingClientRect().bottom - stage.getBoundingClientRect().bottom)).toBeLessThanOrEqual(1));
   },
 };
