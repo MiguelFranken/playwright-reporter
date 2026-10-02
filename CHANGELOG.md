@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.80](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.79...v0.0.80) (2026-10-02)
+
+### Features
+
+* **review:** choose what the viewer compares an image with ([#86](https://github.com/MiguelFranken/playwright-reporter/issues/86)) ([31193f2](https://github.com/MiguelFranken/playwright-reporter/commit/31193f2b4e73b635657b3862fdbfb721af33a065))
+
 ## [0.0.79](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.78...v0.0.79) (2026-10-02)
 
 ### Features
