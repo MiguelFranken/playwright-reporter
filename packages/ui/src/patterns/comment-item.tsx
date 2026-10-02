@@ -77,7 +77,7 @@ export function CommentItem({
   return (
     <article
       data-agent={agent || undefined}
-      className={cn('group/comment flex animate-rise-in gap-2.5', agent && '-mx-1.5 rounded-lg bg-accent-subtle/60 px-1.5 py-1.5', comment.pending && 'opacity-70', className)}
+      className={cn('group/comment flex gap-2.5', agent && '-mx-1.5 rounded-lg bg-accent-subtle/60 px-1.5 py-1.5', comment.pending && 'opacity-70', className)}
       aria-label={agent ? `Comment by ${name}${name === DEFAULT_AGENT_NAME ? '' : ', an AI agent'}${onBehalfOf ? `, for ${onBehalfOf.name}` : ''}` : `Comment by ${name}`}
     >
       {agent ? (

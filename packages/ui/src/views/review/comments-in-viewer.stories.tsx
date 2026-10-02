@@ -163,12 +163,16 @@ export const PinWithTheKeyboard: Story = {
   },
 };
 
-/** Hovering a pin shows its thread. */
-export const HoverAPin: Story = {
+/** Hovering a pin leaves its thread closed; a click opens it. */
+export const ClickAPin: Story = {
   play: async () => {
     const body = within(document.body);
     await onTheScreen();
-    await userEvent.hover(within(body.getByRole('region', { name: 'Checkpoint image' })).getByRole('button', { name: /^Thread 1: / }));
+    const pin = within(body.getByRole('region', { name: 'Checkpoint image' })).getByRole('button', { name: /^Thread 1: / });
+    await userEvent.hover(pin);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    await expect(body.queryByRole('textbox', { name: 'Reply to thread 1' })).toBeNull();
+    await userEvent.click(pin);
     await waitFor(() => expect(body.getByRole('textbox', { name: 'Reply to thread 1' })).toBeVisible());
   },
 };

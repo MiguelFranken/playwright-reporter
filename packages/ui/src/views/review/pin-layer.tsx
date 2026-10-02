@@ -107,7 +107,7 @@ const SCROLLER = '[data-slot="screen-frame"], [data-slot="diff-highlight"]';
 /**
  * The pins and drawings of one screenshot, laid over the image inside its
  * scrolling frame so they scroll with it, at a fixed size whatever the zoom.
- * Hovering a pin shows its thread; clicking keeps it open. In comment mode
+ * Clicking a pin opens its thread. In comment mode
  * the layer takes the pointer:
  * - the pin: a click drops a draft pin with a composer beside it; from the
  *   keyboard, Enter puts a crosshair in the middle, the arrow keys move it
@@ -528,9 +528,6 @@ function ThreadPin({
         {ping != null ? <span key={ping} aria-hidden className="pointer-events-none absolute inset-0 animate-pin-ping rounded-full rounded-bl-[3px]" /> : null}
         <Popover open={open} onOpenChange={(next) => onOpenThreadChange?.(next ? t.id : null, t.id)}>
           <PopoverTrigger
-            openOnHover
-            delay={200}
-            closeDelay={150}
             render={
               <CommentPin
                 number={t.number}
