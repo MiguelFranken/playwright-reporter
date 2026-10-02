@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.87](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.86...v0.0.87) (2026-10-02)
+
+### Features
+
+* **review:** preview a change in a close-up when hovering its mark on the strip ([#89](https://github.com/MiguelFranken/playwright-reporter/issues/89)) ([a63d907](https://github.com/MiguelFranken/playwright-reporter/commit/a63d9070d38811236ca286f8a52e782f61307dc8))
+
 ## [0.0.86](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.85...v0.0.86) (2026-10-02)
 
 ### Features
