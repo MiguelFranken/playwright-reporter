@@ -8,6 +8,7 @@ import {
   DEFAULT_REVIEW_PANEL,
   reviewPanel,
   type ReviewPanelSettings,
+  compareRuleRun,
   parseCompareRule,
   parseReviewFilter,
   resolveCompare,
@@ -196,10 +197,17 @@ function openCapture(flows: readonly ReviewFlowView[], selection: ReviewSelectio
  * runs that captured its screen are asked for, and the reference the rule
  * picks becomes the capture's `compare`, which the live measurements then
  * measure like a library comparison. The default reference needs no patch.
+ *
+ * The other runs are read only when something needs them: the reviewer
+ * reaches for the list, or the rule picks from them (`comments`, `run:<n>`).
+ * Paging through images under the other rules reads nothing.
  */
 function useCompareWith(ref: { team: string; project: string }, flows: ReviewFlowView[], selection: ReviewSelection | null, rule: CompareRule) {
   const open = useMemo(() => openCapture(flows, selection), [flows, selection]);
-  const query = useQuery({ ...compareTargetsQuery(ref, open?.id ?? ''), enabled: Boolean(open) });
+  const [wantedFor, setWantedFor] = useState<string | null>(null);
+  const needed = rule === 'comments' || compareRuleRun(rule) !== null || (open !== null && wantedFor === open.id);
+  // A list read before stays in the cache, so going back to an image shows it without asking.
+  const query = useQuery({ ...compareTargetsQuery(ref, open?.id ?? ''), enabled: Boolean(open) && needed });
   // A failed read offers no other runs; the default comparison still works.
   const targets = !open ? undefined : query.isError ? [] : query.data?.targets;
   const compared = useMemo(() => {
@@ -208,7 +216,8 @@ function useCompareWith(ref: { team: string; project: string }, flows: ReviewFlo
     if (!target) return flows;
     return patchCaptures(flows, (cap) => (cap.id === open.id ? { ...cap, compare: target, diff: null } : undefined));
   }, [flows, open, rule, targets]);
-  return { flows: compared, targets };
+  const onTargetsWanted = useCallback(() => setWantedFor(open?.id ?? null), [open?.id]);
+  return { flows: compared, targets, onTargetsWanted };
 }
 
 const SETTINGS_KEY = 'pwr.review.view';
@@ -359,6 +368,7 @@ export function useReviewActions({
       onCompareRuleChange?.(next);
     },
     targets: compare.targets,
+    onTargetsWanted: compare.onTargetsWanted,
   };
   return { flows: optimistic, pendingIds, onDecide, onIgnoreRegionsChange, ignorePendingId, comments, compareWith };
 }
