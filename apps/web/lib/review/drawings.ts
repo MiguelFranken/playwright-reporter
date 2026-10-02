@@ -143,7 +143,8 @@ export async function createDrawings(input: {
   const [{ count }] = await db.select({ count: sql<number>`count(*)::int` }).from(reviewDrawings).where(identity);
   if (Number(count) + input.drawings.length > MAX_IMAGE_DRAWINGS) throw new DrawingError(`An image holds at most ${MAX_IMAGE_DRAWINGS} drawings. Erase some first.`);
 
-  const rows = input.drawings.map((d) => ({
+  // One statement gives every row the same now(): a microsecond apart, the batch keeps the order it was drawn in (later on top).
+  const rows = input.drawings.map((d, i) => ({
     id: d.id.toLowerCase(),
     projectId: input.projectId,
     testId: capture.testId,
@@ -155,6 +156,7 @@ export async function createDrawings(input: {
     originHeight: size.height,
     shape: markupToPixels(cleanMarkup([d.shape as MarkupShape]), size)[0],
     createdBy: input.userId,
+    createdAt: sql`now() + ${i} * interval '1 microsecond'`,
   }));
   const inserted = await db.insert(reviewDrawings).values(rows).onConflictDoNothing({ target: reviewDrawings.id }).returning({ id: reviewDrawings.id, projectId: reviewDrawings.projectId });
   return { created: inserted.length };
