@@ -1,8 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useState } from 'react';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
-import { diffStatesFlow, legacyFlow, libraryCompareFlows, longTextFlow, placeOrderFlow, reviewFlows, unavailableFlow } from '../../fixtures/review';
+import { checkoutCompareTargets, diffStatesFlow, legacyFlow, libraryCompareFlows, longTextFlow, placeOrderFlow, reviewFlows, unavailableFlow } from '../../fixtures/review';
 import { libraryFlows, NOW, toVerifyFlow, VIEWER_ID } from '../../fixtures/library-views';
+import { resolveCompare, type CompareRule, type ReviewFlowView } from '../../lib/review';
 import { CheckpointViewer, type ReviewSelection } from './checkpoint-viewer';
 
 const changed = placeOrderFlow.checkpoints[1];
@@ -430,5 +431,54 @@ export const FillAllVariantsSideBySide: Story = {
     await waitFor(() => expect(body.getAllByRole('region', { name: / — (desktop|mobile), / })).toHaveLength(4));
     await expect(stage.scrollWidth).toBeLessThanOrEqual(stage.clientWidth);
     await expect(stage.scrollHeight).toBeLessThanOrEqual(stage.clientHeight);
+  },
+};
+
+/**
+ * A host resolving the reviewer's "Compare with" rule the way the app does:
+ * the open capture gets the chosen run as its `compare`, measured afresh.
+ */
+function ComparingHost({ flows, onRuleChange }: { flows: ReviewFlowView[]; onRuleChange: (next: CompareRule) => void }) {
+  const [rule, setRule] = useState<CompareRule>('auto');
+  const [selection, setSelection] = useState<ReviewSelection | null>({ checkpointId: changed.id, variant: 'desktop' });
+  const open = changed.captures[0];
+  const resolved = resolveCompare(open, rule, checkoutCompareTargets);
+  const shown = resolved.target
+    ? flows.map((f) => ({ ...f, checkpoints: f.checkpoints.map((cp) => ({ ...cp, captures: cp.captures.map((c) => (c.id === open.id ? { ...c, compare: resolved.target, diff: null } : c)) })) }))
+    : flows;
+  return (
+    <CheckpointViewer
+      flows={shown}
+      selection={selection}
+      onSelectionChange={setSelection}
+      compareWith={{
+        rule,
+        onRuleChange: (next) => {
+          setRule(next);
+          onRuleChange(next);
+        },
+        targets: checkoutCompareTargets,
+        now: NOW,
+      }}
+    />
+  );
+}
+
+/** "Compare with" picks another run: side by side, its image is on the left, and a rule that finds nothing says so. */
+export const CompareWithAnotherRun: StoryObj<typeof ComparingHost> = {
+  render: (args) => <ComparingHost {...args} />,
+  args: { flows: reviewFlows, onRuleChange: fn() },
+  play: async ({ args }) => {
+    const body = within(document.body);
+    await body.findByRole('dialog');
+    const picker = body.getByRole('combobox', { name: 'Compare with' });
+    await expect(picker).toHaveTextContent('vs. Approved (#470)');
+    await userEvent.click(picker);
+    await userEvent.click(await body.findByRole('option', { name: /Run #479/ }));
+    await expect(args.onRuleChange).toHaveBeenLastCalledWith('run:479');
+    await waitFor(() => expect(picker).toHaveTextContent('vs. Run #479'));
+    await userEvent.click(body.getByRole('button', { name: 'Compare' }));
+    await userEvent.click(await body.findByRole('button', { name: 'Side by side' }));
+    await expect(await body.findByRole('img', { name: /Run #479/ })).toBeInTheDocument();
   },
 };

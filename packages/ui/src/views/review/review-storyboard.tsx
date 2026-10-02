@@ -34,6 +34,7 @@ import {
 } from '../../lib/review';
 import { toneSolid } from '../../lib/tone';
 import { CheckpointViewer, type ReviewCommentsProps, type ReviewSelection } from './checkpoint-viewer';
+import type { CompareWithProps } from './compare-target-picker';
 import type { IgnoreRect } from './ignore-regions-editor';
 import { approveFolderAction, ReviewTree } from './review-tree';
 import { SCREEN_ZOOM_VAR } from './screen-frame';
@@ -133,6 +134,7 @@ export function ReviewStoryboard({
   onIgnoreRegionsChange,
   ignorePendingId,
   comments,
+  compareWith,
 }: {
   flows: readonly ReviewFlowView[];
   filter?: ReviewFilter;
@@ -176,6 +178,8 @@ export function ReviewStoryboard({
   ignorePendingId?: string | null;
   /** Comment threads on the images, in the viewer. */
   comments?: ReviewCommentsProps;
+  /** What the viewer compares the open image with. */
+  compareWith?: CompareWithProps;
 }) {
   const library = mode === 'library';
   const hasNeedsReview = useMemo(() => flows.some((f) => f.checkpoints.some((c) => c.captures.some((cap) => NEEDS_REVIEW.includes(cap.status)))), [flows]);
@@ -395,6 +399,7 @@ export function ReviewStoryboard({
         onIgnoreRegionsChange={onIgnoreRegionsChange}
         ignorePendingId={ignorePendingId}
         comments={comments}
+        compareWith={compareWith}
       />
     </div>
   );

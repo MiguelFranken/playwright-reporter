@@ -1,6 +1,6 @@
 'use client';
 
-import { useQueries, useQueryClient } from '@tanstack/react-query';
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useOptimistic, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import {
@@ -8,9 +8,12 @@ import {
   DEFAULT_REVIEW_PANEL,
   reviewPanel,
   type ReviewPanelSettings,
+  parseCompareRule,
   parseReviewFilter,
+  resolveCompare,
   REVIEW_GROUPINGS,
   REVIEW_SORTS,
+  type CompareRule,
   type FrameSettings,
   type ReviewCaptureView,
   type ReviewDecisionInput,
@@ -38,7 +41,7 @@ import {
   setReviewThreadStatus,
 } from '@/app/(app)/teams/[team]/projects/[project]/review/actions';
 import { applyDecision, patchCaptures } from '@/lib/review/patch-flows';
-import { captureDiffQuery } from '@/lib/rpc/queries';
+import { captureDiffQuery, compareTargetsQuery } from '@/lib/rpc/queries';
 
 /** What changes at once, before the revalidated page confirms it. */
 type Change =
@@ -166,6 +169,34 @@ function withLive(flows: ReviewFlowView[], live: ReadonlyMap<string, LiveCapture
   });
 }
 
+/** The one image the viewer shows on its own, the only one a "Compare with" applies to. */
+function openCapture(flows: readonly ReviewFlowView[], selection: ReviewSelection | null): ReviewCaptureView | null {
+  if (!selection) return null;
+  const cp = flows.flatMap((f) => f.checkpoints).find((c) => c.id === selection.checkpointId || c.aliases?.includes(selection.checkpointId));
+  const shown = (cp?.captures ?? []).filter((c) => !selection.variant || c.variant === selection.variant);
+  return shown.length === 1 ? shown[0] : null;
+}
+
+/**
+ * The reviewer's "Compare with" rule, resolved for the open image: the other
+ * runs that captured its screen are asked for, and the reference the rule
+ * picks becomes the capture's `compare`, which the live measurements then
+ * measure like a library comparison. The default reference needs no patch.
+ */
+function useCompareWith(ref: { team: string; project: string }, flows: ReviewFlowView[], selection: ReviewSelection | null, rule: CompareRule) {
+  const open = useMemo(() => openCapture(flows, selection), [flows, selection]);
+  const query = useQuery({ ...compareTargetsQuery(ref, open?.id ?? ''), enabled: Boolean(open) });
+  // A failed read offers no other runs; the default comparison still works.
+  const targets = !open ? undefined : query.isError ? [] : query.data?.targets;
+  const compared = useMemo(() => {
+    if (!open) return flows;
+    const { target } = resolveCompare(open, rule, targets);
+    if (!target) return flows;
+    return patchCaptures(flows, (cap) => (cap.id === open.id ? { ...cap, compare: target, diff: null } : undefined));
+  }, [flows, open, rule, targets]);
+  return { flows: compared, targets };
+}
+
 const SETTINGS_KEY = 'pwr.review.view';
 
 interface ViewSettings {
@@ -217,6 +248,8 @@ export function useReviewActions({
   viewerId,
   openThread,
   onOpenThreadChange,
+  compareRule,
+  onCompareRuleChange,
 }: {
   team: string;
   project: string;
@@ -229,13 +262,19 @@ export function useReviewActions({
   viewerId: string | null;
   openThread: number | null;
   onOpenThreadChange: (n: number | null) => void;
+  /** What the viewer compares the open image with; kept here when the host does not keep it (in the URL). */
+  compareRule?: CompareRule;
+  onCompareRuleChange?: (next: CompareRule) => void;
 }) {
   const [pendingIds, setPendingIds] = useState<string[]>([]);
   const [ignorePendingId, setIgnorePendingId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const [, startTransition] = useTransition();
-  const live = useLiveDiffs({ team, project }, flows, selection);
-  const withLiveFlows = useMemo(() => withLive(flows, live), [flows, live]);
+  const [ownRule, setOwnRule] = useState<CompareRule>('auto');
+  const rule = compareRule ?? ownRule;
+  const compare = useCompareWith({ team, project }, flows, selection, rule);
+  const live = useLiveDiffs({ team, project }, compare.flows, selection);
+  const withLiveFlows = useMemo(() => withLive(compare.flows, live), [compare.flows, live]);
   const [optimistic, addChange] = useOptimistic(withLiveFlows, applyChange);
   const onIgnoreRegionsChange = (input: { captureId: string; regions: IgnoreRect[] }) => {
     setIgnorePendingId(input.captureId);
@@ -297,7 +336,15 @@ export function useReviewActions({
       commentAction({ type: 'delete', input }, () => deleteReviewComment(ref, { commentId: input.commentId }));
     },
   };
-  return { flows: optimistic, pendingIds, onDecide, onIgnoreRegionsChange, ignorePendingId, comments };
+  const compareWith = {
+    rule,
+    onRuleChange: (next: CompareRule) => {
+      setOwnRule(next);
+      onCompareRuleChange?.(next);
+    },
+    targets: compare.targets,
+  };
+  return { flows: optimistic, pendingIds, onDecide, onIgnoreRegionsChange, ignorePendingId, comments, compareWith };
 }
 
 /**
@@ -369,7 +416,7 @@ export function UrlReviewStoryboard({
   const sortParam = params.get('sort');
   const sort = (REVIEW_SORTS as readonly string[]).includes(sortParam ?? '') ? (sortParam as ReviewSort) : undefined;
   const [localThread, setLocalThread] = useState<number | null>(null);
-  const { flows: optimistic, pendingIds, onDecide, onIgnoreRegionsChange, ignorePendingId, comments } = useReviewActions({
+  const { flows: optimistic, pendingIds, onDecide, onIgnoreRegionsChange, ignorePendingId, comments, compareWith } = useReviewActions({
     team,
     project,
     flows,
@@ -381,6 +428,9 @@ export function UrlReviewStoryboard({
     viewerId,
     openThread: syncUrl ? Number(params.get('thread')) || null : localThread,
     onOpenThreadChange: (n) => (syncUrl ? set({ thread: n ? String(n) : null }) : setLocalThread(n)),
+    // `against=previous`, `against=run:38`: a link keeps what its checkpoint was compared with.
+    compareRule: syncUrl ? parseCompareRule(params.get('against')) : undefined,
+    onCompareRuleChange: syncUrl ? (next) => set({ against: next === 'auto' ? null : next }) : undefined,
   });
 
   return (
@@ -425,6 +475,7 @@ export function UrlReviewStoryboard({
       onIgnoreRegionsChange={canDecide && mode !== 'library' ? onIgnoreRegionsChange : undefined}
       ignorePendingId={ignorePendingId}
       comments={comments}
+      compareWith={compareWith}
     />
   );
 }

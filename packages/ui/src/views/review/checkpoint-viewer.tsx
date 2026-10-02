@@ -15,6 +15,8 @@ import { formatDateTime } from '../../lib/format';
 import {
   captureViewport,
   checkpointLabel,
+  COMPARE_RULE_LABELS,
+  compareRuleRun,
   compareVariants,
   DEFAULT_FRAME,
   frameFor,
@@ -28,6 +30,7 @@ import {
   type ReviewPanelSettings,
   type FrameSize,
   NEEDS_REVIEW,
+  resolveCompare,
   type ReviewCaptureView,
   type ReviewCheckpointView,
   type ReviewDecisionInput,
@@ -42,6 +45,7 @@ import { DebugWithAiMenu } from '../../patterns/debug-with-ai-menu';
 import { DiffHighlight, diffImageSize } from './diff-highlight';
 import { DiffSummary } from './diff-summary';
 import { COMPARE_MODE_LABELS, COMPARE_MODES, ImageCompare, type CompareMode } from './image-compare';
+import { CompareTargetPicker, type CompareWithProps } from './compare-target-picker';
 import { IgnoreRegionsEditor, type IgnoreRect } from './ignore-regions-editor';
 import { FrameToolbar } from './frame-toolbar';
 import { PinLayer, undoDraftShape, type PinFocusRequest, type ThreadDraft } from './pin-layer';
@@ -234,6 +238,7 @@ export function CheckpointViewer({
   resolve,
   panel: panelProp,
   onPanelChange,
+  compareWith,
 }: {
   flows: readonly ReviewFlowView[];
   selection: ReviewSelection | null;
@@ -257,6 +262,12 @@ export function CheckpointViewer({
   /** The side panel, shown or folded and how wide; uncontrolled when absent. */
   panel?: ReviewPanelSettings | null;
   onPanelChange?: (next: ReviewPanelSettings) => void;
+  /**
+   * What the open image is compared with, chosen by the reviewer. The host
+   * resolves the rule into the capture's `compare` (and its measurement), so
+   * the viewer shows it like any other reference.
+   */
+  compareWith?: CompareWithProps;
 }) {
   const library = mode === 'library';
   const resolving = resolve ?? null;
@@ -332,6 +343,14 @@ export function CheckpointViewer({
   const doneCount = resolving ? resolving.items.filter((i) => isDone(i)).length : 0;
   const measuredSize = current ? compared[0].size : null;
   const hasChanges = Boolean(current && compared[0].changes);
+  // The reviewer's rule found nothing for this image: say so beside the default shown instead.
+  const compareFallback = (() => {
+    if (!current || !compareWith || !resolveCompare(current, compareWith.rule, compareWith.targets).fellBack) return null;
+    const run = compareRuleRun(compareWith.rule);
+    if (run) return `Run #${run} did not capture this screen.`;
+    if (compareWith.rule === 'comments') return 'No earlier image of this screen has open comments.';
+    return `No ${COMPARE_RULE_LABELS[compareWith.rule as 'baseline' | 'previous'].toLowerCase()} for this image.`;
+  })();
   const regions = hasChanges ? diff!.regions : [];
   const ownSize = current?.image.width && current.image.height ? { width: current.image.width, height: current.image.height } : null;
   const canIgnore = Boolean(onIgnoreRegionsChange && canDecide && !current?.compare && current?.image.available && (measuredSize ?? ownSize));
@@ -679,7 +698,7 @@ export function CheckpointViewer({
       // Arrow keys inside a toggle group move between its options, and in the pin layer move its crosshair.
       if (e.key.startsWith('Arrow') && target?.closest('[data-slot="toggle-group"], [data-slot="pin-layer"], [data-slot="compare-split"]')) return;
       // A popover or menu open over the viewer handles its own keys.
-      if (target?.closest('[data-slot="popover-content"], [role="menu"]')) return;
+      if (target?.closest('[data-slot="popover-content"], [data-slot="select-content"], [role="menu"]')) return;
       const key = e.key.toLowerCase();
       if (e.key === 'Escape' && commenting) {
         // Out of comment mode first; a second Escape closes the viewer.
@@ -991,6 +1010,7 @@ export function CheckpointViewer({
                   ) : null}
                 </div>
               ) : null}
+              {current && compareWith ? <CompareTargetPicker capture={current} referenceLabel={reference?.label ?? null} {...compareWith} /> : null}
               <div className="ml-auto flex items-center gap-3">
                 <div className="flex items-center gap-0.5">
                   <Button variant="ghost" size="icon-sm" aria-label="Previous checkpoint" disabled={at <= 0} onClick={() => move(-1)}>
@@ -1323,6 +1343,11 @@ export function CheckpointViewer({
                               : undefined
                           }
                         />
+                      ) : null}
+                      {compareFallback ? (
+                        <p className="text-xs text-muted-foreground">
+                          {compareFallback} {reference ? `Compared with ${reference.label.toLowerCase()} instead.` : ''}
+                        </p>
                       ) : null}
                       {current && reference && diff && !reference.same ? (
                         <DiffSummary diff={diff} referenceLabel={reference.label} />
