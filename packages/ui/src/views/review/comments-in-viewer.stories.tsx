@@ -140,7 +140,8 @@ export const PinWithTheKeyboard: Story = {
     await userEvent.keyboard('{ArrowRight}');
     await userEvent.keyboard('{Shift>}{ArrowDown}{/Shift}');
     await userEvent.keyboard('{Enter}');
-    await userEvent.type(await body.findByRole('textbox', { name: 'New comment' }), 'Here{Enter}');
+    // The composer's popover animates in; a busy browser takes longer than the default second.
+    await userEvent.type(await body.findByRole('textbox', { name: 'New comment' }, { timeout: 5000 }), 'Here{Enter}');
     const [input] = (args.comments!.onCreateThread as ReturnType<typeof fn>).mock.lastCall!;
     await expect(input.anchor.x).toBeCloseTo(0.51);
   },

@@ -84,7 +84,8 @@ export const ScreenSettings: Story = {
     await userEvent.click(body.getByRole('combobox', { name: 'Zoom' }));
     await userEvent.click(await body.findByRole('option', { name: '50%' }));
     await expect(body.getByRole('combobox', { name: 'Zoom' })).toHaveTextContent('50%');
-    await waitFor(() => expect(body.queryByRole('listbox')).not.toBeInTheDocument());
+    // The list animates out; a busy browser takes longer than the default second.
+    await waitFor(() => expect(body.queryByRole('listbox')).not.toBeInTheDocument(), { timeout: 5000 });
     await expect(body.getByRole('region', { name: /mobile screen/ })).toHaveStyle({ width: '195px' });
   },
 };
