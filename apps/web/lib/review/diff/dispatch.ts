@@ -16,19 +16,12 @@
 import { after } from 'next/server';
 import { start } from 'workflow/api';
 import type { ComparedCapture } from '../queries';
-import { approveWithinTolerance, measureDiff, needsPlanning, planCaptures, planRun } from './store';
+import { approveWithinTolerance, measureDiff, needsPlanning, planCaptures, planRun, runCaptures } from './store';
+import { proactiveAnalyses } from '../analysis/jobs';
+import { diffDriver, diffsEnabled, dispatchMeasurements, type DiffDriver } from './measure';
 import { diffPairs, diffRun } from './workflow/diff.workflow';
 
-export type DiffDriver = 'workflow' | 'inline' | 'none';
-
-export function diffDriver(env: Record<string, string | undefined> = process.env): DiffDriver {
-  const d = env.IMAGE_DIFF_DRIVER;
-  if (d === 'workflow' || d === 'inline' || d === 'none') return d;
-  if (env.VERCEL) return env.VERCEL_ENV === 'production' ? 'workflow' : 'none';
-  return 'workflow';
-}
-
-export const diffsEnabled = () => diffDriver() !== 'none';
+export { diffDriver, diffsEnabled, dispatchMeasurements, type DiffDriver };
 
 async function inline(ids: readonly string[], runId: string) {
   for (const id of ids) {
@@ -45,6 +38,7 @@ export async function dispatchRun(runId: string) {
   else if (driver === 'inline') {
     const plan = await planRun(runId);
     await inline(plan.ids, runId);
+    await proactiveAnalyses(runId, await runCaptures(runId));
   }
 }
 
@@ -78,7 +72,13 @@ export function afterRunFinished(runId: string) {
  * died), once the page is sent.
  */
 export function afterCapturesShown(runId: string, captures: readonly ComparedCapture[]) {
-  if (!diffsEnabled() || !needsPlanning(captures)) return;
+  if (!diffsEnabled()) return;
+  // A comparison an agent had measured (without approving) may be within the tolerance already.
+  const due = captures.some((c) => c.status === 'changed' && c.withinTolerance && !c.decision);
+  if (!needsPlanning(captures)) {
+    if (due) later('approving shown captures', () => approveWithinTolerance(runId, captures));
+    return;
+  }
   later('planning shown captures', async () => {
     const plan = await planCaptures(captures);
     await dispatchPairs(plan.ids, runId);

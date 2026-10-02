@@ -18,6 +18,7 @@ import { MAX_COMMENT_LENGTH, projectAnchor } from '@miguelfranken/ui/lib/review-
 import { MARKUP_COLORS, MARKUP_TOOLS, type MarkupShape } from '@miguelfranken/ui/lib/review-markup';
 import { signCaptureImagePath } from '@/lib/auth/artifact-url';
 import { baseUrl } from '@/lib/auth/config';
+import { encodeComparisonId, IGNORE_FILTERS, ignoreStates, matchesIgnoreFilter } from '@miguelfranken/ui/lib/visual-diff';
 import { annotate, cropAround } from '@/lib/review/annotate';
 import { captureDrawings, pinSpecs, readCaptureBytes, threadComments, threadDrawing, threadPosition } from '@/lib/review/images';
 import { createThread, ThreadError, type CaptureThread } from '@/lib/review/threads';
@@ -159,6 +160,7 @@ const listInput = z.object({
     .describe('needs-review (default: changed and new images), all, changed, new, changes_requested or approved.'),
   test: z.string().optional().describe('Part of a test title or file, to narrow the list.'),
   variant: z.string().optional().describe('Only this variant, e.g. "desktop" or "mobile".'),
+  ignore: z.enum(IGNORE_FILTERS).optional().describe('Only images whose rules (areas left out of the comparison) are: active, ever, applied, suppressed, fully-suppressed or needs-review.'),
 });
 
 const diffOut = z
@@ -185,6 +187,10 @@ const captureOut = z.object({
   autoApproved: z.boolean().describe('Approved by the project’s diff tolerance, not by a person.'),
   diff: diffOut.describe('The measured pixel comparison, when there is one.'),
   openThreads: z.number().optional().describe('Open comment threads on the image: see them pinned with get_review_checkpoint.'),
+  ignore: z
+    .object({ active: z.number(), applied: z.number(), suspended: z.number(), rawChangedPixels: z.number().nullable(), suppressedPixels: z.number().nullable(), states: z.array(z.enum(IGNORE_FILTERS)) })
+    .optional()
+    .describe('The checkpoint’s rules (areas left out) and what they did here; absent when none was ever saved.'),
 });
 
 function diffData(c: ComparedCapture): z.infer<typeof diffOut> {
@@ -263,7 +269,7 @@ export const listReviewCheckpoints = defineTool({
               steps: cp.stepPath,
               url: cp.url,
               captures: captures
-                .filter((c) => matchesReviewFilter(c.status, filter))
+                .filter((c) => matchesReviewFilter(c.status, filter) && matchesIgnoreFilter(c.ignore, args.ignore))
                 .map((c) => ({
                   captureId: c.id,
                   variant: c.variant,
@@ -274,6 +280,7 @@ export const listReviewCheckpoints = defineTool({
                   autoApproved: c.decision?.source === 'tolerance',
                   diff: diffData(c),
                   openThreads: c.threads.filter((t) => t.status === 'open').length,
+                  ...(c.ignore.ever ? { ignore: { active: c.ignore.active, applied: c.ignore.applied, suspended: c.ignore.suspended, rawChangedPixels: c.ignore.rawChangedPixels, suppressedPixels: c.ignore.suppressedPixels, states: [...ignoreStates(c.ignore)] } } : {}),
                 })),
             };
           })
@@ -364,6 +371,8 @@ const getOutput = output({
     .optional()
     .describe('The image compared with — chosen by "against" — kept apart from what the pixel diff was measured against.'),
   diff: diffOut,
+  comparisonId: z.string().nullable().optional().describe('The pair shown (the image compared with → this image) for get_visual_diff and get_visual_diff_image: every region, raw and effective numbers, and images in any mode.'),
+  measuredComparisonId: z.string().nullable().optional().describe('The pair the diff below was measured against, when it is another one.'),
   changedRegions: z.array(z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number(), pixels: z.number() })).describe('The changed regions, in the image’s pixels, largest first (up to 10).'),
   note: z.string().nullable(),
   image: z
@@ -662,6 +671,8 @@ export const getReviewCheckpoint = defineTool({
           }
         : null,
       diff: diffData(capture),
+      comparisonId: reference ? encodeComparisonId(reference.id, capture.id) : null,
+      measuredComparisonId: measuredAgainst && measuredAgainst.id !== reference?.id ? encodeComparisonId(measuredAgainst.id, capture.id) : null,
       changedRegions: [...(capture.diff?.regions ?? [])].sort((a, b) => b.pixels - a.pixels).slice(0, 10),
       note: [...notes, hidden > 0 ? `${hidden} resolved thread${hidden === 1 ? '' : 's'} not shown (includeResolved).` : null].filter(Boolean).join(' ') || null,
       image: main?.out
@@ -695,6 +706,7 @@ export const getReviewCheckpoint = defineTool({
           ['Image link', d.imageUrl],
           ['With pins', threads.length ? (d.annotatedImageUrl ?? null) : null],
           ['Compared image', d.referenceUrl],
+          ['Comparison', d.comparisonId ? `${d.comparisonId} — get_visual_diff lists every region raw and effective; get_visual_diff_image shows them in any mode` : null],
         ]);
         if (d.attachments?.length) md.line(`Attached, in order: ${d.attachments.map((a, i) => `${i + 1}. ${a}`).join('; ')}.`);
         if (d.omittedImages?.length) md.line(`Not attached: ${d.omittedImages.join('; ')}. Ask with images "focus" and a thread, or a higher maxImages.`);

@@ -42,10 +42,13 @@ import { fixCommentsPrompt } from '../../lib/ai-handoff';
 import { openingComment, openThreadCount, sortThreads, threadStage, type ReviewThreadView, type ThreadActions, type ThreadFilter } from '../../lib/review-threads';
 import { DebugWithAiMenu } from '../../patterns/debug-with-ai-menu';
 import { DiffHighlight, diffImageSize } from './diff-highlight';
+import { AnalysisPanel } from './analysis-panel';
+import { comparisonIdOf, DiffRegionList, VisualDiffAiActions } from './diff-regions';
 import { DiffSummary } from './diff-summary';
 import { COMPARE_MODE_LABELS, COMPARE_MODES, ImageCompare, type CompareMode } from './image-compare';
 import { CompareTargetPicker, type CompareWithProps } from './compare-target-picker';
-import { IgnoreRegionsEditor, type IgnoreRect } from './ignore-regions-editor';
+import { IgnoreRegionsEditor, type IgnoreRect, type IgnoreRulesChange } from './ignore-regions-editor';
+import { regionId, type AiMode, type AnalysisView, type IgnorePreviewView, type MaskPolicy, type Rect } from '../../lib/visual-diff';
 import { FrameToolbar } from './frame-toolbar';
 import { PinLayer, type PinFocusRequest, type ThreadDraft } from './pin-layer';
 import { CommentBar } from './markup-toolbar';
@@ -158,6 +161,18 @@ function referenceOf(capture: ReviewCaptureView): { captureId: string; image: Re
   return null;
 }
 
+/** The AI analysis of the open capture against its reference, as the host offers it. */
+export interface ViewerAnalysisProps {
+  allowed: boolean;
+  reason?: string | null;
+  mode?: AiMode | null;
+  analyses: readonly AnalysisView[];
+  pending?: boolean;
+  decidingId?: string | null;
+  onAnalyze?: (input: { captureId: string; baseCaptureId: string }) => void;
+  onDecide?: (input: { suggestionId: string; decision: 'accepted' | 'rejected'; rects?: Rect[]; captureId: string }) => void;
+}
+
 /** A screen on show with what it is compared with, and whether measured changes can be marked on it. */
 interface Compared {
   capture: ReviewCaptureView;
@@ -167,11 +182,21 @@ interface Compared {
   changes: boolean;
 }
 
+/** The raw measurement (before the rules left areas out), when it exists and found something. */
+const rawOf = (diff: ReviewDiffView | null) => (diff?.raw && diff.raw.state === 'done' && diff.raw.changedPixels > 0 ? diff.raw : null);
+
 function comparisonOf(capture: ReviewCaptureView): Compared {
   const reference = referenceOf(capture);
   const diff = reference ? (capture.diff ?? null) : null;
   const size = diff ? diffImageSize(capture.image, diff) : null;
-  return { capture, reference, diff, size, changes: Boolean(capture.image.available && diff?.state === 'done' && (diff.changedPixels > 0 || diff.sizeChanged) && size) };
+  // With the rules applied nothing may remain; the raw changes can still be shown.
+  return { capture, reference, diff, size, changes: Boolean(capture.image.available && diff?.state === 'done' && (diff.changedPixels > 0 || diff.sizeChanged || rawOf(diff)) && size) };
+}
+
+/** The diff as the chosen policy shows it: effective, or the raw measurement's numbers and regions. */
+function diffUnder(diff: ReviewDiffView, policy: MaskPolicy): ReviewDiffView {
+  const raw = policy === 'raw' ? rawOf(diff) : null;
+  return raw ? { ...diff, changedPixels: raw.changedPixels, ratio: raw.ratio, regions: raw.regions, overlayUrl: raw.overlayUrl ?? null } : diff;
 }
 
 /** The threads of a capture placed on `referenceId` (the image shown beside it), drawn there where they were placed. */
@@ -247,6 +272,9 @@ export function CheckpointViewer({
   mode = 'review',
   onIgnoreRegionsChange,
   ignorePendingId,
+  onIgnorePreview,
+  ignorePreview,
+  analysis,
   comments = {},
   resolve,
   panel: panelProp,
@@ -266,7 +294,13 @@ export function CheckpointViewer({
   /** `library`: the screens as documentation — where each stands in the review loop instead of a run's statuses; decisions only with `canDecide` and `onDecide`. */
   mode?: StoryboardMode;
   /** Saves the areas a capture's checkpoint and variant leave out of comparisons; without it they cannot be edited. */
-  onIgnoreRegionsChange?: (input: { captureId: string; regions: IgnoreRect[] }) => void;
+  onIgnoreRegionsChange?: (input: IgnoreRulesChange) => void;
+  /** Measures what rectangles drawn in the editor would leave out of the open capture's comparison. */
+  onIgnorePreview?: (input: { captureId: string; regions: IgnoreRect[] }) => void;
+  /** The answer to the last `onIgnorePreview`. */
+  ignorePreview?: { pending: boolean; result: IgnorePreviewView | null; error?: string | null } | null;
+  /** The AI analysis of the open capture against its reference, when the host offers one. */
+  analysis?: ViewerAnalysisProps | null;
   /** The capture whose ignored areas are being saved. */
   ignorePendingId?: string | null;
   comments?: ReviewCommentsProps;
@@ -293,6 +327,10 @@ export function CheckpointViewer({
   // The comparison last picked: "Compare" goes back to it.
   const [compareMode, setCompareMode] = useState<CompareStage>('changes');
   const [activeRegion, setActiveRegion] = useState<number | null>(null);
+  // With rules applied, the raw measurement (before they left areas out) can be shown instead of the effective one.
+  const [maskPolicy, setMaskPolicy] = useState<MaskPolicy>('effective');
+  // Rectangles a suggestion handed to the editor, drawn in before the person adjusts them.
+  const [prefill, setPrefill] = useState<Rect[] | null>(null);
   // Every variant at once, each screen's own selected change.
   const [activeOf, setActiveOf] = useState<Readonly<Record<string, number>>>({});
   const [commenting, setCommenting] = useState(false);
@@ -402,7 +440,9 @@ export function CheckpointViewer({
     if (compareWith.rule === 'comments') return 'No earlier image of this screen has open comments.';
     return `No ${COMPARE_RULE_LABELS[compareWith.rule as 'baseline' | 'previous'].toLowerCase()} for this image.`;
   })();
-  const regions = hasChanges ? diff!.regions : [];
+  const rawAvailable = Boolean(diff && rawOf(diff));
+  const shownDiff = diff ? diffUnder(diff, maskPolicy) : null;
+  const regions = hasChanges && shownDiff ? shownDiff.regions : [];
   const ownSize = current?.image.width && current.image.height ? { width: current.image.width, height: current.image.height } : null;
   const canIgnore = Boolean(onIgnoreRegionsChange && canDecide && !current?.compare && current?.image.available && (measuredSize ?? ownSize));
   // The view picked holds from screen to screen: one without measured changes is compared side by side rather than
@@ -558,6 +598,7 @@ export function CheckpointViewer({
   useEffect(() => {
     setActiveRegion(null);
     setActiveOf({});
+    setMaskPolicy('effective');
     setDraft(null);
     setDrawHistory([]);
     setComposing(false);
@@ -1016,7 +1057,7 @@ export function CheckpointViewer({
     if (!x.reference) return plain('Nothing to compare with yet');
     if (effectiveStage === 'changes') {
       if (!x.changes || !x.diff) return plain(x.reference.same ? `Identical to ${x.reference.label.toLowerCase()}` : x.diff?.state === 'done' ? 'No changes measured' : 'Not measured yet');
-      const count = x.diff.regions.length;
+      const count = diffUnder(x.diff, maskPolicy).regions.length;
       return (
         <StagePane
           key={c.id}
@@ -1034,7 +1075,7 @@ export function CheckpointViewer({
         >
           <DiffHighlight
             image={c.image}
-            diff={x.diff}
+            diff={diffUnder(x.diff, maskPolicy)}
             frame={at[0]}
             zoom={zoom}
             live
@@ -1043,6 +1084,7 @@ export function CheckpointViewer({
             active={multi ? (activeOf[c.id] ?? null) : activeRegion}
             onActiveChange={multi ? (i) => setActiveOf((a) => ({ ...a, [c.id]: i })) : setActiveRegion}
             minimapLabel={multi ? `Where the changes are, ${c.variant}` : undefined}
+            ignored={c.ignoreRegions}
           >
             {pinLayer(c, name)}
           </DiffHighlight>
@@ -1283,9 +1325,31 @@ export function CheckpointViewer({
                         </Button>
                       </div>
                     ) : null}
+                    {effectiveStage === 'changes' && (rawAvailable || compared.some((x) => rawOf(x.diff))) ? (
+                      <ToggleGroup
+                        variant="segment"
+                        size="sm"
+                        value={[maskPolicy]}
+                        onValueChange={(v) => {
+                          if (v[0]) {
+                            setMaskPolicy(v[0] as MaskPolicy);
+                            setActiveRegion(null);
+                            setActiveOf({});
+                          }
+                        }}
+                        aria-label="Which changes"
+                      >
+                        <ToggleGroupItem value="effective" title="What counts: the changes outside the areas left out">
+                          With rules
+                        </ToggleGroupItem>
+                        <ToggleGroupItem value="raw" title="Every changed pixel, areas left out included">
+                          Raw
+                        </ToggleGroupItem>
+                      </ToggleGroup>
+                    ) : null}
                     {canIgnore ? (
                       <Button variant={effectiveStage === 'ignore' ? 'secondary' : 'ghost'} size="sm" aria-pressed={effectiveStage === 'ignore'} onClick={() => setStage(effectiveStage === 'ignore' ? 'changes' : 'ignore')}>
-                        <EyeOff /> Leave out areas
+                        <EyeOff /> Leave out areas{current?.ignore?.active ? ` (${current.ignore.active})` : ''}
                       </Button>
                     ) : null}
                     {effectiveStage === 'side-by-side' ? (
@@ -1430,6 +1494,7 @@ export function CheckpointViewer({
                     />
                   ) : current && effectiveStage === 'ignore' && onIgnoreRegionsChange ? (
                     <IgnoreRegionsEditor
+                      captureId={current.id}
                       image={current.image}
                       imageSize={(measuredSize ?? ownSize)!}
                       frame={frames[0]}
@@ -1437,13 +1502,21 @@ export function CheckpointViewer({
                       live
                       room={tall}
                       alt={label}
-                      value={current.ignoreRegions ?? []}
+                      rules={current.ignore?.rules ?? []}
+                      revision={current.ignore?.revision ?? 0}
+                      prefill={prefill}
                       pending={ignorePendingId === current.id}
-                      onSave={(next) => {
-                        onIgnoreRegionsChange({ captureId: current.id, regions: next });
+                      onPreview={onIgnorePreview && reference ? (regions) => onIgnorePreview({ captureId: current.id, regions }) : undefined}
+                      preview={onIgnorePreview && reference ? ignorePreview : null}
+                      onSave={(change) => {
+                        onIgnoreRegionsChange(change);
+                        setPrefill(null);
                         showStage('changes');
                       }}
-                      onCancel={() => showStage('changes')}
+                      onCancel={() => {
+                        setPrefill(null);
+                        showStage('changes');
+                      }}
                     />
                   ) : comparing ? (
                     <div className={cn(paneRow(fill), fill && 'mx-auto')}>{compared.map((x, i) => comparison(x, paneFrames[i]))}</div>
@@ -1633,16 +1706,65 @@ export function CheckpointViewer({
                           </p>
                         ) : null}
                         {current && reference && diff && !reference.same ? (
-                          <DiffSummary diff={diff} referenceLabel={reference.label} />
+                          <>
+                            <DiffSummary diff={diff} referenceLabel={reference.label} />
+                            {hasChanges ? (
+                              <DiffRegionList
+                                regions={regions}
+                                ignored={current.ignoreRegions ?? []}
+                                active={activeRegion}
+                                onSelect={(i) => {
+                                  setVerifying(false);
+                                  if (effectiveStage !== 'changes') showStage('changes');
+                                  setActiveRegion(i);
+                                }}
+                              />
+                            ) : null}
+                            {assistant && hasChanges && comparisonIdOf(reference.captureId, current.id) ? (
+                              <VisualDiffAiActions
+                                comparisonId={comparisonIdOf(reference.captureId, current.id)!}
+                                regions={regions}
+                                active={activeRegion}
+                                project={assistant.project}
+                                screen={`${screenName} (${current.variant})`}
+                                setupHref={assistant.setupHref}
+                              />
+                            ) : null}
+                          </>
                         ) : current && reference ? (
                           <p className="text-xs text-muted-foreground">{reference.same ? `Identical to ${reference.label.toLowerCase()}.` : `Differs from ${reference.label.toLowerCase()}.`}</p>
                         ) : current ? (
                           <p className="text-xs text-muted-foreground">Nothing to compare with yet: this is the first capture of this checkpoint.</p>
                         ) : null}
-                        {current?.ignoreRegions?.length ? (
-                          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <EyeOff className="size-3.5" /> {current.ignoreRegions.length} {current.ignoreRegions.length === 1 ? 'area is' : 'areas are'} left out of the comparison.
+                        {current?.ignore?.ever ? <IgnoreNote capture={current} /> : null}
+                        {current?.staleTolerance ? (
+                          <p role="note" className="flex items-start gap-1.5 rounded-md border border-info-border bg-info-subtle p-2 text-xs text-info-text">
+                            <History aria-hidden className="mt-px size-3.5 shrink-0" />
+                            <span>Approved automatically on {formatDateTime(current.staleTolerance.at)} under earlier rules; the rules changed since, so the image is reviewed again.</span>
                           </p>
+                        ) : null}
+                        {analysis && current && reference && hasChanges ? (
+                          <AnalysisPanel
+                            allowed={analysis.allowed}
+                            reason={analysis.reason}
+                            mode={analysis.mode}
+                            analyses={analysis.analyses}
+                            pending={analysis.pending}
+                            decidingId={analysis.decidingId}
+                            onAnalyze={analysis.onAnalyze ? () => analysis.onAnalyze!({ captureId: current.id, baseCaptureId: reference.captureId }) : undefined}
+                            onDecide={analysis.onDecide ? (input) => analysis.onDecide!({ ...input, captureId: current.id }) : undefined}
+                            onFocusRegion={(id) => {
+                              const i = regions.findIndex((r) => regionId(r) === id);
+                              if (i < 0) return;
+                              setVerifying(false);
+                              if (effectiveStage !== 'changes') showStage('changes');
+                              setActiveRegion(i);
+                            }}
+                            onEditRects={canIgnore ? (rects) => {
+                              setPrefill(rects);
+                              setStage('ignore');
+                            } : undefined}
+                          />
                         ) : null}
                       </section>
 
@@ -1758,6 +1880,22 @@ const SHORTCUTS: [string[], string][] = [
   [['Esc'], 'Leave comment mode, then close'],
 ];
 
+
+/** The checkpoint's rules and what they did to this comparison, in a line. */
+function IgnoreNote({ capture }: { capture: ReviewCaptureView }) {
+  const g = capture.ignore!;
+  const parts = [
+    g.active ? `${g.active} ${g.active === 1 ? 'area is' : 'areas are'} left out of the comparison` : 'Areas were left out once; none is switched on now',
+    g.suspended ? `${g.suspended} not applied here: drawn on an image of another size` : null,
+    g.suppressedPixels ? `${g.suppressedPixels.toLocaleString('en')} changed px left out${g.rawChangedPixels !== null ? ` of ${g.rawChangedPixels.toLocaleString('en')} raw` : ''}` : null,
+  ].filter(Boolean);
+  return (
+    <p className={cn('flex items-start gap-1.5 text-xs', g.suspended ? 'text-warning-text' : 'text-muted-foreground')}>
+      <EyeOff aria-hidden className="mt-px size-3.5 shrink-0" />
+      <span>{parts.join(' · ')}.</span>
+    </p>
+  );
+}
 
 function statusWord(c: ReviewCaptureView) {
   return { approved: 'approved', changes_requested: 'changes requested', changed: 'changed', new: 'new' }[c.status];

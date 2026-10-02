@@ -28,7 +28,8 @@ import { defaultFeedbackScope, feedbackQueue, feedbackScopeCounts, flowsWithFeed
 import { buildReviewTree, DEFAULT_FRAME, folderId, folderPathOf, inFolder, variantsOf, type FrameSettings, type ReviewPanelSettings, type ReviewDecisionInput, type ReviewFlowView, type ReviewGrouping } from '../../lib/review';
 import { CheckpointViewer, type ReviewCommentsProps, type ReviewSelection } from '../review/checkpoint-viewer';
 import type { CompareWithProps } from '../review/compare-target-picker';
-import type { IgnoreRect } from '../review/ignore-regions-editor';
+import type { IgnoreRect, IgnoreRulesChange } from '../review/ignore-regions-editor';
+import type { IgnorePreviewView } from '../../lib/visual-diff';
 import { filterFlows } from '../review/review-storyboard';
 import { approveFolderAction, ReviewTree, type FolderAction, type FolderMenuTarget } from '../review/review-tree';
 import { SCREEN_ZOOM_VAR } from '../review/screen-frame';
@@ -107,7 +108,7 @@ export interface LibraryBrowserProps {
   /** Screens being decided about. */
   pendingIds?: readonly string[];
   /** Saves the areas a screen leaves out of comparisons, in the viewer. */
-  onIgnoreRegionsChange?: (input: { captureId: string; regions: IgnoreRect[] }) => void;
+  onIgnoreRegionsChange?: (input: IgnoreRulesChange) => void;
   ignorePendingId?: string | null;
   /**
    * Going through the open feedback one item after another (`verify`,
@@ -118,6 +119,9 @@ export interface LibraryBrowserProps {
   onResolvingChange?: (next: FeedbackScope | null) => void;
   /** What the viewer compares the open screen with. */
   compareWith?: CompareWithProps;
+  onIgnorePreview?: (input: { captureId: string; regions: IgnoreRect[] }) => void;
+  ignorePreview?: { pending: boolean; result: IgnorePreviewView | null; error?: string | null } | null;
+  analysis?: React.ComponentProps<typeof CheckpointViewer>['analysis'];
   emptyTitle?: string;
   emptyDescription?: React.ReactNode;
 }
@@ -172,6 +176,9 @@ export function LibraryBrowser({
   resolving: resolvingProp,
   onResolvingChange,
   compareWith,
+  onIgnorePreview,
+  ignorePreview,
+  analysis,
   emptyTitle = 'No screens yet',
   emptyDescription,
 }: LibraryBrowserProps) {
@@ -363,7 +370,7 @@ export function LibraryBrowser({
     return <EmptyState icon={Images} title={emptyTitle} description={emptyDescription} />;
   }
 
-  const filtered = config.filters.states.length > 0 || config.filters.priorities.length > 0;
+  const filtered = config.filters.states.length > 0 || config.filters.priorities.length > 0 || (config.filters.ignore?.length ?? 0) > 0;
   const ViewIcon = activeView ? (activeView.builtIn ? (BUILT_IN_ICONS[activeView.id] ?? Layers) : Bookmark) : Layers;
   const savedActive = activeView && !activeView.builtIn ? activeView : null;
   const canEdit = Boolean(onSaveView);
@@ -474,7 +481,7 @@ export function LibraryBrowser({
             description={filtered ? 'Nothing here is in the states or priorities this view asks for — which may be good news.' : 'Try another folder or search.'}
           >
             {filtered ? (
-              <Button variant="outline" size="sm" onClick={() => setConfig({ ...config, filters: { states: [], priorities: [] } })}>
+              <Button variant="outline" size="sm" onClick={() => setConfig({ ...config, filters: { states: [], priorities: [], ignore: [] } })}>
                 <X /> Clear filters
               </Button>
             ) : null}
@@ -505,6 +512,9 @@ export function LibraryBrowser({
         pendingIds={pendingIds}
         onIgnoreRegionsChange={onIgnoreRegionsChange}
         ignorePendingId={ignorePendingId}
+        onIgnorePreview={onIgnorePreview}
+        ignorePreview={ignorePreview}
+        analysis={analysis}
         frame={frame ?? DEFAULT_FRAME}
         onFrameChange={onFrameChange}
         panel={panel}

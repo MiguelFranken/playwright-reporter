@@ -17,7 +17,7 @@ describe('docs/openapi.json', () => {
     const operations = Object.values(doc.paths ?? {}).flatMap((item) => Object.entries(item ?? {}));
     expect(operations.length).toBeGreaterThan(10);
     for (const [method, operation] of operations) {
-      expect(['get', 'post', 'patch']).toContain(method);
+      expect(['get', 'post', 'patch', 'put']).toContain(method);
       const op = operation as { operationId?: string; summary?: string; responses: Record<string, { content?: Record<string, unknown> }> };
       expect(op.operationId).toBeTruthy();
       expect(op.summary).toBeTruthy();
@@ -38,7 +38,9 @@ describe('docs/openapi.json', () => {
   it('takes the write tools’ arguments as a JSON body, never the query string', async () => {
     const doc = await openApiDocument();
     const writes = Object.values(doc.paths ?? {}).flatMap((item) => Object.entries(item ?? {}).filter(([method]) => method !== 'get'));
-    expect(writes.length).toBe(TOOLS.filter((t) => t.toolset === 'write').length);
+    // Every write tool has a body endpoint; a read tool whose arguments are a structure (a list of rectangles) may have one too.
+    const bodyOperationIds = new Set(writes.map(([, op]) => (op as { operationId?: string }).operationId));
+    for (const t of TOOLS.filter((x) => x.toolset === 'write')) expect(bodyOperationIds.has(t.name.replace(/_(\w)/g, (_, c: string) => c.toUpperCase())), t.name).toBe(true);
     for (const [, operation] of writes) {
       const op = operation as { parameters?: { in: string }[]; requestBody?: { content?: Record<string, unknown> } };
       expect((op.parameters ?? []).filter((p) => p.in === 'query')).toEqual([]);

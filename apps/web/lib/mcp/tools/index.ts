@@ -20,6 +20,9 @@ import { REVIEW_TOOLS } from './review';
 import { REVIEW_THREAD_TOOLS } from './review-threads';
 import { LIBRARY_TOOLS } from './library';
 import { FEEDBACK_TOOLS } from './feedback';
+import { VISUAL_DIFF_TOOLS } from './visual-diffs';
+import { VISUAL_IGNORE_TOOLS } from './visual-ignore';
+import { VISUAL_ANALYSIS_TOOLS } from './visual-analysis';
 
 /** Every tool, in the order clients list them: find things first, then explain and verify. */
 export const TOOLS: ToolDef[] = [
@@ -43,5 +46,8 @@ export const TOOLS: ToolDef[] = [
   ...FEEDBACK_TOOLS,
   ...REVIEW_TOOLS,
   ...REVIEW_THREAD_TOOLS,
+  ...VISUAL_DIFF_TOOLS,
+  ...VISUAL_IGNORE_TOOLS,
+  ...VISUAL_ANALYSIS_TOOLS,
   ...LIBRARY_TOOLS,
 ] as unknown as ToolDef[];

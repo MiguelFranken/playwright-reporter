@@ -65,7 +65,7 @@ export function UrlLibraryBrowser({
   const cp = params.get('cp');
   const v = params.get('v');
   const selection = useMemo<ReviewSelection | null>(() => (cp ? { checkpointId: cp, variant: v } : null), [cp, v]);
-  const { flows: optimistic, comments, onDecide, pendingIds, onIgnoreRegionsChange, ignorePendingId, compareWith } = useReviewActions({
+  const { flows: optimistic, comments, onDecide, pendingIds, onIgnoreRegionsChange, ignorePendingId, onIgnorePreview, ignorePreview, analysis, compareWith } = useReviewActions({
     team,
     project,
     flows,
@@ -73,6 +73,7 @@ export function UrlLibraryBrowser({
     canComment,
     canModerate,
     viewerId,
+    canAnalyze: canDecide,
     openThread: Number(params.get('thread')) || null,
     onOpenThreadChange: (n) => set({ thread: n ? String(n) : null }),
     compareRule: parseCompareRule(params.get('against')),
@@ -154,6 +155,9 @@ export function UrlLibraryBrowser({
       pendingIds={pendingIds}
       onIgnoreRegionsChange={canDecide ? onIgnoreRegionsChange : undefined}
       ignorePendingId={ignorePendingId}
+      onIgnorePreview={canDecide ? onIgnorePreview : undefined}
+      ignorePreview={ignorePreview}
+      analysis={analysis}
       compareWith={compareWith}
       emptyTitle={emptyTitle}
       emptyDescription={emptyDescription}

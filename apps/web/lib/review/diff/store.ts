@@ -18,7 +18,7 @@ import { attachments, imageDiffs, reviewCaptures, reviewCheckpoints, reviewDecis
 import { getStorage } from '@/lib/storage';
 import { checkpointsWhere, type AttachmentState, type ComparedCapture } from '../queries';
 import { diffImages, DiffTooLargeError } from './engine';
-import { diffSettingsFor, pairOf, type DiffPair, type Rect } from './lookup';
+import { diffSettingsFor, pairOf, type DiffPair, type DiffRecord, type Rect } from './lookup';
 import { toleranceComment } from './settings';
 
 /** A claim older than this belongs to a worker that died; the row is free again. */
@@ -53,11 +53,16 @@ export async function planCaptures(captures: readonly ComparedCapture[]): Promis
   const settings = await diffSettingsFor(captures.map((c) => c.projectId));
   return planPairs(
     captures.flatMap((c) => {
-      if (c.diff && c.diff.status !== 'pending') return [];
       const reference = referenceOf(c);
       const s = settings.get(c.projectId);
-      const pair = s ? pairOf(c, reference, s, c.ignoreRegions) : null;
-      return pair && reference ? [{ pair, head: c.attachment, base: reference.attachment }] : [];
+      if (!s || !reference) return [];
+      const out: PlannedPair[] = [];
+      const pair = pairOf(c, reference, s, c.ignoreRegions);
+      if (pair && (!c.diff || c.diff.status === 'pending')) out.push({ pair, head: c.attachment, base: reference.attachment });
+      // With rules applied, the raw measurement too: what the rules left out is shown beside what remains.
+      const raw = c.ignoreRegions.length ? pairOf(c, reference, s, []) : null;
+      if (raw && (!c.rawDiff || c.rawDiff.status === 'pending')) out.push({ pair: raw, head: c.attachment, base: reference.attachment });
+      return out;
     }),
   );
 }
@@ -120,9 +125,10 @@ export function needsPlanning(captures: readonly ComparedCapture[], now = Date.n
     if (!c.diffAgainst || !c.sha256) return false;
     const reference = referenceOf(c);
     if (!reference?.sha256 || reference.sha256 === c.sha256) return false;
-    if (!c.diff) return c.attachment.status !== 'expired' && reference.attachment.status !== 'expired';
+    if (!c.diff || (c.ignoreRegions.length && !c.rawDiff)) return c.attachment.status !== 'expired' && reference.attachment.status !== 'expired';
     // A cached page may hand the dates back serialized.
-    return c.diff.status === 'pending' && now - new Date(c.diff.claimedAt ?? c.diff.createdAt).getTime() > CLAIM_TTL_MS;
+    const stale = (d: DiffRecord) => d.status === 'pending' && now - new Date(d.claimedAt ?? d.createdAt).getTime() > CLAIM_TTL_MS;
+    return stale(c.diff) || Boolean(c.rawDiff && stale(c.rawDiff));
   });
 }
 
@@ -236,6 +242,11 @@ export async function approveWithinTolerance(runId: string, captures?: readonly 
   if (due.length === 0) return 0;
   // The same pixels may be due twice in a run (two results of one test); one decision each.
   const unique = new Map(due.map((c) => [`${c.testId}\u0000${c.checkpointName}\u0000${c.variant}\u0000${c.sha256}`, c]));
+  const provenanceOf = (c: ComparedCapture) => {
+    const s = settings.get(c.projectId)!;
+    const pair = pairOf(c, c.baseline?.capture ?? null, s, c.ignoreRegions);
+    return { diffId: c.diff!.id, optionsKey: pair?.optionsKey ?? '', ignoreRevision: c.ignore.revision };
+  };
   await db.insert(reviewDecisions).values(
     [...unique.values()].map((c) => ({
       id: randomUUID(),
@@ -249,6 +260,7 @@ export async function approveWithinTolerance(runId: string, captures?: readonly 
       decision: 'approved' as const,
       source: 'tolerance' as const,
       comment: toleranceComment({ changedPixels: c.diff!.changedPixels ?? 0, ratio: c.diff!.ratio ?? 0 }, c.baseline?.decision.runNumber ?? null),
+      provenance: provenanceOf(c),
       userId: null,
     })),
   );

@@ -41,10 +41,10 @@ export const Filters: Story = {
     await userEvent.click(canvas.getByRole('button', { name: /Filter/ }));
     await userEvent.click(await body.findByRole('menuitemcheckbox', { name: /Ready to verify/ }));
     await userEvent.click(body.getByRole('menuitemcheckbox', { name: /Critical/ }));
-    await expect(args.onChange).toHaveBeenLastCalledWith(expect.objectContaining({ filters: { states: ['verify'], priorities: ['critical'] } }));
+    await expect(args.onChange).toHaveBeenLastCalledWith(expect.objectContaining({ filters: expect.objectContaining({ states: ['verify'], priorities: ['critical'] }) }));
     await userEvent.keyboard('{Escape}');
     await userEvent.click(await canvas.findByRole('button', { name: 'Remove the priority filter' }));
-    await expect(args.onChange).toHaveBeenLastCalledWith(expect.objectContaining({ filters: { states: ['verify'], priorities: [] } }));
+    await expect(args.onChange).toHaveBeenLastCalledWith(expect.objectContaining({ filters: expect.objectContaining({ states: ['verify'], priorities: [] }) }));
   },
 };
 
