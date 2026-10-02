@@ -43,6 +43,17 @@ export const LongPage: Story = {
   },
 };
 
+/** Hovering a mark on the strip widens it and shows a close-up of that change beside it. */
+export const CloseUpOnHover: Story = {
+  play: async ({ canvasElement }) => {
+    const strip = within(canvasElement).getByRole('navigation', { name: 'Where the changes are' });
+    await userEvent.hover(within(strip).getByRole('button', { name: 'Change 2 of 2' }));
+    const closeUp = await within(document.body).findByRole('img', { name: 'Close-up of change 2' });
+    await waitFor(() => expect(closeUp).toBeVisible());
+    await expect(within(document.body).getByText(/Change 2 of 2 · 33,000 px/)).toBeVisible();
+  },
+};
+
 /** Boxes only: the changed pixels themselves left unpainted. */
 export const WithoutOverlay: Story = { args: { overlay: false } };
 
