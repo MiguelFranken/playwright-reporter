@@ -186,7 +186,8 @@ export const FoldTheSidePanel: Story = {
 
 /**
  * Its left edge drags (or, focused, the arrow keys move it) to make the panel
- * wider. A drag moves the panel on every frame without a render; the host
+ * wider. A drag moves the panel on every frame without a render, and the
+ * screen, sized by CSS from the stage, follows on the same frame; the host
  * hears the width once the edge is let go, and keeps it.
  */
 export const ResizeTheSidePanel: Story = {
@@ -198,6 +199,10 @@ export const ResizeTheSidePanel: Story = {
     const panel = body.getByRole('complementary', { name: 'Review' });
     await waitFor(() => expect(Math.round(panel.getBoundingClientRect().width)).toBe(400));
     const edge = body.getByRole('separator', { name: 'Resize the side panel' });
+    const stage = body.getByLabelText('Checkpoint screens');
+    const screen = stage.querySelector<HTMLElement>('[data-slot=screen-frame], [data-slot=diff-highlight]')!;
+    const screenBefore = screen.getBoundingClientRect().width;
+    const limited = Math.abs(screenBefore - (stage.clientWidth - 48)) < 2;
     const rect = edge.getBoundingClientRect();
     const from = { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) };
     const to = { x: from.x - 80, y: from.y };
@@ -209,6 +214,8 @@ export const ResizeTheSidePanel: Story = {
     ]);
     await expect(panel).toHaveStyle({ width: '480px' });
     await expect(args.onPanelChange).not.toHaveBeenCalled();
+    // Narrower by what the panel took, before anything rendered — when the stage's width is what limits the screen.
+    if (limited) await expect(Math.round(screen.getBoundingClientRect().width)).toBe(Math.round(screenBefore - 80));
     await user.pointer({ keys: '[/MouseLeft]', target: edge, coords: to });
     await expect(args.onPanelChange).toHaveBeenLastCalledWith({ open: true, width: 480 });
     // The host here keeps its own width: let go, the panel goes back to it.

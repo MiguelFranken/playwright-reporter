@@ -7,6 +7,7 @@ import { cn } from '../../lib/cn';
 import type { DiffRegion, FrameSize, ReviewImage } from '../../lib/review';
 import { DiffMarks } from './diff-summary';
 import { UnavailableImage } from './review-frame';
+import { liveHeight, liveWidth } from './screen-frame';
 
 export type IgnoreRect = Pick<DiffRegion, 'x' | 'y' | 'width' | 'height'>;
 
@@ -30,12 +31,18 @@ export function IgnoreRegionsEditor({
   onSave,
   onCancel,
   pending = false,
+  live = false,
+  room = false,
 }: {
   image: ReviewImage;
   imageSize: { width: number; height: number };
   frame: FrameSize;
   zoom: number;
   alt: string;
+  /** Sized by CSS from the viewer's stage (`SCREEN_ZOOM_VAR`), `zoom` otherwise; see `ScreenFrame`. */
+  live?: boolean;
+  /** Live, as tall as the room the stage gives it, whatever the zoom. */
+  room?: boolean;
   value: readonly IgnoreRect[];
   onSave: (regions: IgnoreRect[]) => void;
   onCancel: () => void;
@@ -75,7 +82,7 @@ export function IgnoreRegionsEditor({
         aria-describedby="ignore-help"
         tabIndex={0}
         className="relative shrink-0 overflow-x-hidden overflow-y-auto overscroll-contain rounded-md bg-surface shadow-e1 ring-1 ring-border outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
-        style={{ width, height }}
+        style={live ? { width: liveWidth(frame.width, zoom), height: liveHeight(frame.height, zoom, room) } : { width, height }}
       >
         {image.available ? (
           <div

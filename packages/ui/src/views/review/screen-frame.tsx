@@ -13,6 +13,24 @@ import { UnavailableImage } from './review-frame';
  */
 export const SCREEN_ZOOM_VAR = '--screen-zoom';
 
+/**
+ * The CSS variable with the height a `live` frame may fill, when an ancestor
+ * (the viewer's stage) sets it: a longer screen ends there and scrolls
+ * inside, and one asked to (`room`) is exactly that tall whatever the zoom.
+ */
+export const SCREEN_ROOM_VAR = '--screen-room';
+
+/** `px` CSS pixels at the live zoom (`zoom` where no ancestor sets one), never below the 24px a frame keeps. */
+export function liveWidth(px: number, zoom: number): string {
+  return `max(24px, calc(${px}px * var(${SCREEN_ZOOM_VAR}, ${zoom})))`;
+}
+
+/** As `liveWidth`, but no taller than the room an ancestor gives it; `room` makes it exactly that tall. */
+export function liveHeight(px: number, zoom: number, room = false): string {
+  if (room) return `var(${SCREEN_ROOM_VAR}, ${Math.round(px * zoom)}px)`;
+  return `max(24px, min(calc(${px}px * var(${SCREEN_ZOOM_VAR}, ${zoom})), var(${SCREEN_ROOM_VAR}, 999999px)))`;
+}
+
 /** The one outline a screen carries: hairline grey, or the colour of what it asks of a reviewer. */
 const TONE_RING = {
   info: 'ring-2 ring-info-border',
@@ -48,6 +66,7 @@ export function ScreenFrame({
   label,
   tone,
   live = false,
+  room = false,
   overlay,
   eager = false,
   wheel = 'frame',
@@ -65,6 +84,8 @@ export function ScreenFrame({
   tone?: keyof typeof TONE_RING;
   /** Sizes the frame from `SCREEN_ZOOM_VAR` when an ancestor sets it, `zoom` otherwise (which still picks the image). */
   live?: boolean;
+  /** Live, as tall as the room `SCREEN_ROOM_VAR` gives it, whatever the zoom: a screen filling the stage. */
+  room?: boolean;
   /** Drawn over the image (marks, boxes), told whether the full image or the first-screen preview is shown. */
   overlay?: (shown: 'full' | 'preview') => React.ReactNode;
   /** Load at once rather than when scrolled near: the screen a viewer opened on. */
@@ -87,7 +108,7 @@ export function ScreenFrame({
     ) : (
       (picture ?? <UnavailableImage image={image} />)
     );
-  const size = live ? { width: liveLength(frame.width, zoom), height: liveLength(frame.height, zoom) } : { width, height };
+  const size = live ? { width: liveWidth(frame.width, zoom), height: liveHeight(frame.height, zoom, room) } : { width, height };
   if (scroll && wheel === 'page') {
     return (
       <PageFirstFrame label={label ?? alt} className={cn(tone ? TONE_RING[tone] : 'ring-1 ring-border', className)} style={size}>
@@ -287,9 +308,4 @@ export function FrameImage({ image, alt, shownWidth, eager = false, className }:
       )}
     </>
   );
-}
-
-/** `px` CSS pixels at the live zoom, never below the 24px a frame keeps. */
-function liveLength(px: number, zoom: number): string {
-  return `max(24px, calc(${px}px * var(${SCREEN_ZOOM_VAR}, ${zoom})))`;
 }

@@ -21,7 +21,6 @@ import {
   DEFAULT_FRAME,
   frameFor,
   fillFrames,
-  frameWithin,
   shownZoom,
   type FrameSettings,
   DEFAULT_REVIEW_PANEL,
@@ -54,7 +53,7 @@ import { CheckpointDetails } from './checkpoint-details';
 import { PanelResizer } from './panel-resizer';
 import { COMMENT_TOOLS, DEFAULT_MARKUP_COLOR, type CommentTool, type MarkupColor, type MarkupShape } from '../../lib/review-markup';
 import type { ImageSize } from '../../lib/review-threads';
-import { ScreenFrame } from './screen-frame';
+import { liveHeight, liveWidth, SCREEN_ROOM_VAR, SCREEN_ZOOM_VAR, ScreenFrame } from './screen-frame';
 import { FeedbackThreadCard, OriginMarker, VerifyDone } from './thread-verify';
 import { FeedbackRequestCard, ResolveDone } from './resolve-feedback';
 import { FeedbackPanel, type FeedbackEntry } from './feedback-panel';
@@ -65,9 +64,7 @@ import { captureStates, type LibraryState } from '../../lib/library-views';
 
 /** How long the panel takes to open or close, in ms; the panel stays mounted while it leaves. */
 const PANEL_MOTION_MS = 220;
-/** Its ease: the design system's emphasised ease-out, as `animate-rise-in` has. */
-const PANEL_EASE = 'cubic-bezier(0.2,0,0,1)';
-/** The same motion as utilities, for the elements that move with the panel (the literal, for Tailwind to see). */
+/** Its timing: the design system's emphasised ease-out, as `animate-rise-in` has. */
 const PANEL_MOTION = 'duration-[220ms] ease-[cubic-bezier(0.2,0,0,1)]';
 
 /** What the viewer shows: a checkpoint, and one of its variants or (`null`) all of them side by side. */
@@ -446,13 +443,8 @@ export function CheckpointViewer({
     setOwnFrame(next);
     onFrameChange?.(next);
   };
-  // While the panel moves — its edge dragged, or opening and closing — the stage is not measured again: the screens
-  // keep their layout and are scaled on the compositor instead (`scaleStage`), and are fitted again once it ends. Below
-  // 100% the fit follows the stage's width, so every frame of a move would otherwise lay the screenshots out at a new
-  // size, raster them again and (through `sizes`) ask for other copies of them — far more than the renders cost.
-  const stageMotion = useRef(false);
-  const { size: stageSize, remeasure: remeasureStage } = useElementSize(stageEl, stageMotion);
-  const scalerRef = useRef<HTMLDivElement>(null);
+  // Read once it rests: the screens follow the stage by CSS (see `zoomCss`), the numbers here label and bound things.
+  const stageSize = useElementSize(stageEl);
   // Narrower than the side panel needs, the viewer scrolls as one page: the stage grows with its screens, so fitting them
   // follows the window's height rather than the stage's own.
   const stackedHeight = useStackedHeight();
@@ -532,89 +524,21 @@ export function CheckpointViewer({
   const maxZoom = shownZoom(Infinity, zoomFrames, room, gap);
   const filled = fill ? fillFrames(frames, room, gap) : null;
   const zoom = filled?.zoom ?? shownZoom(frameSettings.zoom, zoomFrames, room, gap);
-  // The zoom the screens would have on a stage of another size, everything else as it is: what a motion of the stage
-  // scales them by (see `scaleStage`). At a zoom the stage does not limit, nothing moves.
-  const zoomAt = (stageWidth: number, stageHeight: number) => {
-    const at = { width: room.width + (stageWidth - stageSize.width), height: room.height + (stageHeight - stageSize.height) };
-    return fill ? fillFrames(frames, at, gap).zoom : shownZoom(frameSettings.zoom, zoomFrames, at, gap);
-  };
-  const fit = useRef({ zoom, zoomAt, stageSize });
-  fit.current = { zoom, zoomAt, stageSize };
-  /** Scales the screens, laid out for the stage as last measured, to the zoom they will have on a stage of `size`. */
-  const scaleStageTo = (size: { width: number; height: number }) => {
-    const el = scalerRef.current;
-    if (!el) return;
-    const { zoom: now, zoomAt, stageSize: measured } = fit.current;
-    const by = now > 0 && measured.width > 0 ? zoomAt(size.width, size.height) / now : 1;
-    el.style.transform = Math.abs(by - 1) < 0.0005 ? '' : `scale(${by})`;
-  };
-  /** Scales the screens to the zoom they will have once the panel, `from` wide now, is `width` wide. */
-  const scaleStage = (width: number, from: number) => scaleStageTo({ width: fit.current.stageSize.width + (from - width), height: fit.current.stageSize.height });
-  const clearStageScale = () => {
-    const el = scalerRef.current;
-    if (!el) return;
-    el.style.transform = '';
-    el.style.transition = '';
-    el.style.willChange = '';
-  };
-  const stageMotionStart = () => {
-    stageMotion.current = true;
-    if (scalerRef.current) scalerRef.current.style.willChange = 'transform';
-  };
-  /** The motion over, the stage is measured again; its refit's render takes the scale off (or this does, if nothing changed). */
-  const stageMotionEnd = () => {
-    stageMotion.current = false;
-    if (!remeasureStage()) clearStageScale();
-  };
-  // The refit lands in the same paint as the scale coming off.
-  useLayoutEffect(() => {
-    if (!stageMotion.current) clearStageScale();
-  }, [stageSize.width, stageSize.height]);
-  // The window being resized moves the stage the same way: the screens scale with it, and are fitted again once it
-  // has stood still for a moment.
-  useEffect(() => {
-    if (!overlaid) return;
-    let settle = 0;
-    const onResize = () => {
-      const stage = stageRef.current;
-      if (!stage) return;
-      if (!stageMotion.current && !resizing.current) stageMotionStart();
-      scaleStageTo({ width: stage.clientWidth, height: stage.clientHeight });
-      window.clearTimeout(settle);
-      settle = window.setTimeout(stageMotionEnd, 150);
-    };
-    window.addEventListener('resize', onResize);
-    return () => {
-      window.removeEventListener('resize', onResize);
-      window.clearTimeout(settle);
-    };
-    // The handlers read the latest layout through refs.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [overlaid, stageEl]);
-  // Opening or closing beside the stage, the screens scale with the column's motion — the same time and ease, so the
-  // two move as one — and are fitted again once it ends.
-  const openWas = useRef(panel.open);
-  useLayoutEffect(() => {
-    if (openWas.current === panel.open) return;
-    openWas.current = panel.open;
-    const el = scalerRef.current;
-    if (!overlaid || !el) return;
-    stageMotionStart();
-    el.style.transition = `transform ${PANEL_MOTION_MS}ms ${PANEL_EASE}`;
-    scaleStage(panel.open ? panel.width : 0, panel.open ? 0 : panel.width);
-    const timer = window.setTimeout(stageMotionEnd, PANEL_MOTION_MS);
-    return () => window.clearTimeout(timer);
-    // Only when the panel opens or closes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [panel.open]);
-  // A screen longer than the room ends at its bottom edge and scrolls inside; filling, every screen is as tall as the room.
-  // Feedback being verified takes the stage's whole height, framed or not: a long page is read by scrolling the two together.
-  const fitted = filled?.screens ?? (verifyingPanes && room.height > 0 ? frames.map((f) => ({ width: f.width, height: Math.max(24, Math.floor(room.height)) / zoom })) : frames.map((f) => frameWithin(f, room.height, zoom)));
   // One screen filling the stage runs under the bars: as tall as the whole stage, the room they cover kept clear inside
   // it (see `bleed` on the stage), so it opens exactly where it did and its page scrolls on under them.
   const bleed = fill && captionless && overlaid && !verifying && !(resolving && ended) && (inset.top > 0 || inset.bottom > 0);
-  const screens = bleed ? fitted.map((s) => ({ ...s, height: s.height + (inset.top + inset.bottom) / zoom })) : fitted;
-  const paneScreens = paneFrames.map((_, i) => screens.slice(paneFrames.slice(0, i).flat().length, paneFrames.slice(0, i + 1).flat().length));
+  // The screens are sized by CSS from the stage's own size (container query units), so they follow its edge being
+  // dragged, the panel opening and closing and the window being resized on every frame, laid out by the browser alone:
+  // no render, no image asked for again. The stage sets `SCREEN_ZOOM_VAR` — `zoom` above, as CSS computes it
+  // (`tan(atan2(a, b))` is the number a/b) — and `SCREEN_ROOM_VAR`, the height a screen may fill: `100cqh` is the
+  // stage's content box, below its padding and the bars it keeps clear. Screens filling the stage and feedback being
+  // verified are as tall as the room (a long page is read by scrolling it); any other screen longer than the room ends
+  // at its edge and scrolls inside. Stacked, the viewer scrolls as a page: the room follows the window's height.
+  const roomCss = overlaid ? `calc(100cqh - ${around.above}px)` : `calc(max(240px, 75vh) - ${around.above}px)`;
+  const widthFit = `tan(atan2(calc(100cqw - ${around.beside + gap * Math.max(0, frames.length - 1)}px), ${Math.max(1, frames.reduce((sum, f) => sum + f.width, 0))}px))`;
+  const heightFit = `tan(atan2(var(${SCREEN_ROOM_VAR}), ${Math.max(1, ...frames.map((f) => f.height))}px))`;
+  const zoomCss = fill ? `max(0.1, ${widthFit})` : frameSettings.zoom === 'fit' ? `max(0.1, min(1, ${widthFit}, ${heightFit}))` : `max(0.1, min(${frameSettings.zoom}, ${widthFit}))`;
+  const tall = fill || verifyingPanes;
   const pending = new Set(pendingIds);
   const busy = shown.some((c) => pending.has(c.id));
 
@@ -1080,7 +1004,7 @@ export function CheckpointViewer({
           </>
         }
       >
-        <ScreenFrame image={c.image} frame={at[0]} zoom={zoom} alt={`${label} — ${c.variant}`} label={`${name} screen`} overlay={pinLayer(c, name) ? () => pinLayer(c, name) : undefined} />
+        <ScreenFrame image={c.image} frame={at[0]} zoom={zoom} live room={tall} alt={`${label} — ${c.variant}`} label={`${name} screen`} overlay={pinLayer(c, name) ? () => pinLayer(c, name) : undefined} />
       </StagePane>
     );
     if (!x.reference) return plain('Nothing to compare with yet');
@@ -1107,6 +1031,8 @@ export function CheckpointViewer({
             diff={x.diff}
             frame={at[0]}
             zoom={zoom}
+            live
+            room={tall}
             alt={name}
             active={multi ? (activeOf[c.id] ?? null) : activeRegion}
             onActiveChange={multi ? (i) => setActiveOf((a) => ({ ...a, [c.id]: i })) : setActiveRegion}
@@ -1149,7 +1075,7 @@ export function CheckpointViewer({
                 </>
               }
             >
-              <ScreenFrame image={side.image} frame={side.frame} zoom={zoom} alt={`${label} — ${multi ? `${c.variant}, ` : ''}${side.title}`} overlay={side.overlay ? () => side.overlay : undefined} />
+              <ScreenFrame image={side.image} frame={side.frame} zoom={zoom} live room={tall} alt={`${label} — ${multi ? `${c.variant}, ` : ''}${side.title}`} overlay={side.overlay ? () => side.overlay : undefined} />
             </StagePane>
           ))}
         </SyncedPanes>
@@ -1177,7 +1103,7 @@ export function CheckpointViewer({
           aria-label={`${name}, comparison`}
           tabIndex={0}
           className={cn('mx-auto overflow-x-hidden overflow-y-auto outline-none', fill ? null : 'rounded-md ring-1 ring-border', 'focus-visible:ring-[3px] focus-visible:ring-ring/40')}
-          style={{ width: Math.round(at[0].width * zoom), height: Math.round(at[0].height * zoom) + control }}
+          style={{ width: liveWidth(at[0].width, zoom), height: `calc(${liveHeight(at[0].height, zoom, tall)} + ${control}px)` }}
         >
           <ImageCompare current={c.image} reference={x.reference.image} mode={effectiveStage as CompareMode} referenceLabel={x.reference.label} currentLabel={currentTitle} alt={name} />
         </div>
@@ -1370,6 +1296,8 @@ export function CheckpointViewer({
                   className={cn(
                     // Its focus ring is drawn by the frame after it, around the part the bars leave clear.
                     'peer min-h-0 flex-1 outline-none',
+                    // The container the screens take their size from (see `zoomCss`): its height too, beside the panel.
+                    '[container-type:inline-size] lg:[container-type:size]',
                     // The screens fit; only a comparison while verifying, the summary after resolving and the editor's list below
                     // the screen can run longer.
                     verifying || (resolving && ended) || effectiveStage === 'ignore' ? 'overflow-auto' : 'overflow-hidden',
@@ -1382,22 +1310,23 @@ export function CheckpointViewer({
                       '[&_[data-slot=screen-frame]]:pt-(--stage-top) [&_[data-slot=screen-frame]]:pb-(--stage-bottom) [&_[data-slot=screen-frame]]:scroll-pt-(--stage-top) [&_[data-slot=screen-frame]]:scroll-pb-(--stage-bottom)',
                   )}
                   style={
-                    overlaid
-                      ? ({
-                          '--stage-top': `${inset.top}px`,
-                          '--stage-bottom': `${inset.bottom}px`,
-                          // Whatever the stage itself scrolls (a comparison while verifying, the areas left out) starts below the bars too.
-                          paddingTop: bleed ? 0 : inset.top + (fill ? 0 : 24),
-                          paddingBottom: bleed ? 0 : inset.bottom + (fill ? 0 : 24),
-                          scrollPaddingTop: inset.top,
-                          scrollPaddingBottom: inset.bottom,
-                        } as React.CSSProperties)
-                      : undefined
+                    {
+                      [SCREEN_ZOOM_VAR]: zoomCss,
+                      [SCREEN_ROOM_VAR]: roomCss,
+                      ...(overlaid
+                        ? {
+                            '--stage-top': `${inset.top}px`,
+                            '--stage-bottom': `${inset.bottom}px`,
+                            // Whatever the stage itself scrolls (a comparison while verifying, the areas left out) starts below the bars too.
+                            paddingTop: bleed ? 0 : inset.top + (fill ? 0 : 24),
+                            paddingBottom: bleed ? 0 : inset.bottom + (fill ? 0 : 24),
+                            scrollPaddingTop: inset.top,
+                            scrollPaddingBottom: inset.bottom,
+                          }
+                        : {}),
+                    } as React.CSSProperties
                   }
                 >
-                  {/* Scaled, not laid out again, while the panel moves (see `scaleStage`): a flex column, so what is wider than
-                      the stage meanwhile stays centred in it, as it will be once fitted. */}
-                  <div ref={scalerRef} className="flex flex-col items-center origin-top">
                   {resolving && ended ? (
                     <ResolveDone
                       resolved={doneCount}
@@ -1418,16 +1347,16 @@ export function CheckpointViewer({
                           }
                         >
                           {requestThen ? (
-                            <ScreenFrame image={requestThen} frame={paneScreens[0][0]} zoom={zoom} alt={`${label} — the version changes were asked for on`} eager />
+                            <ScreenFrame image={requestThen} frame={paneFrames[0][0]} zoom={zoom} live room={tall} alt={`${label} — the version changes were asked for on`} eager />
                           ) : (
-                            <MissingScreen frame={paneScreens[0][0]} zoom={zoom}>
+                            <MissingScreen frame={paneFrames[0][0]} zoom={zoom} room={tall}>
                               The image the changes were asked for on is not shown here.
                             </MissingScreen>
                           )}
                         </StagePane>
                       ) : null}
                       <StagePane fill={fill} caption={nowLabel(requestCapture)}>
-                        <ScreenFrame image={requestCapture.image} frame={paneScreens[0][comparesTwo ? 1 : 0]} zoom={zoom} alt={`${label} — now`} label={`${label}, now`} eager />
+                        <ScreenFrame image={requestCapture.image} frame={paneFrames[0][comparesTwo ? 1 : 0]} zoom={zoom} live room={tall} alt={`${label} — now`} label={`${label}, now`} eager />
                       </StagePane>
                     </SyncedPanes>
                   ) : verifying && comparedThread && comparedCapture ? (
@@ -1444,15 +1373,17 @@ export function CheckpointViewer({
                           {comparedThread.origin ? (
                             <ScreenFrame
                               image={comparedThread.origin.image}
-                              frame={paneScreens[0][0]}
+                              frame={paneFrames[0][0]}
                               zoom={zoom}
+                              live
+                              room={tall}
                               alt={`${label} — the version commented on`}
                               label={`${label}, the version commented on`}
                               eager
                               overlay={() => <OriginMarker number={comparedThread.number} anchor={comparedThread.origin!.anchor} markup={comparedThread.origin!.markup} />}
                             />
                           ) : (
-                            <MissingScreen frame={paneScreens[0][0]} zoom={zoom}>
+                            <MissingScreen frame={paneFrames[0][0]} zoom={zoom} room={tall}>
                               The image this comment was made on is no longer stored.
                             </MissingScreen>
                           )}
@@ -1461,8 +1392,10 @@ export function CheckpointViewer({
                       <StagePane fill={fill} caption={nowLabel(comparedCapture)}>
                         <ScreenFrame
                           image={comparedCapture.image}
-                          frame={paneScreens[0][comparesTwo ? 1 : 0]}
+                          frame={paneFrames[0][comparesTwo ? 1 : 0]}
                           zoom={zoom}
+                          live
+                          room={tall}
                           alt={`${label} — now`}
                           label={`${label}, now`}
                           eager
@@ -1486,8 +1419,10 @@ export function CheckpointViewer({
                     <IgnoreRegionsEditor
                       image={current.image}
                       imageSize={(measuredSize ?? ownSize)!}
-                      frame={screens[0]}
+                      frame={frames[0]}
                       zoom={zoom}
+                      live
+                      room={tall}
                       alt={label}
                       value={current.ignoreRegions ?? []}
                       pending={ignorePendingId === current.id}
@@ -1498,7 +1433,7 @@ export function CheckpointViewer({
                       onCancel={() => showStage('changes')}
                     />
                   ) : comparing ? (
-                    <div className={cn(paneRow(fill), fill && 'mx-auto')}>{compared.map((x, i) => comparison(x, paneScreens[i]))}</div>
+                    <div className={cn(paneRow(fill), fill && 'mx-auto')}>{compared.map((x, i) => comparison(x, paneFrames[i]))}</div>
                   ) : (
                     <div className={cn(paneRow(fill), fill && 'mx-auto')}>
                       {shown.map((c, i) => (
@@ -1519,8 +1454,10 @@ export function CheckpointViewer({
                         >
                           <ScreenFrame
                             image={c.image}
-                            frame={screens[i]}
+                            frame={frames[i]}
                             zoom={zoom}
+                            live
+                            room={tall}
                             alt={`${label} — ${c.variant}`}
                             label={`${label}, ${c.variant} screen`}
                             overlay={pinLayer(c, `${label}, ${c.variant}`) ? () => pinLayer(c, `${label}, ${c.variant}`) : undefined}
@@ -1529,7 +1466,6 @@ export function CheckpointViewer({
                       ))}
                     </div>
                   )}
-                  </div>
                 </div>
                 <div
                   aria-hidden
@@ -1567,18 +1503,11 @@ export function CheckpointViewer({
                       min={REVIEW_PANEL.min}
                       max={REVIEW_PANEL.max}
                       defaultWidth={REVIEW_PANEL.default}
-                      onResizeStart={() => {
-                        setResizing(true);
-                        stageMotionStart();
-                      }}
-                      onResize={(width) => {
-                        movePanel(width);
-                        scaleStage(width, panel.width);
-                      }}
+                      onResizeStart={() => setResizing(true)}
+                      onResize={movePanel}
                       onResizeEnd={(width) => {
                         setResizing(false);
                         movePanel(width);
-                        stageMotionEnd();
                         setPanel({ width });
                       }}
                     />
@@ -1877,9 +1806,9 @@ function paneRow(fill: boolean) {
  * caption is a bar across the screen's top, ruled off like the toolbar above it.
  */
 /** In place of a screen that is no longer stored: as large as it would be, saying why. */
-function MissingScreen({ frame, zoom, children }: { frame: FrameSize; zoom: number; children: ReactNode }) {
+function MissingScreen({ frame, zoom, room = false, children }: { frame: FrameSize; zoom: number; room?: boolean; children: ReactNode }) {
   return (
-    <div className="flex items-center justify-center rounded-md bg-surface-sunken p-6 text-center text-label-s text-muted-foreground ring-1 ring-border" style={{ width: Math.round(frame.width * zoom), height: Math.round(frame.height * zoom) }}>
+    <div className="flex items-center justify-center rounded-md bg-surface-sunken p-6 text-center text-label-s text-muted-foreground ring-1 ring-border" style={{ width: liveWidth(frame.width, zoom), height: liveHeight(frame.height, zoom, room) }}>
       {children}
     </div>
   );
@@ -1927,37 +1856,29 @@ function usePresence(open: boolean, ms: number) {
 }
 
 /**
- * The content box of an element, followed as it resizes — not while `paused`
- * is set; zero until it mounts. `remeasure` reads it now and says whether it
- * changed (a change renders).
+ * The content box of an element, followed as it resizes; zero until it mounts.
+ * A resize under way (the panel's edge dragged, the window resized) is read
+ * once it has rested for a moment: what is laid out from it follows by CSS
+ * meanwhile, and nothing here needs a render on every frame of it.
  */
-function useElementSize(el: HTMLElement | null, paused?: React.RefObject<boolean>) {
+function useElementSize(el: HTMLElement | null) {
   const [size, setSize] = useState({ width: 0, height: 0 });
-  const last = useRef(size);
-  const remeasure = () => {
-    if (!el) return false;
-    const next = { width: el.clientWidth, height: el.clientHeight };
-    if (next.width === last.current.width && next.height === last.current.height) return false;
-    last.current = next;
-    setSize(next);
-    return true;
-  };
   useLayoutEffect(() => {
     if (!el) return;
-    const measure = () => {
-      const next = { width: el.clientWidth, height: el.clientHeight };
-      if (next.width === last.current.width && next.height === last.current.height) return;
-      last.current = next;
-      setSize(next);
-    };
+    const measure = () => setSize((cur) => (cur.width === el.clientWidth && cur.height === el.clientHeight ? cur : { width: el.clientWidth, height: el.clientHeight }));
     measure();
+    let timer = 0;
     const observer = new ResizeObserver(() => {
-      if (!paused?.current) measure();
+      window.clearTimeout(timer);
+      timer = window.setTimeout(measure, 120);
     });
     observer.observe(el);
-    return () => observer.disconnect();
-  }, [el, paused]);
-  return { size, remeasure };
+    return () => {
+      observer.disconnect();
+      window.clearTimeout(timer);
+    };
+  }, [el]);
+  return size;
 }
 
 /** The height of an element with its border, followed as it resizes; zero until it mounts. */
