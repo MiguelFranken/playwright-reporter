@@ -237,6 +237,29 @@ export const InTheLibraryReadOnly: Story = {
   },
 };
 
+/**
+ * The view holds from screen to screen until the reviewer changes it: opened
+ * on an unchanged screen, the image stays on show where the next one changed;
+ * comparing, a screen without changes is compared side by side.
+ */
+export const InTheLibraryKeepsTheView: Story = {
+  args: { mode: 'library', initial: { checkpointId: placeOrderFlow.checkpoints[0].id, variant: 'desktop' } },
+  play: async ({ args }) => {
+    const body = within(document.body);
+    await body.findByRole('dialog');
+    await expect(body.getByRole('button', { name: 'Image' })).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(body.getByRole('button', { name: 'Next checkpoint' }));
+    await waitFor(() => expect(args.onSelectionChange).toHaveBeenLastCalledWith({ checkpointId: changed.id, variant: 'desktop' }));
+    await expect(body.getByRole('button', { name: 'Image' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(body.queryByRole('group', { name: 'Comparison' })).toBeNull();
+    await userEvent.click(body.getByRole('button', { name: 'Compare' }));
+    await expect(body.getByRole('button', { name: 'Changes' })).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(body.getByRole('button', { name: 'Previous checkpoint' }));
+    await waitFor(() => expect(body.getByRole('button', { name: 'Side by side' })).toHaveAttribute('aria-pressed', 'true'));
+    await expect(body.getByRole('button', { name: 'Compare' })).toHaveAttribute('aria-pressed', 'true');
+  },
+};
+
 /** An unchanged screen in the library says what it is identical to. */
 export const InTheLibraryUnchanged: Story = {
   args: { mode: 'library', initial: { checkpointId: placeOrderFlow.checkpoints[0].id, variant: 'desktop' } },
@@ -480,5 +503,8 @@ export const CompareWithAnotherRun: StoryObj<typeof ComparingHost> = {
     await userEvent.click(body.getByRole('button', { name: 'Compare' }));
     await userEvent.click(await body.findByRole('button', { name: 'Side by side' }));
     await expect(await body.findByRole('img', { name: /Run #479/ })).toBeInTheDocument();
+    // What to compare with is a choice of the comparison: the plain image does without it.
+    await userEvent.click(body.getByRole('button', { name: 'Image' }));
+    await expect(body.queryByRole('combobox', { name: 'Compare with' })).toBeNull();
   },
 };

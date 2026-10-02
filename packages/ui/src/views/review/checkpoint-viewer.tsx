@@ -276,7 +276,8 @@ export function CheckpointViewer({
   const at = selection ? all.findIndex((p) => p.checkpoint.id === selection.checkpointId || p.checkpoint.aliases?.includes(selection.checkpointId)) : -1;
   const pos = at >= 0 ? all[at] : null;
   usePreloadNeighbours(all, at);
-  const [stage, setStage] = useState<StageMode>('changes');
+  // Unset until the first screen is shown: it opens on its changes, or on the image when it has none, and keeps that view.
+  const [stage, setStage] = useState<StageMode | null>(null);
   // The comparison last picked: "Compare" goes back to it.
   const [compareMode, setCompareMode] = useState<CompareStage>('changes');
   const [activeRegion, setActiveRegion] = useState<number | null>(null);
@@ -361,12 +362,35 @@ export function CheckpointViewer({
   const regions = hasChanges ? diff!.regions : [];
   const ownSize = current?.image.width && current.image.height ? { width: current.image.width, height: current.image.height } : null;
   const canIgnore = Boolean(onIgnoreRegionsChange && canDecide && !current?.compare && current?.image.available && (measuredSize ?? ownSize));
+  // The view picked holds from screen to screen: one without measured changes is compared side by side rather than
+  // dropped to the plain image, so moving on (or picking another image to compare with) never flips Image and Compare.
+  // Only the reviewer changes it.
   const effectiveStage: StageMode =
-    stage === 'ignore' ? (canIgnore ? 'ignore' : 'image') : stage === 'changes' ? (anyChanges ? 'changes' : 'image') : canCompare && stage !== 'image' ? stage : 'image';
+    stage === null
+      ? anyChanges
+        ? 'changes'
+        : 'image'
+      : stage === 'ignore'
+      ? canIgnore
+        ? 'ignore'
+        : 'image'
+      : stage === 'changes'
+        ? anyChanges
+          ? 'changes'
+          : canCompare
+            ? 'side-by-side'
+            : 'image'
+        : canCompare && stage !== 'image'
+          ? stage
+          : 'image';
   const comparing = effectiveStage !== 'image' && effectiveStage !== 'ignore';
   // What "Compare" opens: the comparison last picked, or side by side where nothing was measured to mark.
   const compareStage: CompareStage = compareMode === 'changes' && !anyChanges ? 'side-by-side' : compareMode;
   const compareModes: CompareStage[] = [...(anyChanges ? (['changes'] as const) : []), ...COMPARE_MODES];
+  // The view the viewer opened on is kept once a screen is shown.
+  useEffect(() => {
+    if (stage === null && shown.length > 0) setStage(effectiveStage);
+  }, [stage, shown.length, effectiveStage]);
   const showStage = (next: StageMode) => {
     setStage(next);
     if (next !== 'image' && next !== 'ignore') setCompareMode(next);
@@ -1093,7 +1117,7 @@ export function CheckpointViewer({
                   ) : null}
                 </div>
               ) : null}
-              {current && compareWith ? <CompareTargetPicker capture={current} referenceLabel={reference?.label ?? null} {...compareWith} /> : null}
+              {current && compareWith && comparing ? <CompareTargetPicker capture={current} referenceLabel={reference?.label ?? null} {...compareWith} /> : null}
               <div className="ml-auto flex items-center gap-3">
                 <div className="flex items-center gap-0.5">
                   <Button variant="ghost" size="icon-sm" aria-label="Previous checkpoint" disabled={at <= 0} onClick={() => move(-1)}>
