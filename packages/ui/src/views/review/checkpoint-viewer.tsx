@@ -529,16 +529,19 @@ export function CheckpointViewer({
   // One screen filling the stage runs under the bars: as tall as the whole stage, the room they cover kept clear inside
   // it (see `bleed` on the stage), so it opens exactly where it did and its page scrolls on under them.
   const bleed = fill && captionless && overlaid && !verifying && !(resolving && ended) && (inset.top > 0 || inset.bottom > 0);
-  // The screens are sized by CSS from the stage's own size (container query units), so they follow its edge being
-  // dragged, the panel opening and closing and the window being resized on every frame, laid out by the browser alone:
-  // no render, no image asked for again — and the images themselves are not laid out at all, only scaled on the GPU
-  // (see `MOVING_ATTR`). The stage sets `SCREEN_ZOOM_VAR` — `zoom` above, as CSS computes it (`tan(atan2(a, b))` is
-  // the number a/b) — and `SCREEN_ROOM_VAR`, the height a screen may fill: `100cqh` is the stage's content box, below
-  // its padding and the bars it keeps clear. Screens filling the stage and feedback being verified are as tall as the
-  // room (a long page is read by scrolling it); any other screen longer than the room ends at its edge and scrolls
-  // inside. Stacked, the viewer scrolls as a page: the room follows the window's height.
-  const roomCss = overlaid ? `calc(100cqh - ${around.above}px)` : `calc(max(240px, 75vh) - ${around.above}px)`;
-  const widthFit = `tan(atan2(calc(100cqw - ${around.beside + gap * Math.max(0, frames.length - 1)}px), ${Math.max(1, frames.reduce((sum, f) => sum + f.width, 0))}px))`;
+  // The screens are sized by CSS from the stage's size (container query units), so they follow its edge being dragged,
+  // the panel opening and closing and the window being resized on every frame, laid out by the browser alone: no
+  // render, no image asked for again — and the images themselves are not laid out at all, only scaled on the GPU (see
+  // `MOVING_ATTR`). The stage sets `SCREEN_ZOOM_VAR` — `zoom` above, as CSS computes it (`tan(atan2(a, b))` is the
+  // number a/b) — and `SCREEN_ROOM_VAR`, the height a screen may fill. The container is the section around the stage,
+  // whose box is the stage's but never changes with the mode: a container's units resolve against its content box,
+  // and a browser may not resolve them again when only the padding changed (filling the stage takes its padding away),
+  // so the padding and the bars the stage keeps clear are taken off here instead. Screens filling the stage and
+  // feedback being verified are as tall as the room (a long page is read by scrolling it); any other screen longer
+  // than the room ends at its edge and scrolls inside. Stacked, the viewer scrolls as a page: the room follows the
+  // window's height.
+  const roomCss = overlaid ? `calc(100cqh - ${(bleed ? 0 : padding + inset.top + inset.bottom) + around.above}px)` : `calc(max(240px, 75vh) - ${around.above}px)`;
+  const widthFit = `tan(atan2(calc(100cqw - ${padding + around.beside + gap * Math.max(0, frames.length - 1)}px), ${Math.max(1, frames.reduce((sum, f) => sum + f.width, 0))}px))`;
   const heightFit = `tan(atan2(var(${SCREEN_ROOM_VAR}), ${Math.max(1, ...frames.map((f) => f.height))}px))`;
   const zoomCss = fill ? `max(0.1, ${widthFit})` : frameSettings.zoom === 'fit' ? `max(0.1, min(1, ${widthFit}, ${heightFit}))` : `max(0.1, min(${frameSettings.zoom}, ${widthFit}))`;
   const tall = fill || verifyingPanes;
@@ -1258,7 +1261,8 @@ export function CheckpointViewer({
               className={cn('grid shrink-0 grow grid-cols-1 lg:h-full lg:min-h-0 lg:transition-[grid-template-columns]', PANEL_MOTION)}
               style={overlaid ? { gridTemplateColumns: panelColumns(panel.open ? panel.width : null) } : undefined}
             >
-              <section data-float-bounds className="relative flex min-h-0 flex-col bg-surface" aria-label="Checkpoint image">
+              {/* The container the screens take their size from (see `zoomCss`): its height too, beside the panel. */}
+              <section data-float-bounds className="relative flex min-h-0 flex-col bg-surface [container-type:inline-size] lg:[container-type:size]" aria-label="Checkpoint image">
                 <div
                   ref={setToolbarEl}
                   className="z-20 flex flex-wrap items-center justify-between gap-2 border-b border-border bg-surface/85 px-4 py-2 backdrop-blur-sm lg:absolute lg:inset-x-0"
@@ -1307,8 +1311,6 @@ export function CheckpointViewer({
                   className={cn(
                     // Its focus ring is drawn by the frame after it, around the part the bars leave clear.
                     'peer min-h-0 flex-1 outline-none',
-                    // The container the screens take their size from (see `zoomCss`): its height too, beside the panel.
-                    '[container-type:inline-size] lg:[container-type:size]',
                     // The screens fit; only a comparison while verifying, the summary after resolving and the editor's list below
                     // the screen can run longer.
                     verifying || (resolving && ended) || effectiveStage === 'ignore' ? 'overflow-auto' : 'overflow-hidden',
