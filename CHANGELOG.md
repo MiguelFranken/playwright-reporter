@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.79](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.78...v0.0.79) (2026-10-02)
+
+### Features
+
+* **review:** the checkpoint previews float over the screen ([#85](https://github.com/MiguelFranken/playwright-reporter/issues/85)) ([063596e](https://github.com/MiguelFranken/playwright-reporter/commit/063596ee4443e814fe690025581f5adea4e36843))
+
 ## [0.0.78](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.77...v0.0.78) (2026-10-02)
 
 ### Features
