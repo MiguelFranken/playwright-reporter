@@ -161,25 +161,34 @@ export const FillRunsUnderTheBars: Story = {
 
 /**
  * The side panel folds away (the button in the header, or I) and gives the
- * screen the room; folded, the button still counts what is open in it.
+ * screen the room; folded, the button still counts what is open in it. Beside
+ * the stage it slides out and back in: leaving, it is out of reach at once and
+ * gone once its column has closed over it.
  */
 export const FoldTheSidePanel: Story = {
   args: { onPanelChange: fn() },
   play: async ({ args }) => {
     const body = within(document.body);
     await body.findByRole('dialog');
+    const beside = window.matchMedia('(min-width: 64rem)').matches;
     const stage = body.getByLabelText('Checkpoint screens');
     const before = stage.clientWidth;
     await userEvent.click(body.getByRole('button', { name: 'Hide the side panel' }));
+    if (beside) await expect(document.getElementById('checkpoint-panel')).not.toBeNull();
     await waitFor(() => expect(body.queryByRole('complementary', { name: 'Review' })).toBeNull());
+    await waitFor(() => expect(document.getElementById('checkpoint-panel')).toBeNull());
     await expect(args.onPanelChange).toHaveBeenLastCalledWith({ open: false, width: 320 });
-    if (window.matchMedia('(min-width: 64rem)').matches) await waitFor(() => expect(stage.clientWidth).toBeGreaterThan(before));
+    if (beside) await waitFor(() => expect(stage.clientWidth).toBeGreaterThan(before));
     await userEvent.keyboard('i');
     await expect(await body.findByRole('complementary', { name: 'Review' })).toBeInTheDocument();
   },
 };
 
-/** Its left edge drags (or, focused, the arrow keys move it) to make the panel wider; the host keeps the width. */
+/**
+ * Its left edge drags (or, focused, the arrow keys move it) to make the panel
+ * wider. A drag moves the panel on every frame without a render; the host
+ * hears the width once the edge is let go, and keeps it.
+ */
 export const ResizeTheSidePanel: Story = {
   args: { onPanelChange: fn(), panel: { open: true, width: 400 } },
   play: async ({ args }) => {
@@ -189,6 +198,21 @@ export const ResizeTheSidePanel: Story = {
     const panel = body.getByRole('complementary', { name: 'Review' });
     await waitFor(() => expect(Math.round(panel.getBoundingClientRect().width)).toBe(400));
     const edge = body.getByRole('separator', { name: 'Resize the side panel' });
+    const rect = edge.getBoundingClientRect();
+    const from = { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) };
+    const to = { x: from.x - 80, y: from.y };
+    // One pointer across both calls: the mouse stays pressed between them.
+    const user = userEvent.setup();
+    await user.pointer([
+      { keys: '[MouseLeft>]', target: edge, coords: from },
+      { target: edge, coords: to },
+    ]);
+    await expect(panel).toHaveStyle({ width: '480px' });
+    await expect(args.onPanelChange).not.toHaveBeenCalled();
+    await user.pointer({ keys: '[/MouseLeft]', target: edge, coords: to });
+    await expect(args.onPanelChange).toHaveBeenLastCalledWith({ open: true, width: 480 });
+    // The host here keeps its own width: let go, the panel goes back to it.
+    await waitFor(() => expect(Math.round(panel.getBoundingClientRect().width)).toBe(400));
     edge.focus();
     await userEvent.keyboard('{ArrowLeft}');
     await expect(args.onPanelChange).toHaveBeenLastCalledWith({ open: true, width: 416 });

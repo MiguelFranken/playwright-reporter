@@ -63,6 +63,11 @@ import { ThreadList } from './thread-list';
 import { LibraryStateChip } from '../../patterns/library-state-chip';
 import { captureStates, type LibraryState } from '../../lib/library-views';
 
+/** How long the panel takes to open or close, in ms; the panel stays mounted while it leaves. */
+const PANEL_MOTION_MS = 220;
+/** Its timing: the design system's emphasised ease-out, as `animate-rise-in` has. */
+const PANEL_MOTION = 'duration-[220ms] ease-[cubic-bezier(0.2,0,0,1)]';
+
 /** What the viewer shows: a checkpoint, and one of its variants or (`null`) all of them side by side. */
 export interface ReviewSelection {
   checkpointId: string;
@@ -308,9 +313,37 @@ export function CheckpointViewer({
   const [confirmApprove, setConfirmApprove] = useState(false);
   const [ownPanel, setOwnPanel] = useState<ReviewPanelSettings>(DEFAULT_REVIEW_PANEL);
   const panel = panelProp ? reviewPanel(panelProp) : ownPanel;
-  // The width while its edge is dragged: kept here, and handed to the host once it is let go.
-  const [draggedWidth, setDraggedWidth] = useState<number | null>(null);
-  const panelWidth = draggedWidth ?? panel.width;
+  // Shown or folded, the panel moves in and out over `PANEL_MOTION_MS`: it stays mounted while it leaves.
+  const panelMounted = usePresence(panel.open, PANEL_MOTION_MS);
+  // The panel's width is laid out in three places: the grid's second column, the panel itself (which keeps it while the
+  // column moves) and where the strip of checkpoints stops. Dragging the edge writes it to those three elements directly:
+  // a move that set state would render this whole viewer once per frame, and the stage, resized by it, once more. (Not
+  // through a CSS variable: a custom property changing on the grid invalidates the style of everything inside it.)
+  const gridRef = useRef<HTMLDivElement>(null);
+  const asideRef = useRef<HTMLElement>(null);
+  const stripRef = useRef<HTMLElement>(null);
+  const panelColumns = (width: number | null) => `minmax(0,1fr) ${width ?? 0}px`;
+  const laidOut = useRef('');
+  const layoutPanel = (open: boolean, width: number) => {
+    const key = `${open}:${width}`;
+    if (laidOut.current === key) return;
+    laidOut.current = key;
+    if (gridRef.current) gridRef.current.style.gridTemplateColumns = panelColumns(open ? width : null);
+    if (asideRef.current) asideRef.current.style.width = `${width}px`;
+    if (stripRef.current) stripRef.current.style.right = `${open ? width : 0}px`;
+  };
+  /** The width while the edge is dragged: on the DOM on every move, and the host's once it is let go. */
+  const movePanel = (width: number) => layoutPanel(true, width);
+  /** While the edge is dragged the layout follows the pointer, not its opening motion. */
+  const resizing = useRef(false);
+  const setResizing = (on: boolean) => {
+    resizing.current = on;
+    for (const el of [gridRef.current, asideRef.current, stripRef.current]) if (el) el.style.transition = on ? 'none' : '';
+  };
+  // Let go, the layout shows the host's width — the one it kept, or the one it had — whatever the drag left in the DOM.
+  useLayoutEffect(() => {
+    if (overlaid && !resizing.current) layoutPanel(panel.open, panel.width);
+  });
   const setPanel = (next: Partial<ReviewPanelSettings>) => {
     const value = { ...panel, ...next };
     setOwnPanel(value);
@@ -1199,7 +1232,12 @@ export function CheckpointViewer({
               </div>
             </header>
 
-            <div className="grid shrink-0 grow grid-cols-1 lg:h-full lg:min-h-0" style={overlaid ? { gridTemplateColumns: panel.open ? `minmax(0,1fr) ${panelWidth}px` : 'minmax(0,1fr)' } : undefined}>
+            <div
+              ref={gridRef}
+              // Beside the stage the panel has the second column, which opens and closes over the motion's time.
+              className={cn('grid shrink-0 grow grid-cols-1 lg:h-full lg:min-h-0 lg:transition-[grid-template-columns]', PANEL_MOTION)}
+              style={overlaid ? { gridTemplateColumns: panelColumns(panel.open ? panel.width : null) } : undefined}
+            >
               <section data-float-bounds className="relative flex min-h-0 flex-col bg-surface" aria-label="Checkpoint image">
                 <div
                   ref={setToolbarEl}
@@ -1432,29 +1470,40 @@ export function CheckpointViewer({
                 ) : null}
               </section>
 
-              {panel.open ? (
-                <div className="relative flex min-h-0 flex-col">
-                  {overlaid ? (
+              {(overlaid ? panelMounted : panel.open) ? (
+                // Leaving, the panel is still here for its column to close over it; nothing in it can be reached meanwhile.
+                <div className="relative flex min-h-0 flex-col" data-state={panel.open ? 'open' : 'closed'} inert={!panel.open || undefined} aria-hidden={!panel.open || undefined}>
+                  {overlaid && panel.open ? (
                     <PanelResizer
                       label="Resize the side panel"
-                      width={panelWidth}
+                      width={panel.width}
                       min={REVIEW_PANEL.min}
                       max={REVIEW_PANEL.max}
                       defaultWidth={REVIEW_PANEL.default}
-                      onResize={setDraggedWidth}
+                      onResizeStart={() => setResizing(true)}
+                      onResize={movePanel}
                       onResizeEnd={(width) => {
-                        setDraggedWidth(null);
+                        setResizing(false);
+                        movePanel(width);
                         setPanel({ width });
                       }}
                     />
                   ) : null}
-                  <aside
-                    id="checkpoint-panel"
-                    className="flex min-h-0 flex-1 flex-col gap-5 overflow-auto border-t border-border p-4 lg:border-t-0 lg:border-l"
-                    // Under the header and the strip too: it starts below the one and scrolls clear of the other.
-                    style={overlaid ? { paddingTop: headerHeight + 16, scrollPaddingTop: headerHeight } : undefined}
-                    aria-label="Review"
-                  >
+                  {/* The column clips the panel, which keeps its width as the column moves: it slides in and out rather than squeezing. */}
+                  <div className="flex min-h-0 flex-1 flex-col lg:overflow-hidden">
+                    <aside
+                      ref={asideRef}
+                      id="checkpoint-panel"
+                      className={cn(
+                        'flex min-h-0 flex-1 flex-col gap-5 overflow-auto border-t border-border p-4 lg:shrink-0 lg:border-t-0 lg:border-l',
+                        // And fades, in as it arrives and out as it leaves, in step with the column.
+                        'lg:transition-opacity lg:starting:opacity-0 lg:in-data-[state=closed]:opacity-0',
+                        PANEL_MOTION,
+                      )}
+                      // Under the header and the strip too: it starts below the one and scrolls clear of the other.
+                      style={overlaid ? { width: panel.width, paddingTop: headerHeight + 16, scrollPaddingTop: headerHeight } : undefined}
+                      aria-label="Review"
+                    >
                     {feedbackMode ? (
                       <FeedbackPanel
                         mode={resolving ? 'resolve' : 'verify'}
@@ -1601,13 +1650,21 @@ export function CheckpointViewer({
                       ) : null}
                       </>
                     )}
-                  </aside>
+                    </aside>
+                  </div>
                 </div>
               ) : null}
             </div>
 
             {/* No bar of its own: the previews float over the screens' bottom-left corner, lifted off them by their shadow. */}
-            <footer ref={setStripEl} className="pointer-events-none z-30 lg:absolute lg:bottom-0 lg:left-0" style={overlaid ? { right: panel.open ? panelWidth : 0 } : undefined}>
+            <footer
+              ref={(el) => {
+                stripRef.current = el;
+                setStripEl(el);
+              }}
+              className={cn('pointer-events-none z-30 lg:absolute lg:bottom-0 lg:left-0 lg:transition-[right]', PANEL_MOTION)}
+              style={overlaid ? { right: panel.open ? panel.width : 0 } : undefined}
+            >
               {/* Room around the previews inside the scrolling row, so neither their shadow nor the outline of the one on show is cut. */}
               <ol className="pointer-events-auto flex w-max max-w-full gap-3 overflow-x-auto p-4" aria-label={`Checkpoints of ${pos.flow.title}`}>
                 {pos.flow.checkpoints.map((cp) => {
@@ -1759,6 +1816,20 @@ function SyncedPanes({ fill, enabled, children }: { fill: boolean; enabled: bool
       {children}
     </div>
   );
+}
+
+/** Whether something that leaves over `ms` is still there: at once when `open`, `ms` after it closes. */
+function usePresence(open: boolean, ms: number) {
+  const [present, setPresent] = useState(open);
+  useEffect(() => {
+    if (open) {
+      setPresent(true);
+      return;
+    }
+    const timer = window.setTimeout(() => setPresent(false), ms);
+    return () => window.clearTimeout(timer);
+  }, [open, ms]);
+  return present || open;
 }
 
 /** The content box of an element, followed as it resizes; zero until it mounts. */

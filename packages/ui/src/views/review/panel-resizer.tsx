@@ -13,7 +13,13 @@ export interface PanelResizerProps {
   max: number;
   /** Where a double click (or Enter) puts it back. */
   defaultWidth: number;
-  /** While dragging, on every move. */
+  /** As a drag begins: a host whose panel opens with a transition switches it off, so the edge follows the pointer. */
+  onResizeStart?: () => void;
+  /**
+   * While dragging, on every move — at most one per frame, as the browser
+   * sends them. A host that lays the panel out itself here (inline styles,
+   * no render) keeps a drag that cheap, and renders once it is let go.
+   */
   onResize: (width: number) => void;
   /** Once a drag or a key press has settled on a width: what to keep. */
   onResizeEnd: (width: number) => void;
@@ -28,7 +34,7 @@ export interface PanelResizerProps {
  * move with the arrow keys (Home and End for the limits), and a double click
  * that puts the default width back.
  */
-export function PanelResizer({ width, min, max, defaultWidth, onResize, onResizeEnd, label, className }: PanelResizerProps) {
+export function PanelResizer({ width, min, max, defaultWidth, onResizeStart, onResize, onResizeEnd, label, className }: PanelResizerProps) {
   const [dragging, setDragging] = useState(false);
   const last = useRef(width);
   const clamp = (n: number) => Math.round(Math.min(max, Math.max(min, n)));
@@ -51,10 +57,13 @@ export function PanelResizer({ width, min, max, defaultWidth, onResize, onResize
       // A pointer the browser does not track (a synthetic one) cannot be captured.
     }
     setDragging(true);
-    // The panel is on the right: dragging its edge left widens it.
+    onResizeStart?.();
+    // The panel is on the right: dragging its edge left widens it. A move that lands on the same pixel changes nothing.
     const move = (ev: PointerEvent) => {
-      last.current = clamp(start.width - (ev.clientX - start.x));
-      onResize(last.current);
+      const next = clamp(start.width - (ev.clientX - start.x));
+      if (next === last.current) return;
+      last.current = next;
+      onResize(next);
     };
     const end = () => {
       setDragging(false);
