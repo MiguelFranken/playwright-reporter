@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.78](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.77...v0.0.78) (2026-10-02)
+
+### Features
+
+* **review:** a foldable, resizable side panel and a floating comment bar ([#84](https://github.com/MiguelFranken/playwright-reporter/issues/84)) ([d7f09b0](https://github.com/MiguelFranken/playwright-reporter/commit/d7f09b0dc74ebdd14a49a45ef0ac3a9e75fca295))
+
 ## [0.0.77](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.76...v0.0.77) (2026-10-02)
 
 ### Features
