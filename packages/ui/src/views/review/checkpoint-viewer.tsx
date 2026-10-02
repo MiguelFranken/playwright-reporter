@@ -1,12 +1,12 @@
 'use client';
 
-import { Check, ChevronLeft, ChevronRight, ExternalLink, Eye, EyeOff, Film, History, Keyboard, Link2, Link2Off, MessageSquareWarning, Route, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Eye, EyeOff, History, Link2, Link2Off, MessageSquareWarning, PanelRightClose, PanelRightOpen, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Badge } from '../../components/badge';
 import { useSyncedScroll } from '../../hooks/use-synced-scroll';
 import { Button } from '../../components/button';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '../../components/dialog';
 import { Kbd } from '../../components/kbd';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../../components/tooltip';
 import { ToggleGroup, ToggleGroupItem } from '../../components/toggle-group';
 import { ReviewStatusBadge, ReviewStatusDot } from '../../patterns/review-status-badge';
 import { StatusIcon } from '../../patterns/status-badge';
@@ -22,6 +22,10 @@ import {
   frameWithin,
   shownZoom,
   type FrameSettings,
+  DEFAULT_REVIEW_PANEL,
+  REVIEW_PANEL,
+  reviewPanel,
+  type ReviewPanelSettings,
   type FrameSize,
   NEEDS_REVIEW,
   type ReviewCaptureView,
@@ -41,7 +45,9 @@ import { COMPARE_MODE_LABELS, COMPARE_MODES, ImageCompare, type CompareMode } fr
 import { IgnoreRegionsEditor, type IgnoreRect } from './ignore-regions-editor';
 import { FrameToolbar } from './frame-toolbar';
 import { PinLayer, undoDraftShape, type PinFocusRequest, type ThreadDraft } from './pin-layer';
-import { MarkupToolbar } from './markup-toolbar';
+import { CommentBar } from './markup-toolbar';
+import { CheckpointDetails } from './checkpoint-details';
+import { PanelResizer } from './panel-resizer';
 import { COMMENT_TOOLS, DEFAULT_MARKUP_COLOR, type CommentTool, type MarkupColor } from '../../lib/review-markup';
 import { ScreenFrame } from './screen-frame';
 import { ThreadVerify, VerifyDone } from './thread-verify';
@@ -120,11 +126,6 @@ function sortedCaptures(cp: ReviewCheckpointView) {
   return [...cp.captures].sort((a, b) => compareVariants(a.variant, b.variant));
 }
 
-/** `4.2 s`, `1:03.5`: where the moment is in the attempt's video. */
-function seconds(ms: number) {
-  const s = Math.max(0, ms / 1000);
-  return s < 60 ? `${s.toFixed(1)} s` : `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`;
-}
 
 /**
  * The reference a capture is compared with: another line of work's capture
@@ -231,6 +232,8 @@ export function CheckpointViewer({
   ignorePendingId,
   comments = {},
   resolve,
+  panel: panelProp,
+  onPanelChange,
 }: {
   flows: readonly ReviewFlowView[];
   selection: ReviewSelection | null;
@@ -251,6 +254,9 @@ export function CheckpointViewer({
   comments?: ReviewCommentsProps;
   /** Going through open feedback, item by item; absent to go through screens. */
   resolve?: ResolveFeedbackProps | null;
+  /** The side panel, shown or folded and how wide; uncontrolled when absent. */
+  panel?: ReviewPanelSettings | null;
+  onPanelChange?: (next: ReviewPanelSettings) => void;
 }) {
   const library = mode === 'library';
   const resolving = resolve ?? null;
@@ -277,6 +283,17 @@ export function CheckpointViewer({
   const [syncScroll, setSyncScroll] = useState(true);
   const [focus, setFocus] = useState<PinFocusRequest | null>(null);
   const [confirmApprove, setConfirmApprove] = useState(false);
+  const [ownPanel, setOwnPanel] = useState<ReviewPanelSettings>(DEFAULT_REVIEW_PANEL);
+  const panel = panelProp ? reviewPanel(panelProp) : ownPanel;
+  // The width while its edge is dragged: kept here, and handed to the host once it is let go.
+  const [draggedWidth, setDraggedWidth] = useState<number | null>(null);
+  const panelWidth = draggedWidth ?? panel.width;
+  const setPanel = (next: Partial<ReviewPanelSettings>) => {
+    const value = { ...panel, ...next };
+    setOwnPanel(value);
+    onPanelChange?.(value);
+  };
+  const [detailsOpen, setDetailsOpen] = useState(false);
   // Walking through the comments made on an earlier version: whether, which one, and how many were resolved on the way.
   const [verifying, setVerifying] = useState(false);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
@@ -453,9 +470,12 @@ export function CheckpointViewer({
   }, [item?.key, selectionKey]);
 
   // A link to a thread (`thread=3`) opens it and brings its pin into view, once its checkpoint is shown.
-  const linked = comments.openThread != null ? (shownThreads.find((t) => t.number === comments.openThread) ?? null) : null;
+  // Every variant numbers its threads from 1: the number a click put in the link is the open thread's own, so that one
+  // stays open — the first screen's thread of the same number is another.
+  const linked =
+    comments.openThread != null ? (shownThreads.find((t) => t.id === openThreadId && t.number === comments.openThread) ?? shownThreads.find((t) => t.number === comments.openThread) ?? null) : null;
   useEffect(() => {
-    if (!linked) return;
+    if (!linked || linked.id === openThreadId) return;
     setOpenThreadId(linked.id);
     if (linked.status === 'resolved') setThreadFilter((f) => (f === 'open' ? 'all' : f));
     setFocus((f) => ({ threadId: linked.id, nonce: (f?.nonce ?? 0) + 1, ping: true }));
@@ -680,6 +700,8 @@ export function CheckpointViewer({
       else if (key === 'n' && regions.length) moveRegion(1);
       else if (key === 'p' && regions.length) moveRegion(-1);
       else if (key === 'c' && canComment) toggleCommenting();
+      else if (key === 'i') setPanel({ open: !panel.open });
+      else if (key === 'd') setDetailsOpen((o) => !o);
       else if (commenting && /^[1-6]$/.test(e.key)) setTool(COMMENT_TOOLS[Number(e.key) - 1]);
       else if (e.key === ']') stepThread(1);
       else if (e.key === '[') stepThread(-1);
@@ -689,7 +711,11 @@ export function CheckpointViewer({
       else if (key === 'e' && canComment && openThreadId && comments.onSetThreadStatus) {
         const t = shownThreads.find((x) => x.id === openThreadId);
         if (t) comments.onSetThreadStatus({ threadId: t.id, status: t.status === 'open' ? 'resolved' : 'open', captureId: threadGroups.find((g) => g.threads.includes(t))?.captureId });
-      } else if (key === 'r' && canComment && current) setComposing(true);
+      } else if (key === 'r' && canComment && current) {
+        // The composer is in the side panel.
+        if (!panel.open) setPanel({ open: true });
+        setComposing(true);
+      }
       else if (key === 'l' && effectiveStage === 'side-by-side') setSyncScroll((on) => !on);
       else if (key === 'a' && deciding && !busy) approve();
       else return;
@@ -715,6 +741,9 @@ export function CheckpointViewer({
         iconOnly={opts.iconOnly}
       />
     ) : null;
+
+  // The keys that do something here, for the details.
+  const shortcuts = SHORTCUTS.filter(([keys]) => (deciding || keys[0] !== 'A') && (canComment || !['C', 'R', 'E', '1–6', '⌘Z'].includes(keys[0])));
 
   /** The pins of one capture on its frame; `on` draws only some of its threads (the rest are on the image beside it). */
   const pinLayer = (capture: ReviewCaptureView, name: string, on?: { threads: readonly ReviewThreadView[]; ghosts?: readonly ReviewThreadView[]; origin?: boolean }) =>
@@ -974,6 +1003,31 @@ export function CheckpointViewer({
                   </Button>
                 </div>
                 <div className="h-5 w-px bg-border" aria-hidden />
+                <div className="flex items-center gap-0.5">
+                  <CheckpointDetails flow={pos.flow} checkpoint={pos.checkpoint} capture={current ?? shown[0] ?? null} library={library} shortcuts={shortcuts} open={detailsOpen} onOpenChange={setDetailsOpen} />
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          variant="ghost"
+                          size={panel.open || !openCount ? 'icon-sm' : 'sm'}
+                          aria-label={panel.open ? 'Hide the side panel' : `Show the side panel${openCount ? `, ${openCount} open ${openCount === 1 ? 'comment' : 'comments'}` : ''}`}
+                          aria-expanded={panel.open}
+                          aria-controls="checkpoint-panel"
+                          aria-keyshortcuts="I"
+                          onClick={() => setPanel({ open: !panel.open })}
+                        />
+                      }
+                    >
+                      {panel.open ? <PanelRightClose /> : <PanelRightOpen />}
+                      {/* Folded away, the panel still says there is something to read in it. */}
+                      {!panel.open && openCount ? <span className="rounded-full bg-accent-subtle px-1.5 text-label-xs text-accent-text tabular-nums">{openCount}</span> : null}
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      {panel.open ? 'Hide' : 'Show'} the side panel <Kbd>I</Kbd>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
                 <DialogClose render={<Button variant="ghost" size="icon-sm" aria-label="Close" />}>
                   <X />
                 </DialogClose>
@@ -992,7 +1046,7 @@ export function CheckpointViewer({
               ) : null}
             </header>
 
-            <div className="grid shrink-0 grow grid-cols-1 lg:h-full lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_20rem]">
+            <div className="grid shrink-0 grow grid-cols-1 lg:h-full lg:min-h-0" style={overlaid ? { gridTemplateColumns: panel.open ? `minmax(0,1fr) ${panelWidth}px` : 'minmax(0,1fr)' } : undefined}>
               <section className="relative flex min-h-0 flex-col bg-surface" aria-label="Checkpoint image">
                 <div
                   ref={setToolbarEl}
@@ -1193,11 +1247,14 @@ export function CheckpointViewer({
                   )}
                   style={{ top: inset.top, bottom: inset.bottom }}
                 />
-                {commenting && canComment && pinsOn && !verifying ? (
+                {canComment && pinsOn && !verifying && !(resolving && ended) ? (
                   // Over the bottom of the screens, the way a drawing tool's bar floats: always at hand, never in the layout.
                   <div className="pointer-events-none absolute inset-x-0 z-40 flex justify-center px-4" style={{ bottom: inset.bottom + 16 }}>
-                    <MarkupToolbar
+                    <CommentBar
                       className="pointer-events-auto"
+                      commenting={commenting}
+                      onCommentingChange={toggleCommenting}
+                      openCount={openCount}
                       tool={tool}
                       onToolChange={setTool}
                       color={color}
@@ -1208,231 +1265,150 @@ export function CheckpointViewer({
                       }}
                       shapes={draft?.markup?.length ?? 0}
                       onUndo={() => setDraft(undoDraftShape(draft))}
-                      onClose={() => toggleCommenting(false)}
                     />
                   </div>
                 ) : null}
               </section>
 
-              <aside
-                className="flex min-h-0 flex-col gap-5 overflow-auto border-t border-border p-4 lg:border-t-0 lg:border-l"
-                // Under the header and the strip too: it starts below the one and scrolls clear of the other.
-                style={overlaid ? { paddingTop: headerHeight + 16, paddingBottom: stripHeight + 16, scrollPaddingTop: headerHeight, scrollPaddingBottom: stripHeight } : undefined}
-                aria-label="Checkpoint details"
-              >
-                <section className="flex flex-col gap-2">
-                  {library ? null : (
-                    <div className="flex flex-wrap gap-1.5">
-                      {shown.map((c) => (
-                        <ReviewStatusBadge key={c.id} status={c.status} label={shown.length > 1 ? `${c.variant}: ${statusWord(c)}` : undefined} />
-                      ))}
-                    </div>
-                  )}
-                  {library ? <LibraryStates captures={shown} /> : null}
-                  {pos.checkpoint.origin ? (
-                    <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <History className="size-3.5" /> Captured in run #{pos.checkpoint.origin.runNumber}: the newest run did not capture this screen.
-                    </p>
-                  ) : null}
-                  {pos.checkpoint.description ? <p className="text-sm text-pretty">{pos.checkpoint.description}</p> : null}
-                  {current?.decision ? <DecisionNote capture={current} /> : null}
-                  {current?.request ? (
-                    <ChangeRequestNote
-                      request={current.request}
-                      onPin={canComment ? () => toggleCommenting(true) : undefined}
-                      onCompare={
-                        !current.request.onThisImage && reference && reference.captureId === current.request.captureId
-                          ? () => {
-                              setVerifying(false);
-                              showStage('side-by-side');
-                            }
-                          : undefined
-                      }
+              {panel.open ? (
+                <div className="relative flex min-h-0 flex-col">
+                  {overlaid ? (
+                    <PanelResizer
+                      label="Resize the side panel"
+                      width={panelWidth}
+                      min={REVIEW_PANEL.min}
+                      max={REVIEW_PANEL.max}
+                      defaultWidth={REVIEW_PANEL.default}
+                      onResize={setDraggedWidth}
+                      onResizeEnd={(width) => {
+                        setDraggedWidth(null);
+                        setPanel({ width });
+                      }}
                     />
                   ) : null}
-                  {current && reference && diff && !reference.same ? (
-                    <DiffSummary diff={diff} referenceLabel={reference.label} />
-                  ) : current && reference ? (
-                    <p className="text-xs text-muted-foreground">{reference.same ? `Identical to ${reference.label.toLowerCase()}.` : `Differs from ${reference.label.toLowerCase()}.`}</p>
-                  ) : current ? (
-                    <p className="text-xs text-muted-foreground">Nothing to compare with yet: this is the first capture of this checkpoint.</p>
-                  ) : null}
-                  {current?.ignoreRegions?.length ? (
-                    <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <EyeOff className="size-3.5" /> {current.ignoreRegions.length} {current.ignoreRegions.length === 1 ? 'area is' : 'areas are'} left out of the comparison.
-                    </p>
-                  ) : null}
-                </section>
-
-                {deciding ? (
-                  <section className="flex flex-col gap-2" aria-label="Decision">
-                    {confirmApprove ? (
-                      <div className="flex animate-rise-in flex-col gap-2 rounded-lg border border-border bg-surface-sunken p-2.5" role="group" aria-label="Open comments">
-                        <p className="text-label-s">
-                          {openCount} open {openCount === 1 ? 'comment' : 'comments'} on {shown.length > 1 ? 'these images' : 'this image'}.
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          <Button ref={approveRef} size="sm" disabled={busy} onClick={() => decide('approved', shown.map((c) => c.id), true)}>
-                            <Check /> Resolve and approve
-                          </Button>
-                          <Button size="sm" variant="outline" disabled={busy} onClick={() => decide('approved', shown.map((c) => c.id))}>
-                            Approve, keep open
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={() => setConfirmApprove(false)}>
-                            Cancel
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex flex-wrap gap-2">
-                        <Button size="sm" disabled={busy} onClick={approve}>
-                          <Check /> {busy ? 'Saving…' : shown.length > 1 ? `Approve ${shown.length} images` : 'Approve'}
-                        </Button>
-                        <Button size="sm" variant="outline" disabled={busy} onClick={() => decide('changes_requested', shown.map((c) => c.id))}>
-                          <MessageSquareWarning /> Request changes
-                        </Button>
-                      </div>
-                    )}
-                  </section>
-                ) : null}
-
-                {canComment || shownThreads.length ? (
-                  <ThreadList
-                    groups={threadGroups}
-                    filter={threadFilter}
-                    onFilterChange={setThreadFilter}
-                    openThreadId={openThreadId}
-                    onOpenThreadChange={(id) => {
-                      const t = id ? shownThreads.find((x) => x.id === id) : null;
-                      // A thread with a pin opens at its pin; one about the whole image opens in the list.
-                      if (t && t.anchor.kind !== 'image') {
-                        setPinsHidden(false);
-                        if (!pinsOn) setStage('image');
-                      }
-                      openThread(id, { focus: Boolean(t && t.anchor.kind !== 'image') });
-                    }}
-                    onHighlight={(id) => (id ? setFocus((f) => ({ threadId: id, nonce: (f?.nonce ?? 0) + 1, ping: true, scroll: false })) : undefined)}
-                    commenting={commenting}
-                    commentTool={tool}
-                    onCommentingChange={canComment ? toggleCommenting : undefined}
-                    composing={composing}
-                    onComposingChange={setComposing}
-                    now={comments.now}
-                    viewerId={comments.viewerId}
-                    canComment={canComment}
-                    canModerate={comments.canModerate}
-                    onCreateThread={comments.onCreateThread}
-                    onReply={comments.onReply}
-                    onSetThreadStatus={comments.onSetThreadStatus}
-                    onEditComment={comments.onEditComment}
-                    onDeleteComment={comments.onDeleteComment}
-                    onVerify={(id) => verify(id)}
-                    headerActions={current ? aiMenu(current.id, (current.threads ?? []).filter((t) => threadStage(t) === 'waiting')) : null}
-                  />
-                ) : null}
-
-                <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
-                  {library && current?.runNumber ? (
-                    <>
-                      <dt className="text-muted-foreground">Captured in</dt>
-                      <dd className="tabular-nums">
-                        Run #{current.runNumber}
-                        {current.baseline ? ` · approved screen from ${current.baseline.runNumber ? `run #${current.baseline.runNumber}` : 'an earlier run'}` : ' · nothing approved yet'}
-                      </dd>
-                    </>
-                  ) : null}
-                  {pos.checkpoint.stepPath.length ? (
-                    <>
-                      <dt className="text-muted-foreground">Step</dt>
-                      <dd className="min-w-0 break-words">{pos.checkpoint.stepPath.join(' › ')}</dd>
-                    </>
-                  ) : null}
-                  {pos.checkpoint.url ? (
-                    <>
-                      <dt className="text-muted-foreground">URL</dt>
-                      <dd className="min-w-0 truncate text-code-s" title={pos.checkpoint.url}>
-                        {pos.checkpoint.url}
-                      </dd>
-                    </>
-                  ) : null}
-                  {pos.checkpoint.pageTitle ? (
-                    <>
-                      <dt className="text-muted-foreground">Page title</dt>
-                      <dd className="min-w-0 break-words">{pos.checkpoint.pageTitle}</dd>
-                    </>
-                  ) : null}
-                  {pos.checkpoint.offsetMs != null ? (
-                    <>
-                      <dt className="text-muted-foreground">Captured</dt>
-                      <dd className="tabular-nums">{seconds(pos.checkpoint.offsetMs)} into the test</dd>
-                    </>
-                  ) : null}
-                  {current?.viewport ? (
-                    <>
-                      <dt className="text-muted-foreground">Viewport</dt>
-                      <dd className="tabular-nums">
-                        {current.viewport.width} × {current.viewport.height}
-                        {current.deviceScaleFactor && current.deviceScaleFactor !== 1 ? ` @${current.deviceScaleFactor}×` : ''}
-                        {current.isMobile ? ' · mobile' : ''}
-                      </dd>
-                    </>
-                  ) : null}
-                  {current?.image.width && current.image.height ? (
-                    <>
-                      <dt className="text-muted-foreground">Image</dt>
-                      <dd className="tabular-nums">
-                        {current.image.width} × {current.image.height} px{current.fullPage === false ? ' · viewport only' : current.fullPage ? ' · full page' : ''}
-                      </dd>
-                    </>
-                  ) : null}
-                  {pos.checkpoint.tags.length ? (
-                    <>
-                      <dt className="text-muted-foreground">Tags</dt>
-                      <dd className="flex flex-wrap gap-1">
-                        {pos.checkpoint.tags.map((t) => (
-                          <Badge key={t} variant="outline" className="text-label-xs">
-                            {t}
-                          </Badge>
-                        ))}
-                      </dd>
-                    </>
-                  ) : null}
-                </dl>
-
-                <nav className="flex flex-col gap-1" aria-label="Evidence">
-                  {(pos.checkpoint.origin ? pos.checkpoint.origin.videoUrl : pos.flow.videoUrl) ? (
-                    <a className="inline-flex items-center gap-2 text-sm text-accent-text hover:underline" href={`${pos.checkpoint.origin ? pos.checkpoint.origin.videoUrl : pos.flow.videoUrl}${pos.checkpoint.offsetMs != null ? `#t=${(pos.checkpoint.offsetMs / 1000).toFixed(1)}` : ''}`} target="_blank" rel="noreferrer">
-                      <Film className="size-4" /> Watch the video{pos.checkpoint.offsetMs != null ? ` at ${seconds(pos.checkpoint.offsetMs)}` : ''}
-                    </a>
-                  ) : null}
-                  {pos.flow.traceUrl ? (
-                    <a className="inline-flex items-center gap-2 text-sm text-accent-text hover:underline" href={pos.flow.traceUrl} target="_blank" rel="noreferrer">
-                      <Route className="size-4" /> Open the trace
-                    </a>
-                  ) : null}
-                  <a className="inline-flex items-center gap-2 text-sm text-accent-text hover:underline" href={pos.checkpoint.origin?.resultHref ?? pos.flow.resultHref}>
-                    <ExternalLink className="size-4" /> Test result
-                  </a>
-                </nav>
-
-                <details className="mt-auto text-xs text-muted-foreground">
-                  <summary className="inline-flex cursor-pointer items-center gap-1.5">
-                    <Keyboard className="size-3.5" /> Keyboard shortcuts
-                  </summary>
-                  <ul className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-                    {SHORTCUTS.filter(([keys]) => (deciding || keys[0] !== 'A') && (canComment || !['C', 'R', 'E', '1–6', '⌘Z'].includes(keys[0]))).map(([keys, what]) => (
-                      <li key={what} className="contents">
-                        <span className="flex gap-1">
-                          {keys.map((k) => (
-                            <Kbd key={k}>{k}</Kbd>
+                  <aside
+                    id="checkpoint-panel"
+                    className="flex min-h-0 flex-1 flex-col gap-5 overflow-auto border-t border-border p-4 lg:border-t-0 lg:border-l"
+                    // Under the header and the strip too: it starts below the one and scrolls clear of the other.
+                    style={overlaid ? { paddingTop: headerHeight + 16, paddingBottom: stripHeight + 16, scrollPaddingTop: headerHeight, scrollPaddingBottom: stripHeight } : undefined}
+                    aria-label="Review"
+                  >
+                    <section className="flex flex-col gap-2">
+                      {library ? null : (
+                        <div className="flex flex-wrap gap-1.5">
+                          {shown.map((c) => (
+                            <ReviewStatusBadge key={c.id} status={c.status} label={shown.length > 1 ? `${c.variant}: ${statusWord(c)}` : undefined} />
                           ))}
-                        </span>
-                        <span>{what}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              </aside>
+                        </div>
+                      )}
+                      {library ? <LibraryStates captures={shown} /> : null}
+                      {pos.checkpoint.origin ? (
+                        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <History className="size-3.5" /> Captured in run #{pos.checkpoint.origin.runNumber}: the newest run did not capture this screen.
+                        </p>
+                      ) : null}
+                      {pos.checkpoint.description ? <p className="text-sm text-pretty">{pos.checkpoint.description}</p> : null}
+                      {current?.decision ? <DecisionNote capture={current} /> : null}
+                      {current?.request ? (
+                        <ChangeRequestNote
+                          request={current.request}
+                          onPin={canComment ? () => toggleCommenting(true) : undefined}
+                          onCompare={
+                            !current.request.onThisImage && reference && reference.captureId === current.request.captureId
+                              ? () => {
+                                  setVerifying(false);
+                                  showStage('side-by-side');
+                                }
+                              : undefined
+                          }
+                        />
+                      ) : null}
+                      {current && reference && diff && !reference.same ? (
+                        <DiffSummary diff={diff} referenceLabel={reference.label} />
+                      ) : current && reference ? (
+                        <p className="text-xs text-muted-foreground">{reference.same ? `Identical to ${reference.label.toLowerCase()}.` : `Differs from ${reference.label.toLowerCase()}.`}</p>
+                      ) : current ? (
+                        <p className="text-xs text-muted-foreground">Nothing to compare with yet: this is the first capture of this checkpoint.</p>
+                      ) : null}
+                      {current?.ignoreRegions?.length ? (
+                        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <EyeOff className="size-3.5" /> {current.ignoreRegions.length} {current.ignoreRegions.length === 1 ? 'area is' : 'areas are'} left out of the comparison.
+                        </p>
+                      ) : null}
+                    </section>
+
+                    {deciding ? (
+                      <section className="flex flex-col gap-2" aria-label="Decision">
+                        {confirmApprove ? (
+                          <div className="flex animate-rise-in flex-col gap-2 rounded-lg border border-border bg-surface-sunken p-2.5" role="group" aria-label="Open comments">
+                            <p className="text-label-s">
+                              {openCount} open {openCount === 1 ? 'comment' : 'comments'} on {shown.length > 1 ? 'these images' : 'this image'}.
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              <Button ref={approveRef} size="sm" disabled={busy} onClick={() => decide('approved', shown.map((c) => c.id), true)}>
+                                <Check /> Resolve and approve
+                              </Button>
+                              <Button size="sm" variant="outline" disabled={busy} onClick={() => decide('approved', shown.map((c) => c.id))}>
+                                Approve, keep open
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={() => setConfirmApprove(false)}>
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex flex-wrap gap-2">
+                            <Button size="sm" disabled={busy} onClick={approve}>
+                              <Check /> {busy ? 'Saving…' : shown.length > 1 ? `Approve ${shown.length} images` : 'Approve'}
+                            </Button>
+                            <Button size="sm" variant="outline" disabled={busy} onClick={() => decide('changes_requested', shown.map((c) => c.id))}>
+                              <MessageSquareWarning /> Request changes
+                            </Button>
+                          </div>
+                        )}
+                      </section>
+                    ) : null}
+
+                    {canComment || shownThreads.length ? (
+                      <ThreadList
+                        groups={threadGroups}
+                        filter={threadFilter}
+                        onFilterChange={setThreadFilter}
+                        openThreadId={openThreadId}
+                        onOpenThreadChange={(id) => {
+                          const t = id ? shownThreads.find((x) => x.id === id) : null;
+                          // A thread with a pin opens at its pin; one about the whole image opens in the list.
+                          if (t && t.anchor.kind !== 'image') {
+                            setPinsHidden(false);
+                            if (!pinsOn) setStage('image');
+                          }
+                          openThread(id, { focus: Boolean(t && t.anchor.kind !== 'image') });
+                        }}
+                        onHighlight={(id) => (id ? setFocus((f) => ({ threadId: id, nonce: (f?.nonce ?? 0) + 1, ping: true, scroll: false })) : undefined)}
+                        emptyHint={
+                          <>
+                            No comments yet. Press <Kbd>C</Kbd> or use Comment below the screen to point at what should change.
+                          </>
+                        }
+                        composing={composing}
+                        onComposingChange={setComposing}
+                        now={comments.now}
+                        viewerId={comments.viewerId}
+                        canComment={canComment}
+                        canModerate={comments.canModerate}
+                        onCreateThread={comments.onCreateThread}
+                        onReply={comments.onReply}
+                        onSetThreadStatus={comments.onSetThreadStatus}
+                        onEditComment={comments.onEditComment}
+                        onDeleteComment={comments.onDeleteComment}
+                        onVerify={(id) => verify(id)}
+                        headerActions={current ? aiMenu(current.id, (current.threads ?? []).filter((t) => threadStage(t) === 'waiting')) : null}
+                      />
+                    ) : null}
+
+                  </aside>
+                </div>
+              ) : null}
             </div>
 
             <footer ref={setStripEl} className="z-30 border-t border-border bg-popover/85 px-4 py-2 backdrop-blur-sm lg:absolute lg:inset-x-0 lg:bottom-0">
@@ -1482,6 +1458,8 @@ const SHORTCUTS: [string[], string][] = [
   [['H'], 'Hide or show the pins'],
   [['O'], 'Compare the comment with the version it was made on, or show the screen'],
   [['L'], 'Side by side: scroll both screens together, or apart'],
+  [['I'], 'Show or hide the side panel'],
+  [['D'], 'Details: step, URL, video, trace'],
   [['Esc'], 'Leave comment mode, then close'],
 ];
 

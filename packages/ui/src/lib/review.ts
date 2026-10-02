@@ -396,6 +396,26 @@ export type FramePreset = (typeof FRAME_PRESETS)[number]['value'];
 export const ZOOM_LEVELS = [0.25, 0.33, 0.5, 0.67, 0.75, 1, 1.25, 1.5] as const;
 
 /**
+ * The viewer's side panel — deciding and the comments: shown or folded away,
+ * and how wide, in pixels. Kept from one session to the next.
+ */
+export interface ReviewPanelSettings {
+  open: boolean;
+  width: number;
+}
+
+/** How wide the viewer's side panel can be dragged, and where it starts. */
+export const REVIEW_PANEL = { min: 280, max: 640, default: 320 } as const;
+
+export const DEFAULT_REVIEW_PANEL: ReviewPanelSettings = { open: true, width: REVIEW_PANEL.default };
+
+/** A saved panel setting made safe: the width within its limits, open unless it was folded. */
+export function reviewPanel(saved: Partial<ReviewPanelSettings> | null | undefined): ReviewPanelSettings {
+  const width = typeof saved?.width === 'number' && Number.isFinite(saved.width) ? Math.round(Math.min(REVIEW_PANEL.max, Math.max(REVIEW_PANEL.min, saved.width))) : REVIEW_PANEL.default;
+  return { open: saved?.open !== false, width };
+}
+
+/**
  * How the viewer frames an image: a screen of `width` × `height` CSS pixels
  * the capture is scaled into (by width) and scrolls in, shown at `zoom`.
  * `captured` uses each capture's own viewport; `fit` picks the zoom that

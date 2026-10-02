@@ -25,7 +25,7 @@ import {
   type LibraryViewDef,
 } from '../../lib/library-views';
 import { defaultFeedbackScope, feedbackQueue, feedbackScopeCounts, flowsWithFeedback, type FeedbackItem, type FeedbackScope } from '../../lib/feedback-queue';
-import { buildReviewTree, DEFAULT_FRAME, folderId, folderPathOf, inFolder, variantsOf, type FrameSettings, type ReviewDecisionInput, type ReviewFlowView, type ReviewGrouping } from '../../lib/review';
+import { buildReviewTree, DEFAULT_FRAME, folderId, folderPathOf, inFolder, variantsOf, type FrameSettings, type ReviewPanelSettings, type ReviewDecisionInput, type ReviewFlowView, type ReviewGrouping } from '../../lib/review';
 import { CheckpointViewer, type ReviewCommentsProps, type ReviewSelection } from '../review/checkpoint-viewer';
 import type { IgnoreRect } from '../review/ignore-regions-editor';
 import { filterFlows } from '../review/review-storyboard';
@@ -93,6 +93,9 @@ export interface LibraryBrowserProps {
   onSizeChange?: (next: number) => void;
   frame?: FrameSettings;
   onFrameChange?: (next: FrameSettings) => void;
+  /** The viewer's side panel: shown or folded, and how wide; uncontrolled when absent. */
+  panel?: ReviewPanelSettings | null;
+  onPanelChange?: (next: ReviewPanelSettings) => void;
   comments?: ReviewCommentsProps;
   /**
    * Deciding about screens — a folder's from its menu in the tree, one in the
@@ -156,6 +159,8 @@ export function LibraryBrowser({
   onSizeChange,
   frame,
   onFrameChange,
+  panel,
+  onPanelChange,
   comments = {},
   onDecide,
   pendingIds,
@@ -498,6 +503,8 @@ export function LibraryBrowser({
         ignorePendingId={ignorePendingId}
         frame={frame ?? DEFAULT_FRAME}
         onFrameChange={onFrameChange}
+        panel={panel}
+        onPanelChange={onPanelChange}
         mode="library"
         comments={comments}
         resolve={

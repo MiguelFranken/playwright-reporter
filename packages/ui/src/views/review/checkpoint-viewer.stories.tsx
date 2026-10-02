@@ -156,6 +156,54 @@ export const FillRunsUnderTheBars: Story = {
 };
 
 /**
+ * The side panel folds away (the button in the header, or I) and gives the
+ * screen the room; folded, the button still counts what is open in it.
+ */
+export const FoldTheSidePanel: Story = {
+  args: { onPanelChange: fn() },
+  play: async ({ args }) => {
+    const body = within(document.body);
+    await body.findByRole('dialog');
+    const stage = body.getByLabelText('Checkpoint screens');
+    const before = stage.clientWidth;
+    await userEvent.click(body.getByRole('button', { name: 'Hide the side panel' }));
+    await waitFor(() => expect(body.queryByRole('complementary', { name: 'Review' })).toBeNull());
+    await expect(args.onPanelChange).toHaveBeenLastCalledWith({ open: false, width: 320 });
+    if (window.matchMedia('(min-width: 64rem)').matches) await waitFor(() => expect(stage.clientWidth).toBeGreaterThan(before));
+    await userEvent.keyboard('i');
+    await expect(await body.findByRole('complementary', { name: 'Review' })).toBeInTheDocument();
+  },
+};
+
+/** Its left edge drags (or, focused, the arrow keys move it) to make the panel wider; the host keeps the width. */
+export const ResizeTheSidePanel: Story = {
+  args: { onPanelChange: fn(), panel: { open: true, width: 400 } },
+  play: async ({ args }) => {
+    const body = within(document.body);
+    await body.findByRole('dialog');
+    if (!window.matchMedia('(min-width: 64rem)').matches) return;
+    const panel = body.getByRole('complementary', { name: 'Review' });
+    await waitFor(() => expect(Math.round(panel.getBoundingClientRect().width)).toBe(400));
+    const edge = body.getByRole('separator', { name: 'Resize the side panel' });
+    edge.focus();
+    await userEvent.keyboard('{ArrowLeft}');
+    await expect(args.onPanelChange).toHaveBeenLastCalledWith({ open: true, width: 416 });
+  },
+};
+
+/** What is looked up now and then — the step, the URL, the video and the trace — is behind Details (D). */
+export const DetailsBehindAButton: Story = {
+  play: async () => {
+    const body = within(document.body);
+    await body.findByRole('dialog');
+    await expect(body.queryByText('Watch the video', { exact: false })).toBeNull();
+    await userEvent.keyboard('d');
+    const details = await body.findByRole('dialog', { name: 'Details' });
+    await expect(within(details).getByRole('link', { name: /Watch the video/ })).toBeInTheDocument();
+  },
+};
+
+/**
  * A library screen is the newest run's capture: it compares with the approved
  * screen (else the capture before it) and is decided about as in that run's
  * review.
