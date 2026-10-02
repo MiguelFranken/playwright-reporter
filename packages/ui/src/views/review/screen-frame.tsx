@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { cn } from '../../lib/cn';
 import type { FrameSize, ReviewImage } from '../../lib/review';
 import { useImage } from '../../provider';
@@ -19,6 +19,35 @@ export const SCREEN_ZOOM_VAR = '--screen-zoom';
  * inside, and one asked to (`room`) is exactly that tall whatever the zoom.
  */
 export const SCREEN_ROOM_VAR = '--screen-room';
+
+/**
+ * The attribute an ancestor carries while its size is changing (`data-moving`
+ * on the viewer's stage: the panel's edge dragged, the panel opening or
+ * closing, the window resized). The image of a frame is laid out once, at the
+ * frame's own width, and scaled to the zoom by a transform; while this is set
+ * it is a layer of its own, which the GPU scales without the image being
+ * decoded and rastered again on every frame — the cost that made a large
+ * screenshot drag. Taken off at rest, it is rastered once more, sharp.
+ */
+export const MOVING_ATTR = 'data-moving';
+
+/**
+ * `children` laid out at `width` CSS pixels and scaled by `zoom` (a number,
+ * or a CSS expression of `SCREEN_ZOOM_VAR`) inside a box of `aspect`'s shape
+ * at the zoomed size. The zoom changing then lays nothing inside out again,
+ * and while an ancestor carries `MOVING_ATTR` the GPU does the scaling.
+ */
+export function ScaledLayer({ width, zoom, aspect, children }: { width: number; zoom: string; aspect: { width: number; height: number }; children: ReactNode }) {
+  return (
+    <div className="relative w-full" style={{ aspectRatio: `${aspect.width} / ${aspect.height}` }}>
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="relative origin-top-left in-data-moving:will-change-transform" style={{ width, transform: `scale(${zoom})` }}>
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /** `px` CSS pixels at the live zoom (`zoom` where no ancestor sets one), never below the 24px a frame keeps. */
 export function liveWidth(px: number, zoom: number): string {
@@ -98,7 +127,7 @@ export function ScreenFrame({
 }) {
   const width = Math.max(24, Math.round(frame.width * zoom));
   const height = Math.max(24, Math.round(frame.height * zoom));
-  const picture = image.available ? <FrameImage image={image} alt={alt} shownWidth={width} eager={eager} /> : null;
+  const picture = image.available ? <FrameImage image={image} alt={alt} shownWidth={width} eager={eager} scaled={{ width: frame.width, zoom: live ? `var(${SCREEN_ZOOM_VAR}, ${zoom})` : `${zoom}` }} /> : null;
   const content =
     picture && overlay ? (
       <div className="relative">
@@ -261,8 +290,13 @@ function PageFirstFrame({ label, className, style, children }: { label: string; 
  * The image of a frame, and its placeholder until the browser can paint it:
  * a cached image counts as loaded the moment it mounts, a new one once it is
  * decoded, so the shimmer never gives way to a half-drawn picture.
+ *
+ * `scaled` (and a recorded size) lays the image out at `width` CSS pixels —
+ * the frame's at a zoom of 1 — inside a box of its own shape at the zoom, and
+ * scales it there by `zoom` (a number, or a CSS expression of `SCREEN_ZOOM_VAR`):
+ * the zoom changing then lays nothing out again, see `MOVING_ATTR`.
  */
-export function FrameImage({ image, alt, shownWidth, eager = false, className }: { image: ReviewImage; alt: string; shownWidth: number; eager?: boolean; className?: string }) {
+export function FrameImage({ image, alt, shownWidth, eager = false, className, scaled }: { image: ReviewImage; alt: string; shownWidth: number; eager?: boolean; className?: string; scaled?: { width: number; zoom: string } }) {
   const Image = useImage();
   const [state, setState] = useState<{ src: string; status: 'loading' | 'ready' | 'failed' }>({ src: image.url, status: 'loading' });
   // Another image in the same frame starts over; a sharper copy of the same one (a new `sizes`) does not.
@@ -277,7 +311,8 @@ export function FrameImage({ image, alt, shownWidth, eager = false, className }:
   );
   const known = image.width && image.height ? { width: image.width, height: image.height } : null;
   if (status === 'failed') return <UnavailableImage image={{ ...image, available: false, unavailableReason: 'failed' }} />;
-  return (
+  const scale = scaled && known ? scaled : null;
+  const picture = (
     <>
       <Image
         ref={ref}
@@ -307,5 +342,11 @@ export function FrameImage({ image, alt, shownWidth, eager = false, className }:
         />
       )}
     </>
+  );
+  if (!scale) return picture;
+  return (
+    <ScaledLayer width={scale.width} zoom={scale.zoom} aspect={known!}>
+      {picture}
+    </ScaledLayer>
   );
 }

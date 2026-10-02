@@ -53,7 +53,7 @@ import { CheckpointDetails } from './checkpoint-details';
 import { PanelResizer } from './panel-resizer';
 import { COMMENT_TOOLS, DEFAULT_MARKUP_COLOR, type CommentTool, type MarkupColor, type MarkupShape } from '../../lib/review-markup';
 import type { ImageSize } from '../../lib/review-threads';
-import { liveHeight, liveWidth, SCREEN_ROOM_VAR, SCREEN_ZOOM_VAR, ScreenFrame } from './screen-frame';
+import { liveHeight, liveWidth, MOVING_ATTR, SCREEN_ROOM_VAR, SCREEN_ZOOM_VAR, ScreenFrame } from './screen-frame';
 import { FeedbackThreadCard, OriginMarker, VerifyDone } from './thread-verify';
 import { FeedbackRequestCard, ResolveDone } from './resolve-feedback';
 import { FeedbackPanel, type FeedbackEntry } from './feedback-panel';
@@ -333,11 +333,12 @@ export function CheckpointViewer({
   };
   /** The width while the edge is dragged: on the DOM on every move, and the host's once it is let go. */
   const movePanel = (width: number) => layoutPanel(true, width);
-  /** While the edge is dragged the layout follows the pointer, not its opening motion. */
+  /** While the edge is dragged the layout follows the pointer, not its opening motion; the stage knows from the first move. */
   const resizing = useRef(false);
   const setResizing = (on: boolean) => {
     resizing.current = on;
     for (const el of [gridRef.current, asideRef.current, stripRef.current]) if (el) el.style.transition = on ? 'none' : '';
+    if (on && stageRef.current) stageRef.current.setAttribute(MOVING_ATTR, '');
   };
   // Let go, the layout shows the host's width — the one it kept, or the one it had — whatever the drag left in the DOM.
   useLayoutEffect(() => {
@@ -444,6 +445,7 @@ export function CheckpointViewer({
     onFrameChange?.(next);
   };
   // Read once it rests: the screens follow the stage by CSS (see `zoomCss`), the numbers here label and bound things.
+  // While it moves the stage carries `MOVING_ATTR`, and the screens' images are scaled on the GPU rather than laid out.
   const stageSize = useElementSize(stageEl);
   // Narrower than the side panel needs, the viewer scrolls as one page: the stage grows with its screens, so fitting them
   // follows the window's height rather than the stage's own.
@@ -529,11 +531,12 @@ export function CheckpointViewer({
   const bleed = fill && captionless && overlaid && !verifying && !(resolving && ended) && (inset.top > 0 || inset.bottom > 0);
   // The screens are sized by CSS from the stage's own size (container query units), so they follow its edge being
   // dragged, the panel opening and closing and the window being resized on every frame, laid out by the browser alone:
-  // no render, no image asked for again. The stage sets `SCREEN_ZOOM_VAR` — `zoom` above, as CSS computes it
-  // (`tan(atan2(a, b))` is the number a/b) — and `SCREEN_ROOM_VAR`, the height a screen may fill: `100cqh` is the
-  // stage's content box, below its padding and the bars it keeps clear. Screens filling the stage and feedback being
-  // verified are as tall as the room (a long page is read by scrolling it); any other screen longer than the room ends
-  // at its edge and scrolls inside. Stacked, the viewer scrolls as a page: the room follows the window's height.
+  // no render, no image asked for again — and the images themselves are not laid out at all, only scaled on the GPU
+  // (see `MOVING_ATTR`). The stage sets `SCREEN_ZOOM_VAR` — `zoom` above, as CSS computes it (`tan(atan2(a, b))` is
+  // the number a/b) — and `SCREEN_ROOM_VAR`, the height a screen may fill: `100cqh` is the stage's content box, below
+  // its padding and the bars it keeps clear. Screens filling the stage and feedback being verified are as tall as the
+  // room (a long page is read by scrolling it); any other screen longer than the room ends at its edge and scrolls
+  // inside. Stacked, the viewer scrolls as a page: the room follows the window's height.
   const roomCss = overlaid ? `calc(100cqh - ${around.above}px)` : `calc(max(240px, 75vh) - ${around.above}px)`;
   const widthFit = `tan(atan2(calc(100cqw - ${around.beside + gap * Math.max(0, frames.length - 1)}px), ${Math.max(1, frames.reduce((sum, f) => sum + f.width, 0))}px))`;
   const heightFit = `tan(atan2(var(${SCREEN_ROOM_VAR}), ${Math.max(1, ...frames.map((f) => f.height))}px))`;
@@ -1105,7 +1108,15 @@ export function CheckpointViewer({
           className={cn('mx-auto overflow-x-hidden overflow-y-auto outline-none', fill ? null : 'rounded-md ring-1 ring-border', 'focus-visible:ring-[3px] focus-visible:ring-ring/40')}
           style={{ width: liveWidth(at[0].width, zoom), height: `calc(${liveHeight(at[0].height, zoom, tall)} + ${control}px)` }}
         >
-          <ImageCompare current={c.image} reference={x.reference.image} mode={effectiveStage as CompareMode} referenceLabel={x.reference.label} currentLabel={currentTitle} alt={name} />
+          <ImageCompare
+            current={c.image}
+            reference={x.reference.image}
+            mode={effectiveStage as CompareMode}
+            referenceLabel={x.reference.label}
+            currentLabel={currentTitle}
+            alt={name}
+            scaled={{ width: at[0].width, zoom: `var(${SCREEN_ZOOM_VAR}, ${zoom})` }}
+          />
         </div>
       </StagePane>
     );
@@ -1859,7 +1870,8 @@ function usePresence(open: boolean, ms: number) {
  * The content box of an element, followed as it resizes; zero until it mounts.
  * A resize under way (the panel's edge dragged, the window resized) is read
  * once it has rested for a moment: what is laid out from it follows by CSS
- * meanwhile, and nothing here needs a render on every frame of it.
+ * meanwhile, and nothing here needs a render on every frame of it. Until then
+ * the element carries `MOVING_ATTR`, which puts what it shows on the GPU.
  */
 function useElementSize(el: HTMLElement | null) {
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -1868,14 +1880,25 @@ function useElementSize(el: HTMLElement | null) {
     const measure = () => setSize((cur) => (cur.width === el.clientWidth && cur.height === el.clientHeight ? cur : { width: el.clientWidth, height: el.clientHeight }));
     measure();
     let timer = 0;
+    let first = true;
     const observer = new ResizeObserver(() => {
+      // The first notice is the size it mounted at, measured above.
+      if (first) {
+        first = false;
+        return;
+      }
+      if (!el.hasAttribute(MOVING_ATTR)) el.setAttribute(MOVING_ATTR, '');
       window.clearTimeout(timer);
-      timer = window.setTimeout(measure, 120);
+      timer = window.setTimeout(() => {
+        el.removeAttribute(MOVING_ATTR);
+        measure();
+      }, 120);
     });
     observer.observe(el);
     return () => {
       observer.disconnect();
       window.clearTimeout(timer);
+      el.removeAttribute(MOVING_ATTR);
     };
   }, [el]);
   return size;

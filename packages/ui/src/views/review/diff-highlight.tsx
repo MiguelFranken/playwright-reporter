@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, type ReactNode } from 'react';
-import { liveHeight, liveWidth } from './screen-frame';
+import { liveHeight, liveWidth, ScaledLayer, SCREEN_ZOOM_VAR } from './screen-frame';
 import { cn } from '../../lib/cn';
 import type { FrameSize, ReviewDiffView, ReviewImage } from '../../lib/review';
 import { DiffMarks } from './diff-summary';
@@ -61,6 +61,18 @@ export function DiffHighlight({
   const shownHeight = size ? (width * size.height) / size.width : height;
   const tall = shownHeight > height + 1;
   const box = live ? { width: liveWidth(frame.width, zoom), height: liveHeight(frame.height, zoom, room) } : { width, height };
+  // The images are laid out once, at the frame's width, and scaled to the zoom: see `MOVING_ATTR` in `screen-frame`.
+  const scale = live ? `var(${SCREEN_ZOOM_VAR}, ${zoom})` : `${zoom}`;
+  const images = (
+    <>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={image.url} alt={alt} decoding="async" draggable={false} className="block h-auto w-full" />
+      {overlay && diff.overlayUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={diff.overlayUrl} alt="" aria-hidden draggable={false} className="pointer-events-none absolute inset-0 block h-full w-full opacity-80" />
+      ) : null}
+    </>
+  );
 
   useEffect(() => {
     const el = scroller.current;
@@ -85,12 +97,13 @@ export function DiffHighlight({
       >
         {image.available ? (
           <div className="relative">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={image.url} alt={alt} decoding="async" draggable={false} className="block h-auto w-full" />
-            {overlay && diff.overlayUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={diff.overlayUrl} alt="" aria-hidden draggable={false} className="pointer-events-none absolute inset-0 block h-full w-full opacity-80" />
-            ) : null}
+            {size ? (
+              <ScaledLayer width={frame.width} zoom={scale} aspect={size}>
+                {images}
+              </ScaledLayer>
+            ) : (
+              images
+            )}
             {size ? <DiffMarks regions={diff.regions} width={size.width} height={size.height} active={active} numbered onSelect={onActiveChange} /> : null}
             {children}
           </div>
