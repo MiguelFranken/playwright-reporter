@@ -362,7 +362,8 @@ export function CheckpointViewer({
   const toolbarHeight = useOuterHeight(toolbarEl);
   const stripHeight = useOuterHeight(stripEl);
   const overlaid = stackedHeight == null;
-  const inset = overlaid ? { top: headerHeight + toolbarHeight, bottom: stripHeight } : { top: 0, bottom: 0 };
+  // The strip of checkpoints floats over the screens' bottom-left corner, so the screens run on to the window's edge.
+  const inset = overlaid ? { top: headerHeight + toolbarHeight, bottom: 0 } : { top: 0, bottom: 0 };
   const canComment = Boolean(comments.canComment && comments.onCreateThread);
   const threadGroups = shown.map((c) => ({ captureId: c.id, variant: c.variant, threads: c.threads ?? [] }));
   const shownThreads = threadGroups.flatMap((g) => g.threads);
@@ -1249,7 +1250,7 @@ export function CheckpointViewer({
                 />
                 {canComment && pinsOn && !verifying && !(resolving && ended) ? (
                   // Over the bottom of the screens, the way a drawing tool's bar floats: always at hand, never in the layout.
-                  <div className="pointer-events-none absolute inset-x-0 z-40 flex justify-center px-4" style={{ bottom: inset.bottom + 16 }}>
+                  <div className="pointer-events-none absolute inset-x-0 z-40 flex justify-center px-4" style={{ bottom: overlaid ? stripHeight : 16 }}>
                     <CommentBar
                       className="pointer-events-auto"
                       commenting={commenting}
@@ -1290,7 +1291,7 @@ export function CheckpointViewer({
                     id="checkpoint-panel"
                     className="flex min-h-0 flex-1 flex-col gap-5 overflow-auto border-t border-border p-4 lg:border-t-0 lg:border-l"
                     // Under the header and the strip too: it starts below the one and scrolls clear of the other.
-                    style={overlaid ? { paddingTop: headerHeight + 16, paddingBottom: stripHeight + 16, scrollPaddingTop: headerHeight, scrollPaddingBottom: stripHeight } : undefined}
+                    style={overlaid ? { paddingTop: headerHeight + 16, scrollPaddingTop: headerHeight } : undefined}
                     aria-label="Review"
                   >
                     <section className="flex flex-col gap-2">
@@ -1411,22 +1412,29 @@ export function CheckpointViewer({
               ) : null}
             </div>
 
-            <footer ref={setStripEl} className="z-30 border-t border-border bg-popover/85 px-4 py-2 backdrop-blur-sm lg:absolute lg:inset-x-0 lg:bottom-0">
-              <ol className="flex gap-2 overflow-x-auto pb-1" aria-label={`Checkpoints of ${pos.flow.title}`}>
+            {/* No bar of its own: the previews float over the screens' bottom-left corner, lifted off them by their shadow. */}
+            <footer ref={setStripEl} className="pointer-events-none z-30 lg:absolute lg:bottom-0 lg:left-0" style={overlaid ? { right: panel.open ? panelWidth : 0 } : undefined}>
+              {/* Room around the previews inside the scrolling row, so neither their shadow nor the outline of the one on show is cut. */}
+              <ol className="pointer-events-auto flex w-max max-w-full gap-3 overflow-x-auto p-4" aria-label={`Checkpoints of ${pos.flow.title}`}>
                 {pos.flow.checkpoints.map((cp) => {
                   const first = sortedCaptures(cp).find((c) => !variant || c.variant === variant) ?? sortedCaptures(cp)[0];
                   const active = cp.id === pos.checkpoint.id;
                   return (
-                    <li key={cp.id}>
+                    <li key={cp.id} className="shrink-0">
                       <button
                         type="button"
                         onClick={() => onSelectionChange({ checkpointId: cp.id, variant })}
                         aria-current={active ? 'step' : undefined}
                         aria-label={`${cp.sequence + 1}. ${checkpointLabel(cp.name, cp.title)}`}
-                        className={cn('flex items-center gap-2 rounded-md p-1 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/25', active ? 'bg-accent-subtle ring-1 ring-accent-border' : 'hover:bg-muted')}
+                        className={cn(
+                          'relative block rounded-md outline-none transition-transform duration-150 hover:-translate-y-0.5 focus-visible:ring-[3px] focus-visible:ring-ring/40',
+                          active && 'ring-2 ring-accent-solid ring-offset-2 ring-offset-background',
+                        )}
                       >
-                        <span className="text-label-s tabular-nums text-muted-foreground">{cp.sequence + 1}</span>
-                        {first ? <ScreenFrame image={first.image} frame={captureViewport(first)} zoom={56 / captureViewport(first).height} alt="" scroll={false} /> : null}
+                        {first ? <ScreenFrame image={first.image} frame={captureViewport(first)} zoom={56 / captureViewport(first).height} alt="" scroll={false} className="shadow-e3" /> : null}
+                        <span aria-hidden className="absolute top-1 left-1 rounded-sm bg-popover/90 px-1 text-label-xs text-popover-foreground tabular-nums shadow-e1">
+                          {cp.sequence + 1}
+                        </span>
                       </button>
                     </li>
                   );

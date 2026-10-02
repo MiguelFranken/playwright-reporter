@@ -84,7 +84,8 @@ export const ScreenSettings: Story = {
     await userEvent.click(body.getByRole('combobox', { name: 'Zoom' }));
     await userEvent.click(await body.findByRole('option', { name: '50%' }));
     await expect(body.getByRole('combobox', { name: 'Zoom' })).toHaveTextContent('50%');
-    await waitFor(() => expect(body.queryByRole('listbox')).not.toBeInTheDocument());
+    // The list animates out; a busy browser takes longer than the default second.
+    await waitFor(() => expect(body.queryByRole('listbox')).not.toBeInTheDocument(), { timeout: 5000 });
     await expect(body.getByRole('region', { name: /mobile screen/ })).toHaveStyle({ width: '195px' });
   },
 };
@@ -128,10 +129,10 @@ export const FillTheStage: Story = {
 };
 
 /**
- * Filling, one screen runs on under the bars: the header, the toolbar and the
- * strip of checkpoints lie over it, translucent and blurred. It opens where it
- * did when they stood beside it — the page's top just below the toolbar — and
- * scrolls to its foot just above the strip.
+ * Filling, one screen runs on under the bars: the header and the toolbar lie
+ * over it, translucent and blurred, and the previews of the flow's checkpoints
+ * float over its bottom-left corner. It opens with the page's top just below
+ * the toolbar, and scrolls to its foot at the window's edge.
  */
 export const FillRunsUnderTheBars: Story = {
   args: { initial: { checkpointId: changed.id, variant: 'desktop' }, frame: { preset: 'captured', width: 1280, height: 720, zoom: 'fit', fill: true } },
@@ -144,14 +145,16 @@ export const FillRunsUnderTheBars: Story = {
     const header = body.getByRole('heading', { name: /Checkout filled in/ }).closest('header')!;
     const toolbar = body.getByRole('button', { name: /Fill/ }).closest('[class*="backdrop-blur"]')!;
     const strip = body.getByRole('list', { name: /^Checkpoints of/ }).closest('footer')!;
-    for (const bar of [header, toolbar, strip]) await expect(getComputedStyle(bar).backdropFilter).toContain('blur');
+    for (const bar of [header, toolbar]) await expect(getComputedStyle(bar).backdropFilter).toContain('blur');
+    // The strip of checkpoints has no bar: its previews float over the screen, in its bottom-left corner.
+    await expect(getComputedStyle(strip).backgroundColor).toBe('rgba(0, 0, 0, 0)');
     // Wide enough for the side panel, the bars lie over the screen.
     if (!window.matchMedia('(min-width: 64rem)').matches) return;
     await waitFor(() => expect(Math.abs(image.getBoundingClientRect().top - toolbar.getBoundingClientRect().bottom)).toBeLessThanOrEqual(1));
     await expect(screen.getBoundingClientRect().top).toBeLessThanOrEqual(header.getBoundingClientRect().top + 1);
     await waitFor(() => expect(screen.scrollHeight).toBeGreaterThan(screen.clientHeight));
     screen.scrollTop = screen.scrollHeight;
-    await waitFor(() => expect(Math.abs(image.getBoundingClientRect().bottom - strip.getBoundingClientRect().top)).toBeLessThanOrEqual(1));
+    await waitFor(() => expect(Math.abs(image.getBoundingClientRect().bottom - screen.getBoundingClientRect().bottom)).toBeLessThanOrEqual(1));
   },
 };
 
@@ -408,9 +411,8 @@ export const FillAllVariants: Story = {
     const desktop = body.getByRole('region', { name: /desktop screen/ });
     const mobile = body.getByRole('region', { name: /mobile screen/ });
     await waitFor(() => expect(Math.abs(mobile.getBoundingClientRect().left - desktop.getBoundingClientRect().right - 1)).toBeLessThanOrEqual(1));
-    // The stage runs on under the strip of checkpoints; the screens, under their captions, end where it starts.
-    const strip = body.getByRole('list', { name: /^Checkpoints of/ }).closest('footer')!;
-    for (const screen of [desktop, mobile]) await expect(Math.abs(screen.getBoundingClientRect().bottom - strip.getBoundingClientRect().top)).toBeLessThanOrEqual(1);
+    // The strip of checkpoints floats over the screens: they run on to the stage's foot.
+    for (const screen of [desktop, mobile]) await expect(Math.abs(screen.getBoundingClientRect().bottom - stage.getBoundingClientRect().bottom)).toBeLessThanOrEqual(1);
     await expect(stage.scrollHeight).toBeLessThanOrEqual(stage.clientHeight);
     await expect(stage.scrollWidth).toBeLessThanOrEqual(stage.clientWidth);
     await expect(body.getByText('desktop', { selector: 'figcaption span' }).closest('figcaption')).toHaveStyle({ height: '32px' });
