@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.82](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.81...v0.0.82) (2026-10-02)
+
+### Bug Fixes
+
+* **review:** keep Image or Compare until the reviewer switches ([c989805](https://github.com/MiguelFranken/playwright-reporter/commit/c989805e630f3f40b51838516d03e2effd5351d9))
+
 ## [0.0.81](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.80...v0.0.81) (2026-10-02)
 
 ### Features
