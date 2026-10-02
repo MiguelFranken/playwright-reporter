@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.81](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.80...v0.0.81) (2026-10-02)
+
+### Features
+
+* **review:** feedback is resolved in the side panel, the screens get the stage ([#87](https://github.com/MiguelFranken/playwright-reporter/issues/87)) ([ed7d91b](https://github.com/MiguelFranken/playwright-reporter/commit/ed7d91b295c75af0cbc0c0dc3820ca894bed34a8))
+
 ## [0.0.80](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.79...v0.0.80) (2026-10-02)
 
 ### Features
