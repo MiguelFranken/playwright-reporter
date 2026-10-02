@@ -237,6 +237,29 @@ describe('compare targets', () => {
 
     expect(await compareTargetsOf(randomUUID(), now.capture.id)).toBeNull();
   });
+
+  test('leaves out runs whose image the retention policy deleted, and the run before falls back past them', async ({ db, tenant }) => {
+    const author = { userId: tenant.adminUser.id, source: 'app' as const };
+    const r1 = await runWith(tenant, sha('a'), minutesAgo(40));
+    const r2 = await runWith(tenant, sha('b'), minutesAgo(30));
+    const r3 = await runWith(tenant, sha('c'), minutesAgo(20));
+    const now = await runWith(tenant, sha('d'), minutesAgo(10));
+    await createThread({ projectId: tenant.project.id, captureId: r2.capture.id, anchor: { kind: 'image', x: 0, y: 0 }, body: 'Logo too small', author });
+    const expire = async (captureId: string) => {
+      const [c] = await db.select({ attachmentId: reviewCaptures.attachmentId }).from(reviewCaptures).where(eq(reviewCaptures.id, captureId));
+      await db.update(attachments).set({ status: 'expired', expiredAt: new Date() }).where(eq(attachments.id, c.attachmentId));
+    };
+    await expire(r3.capture.id);
+    await expire(r2.capture.id);
+
+    // r3 and r2 (despite its open comment) are gone; r1 moves up within the limit.
+    const found = await compareTargetsOf(tenant.project.id, now.capture.id, 1);
+    expect(found?.targets.map((t) => t.runNumber)).toEqual([r1.run.number]);
+
+    // The run before is the newest one that still has its image.
+    const [flow] = await runReview({ id: now.run.id, startedAt: minutesAgo(10) });
+    expect(flow.checkpoints[0].captures[0].previous?.runNumber).toBe(r1.run.number);
+  });
 });
 
 describe('migration', () => {

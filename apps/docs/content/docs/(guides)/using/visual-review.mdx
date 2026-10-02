@@ -118,6 +118,10 @@ before when nothing is approved yet. You can also pick one of these:
 - Any of the last ten runs that captured the screen. Every earlier image with open comments is listed too, however
   old, with the number of open comments. Resolved comments are not counted.
 
+Only images that are still stored are offered. When the [retention policy](/docs/administration/retention)
+has deleted a run's screenshots, that run is left out of the list, and **Run before** is the newest earlier run that
+still has its image. The list of other runs loads when you open the menu.
+
 Your choice stays as you move from checkpoint to checkpoint, and it is part of the link (`against=previous`,
 `against=run:38`). Where it finds nothing, for example a run that did not capture this screen, the viewer says so
 and shows the automatic comparison. The difference to the chosen image is measured the first time you open it.

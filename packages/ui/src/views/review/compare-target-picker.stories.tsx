@@ -70,23 +70,60 @@ export const Open: Story = {
 /** The run before, picked once: it stays the rule while the reviewer moves on. */
 export const RunBefore: Story = { args: { initial: 'previous' } };
 
-/** The other runs are still loading: the rules that need them wait. */
+/** The other runs are still loading: placeholders stand in for them, and the rules that need them wait. */
 export const Loading: Story = {
   args: { targets: undefined },
   play: async ({ canvasElement }) => {
     await userEvent.click(within(canvasElement).getByRole('combobox', { name: 'Compare with' }));
-    await expect(await screen.findByText('Loading the other runs…')).toBeInTheDocument();
+    const placeholders = await screen.findAllByRole('option', { name: 'Loading the other runs…' });
+    await expect(placeholders).toHaveLength(3);
+    for (const p of placeholders) await expect(p).toHaveAttribute('aria-disabled', 'true');
+    await expect(await screen.findByRole('group', { name: 'Other runs' })).toBeInTheDocument();
   },
 };
 
-/** The first capture of a screen: nothing approved, no run before, no other run. */
+/** Loaded on demand, as the app does: nothing is asked for until the reviewer reaches for the list. */
+function OnDemand(props: React.ComponentProps<typeof Hosted> & { delay?: number }) {
+  const { delay = 400, onTargetsWanted, targets: loaded, ...rest } = props;
+  const [targets, setTargets] = useState<typeof loaded>(undefined);
+  const [asked, setAsked] = useState(false);
+  return (
+    <Hosted
+      {...rest}
+      targets={targets}
+      onTargetsWanted={() => {
+        onTargetsWanted?.();
+        if (asked) return;
+        setAsked(true);
+        setTimeout(() => setTargets(loaded), delay);
+      }}
+    />
+  );
+}
+
+export const LoadedOnOpen: Story = {
+  args: { onTargetsWanted: fn() },
+  render: (args) => <OnDemand {...args} />,
+  play: async ({ canvasElement, args }) => {
+    const trigger = within(canvasElement).getByRole('combobox', { name: 'Compare with' });
+    await expect(args.onTargetsWanted).not.toHaveBeenCalled();
+    await userEvent.click(trigger);
+    await expect(args.onTargetsWanted).toHaveBeenCalled();
+    await expect((await screen.findAllByRole('option', { name: 'Loading the other runs…' })).length).toBeGreaterThan(0);
+    // The runs replace the placeholders once they arrive.
+    await expect(await screen.findByRole('option', { name: /Run #468/ }, { timeout: 3000 })).toBeInTheDocument();
+    await expect(screen.queryByRole('option', { name: 'Loading the other runs…' })).not.toBeInTheDocument();
+  },
+};
+
+/** The first capture of a screen, or every other run's image has been deleted: nothing approved, no run before, no other run. */
 export const NothingToCompare: Story = {
   args: { capture: { ...firstCapture, previous: null, baseline: null }, targets: [] },
   play: async ({ canvasElement }) => {
     const trigger = within(canvasElement).getByRole('combobox', { name: 'Compare with' });
     await expect(trigger).toHaveTextContent('vs. Nothing yet');
     await userEvent.click(trigger);
-    await expect(await screen.findByText('No other run captured this screen.')).toBeInTheDocument();
+    await expect(await screen.findByText('No other run still has an image of this screen.')).toBeInTheDocument();
     await expect(await screen.findByRole('option', { name: /Approved baseline/ })).toHaveAttribute('aria-disabled', 'true');
   },
 };
