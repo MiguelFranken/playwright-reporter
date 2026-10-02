@@ -143,8 +143,11 @@ export async function createDrawings(input: {
   const [{ count }] = await db.select({ count: sql<number>`count(*)::int` }).from(reviewDrawings).where(identity);
   if (Number(count) + input.drawings.length > MAX_IMAGE_DRAWINGS) throw new DrawingError(`An image holds at most ${MAX_IMAGE_DRAWINGS} drawings. Erase some first.`);
 
-  const rows = input.drawings.map((d) => ({
+  // One request's shapes keep the order they were drawn in: a millisecond apart, since they are read back by `created_at`.
+  const now = Date.now();
+  const rows = input.drawings.map((d, i) => ({
     id: d.id.toLowerCase(),
+    createdAt: new Date(now + i),
     projectId: input.projectId,
     testId: capture.testId,
     checkpointName: capture.checkpointName,
