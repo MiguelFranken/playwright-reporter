@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.0.86](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.85...v0.0.86) (2026-10-02)
+
+### Features
+
+* **mcp:** list, detail and picture visual differences between two runs ([1d83858](https://github.com/MiguelFranken/playwright-reporter/commit/1d8385826bea344b2f0609a1273ec621810ac195))
+* **review:** ask a model what a visual difference is, within a budget ([c5d7ec8](https://github.com/MiguelFranken/playwright-reporter/commit/c5d7ec87adbd38003208627d4a37c33e439cb865))
+* **review:** edit rules with reasons and a preview, filter by them, set policies ([7e5ad33](https://github.com/MiguelFranken/playwright-reporter/commit/7e5ad33d746ccb2814cf33f7a12c99b5b730c6d2))
+* **review:** hand a visual difference to an AI assistant from the viewer ([6aa2e4b](https://github.com/MiguelFranken/playwright-reporter/commit/6aa2e4b607481a4cb731a5ad4a77486328d53239))
+* **review:** name a pair of captures and measure it raw and effective ([d49c88f](https://github.com/MiguelFranken/playwright-reporter/commit/d49c88f08d240e0f5c7b9a213a66b9dd22aabb07))
+* **review:** rules that leave areas out, with a reason, a history and a revision ([fa959a6](https://github.com/MiguelFranken/playwright-reporter/commit/fa959a6df4591a5d812c394aab0b4d9083f7a8bb))
+
+### Bug Fixes
+
+* **review:** keep the order drawings were made in when several are saved at once ([1e9f6f1](https://github.com/MiguelFranken/playwright-reporter/commit/1e9f6f1dce5a1992cd4c003d1129cfab6f13a3a1))
+* **review:** keep the screens' size container from changing with the mode ([00a84df](https://github.com/MiguelFranken/playwright-reporter/commit/00a84dfbba2924349d62bacfb7352843e8747d29))
+* **review:** no tooltips flash while the comment bar grows ([fb29b03](https://github.com/MiguelFranken/playwright-reporter/commit/fb29b036ce40c58eb968af064551b979e6715980))
+* **review:** open a pin's thread on click, not hover ([0b8e518](https://github.com/MiguelFranken/playwright-reporter/commit/0b8e5180151c0eb8aa95a92c16837b0fd8b4a6ac))
+
+### Performance Improvements
+
+* **review:** lay each screenshot out once and scale it on the GPU while the stage moves ([8b125a8](https://github.com/MiguelFranken/playwright-reporter/commit/8b125a875e6aec302f00d3b08689afded2c51945))
+
 ## [0.0.85](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.84...v0.0.85) (2026-10-02)
 
 ### Performance Improvements
