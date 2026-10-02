@@ -48,6 +48,8 @@ export const Default: Story = {
     await userEvent.click(await screen.findByRole('option', { name: /Run #477/ }));
     await expect(args.onRuleChange).toHaveBeenLastCalledWith('run:477');
     await waitFor(() => expect(trigger).toHaveTextContent('vs. Run #477'));
+    // The list animates out; the trigger takes a click again once it has gone.
+    await waitFor(() => expect(screen.queryByRole('listbox')).not.toBeInTheDocument());
     await userEvent.click(trigger);
     await userEvent.click(await screen.findByRole('option', { name: /Latest open comments/ }));
     await expect(args.onRuleChange).toHaveBeenLastCalledWith('comments');

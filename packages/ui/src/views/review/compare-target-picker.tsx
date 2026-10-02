@@ -96,9 +96,10 @@ export function CompareTargetPicker({
         {loading ? (
           <>
             <SelectSeparator />
-            <p className="px-2 py-1.5 text-body-xs text-muted-foreground" aria-live="polite">
+            {/* A listbox holds only options: the notes are disabled ones. */}
+            <SelectItem value="__loading" disabled className="text-body-xs text-muted-foreground">
               Loading the other runs…
-            </p>
+            </SelectItem>
           </>
         ) : null}
         {commented.length ? (
@@ -122,7 +123,9 @@ export function CompareTargetPicker({
         {!loading && others.length === 0 ? (
           <>
             <SelectSeparator />
-            <p className="px-2 py-1.5 text-body-xs text-muted-foreground">No other run captured this screen.</p>
+            <SelectItem value="__none" disabled className="text-body-xs text-muted-foreground">
+              No other run captured this screen.
+            </SelectItem>
           </>
         ) : null}
       </SelectContent>
