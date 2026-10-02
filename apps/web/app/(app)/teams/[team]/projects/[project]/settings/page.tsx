@@ -9,6 +9,11 @@ import { StorageCard } from '@miguelfranken/ui/views/settings/storage-card';
 import { TokensCard, type TokenRow } from '@/components/settings/tokens-card';
 import { FieldSettingsCard } from '@/components/test-cases/field-settings-card';
 import { VisualDiffForm } from '@/components/settings/visual-diff-form';
+import { VisualPolicyForm } from '@/components/settings/visual-policy-form';
+import { policyChoices } from '@/lib/review/diff/policy';
+import { visualAiSettings, visualPolicies } from '@/lib/review/diff/policy';
+import { aiUnavailableReason, allowedModels } from '@/lib/review/analysis/config';
+import { spentThisMonth } from '@/lib/review/analysis/budget';
 import { diffDriver } from '@/lib/review/diff/dispatch';
 import { visualDiffSettings } from '@/lib/review/diff/settings';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@miguelfranken/ui/components/card';
@@ -154,6 +159,25 @@ async function SettingsContent({ params }: { params: Params }) {
             value={visualDiffSettings(project.settings)}
             disabled={!canUpdate}
             inactiveReason={diffDriver() === 'none' ? 'This deployment does not measure image comparisons (IMAGE_DIFF_DRIVER is none; Vercel previews default to it). The settings apply where it does.' : null}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Visual policies and AI analysis</CardTitle>
+          <CardDescription>Where areas may be left out of comparisons and where a model may look at them, and the budget it may spend.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <VisualPolicyForm
+            teamSlug={team}
+            projectSlug={project.slug}
+            rules={visualPolicies(project.settings)}
+            ai={visualAiSettings(project.settings)}
+            choices={{ ...(await policyChoices(project.id)), models: allowedModels() }}
+            disabled={!canUpdate}
+            aiUnavailableReason={aiUnavailableReason()}
+            spentThisMonthMicroUsd={await spentThisMonth(access.team.id, project.id)}
           />
         </CardContent>
       </Card>

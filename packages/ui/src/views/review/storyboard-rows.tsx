@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, ChevronRight, CircleAlert, ClipboardList, Film, Folder, History, MessageSquare, Route } from 'lucide-react';
+import { Check, ChevronRight, CircleAlert, ClipboardList, Film, Folder, History, MessageSquare, Route, EyeOff } from 'lucide-react';
 import { defaultRangeExtractor, useWindowVirtualizer, type Range } from '@tanstack/react-virtual';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '../../components/badge';
@@ -397,6 +397,16 @@ function CheckpointColumn({
                 ) : (
                   <DiffBadge diff={c.diff} decision={library ? null : c.decision} className="h-4 px-1 text-label-xs" />
                 )}
+                {c.ignore?.active || c.ignore?.suspended ? (
+                  <span
+                    className={cn('inline-flex items-center gap-1', c.ignore.suspended ? 'text-warning-text' : 'text-muted-foreground')}
+                    title={c.ignore.suspended ? `${c.ignore.suspended} ${c.ignore.suspended === 1 ? 'area' : 'areas'} left out, not applied here (another image size)` : `${c.ignore.active} ${c.ignore.active === 1 ? 'area' : 'areas'} left out of the comparison${c.ignore.suppressedPixels ? `, ${c.ignore.suppressedPixels.toLocaleString('en')} changed px left out` : ''}`}
+                  >
+                    <EyeOff aria-hidden className="size-3" />
+                    <span className="tabular-nums">{c.ignore.active}</span>
+                    <span className="sr-only">{c.ignore.active === 1 ? 'area' : 'areas'} left out</span>
+                  </span>
+                ) : null}
                 {updated ? (
                   <span className="inline-flex items-center gap-1 text-warning-text" title={`Changed since run #${c.previous!.runNumber}`}>
                     <span aria-hidden className="size-1.5 rounded-full bg-warning-solid" />

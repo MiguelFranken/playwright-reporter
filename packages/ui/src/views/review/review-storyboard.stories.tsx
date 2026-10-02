@@ -167,3 +167,17 @@ export const ManyTests: Story = {
     window.scrollTo(0, 0);
   },
 };
+
+/** Screens with areas left out can be filtered to; the menu names what the rules did. */
+export const FilterByAreasLeftOut: Story = {
+  args: { filter: 'all' },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Filter by areas left out' }));
+    const menu = await within(document.body).findByRole('menu');
+    await userEvent.click(within(menu).getByRole('menuitemcheckbox', { name: 'Changes left out' }));
+    await waitFor(() => expect(canvas.getByRole('button', { name: /Open 2\. Checkout filled in/ })).toBeInTheDocument());
+    await expect(canvas.queryByRole('button', { name: /Open 1\. Cart with two products/ })).toBeNull();
+    await expect(canvas.getByText('area left out')).toBeInTheDocument();
+  },
+};

@@ -1,4 +1,5 @@
-import { approveWithinTolerance, measureDiff, planRun } from '../store';
+import { approveWithinTolerance, measureDiff, planRun, runCaptures } from '../store';
+import { proactiveAnalyses } from '../../analysis/jobs';
 
 // Steps of `diffRun` and `diffPairs`. Their ids derive from this file's path
 // and the function names: renaming either breaks workflows already in flight.
@@ -21,4 +22,10 @@ export async function measure(diffId: string) {
 export async function approveRun(runId: string) {
   'use step';
   return approveWithinTolerance(runId);
+}
+
+/** With the project in proactive mode: one AI analysis per changed screen, within the budget. */
+export async function analyzeRun(runId: string) {
+  'use step';
+  return proactiveAnalyses(runId, await runCaptures(runId));
 }

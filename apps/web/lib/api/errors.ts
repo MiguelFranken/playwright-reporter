@@ -25,12 +25,21 @@ export const ERROR_STATUS: Record<string, number> = {
   ARTIFACT_UNAVAILABLE: 409,
   ARTIFACT_EXPIRED: 410,
   RATE_LIMITED: 429,
+  INVALID_COMPARISON: 400,
+  INCOMPATIBLE_CAPTURE: 409,
+  SOURCE_UNAVAILABLE: 409,
+  DIFF_TOO_LARGE: 413,
+  REVISION_CONFLICT: 409,
+  POLICY_DENIED: 403,
+  BUDGET_EXCEEDED: 402,
+  ANALYSIS_FAILED: 500,
   INTERNAL: 500,
 } satisfies Partial<Record<ToolErrorCode, number>> & Record<string, number>;
 
 const TITLES: Record<number, string> = {
   400: 'Bad Request',
   401: 'Unauthorized',
+  402: 'Payment Required',
   403: 'Forbidden',
   404: 'Not Found',
   405: 'Method Not Allowed',
@@ -76,7 +85,7 @@ export const problemSchema = z
     code: z
       .string()
       .describe(
-        'Stable machine-readable code: BAD_REQUEST, INVALID_ARGUMENT, PROJECT_REQUIRED, UNAUTHORIZED, INSUFFICIENT_SCOPE, NOT_FOUND, AMBIGUOUS, ARTIFACT_UNAVAILABLE, ARTIFACT_EXPIRED, RATE_LIMITED, INTERNAL_SERVER_ERROR.',
+        'Stable machine-readable code: BAD_REQUEST, INVALID_ARGUMENT, PROJECT_REQUIRED, UNAUTHORIZED, INSUFFICIENT_SCOPE, NOT_FOUND, AMBIGUOUS, ARTIFACT_UNAVAILABLE, ARTIFACT_EXPIRED, RATE_LIMITED, INVALID_COMPARISON, INCOMPATIBLE_CAPTURE, SOURCE_UNAVAILABLE, DIFF_TOO_LARGE, REVISION_CONFLICT, POLICY_DENIED, BUDGET_EXCEEDED, ANALYSIS_FAILED, INTERNAL_SERVER_ERROR.',
       ),
     detail: z.string().describe('What went wrong, for a person.'),
     hint: z.string().nullable().describe('What to do about it, when there is something to do.'),
@@ -101,6 +110,9 @@ const TOOL_ENDPOINTS: Record<string, string> = {
   verify_fix: 'GET …/tests/{test}/verify-fix',
   get_artifact: 'GET …/attachments/{attachment}',
   get_rerun_command: 'GET …/runs/{run}/rerun-command',
+  list_visual_diffs: 'GET …/visual-diffs',
+  get_visual_diff: 'GET …/visual-diffs/{comparison}',
+  get_visual_diff_image: 'GET …/visual-diffs/{comparison}/render',
 };
 const TOOL_NAME = new RegExp(`\\b(${Object.keys(TOOL_ENDPOINTS).join('|')})\\b`, 'g');
 

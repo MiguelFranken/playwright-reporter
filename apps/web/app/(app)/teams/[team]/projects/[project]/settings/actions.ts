@@ -9,6 +9,8 @@ import { db } from '@/lib/db/drizzle';
 import { isUuid } from '@/lib/db/queries/shared';
 import { apiTokens, projects } from '@/lib/db/schema';
 import { MAX_TOLERANCE_PERCENT, MAX_TOLERANCE_PIXELS, THRESHOLD_RANGE, visualDiffSettings } from '@/lib/review/diff/settings';
+import { MAX_POLICY_RULES, visualAiSettings, visualPolicies } from '@/lib/review/diff/policy';
+import { allowedModels } from '@/lib/review/analysis/config';
 import { generateToken, hashToken } from '@/lib/tokens';
 
 export type RenameState = { ok: boolean; message?: string } | null;
@@ -116,6 +118,55 @@ export async function updateVisualDiff(_prev: VisualDiffState, formData: FormDat
   });
   revalidatePath(`/teams/${teamSlug}/projects/${projectSlug}`, 'layout');
   return { ok: true, message: 'Visual comparison saved.' };
+}
+
+/**
+ * Sets `projects.settings.visualPolicies` (where rules and AI analyses are
+ * allowed) and `projects.settings.visualAi` (mode, model, budget). Merged in
+ * SQL like the other settings keys. A policy change takes effect on the next
+ * write it governs; it revokes nothing already saved.
+ */
+export async function updateVisualPolicies(_prev: VisualDiffState, formData: FormData): Promise<VisualDiffState> {
+  const teamSlug = String(formData.get('team') ?? '');
+  const projectSlug = String(formData.get('project') ?? '');
+  if (!teamSlug || !projectSlug) return { ok: false, message: 'Missing project.' };
+  let parsedRules: unknown;
+  try {
+    parsedRules = JSON.parse(String(formData.get('rules') ?? '[]'));
+  } catch {
+    return { ok: false, message: 'The rules could not be read.' };
+  }
+  if (!Array.isArray(parsedRules) || parsedRules.length > MAX_POLICY_RULES) return { ok: false, message: `At most ${MAX_POLICY_RULES} rules.` };
+  const rules = visualPolicies({ visualPolicies: parsedRules });
+  if (rules.length !== parsedRules.length) return { ok: false, message: 'A rule is incomplete.' };
+  const mode = String(formData.get('aiMode') ?? 'off');
+  if (!['off', 'manual', 'proactive'].includes(mode)) return { ok: false, message: 'Unknown AI mode.' };
+  const model = String(formData.get('aiModel') ?? '').trim() || null;
+  const models = allowedModels();
+  if (model && models.length && !models.includes(model)) return { ok: false, message: 'The model is not on this deployment’s allow list.' };
+  const money = (name: string, max: number) => {
+    const raw = String(formData.get(name) ?? '').trim();
+    if (raw === '') return null;
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < 0 || n > max) return NaN;
+    return Math.round(n * 1_000_000);
+  };
+  const monthly = money('aiMonthlyBudgetUsd', 10_000);
+  const perJob = money('aiPerJobMaxUsd', 10);
+  if (Number.isNaN(monthly) || Number.isNaN(perJob)) return { ok: false, message: 'Budgets are amounts in USD.' };
+  if (perJob !== null && perJob < 1_000) return { ok: false, message: 'An analysis reserves at least $0.001.' };
+  const ai = { mode, model, monthlyBudgetMicroUsd: monthly, perJobMaxMicroUsd: perJob ?? 50_000 };
+
+  const access = await projectForAction(teamSlug, projectSlug, { project: ['update'] });
+  if (denied(access)) return access;
+  if (JSON.stringify(visualPolicies(access.project.settings)) === JSON.stringify(rules) && JSON.stringify(visualAiSettings(access.project.settings)) === JSON.stringify(ai)) return { ok: true, message: 'No changes.' };
+  await db
+    .update(projects)
+    .set({ settings: sql`${projects.settings} || jsonb_build_object('visualPolicies', ${JSON.stringify(rules)}::jsonb, 'visualAi', ${JSON.stringify(ai)}::jsonb)`, updatedAt: new Date() })
+    .where(eq(projects.id, access.project.id));
+  await audit('project.update', { actorId: access.user.id, teamId: access.team.id, projectId: access.project.id, target: { slug: access.project.slug, visualPolicies: rules.length, visualAi: ai } });
+  revalidatePath(`/teams/${teamSlug}/projects/${projectSlug}`, 'layout');
+  return { ok: true, message: 'Visual policies saved.' };
 }
 
 export type CreateTokenResult = { ok: true; token: string; name: string } | { ok: false; message: string };

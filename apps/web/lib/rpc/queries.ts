@@ -44,6 +44,36 @@ export function captureDiffQuery(ref: ProjectRef, captureId: string, compareCapt
   });
 }
 
+/** The analyses of a capture against its reference, and whether one may be started. */
+export function captureAnalysesQuery(ref: ProjectRef, captureId: string, baseCaptureId: string) {
+  return orpc.review.analyses.queryOptions({ input: { ...ref, captureId, baseCaptureId }, staleTime: 30_000, gcTime: 10 * 60_000, retry: false });
+}
+
+/** One analysis while it runs: asked every three seconds until it is done (or failed), then kept. */
+export function analysisQuery(ref: ProjectRef, analysisId: string) {
+  return orpc.review.analysis.queryOptions({
+    input: { ...ref, analysisId },
+    staleTime: Infinity,
+    gcTime: 10 * 60_000,
+    retry: false,
+    refetchInterval: (query) => (query.state.data && (query.state.data.status === 'queued' || query.state.data.status === 'running') ? 3000 : false),
+  });
+}
+
+/**
+ * What rectangles drawn in the ignore editor would do to the open comparison.
+ * Each set of rectangles is its own entry; an answer never goes stale (the two
+ * images do not change), and a failure is shown, not retried.
+ */
+export function ignorePreviewQuery(ref: ProjectRef, captureId: string, regions: readonly { x: number; y: number; width: number; height: number }[], compareCaptureId?: string) {
+  return orpc.review.previewIgnore.queryOptions({
+    input: { ...ref, captureId, regions: [...regions], ...(compareCaptureId ? { compareCaptureId } : {}) },
+    staleTime: Infinity,
+    gcTime: 10 * 60_000,
+    retry: false,
+  });
+}
+
 /**
  * The other runs' captures of the open image's screen, for the viewer's
  * "Compare with". New runs and new comments arrive while a review goes on,

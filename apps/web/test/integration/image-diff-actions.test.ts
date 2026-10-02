@@ -76,10 +76,10 @@ describe('saveIgnoreRegions', () => {
     const { capture } = await runWith(db, tenant, await page(), new Date());
     const ref = { team: tenant.team.slug, project: tenant.project.slug };
     actor.signIn(tenant.adminUser);
-    expect(await saveIgnoreRegions(ref, { captureId: capture.id, regions: [{ x: 1.4, y: 2, width: 30, height: 10 }] })).toEqual({ ok: true });
+    expect(await saveIgnoreRegions(ref, { captureId: capture.id, regions: [{ x: 1.4, y: 2, width: 30, height: 10 }] })).toEqual({ ok: true, revision: 1 });
     const [row] = await db.select().from(reviewIgnoreRegions);
     expect(row).toMatchObject({ testId: capture.testId, checkpointName: 'checkout-ready', variant: 'desktop', regions: [{ x: 1, y: 2, width: 30, height: 10 }], updatedBy: tenant.adminUser.id });
-    expect(await saveIgnoreRegions(ref, { captureId: capture.id, regions: [] })).toEqual({ ok: true });
+    expect(await saveIgnoreRegions(ref, { captureId: capture.id, regions: [] })).toEqual({ ok: true, revision: 2 });
     expect((await db.select().from(reviewIgnoreRegions))[0].regions).toEqual([]);
 
     expect(await saveIgnoreRegions(ref, { captureId: capture.id, regions: [{ x: -1, y: 0, width: 5, height: 5 }] })).toMatchObject({ ok: false });

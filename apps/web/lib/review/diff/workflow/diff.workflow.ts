@@ -1,5 +1,5 @@
 import { sleep } from 'workflow';
-import { approveRun, measure, planRunDiffs } from './diff.steps';
+import { analyzeRun, approveRun, measure, planRunDiffs } from './diff.steps';
 
 /** Comparisons measured at once: each holds about three decoded images in memory. */
 export const BATCH = 6;
@@ -34,7 +34,8 @@ export async function diffRun(runId: string) {
     if (plan.waiting === 0) break;
     await sleep('1m');
   }
-  return { runId, measured, approved };
+  const analyses = await analyzeRun(runId);
+  return { runId, measured, approved, analyses: analyses.created };
 }
 
 /** Measures comparisons already planned (a reviewer opened an image nobody measured yet). */
@@ -43,4 +44,15 @@ export async function diffPairs(diffIds: string[], runId: string) {
   const measured = await measureAll(diffIds);
   const approved = await approveRun(runId);
   return { runId, measured, approved };
+}
+
+/**
+ * Measures comparisons already planned and approves nothing: an agent asked
+ * to see a pair of images (`get_visual_diff`). The run's review approves its
+ * noise when the run is shown or finishes, as it does today.
+ */
+export async function measurePairs(diffIds: string[]) {
+  'use workflow';
+  const measured = await measureAll(diffIds);
+  return { measured };
 }

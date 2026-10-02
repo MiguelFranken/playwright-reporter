@@ -51,6 +51,12 @@ export interface ToolRoute {
   /** Tools like `whoami` are not about one project. Default true. */
   projectScoped?: boolean;
   /**
+   * A read tool whose arguments are a structure (a list of rectangles) and
+   * so travel in a JSON body: a `POST` that changes nothing and needs no
+   * `write` scope. The tool stays a read tool for MCP.
+   */
+  readOnlyBody?: boolean;
+  /**
    * Arguments the endpoint always passes, and does not offer: e.g. no inline
    * images, which a JSON answer never carries, so none are read and encoded.
    */
@@ -79,7 +85,9 @@ export function fromTool(tool: ToolDef, route: ToolRoute) {
   const scoped = route.projectScoped ?? true;
   const method = route.method ?? 'GET';
   const writes = tool.toolset === 'write';
-  if (writes === (method === 'GET')) {
+  if (route.readOnlyBody) {
+    if (writes || method !== 'POST') throw new Error(`${tool.name}: readOnlyBody is a POST of a read tool.`);
+  } else if (writes === (method === 'GET')) {
     throw new Error(`${tool.name}: ${writes ? 'a write tool needs a method other than GET' : 'a read tool is a GET'}.`);
   }
   return authed

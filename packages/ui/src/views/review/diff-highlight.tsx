@@ -35,6 +35,7 @@ export function DiffHighlight({
   live = false,
   room = false,
   minimapLabel,
+  ignored,
   children,
   className,
 }: {
@@ -53,6 +54,8 @@ export function DiffHighlight({
   overlay?: boolean;
   /** The name of the strip beside a long screen, when several screens are shown. */
   minimapLabel?: string;
+  /** Areas left out of the comparison, hatched over the image so a change inside one reads as left out, not as missed. */
+  ignored?: readonly Pick<DiffRegion, 'x' | 'y' | 'width' | 'height'>[];
   /** More over the image, scrolling with it: comment pins. */
   children?: ReactNode;
   className?: string;
@@ -107,6 +110,7 @@ export function DiffHighlight({
             ) : (
               images
             )}
+            {size && ignored?.length ? <DiffMarks regions={ignored} width={size.width} height={size.height} kind="ignore" /> : null}
             {size ? <DiffMarks regions={diff.regions} width={size.width} height={size.height} active={active} numbered onSelect={onActiveChange} /> : null}
             {children}
           </div>
