@@ -498,7 +498,7 @@ function useOffscreenPins(layer: React.RefObject<HTMLDivElement | null>, pins: r
     let frame = 0;
     const measure = () => {
       frame = 0;
-      const view = scroller.getBoundingClientRect();
+      const view = shownPart(scroller);
       const all = [...el.querySelectorAll<HTMLElement>('[data-thread-id]')].sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);
       const above = all.filter((p) => p.getBoundingClientRect().bottom < view.top + 4);
       const below = all.filter((p) => p.getBoundingClientRect().top > view.bottom - 4);
@@ -521,10 +521,21 @@ function useOffscreenPins(layer: React.RefObject<HTMLDivElement | null>, pins: r
   return state;
 }
 
+/**
+ * The part of its frame a screen shows: the frame less its padding, which is
+ * the room bars laid over a frame running under them keep clear.
+ */
+function shownPart(scroller: Element) {
+  const r = scroller.getBoundingClientRect();
+  const style = getComputedStyle(scroller);
+  return { top: r.top + (parseFloat(style.paddingTop) || 0), bottom: r.bottom - (parseFloat(style.paddingBottom) || 0) };
+}
+
 /** The middle of the part of the layer its frame shows, in fractions of the layer. */
 function visibleCenter(layer: HTMLElement) {
   const r = layer.getBoundingClientRect();
-  const view = layer.closest(SCROLLER)?.getBoundingClientRect() ?? r;
+  const scroller = layer.closest(SCROLLER);
+  const view = scroller ? shownPart(scroller) : r;
   const top = Math.max(r.top, view.top);
   const bottom = Math.min(r.bottom, view.bottom);
   return { x: 0.5, y: clamp(((top + bottom) / 2 - r.top) / r.height) };
