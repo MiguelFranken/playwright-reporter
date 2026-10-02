@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useState } from 'react';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import type { CommentTool, MarkupColor } from '../../lib/review-markup';
 import { CommentBar } from './markup-toolbar';
 
@@ -98,5 +98,39 @@ export const Drawing: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'Pen' }));
     await userEvent.click(await canvas.findByRole('button', { name: 'Blue' }));
     await expect(canvas.getByRole('button', { name: 'Blue' })).toHaveAttribute('aria-pressed', 'true');
+  },
+};
+
+/**
+ * Unfolding grows the bar from its middle, so its tools slide along under a pointer that has not moved: none
+ * of them flashes its tooltip on the way. The tooltips are back once the pointer itself moves again.
+ */
+export const NoTooltipsWhileItGrows: Story = {
+  render: (args) => {
+    const [commenting, setCommenting] = useState(false);
+    const [tool, setTool] = useState<CommentTool>('pin');
+    const [color, setColor] = useState<MarkupColor>('red');
+    return <CommentBar {...args} commenting={commenting} onCommentingChange={setCommenting} tool={tool} onToolChange={setTool} color={color} onColorChange={setColor} />;
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const tooltip = () => document.body.querySelector('[data-slot="tooltip-content"]');
+    // The pointer, at the middle of an element: the bar tells a real movement from a still pointer by its coordinates.
+    const pointAt = (name: string) => {
+      const target = canvas.getByRole('button', { name });
+      const r = target.getBoundingClientRect();
+      return userEvent.pointer({ target, coords: { clientX: r.x + r.width / 2, clientY: r.y + r.height / 2 } });
+    };
+    await pointAt('Comment');
+    await userEvent.click(canvas.getByRole('button', { name: 'Comment' }));
+    // A tool slides in under the pointer while the bar grows.
+    await canvas.findByRole('button', { name: 'Area' });
+    await pointAt('Area');
+    await new Promise((r) => setTimeout(r, 700));
+    await expect(tooltip()).toBeNull();
+    // Settled, the reviewer moves the pointer: the tooltips answer again.
+    await pointAt('Pen');
+    await pointAt('Arrow');
+    await waitFor(() => expect(tooltip()).toHaveTextContent('Arrow'));
   },
 };

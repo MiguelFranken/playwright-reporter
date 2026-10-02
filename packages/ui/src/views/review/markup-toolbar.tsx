@@ -63,14 +63,14 @@ export function MarkupToolbar({ className, ...props }: MarkupToolbarProps) {
 }
 
 /** What the bar holds; the colours slide open beside the tools while one draws, and slide shut again. */
-function MarkupTools({ tool, onToolChange, color, onColorChange, canUndo = false, onUndo, onClose }: Omit<MarkupToolbarProps, 'className'>) {
+function MarkupTools({ tool, onToolChange, color, onColorChange, canUndo = false, onUndo, onClose, tooltips = true }: Omit<MarkupToolbarProps, 'className'> & { tooltips?: boolean }) {
   const drawing = isMarkupTool(tool);
   const group = (label: string, tools: readonly CommentTool[]) => (
     <ToggleGroup aria-label={label} size="sm" spacing={0.5} value={tools.includes(tool) ? [tool] : []} onValueChange={(v) => v[0] && onToolChange(v[0] as CommentTool)}>
       {tools.map((t) => {
         const Icon = ICONS[t];
         return (
-          <Tooltip key={t}>
+          <Tooltip key={t} disabled={!tooltips}>
             <TooltipTrigger render={<ToggleGroupItem value={t} aria-label={COMMENT_TOOL_LABELS[t]} aria-keyshortcuts={TOOL_KEYS[t]} className="size-8 px-0 data-[state=on]:bg-accent-subtle data-[state=on]:text-accent-text aria-pressed:bg-accent-subtle aria-pressed:text-accent-text" />}>
               <Icon className="size-4" />
             </TooltipTrigger>
@@ -127,7 +127,7 @@ function MarkupTools({ tool, onToolChange, color, onColorChange, canUndo = false
 
       <span aria-hidden className="mx-1 h-5 w-px bg-border" />
 
-      <Tooltip>
+      <Tooltip disabled={!tooltips}>
         <TooltipTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Undo" aria-keyshortcuts="Meta+Z" disabled={!canUndo || !onUndo} onClick={onUndo} />}>
           <Undo2 />
         </TooltipTrigger>
@@ -136,7 +136,7 @@ function MarkupTools({ tool, onToolChange, color, onColorChange, canUndo = false
         </TooltipContent>
       </Tooltip>
       {onClose ? (
-        <Tooltip>
+        <Tooltip disabled={!tooltips}>
           <TooltipTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Stop commenting" onClick={onClose} />}>
             <X />
           </TooltipTrigger>
@@ -170,19 +170,40 @@ export interface CommentBarProps extends Omit<MarkupToolbarProps, 'onClose'> {
 export function CommentBar({ commenting, onCommentingChange, openCount = 0, positionKey, className, ...tools }: CommentBarProps) {
   const { ref, offset, dragging, handleProps } = useFloatingOffset<HTMLDivElement>(positionKey);
   const width = useContentWidth<HTMLDivElement>();
-  // Folding and unfolding swap what the bar holds at once, so the bar eases between the two widths. Anything
-  // else (the colours) eases inside it already: then the bar keeps to its content, rather than trailing it.
+  // Folding and unfolding swap what the bar holds at once, so the bar eases between the two widths. The colours
+  // ease inside it already: then the bar keeps to its content, rather than trailing it.
+  const drawing = commenting && isMarkupTool(tools.tool);
+  const [shape, setShape] = useState({ commenting, drawing });
   const [swapping, setSwapping] = useState(false);
-  const [wasCommenting, setWasCommenting] = useState(commenting);
-  if (wasCommenting !== commenting) {
-    setWasCommenting(commenting);
-    setSwapping(true);
+  // The bar is changing width. It grows from its middle, so its tools slide along under a pointer that has
+  // not moved — and each one it passed would flash its tooltip. So its tooltips are off from the moment it
+  // starts to the moment the pointer itself moves again; a click still lands on whatever is under it.
+  const [resizing, setResizing] = useState(false);
+  const [tooltips, setTooltips] = useState(true);
+  if (shape.commenting !== commenting || shape.drawing !== drawing) {
+    setShape({ commenting, drawing });
+    if (shape.commenting !== commenting) setSwapping(true);
+    setResizing(true);
+    setTooltips(false);
   }
   useEffect(() => {
-    if (!swapping) return;
-    const timer = setTimeout(() => setSwapping(false), 320);
+    if (!resizing) return;
+    // Started over by every change, so a quick second one gets its own full ease.
+    const timer = setTimeout(() => {
+      setResizing(false);
+      setSwapping(false);
+    }, 320);
     return () => clearTimeout(timer);
-  }, [swapping]);
+  }, [resizing, shape]);
+  // Where the pointer was last seen over the bar: the browser re-sends a still pointer's position once the
+  // tools stop under it, and that is not the reviewer reaching for one.
+  const lastPointer = useRef<{ x: number; y: number } | null>(null);
+  const rearm = (e: React.PointerEvent) => {
+    const last = lastPointer.current;
+    lastPointer.current = { x: e.clientX, y: e.clientY };
+    if (tooltips || resizing || !last) return;
+    if (Math.abs(e.clientX - last.x) + Math.abs(e.clientY - last.y) > 2) setTooltips(true);
+  };
   return (
     <div
       ref={ref}
@@ -195,6 +216,14 @@ export function CommentBar({ commenting, onCommentingChange, openCount = 0, posi
         className,
       )}
       style={{ width: width.value, translate: `${offset.x}px ${offset.y}px` }}
+      onPointerMove={rearm}
+      onPointerLeave={() => {
+        lastPointer.current = null;
+        if (!resizing) setTooltips(true);
+      }}
+      onKeyDown={() => {
+        if (!resizing) setTooltips(true);
+      }}
     >
       <div ref={width.ref} className="flex w-max items-center gap-1 p-1">
         <button
@@ -209,11 +238,11 @@ export function CommentBar({ commenting, onCommentingChange, openCount = 0, posi
         </button>
         {commenting ? (
           <div key="tools" role="toolbar" aria-label="Comment tools" data-slot="markup-toolbar" className="flex animate-fade-in items-center gap-1">
-            <MarkupTools {...tools} onClose={() => onCommentingChange(false)} />
+            <MarkupTools {...tools} tooltips={tooltips} onClose={() => onCommentingChange(false)} />
           </div>
         ) : (
           <div key="folded" className="flex animate-fade-in items-center">
-            <Tooltip>
+            <Tooltip disabled={!tooltips}>
               <TooltipTrigger render={<Button variant="ghost" size="sm" aria-pressed={false} aria-keyshortcuts="C" className="gap-2 px-3" onClick={() => onCommentingChange(true)} />}>
                 <MessageSquarePlus /> Comment
                 {openCount ? (
