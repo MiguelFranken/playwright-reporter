@@ -65,7 +65,9 @@ import { captureStates, type LibraryState } from '../../lib/library-views';
 
 /** How long the panel takes to open or close, in ms; the panel stays mounted while it leaves. */
 const PANEL_MOTION_MS = 220;
-/** Its timing: the design system's emphasised ease-out, as `animate-rise-in` has. */
+/** Its ease: the design system's emphasised ease-out, as `animate-rise-in` has. */
+const PANEL_EASE = 'cubic-bezier(0.2,0,0,1)';
+/** The same motion as utilities, for the elements that move with the panel (the literal, for Tailwind to see). */
 const PANEL_MOTION = 'duration-[220ms] ease-[cubic-bezier(0.2,0,0,1)]';
 
 /** What the viewer shows: a checkpoint, and one of its variants or (`null`) all of them side by side. */
@@ -444,7 +446,13 @@ export function CheckpointViewer({
     setOwnFrame(next);
     onFrameChange?.(next);
   };
-  const stageSize = useElementSize(stageEl);
+  // While the panel moves — its edge dragged, or opening and closing — the stage is not measured again: the screens
+  // keep their layout and are scaled on the compositor instead (`scaleStage`), and are fitted again once it ends. Below
+  // 100% the fit follows the stage's width, so every frame of a move would otherwise lay the screenshots out at a new
+  // size, raster them again and (through `sizes`) ask for other copies of them — far more than the renders cost.
+  const stageMotion = useRef(false);
+  const { size: stageSize, remeasure: remeasureStage } = useElementSize(stageEl, stageMotion);
+  const scalerRef = useRef<HTMLDivElement>(null);
   // Narrower than the side panel needs, the viewer scrolls as one page: the stage grows with its screens, so fitting them
   // follows the window's height rather than the stage's own.
   const stackedHeight = useStackedHeight();
@@ -524,6 +532,81 @@ export function CheckpointViewer({
   const maxZoom = shownZoom(Infinity, zoomFrames, room, gap);
   const filled = fill ? fillFrames(frames, room, gap) : null;
   const zoom = filled?.zoom ?? shownZoom(frameSettings.zoom, zoomFrames, room, gap);
+  // The zoom the screens would have on a stage of another size, everything else as it is: what a motion of the stage
+  // scales them by (see `scaleStage`). At a zoom the stage does not limit, nothing moves.
+  const zoomAt = (stageWidth: number, stageHeight: number) => {
+    const at = { width: room.width + (stageWidth - stageSize.width), height: room.height + (stageHeight - stageSize.height) };
+    return fill ? fillFrames(frames, at, gap).zoom : shownZoom(frameSettings.zoom, zoomFrames, at, gap);
+  };
+  const fit = useRef({ zoom, zoomAt, stageSize });
+  fit.current = { zoom, zoomAt, stageSize };
+  /** Scales the screens, laid out for the stage as last measured, to the zoom they will have on a stage of `size`. */
+  const scaleStageTo = (size: { width: number; height: number }) => {
+    const el = scalerRef.current;
+    if (!el) return;
+    const { zoom: now, zoomAt, stageSize: measured } = fit.current;
+    const by = now > 0 && measured.width > 0 ? zoomAt(size.width, size.height) / now : 1;
+    el.style.transform = Math.abs(by - 1) < 0.0005 ? '' : `scale(${by})`;
+  };
+  /** Scales the screens to the zoom they will have once the panel, `from` wide now, is `width` wide. */
+  const scaleStage = (width: number, from: number) => scaleStageTo({ width: fit.current.stageSize.width + (from - width), height: fit.current.stageSize.height });
+  const clearStageScale = () => {
+    const el = scalerRef.current;
+    if (!el) return;
+    el.style.transform = '';
+    el.style.transition = '';
+    el.style.willChange = '';
+  };
+  const stageMotionStart = () => {
+    stageMotion.current = true;
+    if (scalerRef.current) scalerRef.current.style.willChange = 'transform';
+  };
+  /** The motion over, the stage is measured again; its refit's render takes the scale off (or this does, if nothing changed). */
+  const stageMotionEnd = () => {
+    stageMotion.current = false;
+    if (!remeasureStage()) clearStageScale();
+  };
+  // The refit lands in the same paint as the scale coming off.
+  useLayoutEffect(() => {
+    if (!stageMotion.current) clearStageScale();
+  }, [stageSize.width, stageSize.height]);
+  // The window being resized moves the stage the same way: the screens scale with it, and are fitted again once it
+  // has stood still for a moment.
+  useEffect(() => {
+    if (!overlaid) return;
+    let settle = 0;
+    const onResize = () => {
+      const stage = stageRef.current;
+      if (!stage) return;
+      if (!stageMotion.current && !resizing.current) stageMotionStart();
+      scaleStageTo({ width: stage.clientWidth, height: stage.clientHeight });
+      window.clearTimeout(settle);
+      settle = window.setTimeout(stageMotionEnd, 150);
+    };
+    window.addEventListener('resize', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      window.clearTimeout(settle);
+    };
+    // The handlers read the latest layout through refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [overlaid, stageEl]);
+  // Opening or closing beside the stage, the screens scale with the column's motion — the same time and ease, so the
+  // two move as one — and are fitted again once it ends.
+  const openWas = useRef(panel.open);
+  useLayoutEffect(() => {
+    if (openWas.current === panel.open) return;
+    openWas.current = panel.open;
+    const el = scalerRef.current;
+    if (!overlaid || !el) return;
+    stageMotionStart();
+    el.style.transition = `transform ${PANEL_MOTION_MS}ms ${PANEL_EASE}`;
+    scaleStage(panel.open ? panel.width : 0, panel.open ? 0 : panel.width);
+    const timer = window.setTimeout(stageMotionEnd, PANEL_MOTION_MS);
+    return () => window.clearTimeout(timer);
+    // Only when the panel opens or closes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panel.open]);
   // A screen longer than the room ends at its bottom edge and scrolls inside; filling, every screen is as tall as the room.
   // Feedback being verified takes the stage's whole height, framed or not: a long page is read by scrolling the two together.
   const fitted = filled?.screens ?? (verifyingPanes && room.height > 0 ? frames.map((f) => ({ width: f.width, height: Math.max(24, Math.floor(room.height)) / zoom })) : frames.map((f) => frameWithin(f, room.height, zoom)));
@@ -1312,6 +1395,9 @@ export function CheckpointViewer({
                       : undefined
                   }
                 >
+                  {/* Scaled, not laid out again, while the panel moves (see `scaleStage`): a flex column, so what is wider than
+                      the stage meanwhile stays centred in it, as it will be once fitted. */}
+                  <div ref={scalerRef} className="flex flex-col items-center origin-top">
                   {resolving && ended ? (
                     <ResolveDone
                       resolved={doneCount}
@@ -1443,6 +1529,7 @@ export function CheckpointViewer({
                       ))}
                     </div>
                   )}
+                  </div>
                 </div>
                 <div
                   aria-hidden
@@ -1480,11 +1567,18 @@ export function CheckpointViewer({
                       min={REVIEW_PANEL.min}
                       max={REVIEW_PANEL.max}
                       defaultWidth={REVIEW_PANEL.default}
-                      onResizeStart={() => setResizing(true)}
-                      onResize={movePanel}
+                      onResizeStart={() => {
+                        setResizing(true);
+                        stageMotionStart();
+                      }}
+                      onResize={(width) => {
+                        movePanel(width);
+                        scaleStage(width, panel.width);
+                      }}
                       onResizeEnd={(width) => {
                         setResizing(false);
                         movePanel(width);
+                        stageMotionEnd();
                         setPanel({ width });
                       }}
                     />
@@ -1832,18 +1926,38 @@ function usePresence(open: boolean, ms: number) {
   return present || open;
 }
 
-/** The content box of an element, followed as it resizes; zero until it mounts. */
-function useElementSize(el: HTMLElement | null) {
+/**
+ * The content box of an element, followed as it resizes — not while `paused`
+ * is set; zero until it mounts. `remeasure` reads it now and says whether it
+ * changed (a change renders).
+ */
+function useElementSize(el: HTMLElement | null, paused?: React.RefObject<boolean>) {
   const [size, setSize] = useState({ width: 0, height: 0 });
+  const last = useRef(size);
+  const remeasure = () => {
+    if (!el) return false;
+    const next = { width: el.clientWidth, height: el.clientHeight };
+    if (next.width === last.current.width && next.height === last.current.height) return false;
+    last.current = next;
+    setSize(next);
+    return true;
+  };
   useLayoutEffect(() => {
     if (!el) return;
-    const measure = () => setSize({ width: el.clientWidth, height: el.clientHeight });
+    const measure = () => {
+      const next = { width: el.clientWidth, height: el.clientHeight };
+      if (next.width === last.current.width && next.height === last.current.height) return;
+      last.current = next;
+      setSize(next);
+    };
     measure();
-    const observer = new ResizeObserver(measure);
+    const observer = new ResizeObserver(() => {
+      if (!paused?.current) measure();
+    });
     observer.observe(el);
     return () => observer.disconnect();
-  }, [el]);
-  return size;
+  }, [el, paused]);
+  return { size, remeasure };
 }
 
 /** The height of an element with its border, followed as it resizes; zero until it mounts. */
