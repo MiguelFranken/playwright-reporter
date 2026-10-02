@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.84](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.83...v0.0.84) (2026-10-02)
+
+### Performance Improvements
+
+* **review:** drag the side panel's edge without a render, and slide it open and closed ([997c7db](https://github.com/MiguelFranken/playwright-reporter/commit/997c7db364ba7e21b3aa5d34f37560aca25db574))
+* **review:** scale the screens on the compositor while the stage moves, and fit them once it stands ([40b939f](https://github.com/MiguelFranken/playwright-reporter/commit/40b939fec6c367c7c119af633ac476a5e3cb2cdf))
+
 ## [0.0.83](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.82...v0.0.83) (2026-10-02)
 
 ### Features
