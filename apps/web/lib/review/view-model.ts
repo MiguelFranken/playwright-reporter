@@ -9,12 +9,13 @@
  */
 import type { CompareTargetView, ReviewCaseRef, ReviewCaptureView, ReviewCheckpointView, ReviewDiffView, ReviewFlowView, ReviewImage, ReviewStatus } from '@miguelfranken/ui/lib/review';
 import { projectAnchor, type ReviewCommentView, type ReviewThreadView } from '@miguelfranken/ui/lib/review-threads';
-import { projectMarkup } from '@miguelfranken/ui/lib/review-markup';
+import { projectMarkup, type ReviewDrawingView } from '@miguelfranken/ui/lib/review-markup';
 import { displayableAvatar } from '@/lib/avatars';
 import type { DiffRecord } from './diff/lookup';
 import { traceViewerUrl } from '@/lib/trace-viewer/url';
 import type { AttachmentState, CaptureRecord, CheckpointRecord, ComparedCapture, CompareTargetRecord, ReviewFlowRecord } from './queries';
 import type { CaptureThread, CommentRecord } from './threads';
+import type { CaptureDrawing } from './drawings';
 
 export const artifactUrl = (id: string) => `/api/artifacts/${id}`;
 
@@ -70,6 +71,10 @@ export function toThreadView(t: CaptureThread): ReviewThreadView {
     resolvedBy: t.resolvedBy,
     comments: t.comments.map(toCommentView),
   };
+}
+
+export function toDrawingView(d: CaptureDrawing): ReviewDrawingView {
+  return { id: d.id, ...d.position, authorId: d.createdBy, authorName: d.authorName, createdAt: d.createdAt.toISOString() };
 }
 
 export const diffOverlayUrl = (id: string) => `/api/diffs/${id}/overlay`;
@@ -139,6 +144,7 @@ export function toCaptureView(c: ComparedCapture): ReviewCaptureView {
     diff: c.diff && c.diffAgainst ? toDiffView(c.diff, c.diffAgainst, c.withinTolerance) : null,
     ignoreRegions: c.ignoreRegions.length ? c.ignoreRegions.map((r) => ({ ...r, pixels: 0 })) : undefined,
     threads: c.threads.map(toThreadView),
+    drawings: c.drawings?.length ? c.drawings.map(toDrawingView) : undefined,
     runNumber: c.runNumber ?? null,
   };
 }

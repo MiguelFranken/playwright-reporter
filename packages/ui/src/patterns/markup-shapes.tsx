@@ -61,6 +61,18 @@ function Shape({ shape, width, dash, head }: { shape: MarkupShape; width: number
   const ink = MARKUP_INK[shape.color];
   if (isStroke(shape.tool)) {
     const highlighter = shape.tool === 'highlighter';
+    const stroke = highlighter ? HIGHLIGHTER_WIDTH : width;
+    if (shape.points.length === 2) {
+      // A dot is drawn as a circle on the page's pixels: a zero-length path stretched with the image would come out
+      // the wrong size, and jump when the stroke grows its second point.
+      const at = { cx: pct(shape.points[0]), cy: pct(shape.points[1]) };
+      return (
+        <g>
+          {highlighter ? null : <circle {...at} r={(width + 3) / 2} fill="var(--surface)" fillOpacity={0.85} />}
+          <circle {...at} r={stroke / 2} fill={ink} fillOpacity={highlighter ? 0.38 : 1} />
+        </g>
+      );
+    }
     const d = strokePath(shape.points);
     // Strokes are drawn in the image's fractions, stretched to its box; `non-scaling-stroke` keeps their width in CSS pixels.
     return (
@@ -71,7 +83,7 @@ function Shape({ shape, width, dash, head }: { shape: MarkupShape; width: number
           fill="none"
           stroke={ink}
           strokeOpacity={highlighter ? 0.38 : 1}
-          strokeWidth={highlighter ? HIGHLIGHTER_WIDTH : width}
+          strokeWidth={stroke}
           strokeLinecap="round"
           strokeLinejoin="round"
           strokeDasharray={highlighter ? undefined : dash}

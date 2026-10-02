@@ -113,13 +113,17 @@ function areaSvg(pin: PinSpec, x: number, y: number, w: number, h: number, weigh
   return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="${weight}" fill="${color}" fill-opacity="0.12" stroke="${color}" stroke-width="${weight}"${dash}/>`;
 }
 
+/** A thread's drawing, faded when the thread is resolved. */
+const markupSvg = (pin: PinSpec, toX: (f: number) => number, toY: (f: number) => number, weight: number) => shapesSvg(pin.markup ?? [], toX, toY, weight, pin.status === 'resolved');
+
 /**
- * A thread's drawing in the colours it was drawn in, the way the app draws it:
+ * Shapes in the colours they were drawn in, the way the app draws them:
  * strokes with round ends, a translucent highlighter, arrows with a head.
  * `weight` is the pen's width in output pixels.
  */
-function markupSvg(pin: PinSpec, toX: (f: number) => number, toY: (f: number) => number, weight: number): string {
-  const muted = pin.status === 'resolved' ? ' opacity="0.5"' : '';
+function shapesSvg(shapes: readonly MarkupShape[], toX: (f: number) => number, toY: (f: number) => number, weight: number, faded = false): string {
+  if (!shapes.length) return '';
+  const muted = faded ? ' opacity="0.5"' : '';
   const svg = (shape: MarkupShape) => {
     const ink = MARKUP_INK[shape.color];
     const pts = pairs(shape.points).map(([x, y]) => [toX(x), toY(y)] as const);
@@ -142,22 +146,21 @@ function markupSvg(pin: PinSpec, toX: (f: number) => number, toY: (f: number) =>
     if (shape.tool === 'rect') return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="${weight.toFixed(1)}" ${stroke}/>`;
     return `<ellipse cx="${(x + w / 2).toFixed(1)}" cy="${(y + h / 2).toFixed(1)}" rx="${(w / 2).toFixed(1)}" ry="${(h / 2).toFixed(1)}" ${stroke}/>`;
   };
-  const shapes = pin.markup ?? [];
   const marker = shapes.filter((s) => s.tool === 'highlighter').map(svg);
   const ink = shapes.filter((s) => s.tool !== 'highlighter').map(svg);
   // A white halo around the lines keeps them apart from the page, as the pins' ring does; a highlighter shows the page through it.
   return `<g${muted}>${marker.join('')}${ink.length ? `<g filter="url(#halo)">${ink.join('')}</g>` : ''}</g>`;
 }
 
-/** The overlay of every pin on an image of `width` × `height`: drawings and areas under pins, in number order. */
-function overlaySvg(pins: readonly PinSpec[], width: number, height: number, origin = { x: 0, y: 0, w: 1, h: 1 }): Buffer {
+/** The overlay of every pin on an image of `width` × `height`: drawings on their own, then threads' drawings and areas, under pins in number order. */
+function overlaySvg(pins: readonly PinSpec[], width: number, height: number, origin = { x: 0, y: 0, w: 1, h: 1 }, loose: readonly MarkupShape[] = []): Buffer {
   const radius = Math.round(Math.min(24, Math.max(14, width / 60)));
   const weight = Math.max(2, Math.round(radius / 5));
   const toX = (f: number) => ((f - origin.x) / origin.w) * width;
   const toY = (f: number) => ((f - origin.y) / origin.h) * height;
   const drawn = pins.filter((p) => p.anchor.kind !== 'image').sort((a, b) => a.number - b.number);
   const pen = Math.max(2.5, Math.min(6, width / 320));
-  const drawings = drawn.filter((p) => p.markup?.length).map((p) => markupSvg(p, toX, toY, pen));
+  const drawings = [shapesSvg(loose, toX, toY, pen), ...drawn.filter((p) => p.markup?.length).map((p) => markupSvg(p, toX, toY, pen))];
   const areas = drawn
     .filter((p) => !p.markup?.length && p.anchor.kind === 'area' && p.anchor.w != null && p.anchor.h != null)
     .map((p) => areaSvg(p, toX(p.anchor.x), toY(p.anchor.y), (p.anchor.w! / origin.w) * width, (p.anchor.h! / origin.h) * height, weight));
@@ -188,9 +191,11 @@ export interface AnnotateOptions {
   /** Most output pixels: a tall full page shrinks until it fits. */
   maxPixels?: number;
   maxBytes: number;
+  /** Drawings on the image, on their own, in fractions of it: drawn under the pins. */
+  drawings?: readonly MarkupShape[];
 }
 
-/** The image scaled for a model, with the pins drawn on it. `pins` may be empty: then it is only scaled. */
+/** The image scaled for a model, with the pins (and drawings) drawn on it. Both may be empty: then it is only scaled. */
 export async function annotate(bytes: Uint8Array, pins: readonly PinSpec[], opts: AnnotateOptions): Promise<AnnotatedImage> {
   const input = sharp(bytes, { limitInputPixels: 268_402_689 });
   const meta = await input.metadata();
@@ -201,9 +206,10 @@ export async function annotate(bytes: Uint8Array, pins: readonly PinSpec[], opts
   const width = Math.max(1, Math.floor(source.width * scale));
   const height = Math.max(1, Math.floor(source.height * scale));
   let image: Sharp = input.resize(width, height, { fit: 'fill' });
-  if (pins.some((p) => p.anchor.kind !== 'image')) {
+  const drawings = opts.drawings ?? [];
+  if (pins.some((p) => p.anchor.kind !== 'image') || drawings.length) {
     const flat = await image.png().toBuffer();
-    image = sharp(flat).composite([{ input: overlaySvg(pins, width, height), top: 0, left: 0 }]);
+    image = sharp(flat).composite([{ input: overlaySvg(pins, width, height, undefined, drawings), top: 0, left: 0 }]);
   }
   return { ...(await encode(image, opts.maxBytes)), width, height, source, scale };
 }
@@ -212,7 +218,7 @@ export async function annotate(bytes: Uint8Array, pins: readonly PinSpec[], opts
  * A close-up around one pin at the source's own resolution (shrunk to
  * `maxWidth`): the spot with room around it, or the area with a margin.
  */
-export async function cropAround(bytes: Uint8Array, pin: PinSpec, allPins: readonly PinSpec[], opts: { maxWidth?: number; maxBytes: number }): Promise<Crop | null> {
+export async function cropAround(bytes: Uint8Array, pin: PinSpec, allPins: readonly PinSpec[], opts: { maxWidth?: number; maxBytes: number; drawings?: readonly MarkupShape[] }): Promise<Crop | null> {
   if (pin.anchor.kind === 'image') return null;
   const input = sharp(bytes, { limitInputPixels: 268_402_689 });
   const meta = await input.metadata();
@@ -244,6 +250,6 @@ export async function cropAround(bytes: Uint8Array, pin: PinSpec, allPins: reado
   // Every pin inside the close-up is drawn, so neighbours are not mistaken for the thread's spot.
   const inside = allPins.filter((p) => p.anchor.kind !== 'image' && p.anchor.x >= origin.x && p.anchor.x <= origin.x + origin.w && p.anchor.y >= origin.y && p.anchor.y <= origin.y + origin.h);
   const base = await input.extract({ left: region.x, top: region.y, width: region.w, height: region.h }).resize(outW, outH).png().toBuffer();
-  const image = sharp(base).composite([{ input: overlaySvg(inside.length ? inside : [pin], outW, outH, origin), top: 0, left: 0 }]);
+  const image = sharp(base).composite([{ input: overlaySvg(inside.length ? inside : [pin], outW, outH, origin, opts.drawings), top: 0, left: 0 }]);
   return { ...(await encode(image, opts.maxBytes)), width: outW, height: outH, number: pin.number, region };
 }

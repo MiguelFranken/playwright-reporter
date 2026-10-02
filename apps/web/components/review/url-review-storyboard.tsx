@@ -27,13 +27,15 @@ import {
   type StoryboardMode,
 } from '@miguelfranken/ui/lib/review';
 import type { CommentEditInput, NewThreadInput, ReviewThreadView, ThreadReplyInput, ThreadStatusInput } from '@miguelfranken/ui/lib/review-threads';
-import { anchorForMarkup } from '@miguelfranken/ui/lib/review-markup';
+import { anchorForMarkup, type DeleteDrawingsInput, type NewDrawingsInput } from '@miguelfranken/ui/lib/review-markup';
 import type { IgnoreRect } from '@miguelfranken/ui/views/review/ignore-regions-editor';
 import { ReviewStoryboard, STORYBOARD_SIZE, type ReviewSelection } from '@miguelfranken/ui/views/review/review-storyboard';
 import { useShallowSearch } from '@/components/filters/url-filters';
 import {
+  createReviewDrawings,
   createReviewThread,
   decideReview,
+  deleteReviewDrawings,
   deleteReviewComment,
   editReviewComment,
   replyToReviewThread,
@@ -50,7 +52,9 @@ type Change =
   | { type: 'reply'; input: ThreadReplyInput; tempId: string }
   | { type: 'status'; input: ThreadStatusInput }
   | { type: 'edit'; input: CommentEditInput }
-  | { type: 'delete'; input: { commentId: string; threadId: string } };
+  | { type: 'delete'; input: { commentId: string; threadId: string } }
+  | { type: 'draw'; input: NewDrawingsInput; authorId: string | null }
+  | { type: 'erase'; input: DeleteDrawingsInput };
 
 // Untouched flows stay the same objects, so the storyboard's memoised rows do not render again.
 const mapCaptures = (flows: ReviewFlowView[], fn: (cap: ReviewFlowView['checkpoints'][number]['captures'][number]) => ReviewFlowView['checkpoints'][number]['captures'][number]) => patchCaptures(flows, fn);
@@ -109,6 +113,16 @@ function applyChange(flows: ReviewFlowView[], change: Change): ReviewFlowView[] 
       );
     case 'edit':
       return mapThreads(flows, (t) => (t.comments.some((c) => c.id === change.input.commentId) ? { ...t, comments: t.comments.map((c) => (c.id === change.input.commentId ? { ...c, body: change.input.body, editedAt: now } : c)) } : t));
+    case 'draw': {
+      const { input, authorId } = change;
+      return mapCaptures(flows, (cap) =>
+        cap.id === input.captureId ? { ...cap, drawings: [...(cap.drawings ?? []), ...input.drawings.map((d) => ({ ...d.shape, id: d.id, authorId, createdAt: now, pending: true }))] } : cap,
+      );
+    }
+    case 'erase': {
+      const gone = new Set(change.input.drawingIds);
+      return mapCaptures(flows, (cap) => (cap.drawings?.some((d) => gone.has(d.id)) ? { ...cap, drawings: cap.drawings.filter((d) => !gone.has(d.id)) } : cap));
+    }
     case 'delete':
       return mapThreads(flows, (t) => {
         if (t.id !== change.input.threadId) return t;
@@ -335,6 +349,8 @@ export function useReviewActions({
       if (!window.confirm('Delete this comment? The first comment of a thread takes the whole thread with it.')) return;
       commentAction({ type: 'delete', input }, () => deleteReviewComment(ref, { commentId: input.commentId }));
     },
+    onCreateDrawings: (input: NewDrawingsInput) => commentAction({ type: 'draw', input, authorId: viewerId }, () => createReviewDrawings(ref, input)),
+    onDeleteDrawings: (input: DeleteDrawingsInput) => commentAction({ type: 'erase', input }, () => deleteReviewDrawings(ref, input)),
   };
   const compareWith = {
     rule,

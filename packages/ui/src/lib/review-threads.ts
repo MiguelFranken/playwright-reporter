@@ -13,7 +13,7 @@
  * handed to views as fractions of the image they are drawn on, so a pin does
  * not care about zoom.
  */
-import type { MarkupShape } from './review-markup';
+import type { DeleteDrawingsInput, MarkupShape, NewDrawingsInput } from './review-markup';
 import type { ReviewImage } from './review';
 
 export const THREAD_STATUSES = ['open', 'resolved'] as const;
@@ -204,6 +204,10 @@ export interface ThreadActions {
   onSetThreadStatus?: (input: ThreadStatusInput) => void;
   onEditComment?: (input: CommentEditInput) => void;
   onDeleteComment?: (input: { commentId: string; threadId: string }) => void;
+  /** Save drawings made on an image (no comment needed). */
+  onCreateDrawings?: (input: NewDrawingsInput) => void;
+  /** Erase drawings: their author's, or anyone's for a moderator. */
+  onDeleteDrawings?: (input: DeleteDrawingsInput) => void;
   /** Show an outdated thread's version commented on beside the screen as it is now (the viewer does this itself). */
   onCompareThread?: (threadId: string) => void;
 }

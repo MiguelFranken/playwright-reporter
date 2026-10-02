@@ -662,7 +662,7 @@ One review checkpoint image to look at, beside the image it is compared with —
 | `pinCrops` | boolean |  | Attach a close-up around each pin. Default: when at most 6 threads are open. |
 | `includeResolved` | boolean |  | Also list (and pin) resolved threads. Default false. |
 
-Structured output fields: `project`, `captureId`, `test`, `checkpoint`, `variant`, `run`, `status`, `viewport`, `sameAsReference`, `reference`, `imageUrl`, `referenceUrl`, `comparison`, `diff`, `changedRegions`, `note`, `image`, `annotatedImageUrl`, `reviewUrl`, `request`, `threads`, `attachments`, `attachedImages`, `omittedImages`, `truncated`.
+Structured output fields: `project`, `captureId`, `test`, `checkpoint`, `variant`, `run`, `status`, `viewport`, `sameAsReference`, `reference`, `imageUrl`, `referenceUrl`, `comparison`, `diff`, `changedRegions`, `note`, `image`, `annotatedImageUrl`, `reviewUrl`, `request`, `threads`, `drawings`, `attachments`, `attachedImages`, `omittedImages`, `truncated`.
 
 ## review_checkpoint
 

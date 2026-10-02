@@ -9,7 +9,13 @@ import {
   MAX_MARKUP_SHAPES,
   projectMarkup,
   shapeFromDrag,
+  shapeDistance,
   simplifyStroke,
+  streamlinePoint,
+  constrainDrag,
+  isMarkupTool,
+  isFractionShape,
+  COMMENT_TOOLS,
   strokePath,
   type MarkupShape,
 } from './review-markup';
@@ -95,9 +101,11 @@ describe('simplifyStroke', () => {
 });
 
 describe('strokePath', () => {
-  it('draws a dot for one point and curves through more', () => {
+  it('draws a dot for one point, a line for two, and bends through more', () => {
     expect(strokePath([1, 2])).toBe('M1 2L1 2');
-    expect(strokePath([0, 0, 10, 0, 10, 10])).toBe('M0 0Q10 0 10 5L10 10');
+    expect(strokePath([0, 0, 6, 0])).toBe('M0 0L6 0');
+    // A Catmull–Rom spline: it passes through every point, its tangent at each the chord of its neighbours.
+    expect(strokePath([0, 0, 6, 0, 6, 6])).toBe('M0 0C1 0 5 -1 6 0C7 1 6 5 6 6');
   });
 });
 
@@ -113,5 +121,64 @@ describe('markupColors', () => {
   it('lists each colour once, in order of use', () => {
     expect(markupColors([pen, box, { ...pen, color: 'yellow' }])).toEqual(['blue', 'yellow']);
     expect(markupColors(null)).toEqual([]);
+  });
+});
+
+describe('streamlinePoint', () => {
+  it('goes part of the way to the pointer', () => {
+    expect(streamlinePoint({ x: 0, y: 0 }, { x: 10, y: 20 }, 0.5)).toEqual({ x: 5, y: 10 });
+    expect(streamlinePoint({ x: 0, y: 0 }, { x: 10, y: 20 }, 0)).toEqual({ x: 10, y: 20 });
+  });
+
+  it('always moves', () => {
+    expect(streamlinePoint({ x: 0, y: 0 }, { x: 100, y: 0 }, 1).x).toBeGreaterThan(0);
+  });
+});
+
+describe('constrainDrag', () => {
+  it('turns an arrow to the nearest 45°, keeping its length', () => {
+    const end = constrainDrag('arrow', { x: 0, y: 0 }, { x: 100, y: 10 });
+    expect(end.x).toBeCloseTo(Math.hypot(100, 10));
+    expect(end.y).toBeCloseTo(0);
+    const diagonal = constrainDrag('arrow', { x: 0, y: 0 }, { x: 50, y: -45 });
+    expect(diagonal.x).toBeCloseTo(-diagonal.y);
+  });
+
+  it('makes a box square and an ellipse round, toward the drag', () => {
+    expect(constrainDrag('rect', { x: 10, y: 10 }, { x: 40, y: -50 })).toEqual({ x: 70, y: -50 });
+    expect(constrainDrag('ellipse', { x: 0, y: 0 }, { x: -20, y: 5 })).toEqual({ x: -20, y: 20 });
+  });
+});
+
+describe('shapeDistance', () => {
+  it('measures to a stroke and an arrow along their lines', () => {
+    expect(shapeDistance({ tool: 'pen', color: 'red', points: [0, 0, 10, 0, 10, 10] }, { x: 5, y: 3 })).toBeCloseTo(3);
+    expect(shapeDistance({ tool: 'arrow', color: 'red', points: [0, 0, 10, 0] }, { x: 14, y: 3 })).toBeCloseTo(5);
+    expect(shapeDistance({ tool: 'pen', color: 'red', points: [2, 2] }, { x: 5, y: 6 })).toBeCloseTo(5);
+  });
+
+  it('measures to a box’s outline, not its inside', () => {
+    const rect: MarkupShape = { tool: 'rect', color: 'red', points: [0, 0, 100, 50] };
+    expect(shapeDistance(rect, { x: 50, y: 25 })).toBeCloseTo(25);
+    expect(shapeDistance(rect, { x: 102, y: 25 })).toBeCloseTo(2);
+  });
+
+  it('measures to an ellipse’s rim', () => {
+    const ellipse: MarkupShape = { tool: 'ellipse', color: 'red', points: [0, 0, 100, 50] };
+    expect(shapeDistance(ellipse, { x: 100, y: 25 })).toBeCloseTo(0);
+    expect(shapeDistance(ellipse, { x: 50, y: 25 })).toBeCloseTo(25);
+    expect(shapeDistance(ellipse, { x: 50, y: -3 })).toBeCloseTo(3);
+  });
+});
+
+describe('comment tools', () => {
+  it('keeps pins and areas apart, then the drawing tools and the eraser', () => {
+    expect(COMMENT_TOOLS).toEqual(['pin', 'area', 'pen', 'highlighter', 'arrow', 'rect', 'ellipse', 'eraser']);
+    expect(COMMENT_TOOLS.filter(isMarkupTool)).toEqual(['pen', 'highlighter', 'arrow', 'rect', 'ellipse']);
+  });
+
+  it('checks one shape the way it checks a drawing', () => {
+    expect(isFractionShape(pen)).toBe(true);
+    expect(isFractionShape({ ...pen, tool: 'eraser' })).toBe(false);
   });
 });

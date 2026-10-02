@@ -30,6 +30,7 @@ import {
 import { diffSettingsFor, diffsFor, identityKey, ignoreRegionsFor, pairKey, pairOf, type DiffRecord, type Rect } from './diff/lookup';
 import { withinTolerance } from './diff/settings';
 import { createThread, resolveThreadsOf, threadsForCaptures, type CaptureThread } from './threads';
+import { drawingsForCaptures, type CaptureDrawing } from './drawings';
 
 const thumbs = alias(attachments, 'thumb_attachments');
 
@@ -96,6 +97,8 @@ export interface ComparedCapture extends CaptureRecord {
   ignoreRegions: Rect[];
   /** The comment threads the image shows (see `threads.ts`). */
   threads: CaptureThread[];
+  /** The drawings on its pixels, on their own (see `drawings.ts`). */
+  drawings: CaptureDrawing[];
   /** The run it was captured in, where images of several runs are shown together (the library). */
   runNumber?: number;
 }
@@ -263,10 +266,11 @@ export async function compareCaptures(
       if (approved.captureId) baselineIds.add(approved.captureId);
     }
   }
-  const [baselineCaptures, previous, threads] = await Promise.all([
+  const [baselineCaptures, previous, threads, drawings] = await Promise.all([
     baselineIds.size ? selectCaptures(inArray(reviewCaptures.id, [...baselineIds])) : Promise.resolve([]),
     context ? previousCaptures(captures, context.runId, context.runStartedAt) : Promise.resolve(new Map<string, { capture: CaptureRecord; runNumber: number }>()),
     threadsForCaptures(captures),
+    drawingsForCaptures(captures),
   ]);
   const baselineById = new Map(baselineCaptures.map((c) => [c.id, c]));
 
@@ -286,7 +290,7 @@ export async function compareCaptures(
     const ignoreRegions = ignores.get(key) ?? [];
     const pair = settings.has(c.projectId) ? pairOf(c, reference, settings.get(c.projectId)!, ignoreRegions) : null;
     return {
-      compared: { ...c, status, decision: exact, baseline, previous: prev, request, diff: null, diffAgainst: baseline?.capture ? 'baseline' : prev ? 'previous' : null, withinTolerance: false, ignoreRegions, threads: threads.get(c.id) ?? [] } as ComparedCapture,
+      compared: { ...c, status, decision: exact, baseline, previous: prev, request, diff: null, diffAgainst: baseline?.capture ? 'baseline' : prev ? 'previous' : null, withinTolerance: false, ignoreRegions, threads: threads.get(c.id) ?? [], drawings: drawings.get(c.id) ?? [] } as ComparedCapture,
       pair,
     };
   });

@@ -7,6 +7,7 @@
  * content hash — and holds for every later capture of the same pixels. That is
  * what lets a run with nothing new ask for no review at all.
  */
+import type { ReviewDrawingView } from './review-markup';
 import type { ReviewThreadView } from './review-threads';
 import type { CasePriority } from './test-cases';
 import type { Tone } from './tone';
@@ -264,6 +265,8 @@ export interface ReviewCaptureView {
   ignoreRegions?: DiffRegion[];
   /** Comment threads on the image: its own and the open ones placed on earlier captures of it. */
   threads?: ReviewThreadView[];
+  /** Drawings on the image, on their own (pen, arrows, boxes): shown with the pins, erased with the eraser. */
+  drawings?: ReviewDrawingView[];
   /** The run it was captured in, where one flow shows several runs' images (the library). */
   runNumber?: number | null;
 }
