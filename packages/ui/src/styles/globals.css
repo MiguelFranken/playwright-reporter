@@ -207,8 +207,6 @@
   --elevation-2: 0 2px 4px -2px oklch(0.179 0.007 264 / 0.1), 0 4px 10px -3px oklch(0.179 0.007 264 / 0.08);
   --elevation-3: 0 8px 24px -6px oklch(0.179 0.007 264 / 0.14), 0 2px 6px -2px oklch(0.179 0.007 264 / 0.08);
 
-  --image-outline: oklch(0 0 0 / 0.1);
-
   --radius: 0.625rem;
 }
 
@@ -302,8 +300,6 @@
   --elevation-1: 0 1px 2px -1px oklch(0 0 0 / 0.5);
   --elevation-2: 0 2px 4px -2px oklch(0 0 0 / 0.5), 0 4px 10px -3px oklch(0 0 0 / 0.4);
   --elevation-3: 0 8px 24px -6px oklch(0 0 0 / 0.6), 0 2px 6px -2px oklch(0 0 0 / 0.4);
-
-  --image-outline: oklch(1 0 0 / 0.1);
 }
 
 @theme inline {
@@ -683,12 +679,6 @@
   code,
   kbd {
     font-variant-numeric: tabular-nums;
-  }
-
-  img,
-  video {
-    outline: 1px solid var(--image-outline);
-    outline-offset: -1px;
   }
 }
 
