@@ -119,9 +119,12 @@ export const FillTheStage: Story = {
     await userEvent.click(body.getByRole('button', { name: 'Image' }));
     const stage = body.getByLabelText('Checkpoint screens');
     const screen = body.getByRole('region', { name: /desktop screen/ });
-    await waitFor(() => expect(Math.abs(screen.getBoundingClientRect().width - stage.clientWidth)).toBeLessThanOrEqual(1));
-    await expect(Math.abs(screen.getBoundingClientRect().height - stage.clientHeight)).toBeLessThanOrEqual(1);
-    await expect(stage.scrollHeight).toBeLessThanOrEqual(stage.clientHeight);
+    // The opening animation and ResizeObserver can settle each dimension separately.
+    await waitFor(() => {
+      expect(Math.abs(screen.getBoundingClientRect().width - stage.clientWidth)).toBeLessThanOrEqual(1);
+      expect(Math.abs(screen.getBoundingClientRect().height - stage.clientHeight)).toBeLessThanOrEqual(1);
+      expect(stage.scrollHeight).toBeLessThanOrEqual(stage.clientHeight);
+    });
     await expect(body.getByRole('button', { name: /Fill/ })).toHaveAttribute('aria-pressed', 'true');
     await expect(body.getByRole('combobox', { name: 'Zoom' })).toBeDisabled();
   },
@@ -331,10 +334,12 @@ export const FillAllVariants: Story = {
     const stage = body.getByLabelText('Checkpoint screens');
     const desktop = body.getByRole('region', { name: /desktop screen/ });
     const mobile = body.getByRole('region', { name: /mobile screen/ });
-    await waitFor(() => expect(Math.abs(mobile.getBoundingClientRect().left - desktop.getBoundingClientRect().right - 1)).toBeLessThanOrEqual(1));
-    for (const screen of [desktop, mobile]) await expect(Math.abs(screen.getBoundingClientRect().bottom - stage.getBoundingClientRect().bottom)).toBeLessThanOrEqual(1);
-    await expect(stage.scrollHeight).toBeLessThanOrEqual(stage.clientHeight);
-    await expect(stage.scrollWidth).toBeLessThanOrEqual(stage.clientWidth);
+    await waitFor(() => {
+      expect(Math.abs(mobile.getBoundingClientRect().left - desktop.getBoundingClientRect().right - 1)).toBeLessThanOrEqual(1);
+      for (const screen of [desktop, mobile]) expect(Math.abs(screen.getBoundingClientRect().bottom - stage.getBoundingClientRect().bottom)).toBeLessThanOrEqual(1);
+      expect(stage.scrollHeight).toBeLessThanOrEqual(stage.clientHeight);
+      expect(stage.scrollWidth).toBeLessThanOrEqual(stage.clientWidth);
+    });
     await expect(body.getByText('desktop', { selector: 'figcaption span' }).closest('figcaption')).toHaveStyle({ height: '32px' });
   },
 };
