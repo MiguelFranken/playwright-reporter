@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.0.83](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.82...v0.0.83) (2026-10-02)
+
+### Features
+
+* **review:** draw on review images without a comment, and erase drawings ([#88](https://github.com/MiguelFranken/playwright-reporter/issues/88)) ([77d9861](https://github.com/MiguelFranken/playwright-reporter/commit/77d98619d4b152e33b5410398f9b9333d46796cd))
+* **review:** move the comment bar by its grip, and ease its width ([458e795](https://github.com/MiguelFranken/playwright-reporter/commit/458e79580e9e745807ef60f4db7b4e3293c49466))
+
+### Bug Fixes
+
+* **review:** drop the blue border around the stage while commenting ([c63ac11](https://github.com/MiguelFranken/playwright-reporter/commit/c63ac113caf77e2c49698df0f458d2d7bc4e24e3))
+* **ui:** drop the outline every image carried ([6b2e71a](https://github.com/MiguelFranken/playwright-reporter/commit/6b2e71a4789f14f31fd2b9a92bff708669c9df98))
+
 ## [0.0.82](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.81...v0.0.82) (2026-10-02)
 
 ### Bug Fixes
