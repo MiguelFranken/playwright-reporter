@@ -289,6 +289,9 @@ export function CheckpointViewer({
   const stageRef = useRef<HTMLDivElement>(null);
   // The dialog mounts its content in a portal after opening; state follows the element itself.
   const [stageEl, setStageEl] = useState<HTMLDivElement | null>(null);
+  const [headerEl, setHeaderEl] = useState<HTMLElement | null>(null);
+  const [toolbarEl, setToolbarEl] = useState<HTMLDivElement | null>(null);
+  const [stripEl, setStripEl] = useState<HTMLElement | null>(null);
 
   const captures = pos ? sortedCaptures(pos.checkpoint) : [];
   const variant = selection?.variant ?? null;
@@ -335,6 +338,14 @@ export function CheckpointViewer({
   // Narrower than the side panel needs, the viewer scrolls as one page: the stage grows with its screens, so fitting them
   // follows the window's height rather than the stage's own.
   const stackedHeight = useStackedHeight();
+  // Beside the side panel, the header, the toolbar and the strip of checkpoints lie over the stage, translucent and
+  // blurred, so what scrolls runs on under them. `inset` is how much of the stage they cover: the screens start below the
+  // bars above and stop above the strip, the way they did when the bars stood beside them.
+  const headerHeight = useOuterHeight(headerEl);
+  const toolbarHeight = useOuterHeight(toolbarEl);
+  const stripHeight = useOuterHeight(stripEl);
+  const overlaid = stackedHeight == null;
+  const inset = overlaid ? { top: headerHeight + toolbarHeight, bottom: stripHeight } : { top: 0, bottom: 0 };
   const canComment = Boolean(comments.canComment && comments.onCreateThread);
   const threadGroups = shown.map((c) => ({ captureId: c.id, variant: c.variant, threads: c.threads ?? [] }));
   const shownThreads = threadGroups.flatMap((g) => g.threads);
@@ -385,14 +396,18 @@ export function CheckpointViewer({
   const padding = fill ? 0 : 48;
   const room = {
     width: stageSize.width - padding - around.beside,
-    height: (stackedHeight == null ? stageSize.height - padding : Math.max(240, stackedHeight * 0.75)) - around.above,
+    height: (stackedHeight == null ? stageSize.height - padding - inset.top - inset.bottom : Math.max(240, stackedHeight * 0.75)) - around.above,
   };
   // The largest zoom the width allows; the toolbar offers nothing above it.
   const maxZoom = shownZoom(Infinity, zoomFrames, room, gap);
   const filled = fill ? fillFrames(frames, room, gap) : null;
   const zoom = filled?.zoom ?? shownZoom(frameSettings.zoom, zoomFrames, room, gap);
   // A screen longer than the room ends at its bottom edge and scrolls inside; filling, every screen is as tall as the room.
-  const screens = filled?.screens ?? frames.map((f) => frameWithin(f, room.height, zoom));
+  const fitted = filled?.screens ?? frames.map((f) => frameWithin(f, room.height, zoom));
+  // One screen filling the stage runs under the bars: as tall as the whole stage, the room they cover kept clear inside
+  // it (see `bleed` on the stage), so it opens exactly where it did and its page scrolls on under them.
+  const bleed = fill && captionless && overlaid && !verifying && !(resolving && ended) && (inset.top > 0 || inset.bottom > 0);
+  const screens = bleed ? fitted.map((s) => ({ ...s, height: s.height + (inset.top + inset.bottom) / zoom })) : fitted;
   const paneScreens = paneFrames.map((_, i) => screens.slice(paneFrames.slice(0, i).flat().length, paneFrames.slice(0, i + 1).flat().length));
   const closeUpWidth = Math.min(640, Math.max(240, (stageSize.width - 48 - 24) / 2));
   const pending = new Set(pendingIds);
@@ -866,11 +881,14 @@ export function CheckpointViewer({
       <DialogContent
         showCloseButton={false}
         initialFocus={stageRef}
-        className="top-0 left-0 flex h-dvh w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-y-auto rounded-none border-0 p-0 sm:max-w-none lg:grid lg:grid-rows-[auto_minmax(0,1fr)_auto] lg:overflow-hidden"
+        className="top-0 left-0 flex h-dvh w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-y-auto rounded-none border-0 p-0 sm:max-w-none lg:block lg:overflow-hidden"
       >
         {pos ? (
           <>
-            <header className="sticky top-0 z-10 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border bg-popover px-4 py-3 lg:static">
+            <header
+              ref={setHeaderEl}
+              className="sticky top-0 z-30 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border bg-popover/85 px-4 py-3 backdrop-blur-sm lg:absolute lg:inset-x-0"
+            >
               <div className="flex min-w-0 flex-1 items-center gap-2">
                 <StatusIcon status={pos.flow.outcome} />
                 <div className="min-w-0">
@@ -974,9 +992,13 @@ export function CheckpointViewer({
               ) : null}
             </header>
 
-            <div className="grid shrink-0 grow grid-cols-1 lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_20rem]">
+            <div className="grid shrink-0 grow grid-cols-1 lg:h-full lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_20rem]">
               <section className="relative flex min-h-0 flex-col bg-surface" aria-label="Checkpoint image">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-surface px-4 py-2">
+                <div
+                  ref={setToolbarEl}
+                  className="z-20 flex flex-wrap items-center justify-between gap-2 border-b border-border bg-surface/85 px-4 py-2 backdrop-blur-sm lg:absolute lg:inset-x-0"
+                  style={overlaid ? { top: headerHeight } : undefined}
+                >
                   <FrameToolbar value={frameSettings} onChange={setFrame} captured={current ? captureViewport(current) : null} maxZoom={stageSize.width > 0 ? maxZoom : undefined} />
                   <div className="flex items-center gap-3">
                     {effectiveStage === 'changes' && regions.length ? (
@@ -1018,7 +1040,8 @@ export function CheckpointViewer({
                   tabIndex={0}
                   aria-label="Checkpoint screens"
                   className={cn(
-                    'min-h-0 flex-1 outline-none transition-shadow duration-150 focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/25',
+                    // Its focus ring and the commenting outline are drawn by the frame after it, around the part the bars leave clear.
+                    'peer min-h-0 flex-1 outline-none',
                     // The screens fit; only a comparison while verifying, the summary after resolving and the editor's list below
                     // the screen can run longer.
                     verifying || (resolving && ended) || effectiveStage === 'ignore' ? 'overflow-auto' : 'overflow-hidden',
@@ -1026,8 +1049,23 @@ export function CheckpointViewer({
                     fill
                       ? 'p-0 [&_[data-slot=diff-highlight]]:rounded-none [&_[data-slot=diff-highlight]]:shadow-none [&_[data-slot=diff-highlight]]:ring-0 [&_[data-slot=screen-frame]]:rounded-none [&_[data-slot=screen-frame]]:shadow-none [&_[data-slot=screen-frame]]:ring-0'
                       : 'p-6',
-                    commenting && 'shadow-[inset_0_0_0_2px_var(--accent-solid)]',
+                    // The screen running under the bars keeps their room clear at its ends, and scrolls things into view below them.
+                    bleed &&
+                      '[&_[data-slot=screen-frame]]:pt-(--stage-top) [&_[data-slot=screen-frame]]:pb-(--stage-bottom) [&_[data-slot=screen-frame]]:scroll-pt-(--stage-top) [&_[data-slot=screen-frame]]:scroll-pb-(--stage-bottom)',
                   )}
+                  style={
+                    overlaid
+                      ? ({
+                          '--stage-top': `${inset.top}px`,
+                          '--stage-bottom': `${inset.bottom}px`,
+                          // Whatever the stage itself scrolls (a comparison while verifying, the areas left out) starts below the bars too.
+                          paddingTop: bleed ? 0 : inset.top + (fill ? 0 : 24),
+                          paddingBottom: bleed ? 0 : inset.bottom + (fill ? 0 : 24),
+                          scrollPaddingTop: inset.top,
+                          scrollPaddingBottom: inset.bottom,
+                        } as React.CSSProperties)
+                      : undefined
+                  }
                 >
                   {resolving && ended ? (
                     <ResolveDone
@@ -1147,9 +1185,17 @@ export function CheckpointViewer({
                     </div>
                   )}
                 </div>
+                <div
+                  aria-hidden
+                  className={cn(
+                    'pointer-events-none absolute inset-x-0 z-10 transition-shadow duration-150 peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/25 peer-focus-visible:ring-inset',
+                    commenting && 'shadow-[inset_0_0_0_2px_var(--accent-solid)]',
+                  )}
+                  style={{ top: inset.top, bottom: inset.bottom }}
+                />
                 {commenting && canComment && pinsOn && !verifying ? (
                   // Over the bottom of the screens, the way a drawing tool's bar floats: always at hand, never in the layout.
-                  <div className="pointer-events-none absolute inset-x-0 bottom-4 z-40 flex justify-center px-4">
+                  <div className="pointer-events-none absolute inset-x-0 z-40 flex justify-center px-4" style={{ bottom: inset.bottom + 16 }}>
                     <MarkupToolbar
                       className="pointer-events-auto"
                       tool={tool}
@@ -1168,7 +1214,12 @@ export function CheckpointViewer({
                 ) : null}
               </section>
 
-              <aside className="flex min-h-0 flex-col gap-5 overflow-auto border-t border-border p-4 lg:border-t-0 lg:border-l" aria-label="Checkpoint details">
+              <aside
+                className="flex min-h-0 flex-col gap-5 overflow-auto border-t border-border p-4 lg:border-t-0 lg:border-l"
+                // Under the header and the strip too: it starts below the one and scrolls clear of the other.
+                style={overlaid ? { paddingTop: headerHeight + 16, paddingBottom: stripHeight + 16, scrollPaddingTop: headerHeight, scrollPaddingBottom: stripHeight } : undefined}
+                aria-label="Checkpoint details"
+              >
                 <section className="flex flex-col gap-2">
                   {library ? null : (
                     <div className="flex flex-wrap gap-1.5">
@@ -1384,7 +1435,7 @@ export function CheckpointViewer({
               </aside>
             </div>
 
-            <footer className="border-t border-border px-4 py-2">
+            <footer ref={setStripEl} className="z-30 border-t border-border bg-popover/85 px-4 py-2 backdrop-blur-sm lg:absolute lg:inset-x-0 lg:bottom-0">
               <ol className="flex gap-2 overflow-x-auto pb-1" aria-label={`Checkpoints of ${pos.flow.title}`}>
                 {pos.flow.checkpoints.map((cp) => {
                   const first = sortedCaptures(cp).find((c) => !variant || c.variant === variant) ?? sortedCaptures(cp)[0];
@@ -1533,6 +1584,20 @@ function useElementSize(el: HTMLElement | null) {
     return () => observer.disconnect();
   }, [el]);
   return size;
+}
+
+/** The height of an element with its border, followed as it resizes; zero until it mounts. */
+function useOuterHeight(el: HTMLElement | null) {
+  const [height, setHeight] = useState(0);
+  useLayoutEffect(() => {
+    if (!el) return;
+    const measure = () => setHeight(el.offsetHeight);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [el]);
+  return height;
 }
 
 /** The window's height while the viewer is stacked (below `lg`, where it scrolls as a page); null beside the side panel. */

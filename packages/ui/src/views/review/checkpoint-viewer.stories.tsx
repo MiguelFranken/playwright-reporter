@@ -128,6 +128,34 @@ export const FillTheStage: Story = {
 };
 
 /**
+ * Filling, one screen runs on under the bars: the header, the toolbar and the
+ * strip of checkpoints lie over it, translucent and blurred. It opens where it
+ * did when they stood beside it — the page's top just below the toolbar — and
+ * scrolls to its foot just above the strip.
+ */
+export const FillRunsUnderTheBars: Story = {
+  args: { initial: { checkpointId: changed.id, variant: 'desktop' }, frame: { preset: 'captured', width: 1280, height: 720, zoom: 'fit', fill: true } },
+  play: async () => {
+    const body = within(document.body);
+    await body.findByRole('dialog');
+    await userEvent.click(body.getByRole('button', { name: 'Image' }));
+    const screen = body.getByRole('region', { name: /desktop screen/ });
+    const image = within(screen).getByRole('img');
+    const header = body.getByRole('heading', { name: /Checkout filled in/ }).closest('header')!;
+    const toolbar = body.getByRole('button', { name: /Fill/ }).closest('[class*="backdrop-blur"]')!;
+    const strip = body.getByRole('list', { name: /^Checkpoints of/ }).closest('footer')!;
+    for (const bar of [header, toolbar, strip]) await expect(getComputedStyle(bar).backdropFilter).toContain('blur');
+    // Wide enough for the side panel, the bars lie over the screen.
+    if (!window.matchMedia('(min-width: 64rem)').matches) return;
+    await waitFor(() => expect(Math.abs(image.getBoundingClientRect().top - toolbar.getBoundingClientRect().bottom)).toBeLessThanOrEqual(1));
+    await expect(screen.getBoundingClientRect().top).toBeLessThanOrEqual(header.getBoundingClientRect().top + 1);
+    await waitFor(() => expect(screen.scrollHeight).toBeGreaterThan(screen.clientHeight));
+    screen.scrollTop = screen.scrollHeight;
+    await waitFor(() => expect(Math.abs(image.getBoundingClientRect().bottom - strip.getBoundingClientRect().top)).toBeLessThanOrEqual(1));
+  },
+};
+
+/**
  * A library screen is the newest run's capture: it compares with the approved
  * screen (else the capture before it) and is decided about as in that run's
  * review.
@@ -332,7 +360,9 @@ export const FillAllVariants: Story = {
     const desktop = body.getByRole('region', { name: /desktop screen/ });
     const mobile = body.getByRole('region', { name: /mobile screen/ });
     await waitFor(() => expect(Math.abs(mobile.getBoundingClientRect().left - desktop.getBoundingClientRect().right - 1)).toBeLessThanOrEqual(1));
-    for (const screen of [desktop, mobile]) await expect(Math.abs(screen.getBoundingClientRect().bottom - stage.getBoundingClientRect().bottom)).toBeLessThanOrEqual(1);
+    // The stage runs on under the strip of checkpoints; the screens, under their captions, end where it starts.
+    const strip = body.getByRole('list', { name: /^Checkpoints of/ }).closest('footer')!;
+    for (const screen of [desktop, mobile]) await expect(Math.abs(screen.getBoundingClientRect().bottom - strip.getBoundingClientRect().top)).toBeLessThanOrEqual(1);
     await expect(stage.scrollHeight).toBeLessThanOrEqual(stage.clientHeight);
     await expect(stage.scrollWidth).toBeLessThanOrEqual(stage.clientWidth);
     await expect(body.getByText('desktop', { selector: 'figcaption span' }).closest('figcaption')).toHaveStyle({ height: '32px' });
