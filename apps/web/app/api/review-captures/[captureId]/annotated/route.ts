@@ -37,7 +37,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ capt
   const source = await readCaptureBytes(found.capture);
   if (!source) return new Response('image not available', { status: 404 });
   const pins = pinSpecs(found.capture.threads, url.searchParams.has('resolved'));
-  const out = await annotate(source.bytes, pins, { maxWidth: 1 << 14, maxPixels: 1 << 26, maxBytes: 32 * 1024 * 1024 });
+  const out = await annotate(source.bytes, pins, { maxWidth: 1 << 14, maxPixels: 1 << 26, maxBytes: 32 * 1024 * 1024, drawings: found.capture.drawings.map((d) => d.position) });
   return new Response(new Uint8Array(out.data), {
     headers: { 'content-type': out.mimeType, 'cache-control': 'private, no-store', 'content-disposition': `inline; filename="${found.capture.checkpointName}-${found.capture.variant}-pins.${out.mimeType === 'image/png' ? 'png' : 'jpg'}"` },
   });

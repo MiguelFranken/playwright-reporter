@@ -42,20 +42,30 @@ export interface FolderAction {
   confirm?: { title: string; description: string; action: string };
 }
 
-/** Approving what in a folder still needs review, asked first; disabled while any of it is being decided. */
-export function approveFolderAction(target: FolderMenuTarget, ids: readonly string[], onApprove: (ids: string[]) => void, pending: ReadonlySet<string>): FolderAction {
-  const n = ids.length;
-  const images = `${n} ${n === 1 ? 'image' : 'images'}`;
+/** What a folder's approval covers: the screens that still need review, and how many flows they are in. */
+export interface FolderApproval {
+  captureIds: readonly string[];
+  flows: number;
+}
+
+/**
+ * Approving what in a folder still needs review, asked first; disabled while
+ * any of it is being decided. Counted in flows, as the tree counts: the
+ * screens and variants inside them are the detail, not the size of the task.
+ */
+export function approveFolderAction(target: FolderMenuTarget, approval: FolderApproval, onApprove: (ids: string[]) => void, pending: ReadonlySet<string>): FolderAction {
+  const n = approval.captureIds.length ? Math.max(1, approval.flows) : 0;
+  const flows = `${n} ${n === 1 ? 'flow' : 'flows'}`;
   return {
     key: 'approve',
-    label: n ? `Approve ${images}` : 'Nothing to approve',
+    label: n ? `Approve ${flows}` : 'Nothing to approve',
     icon: Check,
-    disabled: n === 0 || ids.some((id) => pending.has(id)),
-    onSelect: () => onApprove([...ids]),
+    disabled: n === 0 || approval.captureIds.some((id) => pending.has(id)),
+    onSelect: () => onApprove([...approval.captureIds]),
     confirm: {
-      title: `Approve ${images}?`,
-      description: `${target.id === null ? 'Every image shown' : `Every image in “${target.name}”`} that still needs review becomes the approved baseline, as it is now.`,
-      action: `Approve ${images}`,
+      title: `Approve ${flows}?`,
+      description: `Every screen that still needs review in ${target.id === null ? `the ${flows} shown` : `the ${flows} in “${target.name}”`} becomes the approved baseline, as it is now.`,
+      action: `Approve ${flows}`,
     },
   };
 }
@@ -63,10 +73,12 @@ export function approveFolderAction(target: FolderMenuTarget, ids: readonly stri
 /**
  * The folders a storyboard is browsed by: the test case suites the flows'
  * tests are linked to, or their spec files. Folders open and close like the
- * Test Cases tree. In review, each folder says how many images below it still
- * need review, so the tree is also the to-do list; in the library it counts
- * the screens. Without `onGroupingChange` the grouping is fixed (the library's
- * view decides it) and the tree names it instead of offering the switch.
+ * Test Cases tree. Each folder counts the flows below it — in review, how many
+ * of them still need review, so the tree is also the to-do list. In the
+ * library the counts follow the filters (`counts`), and a folder they leave
+ * empty stays in place, quieter, so the tree keeps its shape. Without
+ * `onGroupingChange` the grouping is fixed (the library's view decides it)
+ * and the tree names it instead of offering the switch.
  */
 export function ReviewTree({
   folders,
@@ -80,6 +92,7 @@ export function ReviewTree({
   allLabel = 'All flows',
   title,
   attention,
+  counts,
   folderActions,
   className,
 }: {
@@ -97,8 +110,14 @@ export function ReviewTree({
   /** Off in the library, where nothing waits for a decision. */
   showNeedsReview?: boolean;
   allLabel?: string;
-  /** In the library: open comments below each folder by id (`''` for all), shown instead of the image count. */
+  /** In the library: open comments below each folder by id (`''` for all), shown beside the flow count. */
   attention?: ReadonlyMap<string, number>;
+  /**
+   * Flows below each folder by id (`''` for all) that pass the filters on
+   * screen, in place of each folder's own count; a folder without any is
+   * quieter.
+   */
+  counts?: ReadonlyMap<string, number>;
   /**
    * What a right-click on a folder (or on everything) offers, besides showing
    * it and opening or closing what is below it. Absent, the rows have no menu.
@@ -182,12 +201,12 @@ export function ReviewTree({
               <span className="size-6 shrink-0" />
               <Layers className="size-4 shrink-0" />
               <span className="min-w-0 flex-1 truncate">{allLabel}</span>
-              <Count total={total} needsReview={showNeedsReview ? needsReview : 0} comments={attention?.get('') ?? 0} />
+              <Count total={counts?.get('') ?? total} needsReview={showNeedsReview ? needsReview : 0} comments={attention?.get('') ?? 0} />
             </RowButton>
           </WithMenu>
         </li>
         {folders.map((f) => (
-          <Branch key={f.id} folder={f} depth={0} selected={selected} onSelect={onSelect} grouping={grouping} open={open} onToggle={toggle} showNeedsReview={showNeedsReview} attention={attention} menu={menu} />
+          <Branch key={f.id} folder={f} depth={0} selected={selected} onSelect={onSelect} grouping={grouping} open={open} onToggle={toggle} showNeedsReview={showNeedsReview} attention={attention} counts={counts} menu={menu} />
         ))}
       </ul>
       <Dialog open={confirming !== null} onOpenChange={(o) => !o && setConfirming(null)}>
@@ -225,6 +244,7 @@ function Branch({
   onToggle,
   showNeedsReview,
   attention,
+  counts,
   menu,
 }: {
   folder: ReviewFolder;
@@ -236,6 +256,7 @@ function Branch({
   onToggle: (id: string) => void;
   showNeedsReview: boolean;
   attention?: ReadonlyMap<string, number>;
+  counts?: ReadonlyMap<string, number>;
   menu?: MenuFor;
 }) {
   const active = selected === folder.id;
@@ -244,6 +265,7 @@ function Branch({
   const isFile = grouping === 'file' ? !hasChildren : folder.path[0] === UNLINKED_FOLDER && folder.path.length > 1;
   const Icon = isFile ? FileCode2 : isOpen ? FolderOpen : Folder;
   const muted = folder.name === UNLINKED_FOLDER;
+  const total = counts ? (counts.get(folder.id) ?? 0) : folder.total;
   return (
     <li>
       <WithMenu menu={menu?.({ id: folder.id, name: folder.name }, hasChildren ? [folder.id, ...allIds(folder.children)] : [])}>
@@ -274,16 +296,17 @@ function Branch({
           title={folder.name}
           className={cn('flex h-full min-w-0 flex-1 items-center gap-2 rounded text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/40', muted && !active && 'italic')}
         >
-          <Icon className="size-4 shrink-0" />
+          {/* Nothing below passes the filters: the folder stays where it is, its icon faded (the text keeps its contrast). */}
+          <Icon className={cn('size-4 shrink-0', total === 0 && 'opacity-40')} />
           <span className="min-w-0 flex-1 truncate">{folder.name}</span>
-          <Count total={folder.total} needsReview={showNeedsReview ? folder.needsReview : 0} comments={attention?.get(folder.id) ?? 0} />
+          <Count total={total} needsReview={showNeedsReview ? folder.needsReview : 0} comments={attention?.get(folder.id) ?? 0} />
         </button>
       </div>
       </WithMenu>
       {isOpen ? (
         <ul className="flex flex-col gap-px">
           {folder.children.map((c) => (
-            <Branch key={c.id} folder={c} depth={depth + 1} selected={selected} onSelect={onSelect} grouping={grouping} open={open} onToggle={onToggle} showNeedsReview={showNeedsReview} attention={attention} menu={menu} />
+            <Branch key={c.id} folder={c} depth={depth + 1} selected={selected} onSelect={onSelect} grouping={grouping} open={open} onToggle={onToggle} showNeedsReview={showNeedsReview} attention={attention} counts={counts} menu={menu} />
           ))}
         </ul>
       ) : null}
@@ -361,21 +384,27 @@ function RowButton({ depth, active, onClick, title, children }: { depth: number;
   );
 }
 
+const flowsLabel = (n: number) => `${formatNumber(n)} ${n === 1 ? 'flow' : 'flows'}`;
+
+/** A folder's flows, and beside them what waits: open comments in the library, flows to review in a run. */
 function Count({ total, needsReview, comments = 0 }: { total: number; needsReview: number; comments?: number }) {
-  if (comments)
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-accent-subtle px-1.5 text-label-xs text-accent-text tabular-nums" title={`${comments} open ${comments === 1 ? 'comment' : 'comments'} · ${total} images`}>
-        <MessageSquare aria-hidden className="size-3" />
-        {formatNumber(comments)}
-      </span>
-    );
-  return needsReview ? (
-    <span className="rounded-full bg-warning-subtle px-1.5 text-label-xs text-warning-text tabular-nums" title={`${needsReview} of ${total} images need review`}>
-      {formatNumber(needsReview)}
-    </span>
-  ) : (
-    <span className="text-code-s text-muted-foreground tabular-nums" title={`${total} images`}>
-      {formatNumber(total)}
+  return (
+    <span className="flex shrink-0 items-center gap-1.5">
+      {comments ? (
+        <span className="inline-flex items-center gap-1 rounded-full bg-accent-subtle px-1.5 text-label-xs text-accent-text tabular-nums" title={`${comments} open ${comments === 1 ? 'comment' : 'comments'}`}>
+          <MessageSquare aria-hidden className="size-3" />
+          {formatNumber(comments)}
+        </span>
+      ) : null}
+      {needsReview ? (
+        <span className="rounded-full bg-warning-subtle px-1.5 text-label-xs text-warning-text tabular-nums" title={`${needsReview} of ${flowsLabel(total)} need review`}>
+          {formatNumber(needsReview)}
+        </span>
+      ) : (
+        <span className="text-code-s tabular-nums" title={flowsLabel(total)}>
+          {formatNumber(total)}
+        </span>
+      )}
     </span>
   );
 }

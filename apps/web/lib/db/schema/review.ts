@@ -3,6 +3,7 @@ import { boolean, check, index, integer, jsonb, pgEnum, pgTable, real, text, tim
 import { REVIEW_DECISIONS, type DecisionSource, type DiffRegion, type DiffShift, type DiffState } from '@miguelfranken/ui/lib/review';
 import { ANCHOR_KINDS, COMMENT_KINDS, COMMENT_SOURCES, THREAD_STATUSES } from '@miguelfranken/ui/lib/review-threads';
 import type { LibraryViewConfig } from '@miguelfranken/ui/lib/library-views';
+import type { MarkupShape } from '@miguelfranken/ui/lib/review-markup';
 import { users } from './auth';
 import { attachments, projects, runs, testAttempts, testResults, tests } from './reporting';
 
@@ -256,6 +257,8 @@ export const reviewThreads = pgTable(
     y: real('y').notNull().default(0),
     w: real('w'),
     h: real('h'),
+    /** A drawing with the comment (pen, arrows, boxes, in colours), in the origin image's pixels; the anchor is the area it covers. */
+    markup: jsonb('markup').$type<MarkupShape[]>(),
     status: reviewThreadStatusEnum('status').notNull().default('open'),
     resolvedAt: timestamp('resolved_at', { withTimezone: true }),
     resolvedBy: uuid('resolved_by').references(() => users.id, { onDelete: 'set null' }),
@@ -273,6 +276,39 @@ export const reviewThreads = pgTable(
     index('review_threads_resolved_capture_idx').on(t.resolvedCaptureId),
     check('review_threads_area_check', sql`${t.anchor} <> 'area' or (${t.w} is not null and ${t.h} is not null)`),
   ],
+);
+
+/**
+ * A drawing on a review image, on its own — a stroke, a highlight, an arrow,
+ * a box or an ellipse somebody drew to show what they mean, without a
+ * comment. One row per shape, so each can be erased. It belongs to the
+ * image's identity and is shown on the capture it was drawn on and on every
+ * capture with the same pixels (`origin_sha256`); `shape` is in that image's
+ * pixels. The id is chosen by the browser, so a shape can be taken back
+ * before the page has caught up with it.
+ */
+export const reviewDrawings = pgTable(
+  'review_drawings',
+  {
+    id: uuid('id').primaryKey(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    testId: uuid('test_id')
+      .notNull()
+      .references(() => tests.id, { onDelete: 'cascade' }),
+    checkpointName: text('checkpoint_name').notNull(),
+    variant: text('variant').notNull(),
+    originCaptureId: uuid('origin_capture_id').references(() => reviewCaptures.id, { onDelete: 'set null' }),
+    originSha256: text('origin_sha256'),
+    /** The origin image's size, kept so the shape survives the capture's deletion. */
+    originWidth: integer('origin_width').notNull(),
+    originHeight: integer('origin_height').notNull(),
+    shape: jsonb('shape').$type<MarkupShape>().notNull(),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('review_drawings_identity_idx').on(t.testId, t.checkpointName, t.variant), index('review_drawings_origin_capture_idx').on(t.originCaptureId)],
 );
 
 /**

@@ -13,6 +13,7 @@
  * handed to views as fractions of the image they are drawn on, so a pin does
  * not care about zoom.
  */
+import type { DeleteDrawingsInput, MarkupShape, NewDrawingsInput } from './review-markup';
 import type { ReviewImage } from './review';
 
 export const THREAD_STATUSES = ['open', 'resolved'] as const;
@@ -147,6 +148,8 @@ export interface ReviewThreadView {
   status: ThreadStatus;
   /** Where the pin is on the image it is shown with, in fractions of that image. */
   anchor: FractionAnchor;
+  /** What was drawn with the comment, in fractions of the image it is shown with; `anchor` is the area it covers. */
+  markup?: MarkupShape[] | null;
   placement: ThreadPlacement;
   /** The run the thread was placed on. */
   originRunNumber?: number | null;
@@ -156,7 +159,7 @@ export interface ReviewThreadView {
    * comment was about, to compare with the screen as it is now. `anchor` is
    * where the pin sits on that image.
    */
-  origin?: { captureId: string; checkpointId?: string | null; image: ReviewImage; anchor: FractionAnchor } | null;
+  origin?: { captureId: string; checkpointId?: string | null; image: ReviewImage; anchor: FractionAnchor; markup?: MarkupShape[] | null } | null;
   createdAt: string;
   resolvedAt?: string | null;
   resolvedBy?: string | null;
@@ -170,6 +173,8 @@ export interface ReviewThreadView {
 export interface NewThreadInput {
   captureId: string;
   anchor: FractionAnchor;
+  /** A drawing, in the same fractions; the anchor is then the area it covers. */
+  markup?: MarkupShape[] | null;
   body: string;
   /** The image's natural size as the browser loaded it, for captures that did not record one. */
   imageSize?: ImageSize | null;
@@ -199,6 +204,10 @@ export interface ThreadActions {
   onSetThreadStatus?: (input: ThreadStatusInput) => void;
   onEditComment?: (input: CommentEditInput) => void;
   onDeleteComment?: (input: { commentId: string; threadId: string }) => void;
+  /** Save drawings made on an image (no comment needed). */
+  onCreateDrawings?: (input: NewDrawingsInput) => void;
+  /** Erase drawings: their author's, or anyone's for a moderator. */
+  onDeleteDrawings?: (input: DeleteDrawingsInput) => void;
   /** Show an outdated thread's version commented on beside the screen as it is now (the viewer does this itself). */
   onCompareThread?: (threadId: string) => void;
 }

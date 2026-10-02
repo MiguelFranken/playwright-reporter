@@ -207,8 +207,6 @@
   --elevation-2: 0 2px 4px -2px oklch(0.179 0.007 264 / 0.1), 0 4px 10px -3px oklch(0.179 0.007 264 / 0.08);
   --elevation-3: 0 8px 24px -6px oklch(0.179 0.007 264 / 0.14), 0 2px 6px -2px oklch(0.179 0.007 264 / 0.08);
 
-  --image-outline: oklch(0 0 0 / 0.1);
-
   --radius: 0.625rem;
 }
 
@@ -302,8 +300,6 @@
   --elevation-1: 0 1px 2px -1px oklch(0 0 0 / 0.5);
   --elevation-2: 0 2px 4px -2px oklch(0 0 0 / 0.5), 0 4px 10px -3px oklch(0 0 0 / 0.4);
   --elevation-3: 0 8px 24px -6px oklch(0 0 0 / 0.6), 0 2px 6px -2px oklch(0 0 0 / 0.4);
-
-  --image-outline: oklch(1 0 0 / 0.1);
 }
 
 @theme inline {
@@ -407,6 +403,11 @@
   --animate-pin-breathe: pin-breathe 1.2s ease-in-out infinite;
   --animate-pin-ping: pin-ping 600ms cubic-bezier(0.2, 0, 0, 1) 1;
   --animate-rise-in: rise-in 150ms cubic-bezier(0.2, 0, 0, 1) both;
+  /* Content swapped inside a bar that eases to its new width. */
+  --animate-fade-in: fade-in 220ms cubic-bezier(0.2, 0, 0, 1) both;
+  /* Movement that settles: fast out, gentle in; and one that overshoots a touch. */
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   /* A loading image: a soft band of light sweeping across its placeholder. */
   --animate-shimmer: shimmer 1.6s ease-in-out infinite;
 
@@ -452,6 +453,16 @@
     }
     to {
       box-shadow: 0 0 0 12px color-mix(in oklch, var(--accent-solid) 0%, transparent);
+    }
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      filter: blur(2px);
+    }
+    to {
+      opacity: 1;
+      filter: none;
     }
   }
   @keyframes rise-in {
@@ -683,12 +694,6 @@
   code,
   kbd {
     font-variant-numeric: tabular-nums;
-  }
-
-  img,
-  video {
-    outline: 1px solid var(--image-outline);
-    outline-offset: -1px;
   }
 }
 

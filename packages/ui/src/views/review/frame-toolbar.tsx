@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeftRight } from 'lucide-react';
+import { ArrowLeftRight, Maximize2 } from 'lucide-react';
 import { Button } from '../../components/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/select';
 import { cn } from '../../lib/cn';
@@ -16,17 +16,24 @@ const dimension =
  * toolbar: a preset, the frame's width × height in CSS pixels, and a zoom.
  * "As captured" keeps every variant at its own viewport; any other size
  * applies to all of them, so a desktop capture can be read at phone width.
+ * The height sets the screen's shape; a screen longer than the space there
+ * is ends at its edge and scrolls inside, and no zoom above `maxZoom` — what
+ * fits the width — is offered. "Fill" takes the frame away: the screens
+ * span the whole space, edge to edge, and the zoom follows from its width.
  */
 export function FrameToolbar({
   value,
   onChange,
   captured,
+  maxZoom,
   className,
 }: {
   value: FrameSettings;
   onChange: (next: FrameSettings) => void;
   /** The viewport of the capture shown, when there is exactly one; fills in the size for "As captured". */
   captured?: FrameSize | null;
+  /** The largest zoom the screens fit the width at; a larger one asked for is shown, and held, at this. */
+  maxZoom?: number;
   className?: string;
 }) {
   const size = value.preset === 'captured' && captured ? captured : { width: value.width, height: value.height };
@@ -36,6 +43,11 @@ export function FrameToolbar({
     const next = def && 'size' in def ? def.size : preset === 'custom' ? size : { width: value.width, height: value.height };
     onChange({ ...value, preset, ...next });
   };
+  // A level asked for while there was more room is kept, and read out as the zoom it is held at.
+  const held = maxZoom != null && typeof value.zoom === 'number' && value.zoom > maxZoom + 0.001;
+  const fill = Boolean(value.fill);
+  // Filling, or held at the width, the zoom on show is the one the width allows.
+  const shownLabel = (fill || held) && maxZoom != null ? `${Math.round(maxZoom * 100)}%` : fill ? 'Fill' : null;
   const setSize = (patch: Partial<FrameSize>) => onChange({ ...value, preset: 'custom', ...size, ...patch });
 
   return (
@@ -109,20 +121,30 @@ export function FrameToolbar({
         <Select
           items={ZOOM_ITEMS}
           value={String(value.zoom)}
+          disabled={fill}
           onValueChange={(next) => next && onChange({ ...value, zoom: next === 'fit' ? 'fit' : Number(next) })}
         >
           <SelectTrigger size="sm" className="min-w-22 text-label-s tabular-nums" aria-label="Zoom">
-            <SelectValue />
+            <SelectValue>{(v: string) => shownLabel ?? ZOOM_ITEMS.find((z) => z.value === v)?.label ?? v}</SelectValue>
           </SelectTrigger>
           <SelectContent align="start" className="min-w-28">
             {ZOOM_ITEMS.map((z) => (
-              <SelectItem key={z.value} value={z.value} className="text-label-s tabular-nums">
+              <SelectItem key={z.value} value={z.value} disabled={maxZoom != null && z.value !== 'fit' && Number(z.value) > maxZoom + 0.001} className="text-label-s tabular-nums">
                 {z.label}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
+      <Button
+        variant={fill ? 'secondary' : 'ghost'}
+        size="sm"
+        aria-pressed={fill}
+        title="Fill the space with the screens, edge to edge (F)"
+        onClick={() => onChange({ ...value, fill: !fill })}
+      >
+        <Maximize2 /> Fill
+      </Button>
     </div>
   );
 }

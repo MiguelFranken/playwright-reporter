@@ -7,13 +7,15 @@
  * merged when their variants do not collide, so the storyboard shows the two
  * devices side by side, as it does for resized variants of one test.
  */
-import type { ReviewCaseRef, ReviewCaptureView, ReviewCheckpointView, ReviewDiffView, ReviewFlowView, ReviewImage, ReviewStatus } from '@miguelfranken/ui/lib/review';
+import type { CompareTargetView, ReviewCaseRef, ReviewCaptureView, ReviewCheckpointView, ReviewDiffView, ReviewFlowView, ReviewImage, ReviewStatus } from '@miguelfranken/ui/lib/review';
 import { projectAnchor, type ReviewCommentView, type ReviewThreadView } from '@miguelfranken/ui/lib/review-threads';
+import { projectMarkup, type ReviewDrawingView } from '@miguelfranken/ui/lib/review-markup';
 import { displayableAvatar } from '@/lib/avatars';
 import type { DiffRecord } from './diff/lookup';
 import { traceViewerUrl } from '@/lib/trace-viewer/url';
-import type { AttachmentState, CaptureRecord, CheckpointRecord, ComparedCapture, ReviewFlowRecord } from './queries';
+import type { AttachmentState, CaptureRecord, CheckpointRecord, ComparedCapture, CompareTargetRecord, ReviewFlowRecord } from './queries';
 import type { CaptureThread, CommentRecord } from './threads';
+import type { CaptureDrawing } from './drawings';
 
 export const artifactUrl = (id: string) => `/api/artifacts/${id}`;
 
@@ -52,6 +54,7 @@ export function toThreadView(t: CaptureThread): ReviewThreadView {
           checkpointId: t.originImage.checkpointId,
           image: toReviewImage({ attachment: t.originImage.attachment, thumbnail: null, width: t.origin.width > 1 ? t.origin.width : null, height: t.origin.height > 1 ? t.origin.height : null }),
           anchor: projectAnchor(t.anchor, t.origin, t.origin),
+          markup: t.markup ? projectMarkup(t.markup, t.origin, t.origin) : null,
         }
       : null;
   return {
@@ -59,6 +62,7 @@ export function toThreadView(t: CaptureThread): ReviewThreadView {
     number: t.number,
     status: t.status,
     anchor: t.position,
+    markup: t.positionMarkup,
     placement: t.placement,
     originRunNumber: t.originRunNumber,
     origin,
@@ -67,6 +71,10 @@ export function toThreadView(t: CaptureThread): ReviewThreadView {
     resolvedBy: t.resolvedBy,
     comments: t.comments.map(toCommentView),
   };
+}
+
+export function toDrawingView(d: CaptureDrawing): ReviewDrawingView {
+  return { id: d.id, ...d.position, authorId: d.createdBy, authorName: d.authorName, createdAt: d.createdAt.toISOString() };
 }
 
 export const diffOverlayUrl = (id: string) => `/api/diffs/${id}/overlay`;
@@ -136,7 +144,21 @@ export function toCaptureView(c: ComparedCapture): ReviewCaptureView {
     diff: c.diff && c.diffAgainst ? toDiffView(c.diff, c.diffAgainst, c.withinTolerance) : null,
     ignoreRegions: c.ignoreRegions.length ? c.ignoreRegions.map((r) => ({ ...r, pixels: 0 })) : undefined,
     threads: c.threads.map(toThreadView),
+    drawings: c.drawings?.length ? c.drawings.map(toDrawingView) : undefined,
     runNumber: c.runNumber ?? null,
+  };
+}
+
+/** Another run's capture of the screen, as the viewer's "Compare with" lists it; `sha256` is the image it would be compared with. */
+export function toCompareTargetView(t: CompareTargetRecord, sha256: string | null): CompareTargetView {
+  return {
+    captureId: t.capture.id,
+    runNumber: t.runNumber,
+    image: toReviewImage(t.capture),
+    same: Boolean(sha256 && t.capture.sha256 === sha256),
+    branch: t.branch,
+    at: t.startedAt.toISOString(),
+    openThreads: t.openThreads,
   };
 }
 

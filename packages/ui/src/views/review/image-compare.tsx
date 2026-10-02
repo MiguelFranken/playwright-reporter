@@ -1,11 +1,12 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { Slider } from '../../components/slider';
 import { GLIDE_MS, useGlide } from '../../hooks/use-glide';
 import { cn } from '../../lib/cn';
 import type { ReviewImage } from '../../lib/review';
 import { UnavailableImage } from './review-frame';
+import { ScaledLayer } from './screen-frame';
 
 /**
  * How two images are put next to each other:
@@ -42,6 +43,7 @@ export function ImageCompare({
   currentLabel = 'This run',
   referenceLabel = 'Baseline',
   alt,
+  scaled,
 }: {
   current: ReviewImage;
   reference: ReviewImage;
@@ -49,8 +51,11 @@ export function ImageCompare({
   currentLabel?: string;
   referenceLabel?: string;
   alt: string;
+  /** Lays the images out at `width` CSS pixels and scales them by `zoom`, so a zoom changing lays nothing out: see `ScaledLayer`. */
+  scaled?: { width: number; zoom: string };
 }) {
   const [opacity, setOpacity] = useState(50);
+  const layer = scaledLayer(scaled, reference.width && reference.height ? reference : current);
 
   if (mode === 'side-by-side') {
     return (
@@ -79,7 +84,7 @@ export function ImageCompare({
     );
   }
 
-  if (mode === 'slider') return <SplitCompare current={current} reference={reference} currentLabel={currentLabel} referenceLabel={referenceLabel} alt={alt} />;
+  if (mode === 'slider') return <SplitCompare current={current} reference={reference} currentLabel={currentLabel} referenceLabel={referenceLabel} alt={alt} layer={layer} />;
 
   const control =
     mode === 'onion' ? (
@@ -96,15 +101,30 @@ export function ImageCompare({
     <div className="flex flex-col gap-3">
       <div className="sticky top-0 z-10 rounded-md bg-background/90 py-1 backdrop-blur">{control}</div>
       <div className={cn('relative overflow-hidden rounded-md border border-border', mode === 'difference' ? 'bg-black' : 'bg-surface')}>
-        <Picture image={reference} alt={`${alt} — ${referenceLabel}`} />
-        <div
-          className="absolute inset-0"
-          style={mode === 'onion' ? { opacity: opacity / 100 } : { mixBlendMode: 'difference' }}
-        >
-          <Picture image={current} alt={`${alt} — ${currentLabel}`} />
-        </div>
+        {layer(
+          <>
+            <Picture image={reference} alt={`${alt} — ${referenceLabel}`} />
+            <div
+              className="absolute inset-0"
+              style={mode === 'onion' ? { opacity: opacity / 100 } : { mixBlendMode: 'difference' }}
+            >
+              <Picture image={current} alt={`${alt} — ${currentLabel}`} />
+            </div>
+          </>,
+        )}
       </div>
     </div>
+  );
+}
+
+/** Wraps the images in a `ScaledLayer` of `shape`'s proportions when asked to and the shape is known; as they are otherwise. */
+function scaledLayer(scaled: { width: number; zoom: string } | undefined, shape: ReviewImage): (children: ReactNode) => ReactNode {
+  if (!scaled || !shape.width || !shape.height) return (children) => children;
+  const aspect = { width: shape.width, height: shape.height };
+  return (children) => (
+    <ScaledLayer width={scaled.width} zoom={scaled.zoom} aspect={aspect}>
+      {children}
+    </ScaledLayer>
   );
 }
 
@@ -120,7 +140,7 @@ const clampSplit = (v: number) => Math.min(100, Math.max(0, v));
  * that writes a CSS variable, so dragging renders nothing; the handle's value
  * is rendered once the split comes to rest.
  */
-function SplitCompare({ current, reference, currentLabel, referenceLabel, alt }: { current: ReviewImage; reference: ReviewImage; currentLabel: string; referenceLabel: string; alt: string }) {
+function SplitCompare({ current, reference, currentLabel, referenceLabel, alt, layer }: { current: ReviewImage; reference: ReviewImage; currentLabel: string; referenceLabel: string; alt: string; layer: (children: ReactNode) => ReactNode }) {
   const root = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
   // The split at rest, for the handle's value; the CSS variable carries it while it moves.
@@ -185,10 +205,14 @@ function SplitCompare({ current, reference, currentLabel, referenceLabel, alt }:
           </svg>
         </div>
       </div>
-      <Picture image={reference} alt={`${alt} — ${referenceLabel}`} />
-      <div className="absolute inset-0 [clip-path:inset(0_0_0_var(--split))]">
-        <Picture image={current} alt={`${alt} — ${currentLabel}`} />
-      </div>
+      {layer(
+        <>
+          <Picture image={reference} alt={`${alt} — ${referenceLabel}`} />
+          <div className="absolute inset-0 [clip-path:inset(0_0_0_var(--split))]">
+            <Picture image={current} alt={`${alt} — ${currentLabel}`} />
+          </div>
+        </>,
+      )}
       <div aria-hidden className="pointer-events-none absolute inset-y-0 left-(--split) w-0.5 -translate-x-1/2 bg-accent-solid shadow-e2" />
     </div>
   );

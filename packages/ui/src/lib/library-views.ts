@@ -12,7 +12,7 @@
  * Plain data and functions, read by the views, the app's URL parsing and its
  * saved views, so no JSX and no directive (see AGENTS.md, trap 2).
  */
-import { buildReviewTree, compareVariants, flattenFolders, NEEDS_REVIEW, REVIEW_GROUPINGS, type ReviewCaptureView, type ReviewFlowView, type ReviewGrouping } from './review';
+import { buildReviewTree, compareVariants, flattenFolders, folderId, folderPathOf, NEEDS_REVIEW, REVIEW_GROUPINGS, type ReviewCaptureView, type ReviewFlowView, type ReviewGrouping } from './review';
 import { CASE_PRIORITIES, CASE_PRIORITY_LABELS, type CasePriority } from './test-cases';
 import type { Tone } from './tone';
 
@@ -172,6 +172,56 @@ export function matchesLibraryFilters(flow: ReviewFlowView, filters: LibraryFilt
     if (!flow.checkpoints.some((c) => c.captures.some((cap) => [...captureStates(cap)].some((s) => wanted.has(s))))) return false;
   }
   return true;
+}
+
+/**
+ * The filters someone set on top of the view they are in: each category whose
+ * values differ from the view's own. A view as it was saved refines nothing.
+ */
+export function filterRefinement(filters: LibraryFilters, base: LibraryFilters): Partial<LibraryFilters> {
+  const same = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x) => b.includes(x));
+  return {
+    ...(same(filters.states, base.states) ? {} : { states: filters.states }),
+    ...(same(filters.priorities, base.priorities) ? {} : { priorities: filters.priorities }),
+  };
+}
+
+/**
+ * A view's filters with a refinement carried over: a category the view sets
+ * keeps the view's values (that is what the view is), one it leaves open takes
+ * the refinement's. So "priority High" set in All flows still holds in To fix,
+ * and the counts beside the views say what each would show.
+ */
+export function refineFilters(view: LibraryFilters, refinement: Partial<LibraryFilters>): LibraryFilters {
+  return {
+    states: view.states.length ? view.states : (refinement.states ?? []),
+    priorities: view.priorities.length ? view.priorities : (refinement.priorities ?? []),
+  };
+}
+
+/**
+ * How many flows each filter option would show, given the other category:
+ * the states count what passes the priority filter, the priorities what passes
+ * the state filter — so with "High" set, "Needs review 3" means three high
+ * priority flows need review.
+ */
+export function facetedLibraryCounts(flows: readonly ReviewFlowView[], filters: LibraryFilters): LibraryCounts {
+  const byPriority = libraryCounts(flows.filter((f) => matchesLibraryFilters(f, { states: [], priorities: filters.priorities })));
+  const byState = libraryCounts(flows.filter((f) => matchesLibraryFilters(f, { states: filters.states, priorities: [] })));
+  return { ...byPriority, priorities: byState.priorities };
+}
+
+/** Flows below every folder of the tree, by folder id; `''` is everything. */
+export function flowsByFolder(flows: readonly ReviewFlowView[], grouping: ReviewGrouping): Map<string, number> {
+  const out = new Map<string, number>([['', flows.length]]);
+  for (const f of flows) {
+    const path = folderPathOf(f, grouping);
+    for (let i = 1; i <= path.length; i++) {
+      const id = folderId(path.slice(0, i));
+      out.set(id, (out.get(id) ?? 0) + 1);
+    }
+  }
+  return out;
 }
 
 /** The checkpoints of a flow that show why it passed the state filter: the rest of the journey stays, quieter. */

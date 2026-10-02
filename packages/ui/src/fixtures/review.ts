@@ -1,4 +1,4 @@
-import type { DiffRegion, ReviewCaptureView, ReviewCheckpointView, ReviewDiffView, ReviewFlowView, ReviewImage } from '../lib/review';
+import type { CompareTargetView, DiffRegion, ReviewCaptureView, ReviewCheckpointView, ReviewDiffView, ReviewFlowView, ReviewImage } from '../lib/review';
 import type { ReviewQueueRow } from '../views/review/review-queue';
 import { ago, NOW } from './now';
 
@@ -330,6 +330,34 @@ export const libraryCompareFlows: ReviewFlowView[] = [
     })),
   },
 ];
+
+/**
+ * The other runs that captured the changed desktop checkout (placeOrderFlow,
+ * checkpoint 1), newest first, as the viewer's "Compare with" lists them: the
+ * run before, two older runs whose images still carry open comments, and runs
+ * with nothing open.
+ */
+export const checkoutCompareTargets: CompareTargetView[] = (() => {
+  const cap = placeOrderFlow.checkpoints[1].captures[0];
+  const run = (runNumber: number, minutes: number, extra: Partial<CompareTargetView> = {}): CompareTargetView => ({
+    captureId: `cmp-${runNumber}`,
+    runNumber,
+    image: image('Checkout', { tall: true, accent: runNumber % 2 ? '#3e63dd' : '#8e4ec6' }),
+    same: false,
+    branch: 'feat/checkout-redesign',
+    at: ago(minutes).toISOString(),
+    openThreads: 0,
+    ...extra,
+  });
+  return [
+    { ...run(481, 60 * 5, { branch: 'main' }), captureId: cap.previous!.captureId, image: cap.previous!.image },
+    run(479, 60 * 9, { openThreads: 2 }),
+    run(477, 60 * 20, { openThreads: 1, branch: 'feat/checkout-sidebar-with-a-very-long-branch-name' }),
+    run(476, 60 * 22, { same: true }),
+    { ...run(470, 60 * 26, { branch: 'main' }), captureId: cap.baseline!.captureId, image: cap.baseline!.image },
+    run(468, 60 * 30, { branch: null }),
+  ];
+})();
 
 /**
  * A run the size of a real suite: 240 tests in twelve spec files, each a copy

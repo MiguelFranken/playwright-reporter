@@ -21,6 +21,7 @@ import {
   REVIEW_STATUS_TONES,
   variantsOf,
   type FrameSettings,
+  type ReviewPanelSettings,
   type ReviewCheckpointView,
   type ReviewDecisionInput,
   type ReviewFilter,
@@ -33,11 +34,12 @@ import {
 } from '../../lib/review';
 import { toneSolid } from '../../lib/tone';
 import { CheckpointViewer, type ReviewCommentsProps, type ReviewSelection } from './checkpoint-viewer';
+import type { CompareWithProps } from './compare-target-picker';
 import type { IgnoreRect } from './ignore-regions-editor';
 import { approveFolderAction, ReviewTree } from './review-tree';
 import { SCREEN_ZOOM_VAR } from './screen-frame';
 import { SizeControl, STORYBOARD_SIZE } from './size-control';
-import { needsReviewIds, StoryboardRows } from './storyboard-rows';
+import { folderApproval, needsReviewIds, StoryboardRows } from './storyboard-rows';
 
 export type { ReviewSelection };
 
@@ -117,6 +119,8 @@ export function ReviewStoryboard({
   onSizeChange,
   frame,
   onFrameChange,
+  panel,
+  onPanelChange,
   onDecide,
   pendingIds = [],
   canDecide = true,
@@ -130,6 +134,7 @@ export function ReviewStoryboard({
   onIgnoreRegionsChange,
   ignorePendingId,
   comments,
+  compareWith,
 }: {
   flows: readonly ReviewFlowView[];
   filter?: ReviewFilter;
@@ -152,6 +157,9 @@ export function ReviewStoryboard({
   /** The viewer's screen settings. */
   frame?: FrameSettings;
   onFrameChange?: (next: FrameSettings) => void;
+  /** The viewer's side panel: shown or folded, and how wide; uncontrolled when absent. */
+  panel?: ReviewPanelSettings | null;
+  onPanelChange?: (next: ReviewPanelSettings) => void;
   onDecide?: (input: ReviewDecisionInput) => void;
   pendingIds?: readonly string[];
   canDecide?: boolean;
@@ -170,6 +178,8 @@ export function ReviewStoryboard({
   ignorePendingId?: string | null;
   /** Comment threads on the images, in the viewer. */
   comments?: ReviewCommentsProps;
+  /** What the viewer compares the open image with. */
+  compareWith?: CompareWithProps;
 }) {
   const library = mode === 'library';
   const hasNeedsReview = useMemo(() => flows.some((f) => f.checkpoints.some((c) => c.captures.some((cap) => NEEDS_REVIEW.includes(cap.status)))), [flows]);
@@ -209,7 +219,7 @@ export function ReviewStoryboard({
   );
   const counts = useMemo(() => countStatuses(flows, variant), [flows, variant]);
   const total = counts.approved + counts.changes_requested + counts.changed + counts.new;
-  const searchedCounts = useMemo(() => countStatuses(searched), [searched]);
+  const flowsToReview = useMemo(() => searched.filter((f) => needsReviewIds([f]).length > 0).length, [searched]);
   const pending = useMemo(() => new Set(pendingIds), [pendingIds]);
   const ordered = useMemo(() => sections.flatMap((s) => s.flows), [sections]);
   // Where the viewer was when it closed: the rows scroll there if it is out of view.
@@ -358,12 +368,12 @@ export function ReviewStoryboard({
                 setGrouping(g);
                 setFolder(null);
               }}
-              total={searchedCounts.approved + searchedCounts.changes_requested + searchedCounts.changed + searchedCounts.new}
-              needsReview={searchedCounts.changed + searchedCounts.new}
+              total={searched.length}
+              needsReview={flowsToReview}
               showNeedsReview={!library}
               folderActions={
                 canDecide && onDecide && !library
-                  ? (target) => [approveFolderAction(target, needsReviewIds(searched.filter((f) => inFolder(f, grouping, target.id))), (ids) => onDecide({ captureIds: ids, decision: 'approved' }), pending)]
+                  ? (target) => [approveFolderAction(target, folderApproval(searched.filter((f) => inFolder(f, grouping, target.id))), (ids) => onDecide({ captureIds: ids, decision: 'approved' }), pending)]
                   : undefined
               }
             />
@@ -383,10 +393,13 @@ export function ReviewStoryboard({
         canDecide={canDecide}
         frame={frame ?? DEFAULT_FRAME}
         onFrameChange={onFrameChange}
+        panel={panel}
+        onPanelChange={onPanelChange}
         mode={mode}
         onIgnoreRegionsChange={onIgnoreRegionsChange}
         ignorePendingId={ignorePendingId}
         comments={comments}
+        compareWith={compareWith}
       />
     </div>
   );

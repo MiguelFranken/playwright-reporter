@@ -12,7 +12,7 @@ import type { Checkpoint } from '@miguelfranken/protocol';
 import { getRunForProject, ingestEvents, startRun } from '@/lib/ingest/service';
 import { attachments, projects, reviewCaptures, reviewComments, reviewDecisions, reviewThreads } from '@/lib/db/schema';
 import { dueWhere } from '@/lib/storage/retention';
-import { decide, runReview } from '@/lib/review/queries';
+import { compareTargetsOf, decide, runReview } from '@/lib/review/queries';
 import { createThread, deleteComment, editComment, replyToThread, setThreadStatus } from '@/lib/review/threads';
 import { attachmentRef, attemptEnd, eventBatch, runStart, testBegin } from './factories';
 import { describe, expect, test, type Tenant } from './fixtures';
@@ -71,6 +71,35 @@ describe('threads', () => {
     await expect(createThread({ projectId: tenant.project.id, captureId: capture.id, anchor: { kind: 'point', x: 9000, y: 100 }, pixels: true, body: 'x', author })).rejects.toThrow('inside the image');
     await expect(createThread({ projectId: tenant.project.id, captureId: capture.id, anchor: { kind: 'point', x: 0.5, y: 0.5 }, body: '   ', author })).rejects.toThrow('Write a comment');
     await expect(createThread({ projectId: randomUUID(), captureId: capture.id, anchor: { kind: 'image', x: 0, y: 0 }, body: 'x', author })).rejects.toThrow('not in this project');
+  });
+
+  test('stores a drawing in the image’s pixels, anchored to the area it covers, and follows the image', async ({ tenant }) => {
+    const { capture } = await runWith(tenant, sha('a'), minutesAgo(5));
+    const author = { userId: tenant.adminUser.id, source: 'app' as const };
+    const markup = [
+      { tool: 'ellipse' as const, color: 'blue' as const, points: [0.1, 0.1, 0.3, 0.2] },
+      { tool: 'pen' as const, color: 'yellow' as const, points: [0.5, 0.5, 0.6, 0.55] },
+    ];
+    // The anchor given is ignored: a drawing's thread points at what it covers.
+    const thread = await createThread({ projectId: tenant.project.id, captureId: capture.id, anchor: { kind: 'point', x: 0.9, y: 0.9 }, markup, body: 'The blue area should be larger', author });
+    expect(thread.anchor).toEqual({ kind: 'area', x: 256, y: 400, w: 1280, h: 1800 });
+    expect(thread.markup).toEqual([
+      { tool: 'ellipse', color: 'blue', points: [256, 400, 768, 800] },
+      { tool: 'pen', color: 'yellow', points: [1280, 2000, 1536, 2200] },
+    ]);
+
+    const later = await runWith(tenant, sha('b'), minutesAgo(3));
+    const [shown] = later.capture.threads;
+    expect(shown.placement).toBe('outdated');
+    expect(shown.positionMarkup?.[0]).toMatchObject({ tool: 'ellipse', color: 'blue' });
+    expect(shown.positionMarkup?.[0].points[0]).toBeCloseTo(0.1);
+
+    await expect(
+      createThread({ projectId: tenant.project.id, captureId: capture.id, anchor: { kind: 'point', x: 0.5, y: 0.5 }, markup: [{ tool: 'pen', color: 'pink' as 'red', points: [0.1, 0.1] }], body: 'x', author }),
+    ).rejects.toThrow('cannot be saved');
+    await expect(
+      createThread({ projectId: tenant.project.id, captureId: capture.id, anchor: { kind: 'point', x: 0.5, y: 0.5 }, markup: [{ tool: 'arrow', color: 'red', points: [0.1, 0.1, 1.4, 0.2] }], body: 'x', author }),
+    ).rejects.toThrow('cannot be saved');
   });
 
   test('carries open threads into later runs, outdated where the image changed; resolved ones stay where they were', async ({ tenant }) => {
@@ -178,6 +207,35 @@ describe('retention', () => {
     await setThreadStatus({ projectId: tenant.project.id, threadId: thread.id, status: 'resolved', author: { userId: null, source: 'app' } });
     const resolved = await due();
     for (const id of flow) expect(resolved).toContain(id);
+  });
+});
+
+describe('compare targets', () => {
+  test('lists the last runs of the screen and every earlier image with open comments, one per run, newest first', async ({ tenant }) => {
+    const author = { userId: tenant.adminUser.id, source: 'app' as const };
+    const r1 = await runWith(tenant, sha('a'), minutesAgo(50));
+    const r2 = await runWith(tenant, sha('b'), minutesAgo(40));
+    const r3 = await runWith(tenant, sha('c'), minutesAgo(30));
+    const r4 = await runWith(tenant, sha('d'), minutesAgo(20));
+    const now = await runWith(tenant, sha('d'), minutesAgo(10));
+    // Open comments on an old image keep it listed; resolved ones do not count.
+    await createThread({ projectId: tenant.project.id, captureId: r1.capture.id, anchor: { kind: 'image', x: 0, y: 0 }, body: 'Logo too small', author });
+    await createThread({ projectId: tenant.project.id, captureId: r1.capture.id, anchor: { kind: 'point', x: 0.5, y: 0.5 }, body: 'Spacing', author });
+    const done = await createThread({ projectId: tenant.project.id, captureId: r3.capture.id, anchor: { kind: 'image', x: 0, y: 0 }, body: 'Typo', author });
+    await setThreadStatus({ projectId: tenant.project.id, threadId: done.id, status: 'resolved', author });
+
+    const found = await compareTargetsOf(tenant.project.id, now.capture.id, 2);
+    expect(found?.targets.map((t) => [t.runNumber, t.openThreads])).toEqual([
+      [r4.run.number, 0],
+      [r3.run.number, 0],
+      [r1.run.number, 2],
+    ]);
+    // The image's own run is never offered; r2 is past the limit and has nothing open.
+    expect(found?.targets.map((t) => t.capture.id)).not.toContain(now.capture.id);
+    expect(found?.targets.map((t) => t.capture.id)).not.toContain(r2.capture.id);
+    expect(found?.sha256).toBe(sha('d'));
+
+    expect(await compareTargetsOf(randomUUID(), now.capture.id)).toBeNull();
   });
 });
 

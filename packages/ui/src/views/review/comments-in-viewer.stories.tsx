@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useState } from 'react';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
-import { commentedCheckpointId, commentedFlows, flowWithThreads, NOW, uncommentedRequestFlows, uncommentedRequestHereFlows, verifyFlows, VIEWER_ID } from '../../fixtures/review-threads';
+import { commentedCheckpointId, commentedFlows, drawingsFlows, drawnFlows, flowWithThreads, NOW, uncommentedRequestFlows, uncommentedRequestHereFlows, verifyFlows, VIEWER_ID } from '../../fixtures/review-threads';
 import { CheckpointViewer, type ReviewSelection } from './checkpoint-viewer';
 
 const desktopCapture = commentedFlows[0].checkpoints[1].captures.find((c) => c.variant === 'desktop')!;
@@ -22,6 +22,8 @@ const comments = {
   onSetThreadStatus: fn(),
   onEditComment: fn(),
   onDeleteComment: fn(),
+  onCreateDrawings: fn(),
+  onDeleteDrawings: fn(),
   onOpenThreadChange: fn(),
 };
 
@@ -39,14 +41,39 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+/**
+ * The checkpoint has a comment made on an earlier version, and the viewer
+ * opens on it; these stories are about the screen, so they go back to it.
+ */
+async function onTheScreen() {
+  const body = within(document.body);
+  await body.findByRole('dialog');
+  await userEvent.click(await body.findByRole('button', { name: 'Stop verifying' }));
+  await waitFor(() => expect(body.queryByRole('region', { name: /^Verify comment/ })).toBeNull());
+}
+
 /** Numbered pins on the screenshot, and every thread in the list beside it. */
 export const Default: Story = {
   play: async () => {
     const body = within(document.body);
-    await body.findByRole('dialog');
+    await onTheScreen();
     const stage = within(body.getByRole('region', { name: 'Checkpoint image' }));
     await expect(stage.getByRole('button', { name: /^Thread 1: Ada Lovelace/ })).toBeInTheDocument();
     await expect(body.getByRole('radio', { name: 'Open, 5' })).toBeChecked();
+  },
+};
+
+/** A comment made on an earlier version is what the viewer opens on, without a click; Escape shows the screen. */
+export const OpensOnTheCommentToVerify: Story = {
+  play: async () => {
+    const body = within(document.body);
+    await body.findByRole('dialog');
+    await expect(await body.findByRole('region', { name: 'Verify comment 3' })).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(body.queryByRole('region', { name: 'Verify comment 3' })).toBeNull());
+    await expect(body.getByRole('complementary', { name: 'Review' })).toBeInTheDocument();
+    await userEvent.keyboard('o');
+    await expect(await body.findByRole('region', { name: 'Verify comment 3' })).toBeInTheDocument();
   },
 };
 
@@ -54,7 +81,7 @@ export const Default: Story = {
 export const PinAComment: Story = {
   play: async ({ args }) => {
     const body = within(document.body);
-    await body.findByRole('dialog');
+    await onTheScreen();
     await userEvent.keyboard('c');
     const surface = await body.findByRole('application', { name: /Place a comment on/ });
     await userEvent.click(surface);
@@ -65,11 +92,61 @@ export const PinAComment: Story = {
   },
 };
 
+/** C, 7 for the ellipse, a colour from the bar and a drag: the drawing is saved on its own, no comment opens; ⌘Z takes it back. */
+export const DrawAndUndo: Story = {
+  play: async ({ args }) => {
+    const body = within(document.body);
+    await onTheScreen();
+    await userEvent.keyboard('c');
+    const toolbar = within(await body.findByRole('toolbar', { name: 'Comment tools' }));
+    await expect(toolbar.queryByRole('button', { name: 'Blue' })).toBeNull();
+    await userEvent.keyboard('7');
+    await waitFor(() => expect(toolbar.getByRole('button', { name: 'Ellipse' })).toHaveAttribute('aria-pressed', 'true'));
+    await userEvent.click(toolbar.getByRole('button', { name: 'Blue' }));
+    const surface = await body.findByRole('application', { name: /Draw on .* with the ellipse/ });
+    const r = surface.getBoundingClientRect();
+    await userEvent.pointer([
+      { keys: '[MouseLeft>]', target: surface, coords: { clientX: r.left + 60, clientY: r.top + 80 } },
+      { target: surface, coords: { clientX: r.left + 160, clientY: r.top + 120 } },
+      { keys: '[/MouseLeft]', target: surface, coords: { clientX: r.left + 220, clientY: r.top + 160 } },
+    ]);
+    await expect(args.comments!.onCreateDrawings).toHaveBeenCalledWith(
+      expect.objectContaining({ captureId: desktopCapture.id, drawings: [expect.objectContaining({ shape: expect.objectContaining({ tool: 'ellipse', color: 'blue' }) })] }),
+    );
+    await expect(body.queryByRole('textbox', { name: 'New comment' })).toBeNull();
+    await expect(args.comments!.onCreateThread).not.toHaveBeenCalled();
+    const [{ drawings }] = (args.comments!.onCreateDrawings as ReturnType<typeof fn>).mock.lastCall!;
+    await waitFor(() => expect(toolbar.getByRole('button', { name: 'Undo' })).toBeEnabled());
+    await userEvent.click(toolbar.getByRole('button', { name: 'Undo' }));
+    await expect(args.comments!.onDeleteDrawings).toHaveBeenCalledWith({ drawingIds: [drawings[0].id] });
+  },
+};
+
+/** Drawings on their own beside the pins: an arrow, a highlight and a circle. */
+export const WithDrawings: Story = {
+  args: { flows: drawingsFlows },
+  play: async () => {
+    await onTheScreen();
+    await waitFor(() => expect(document.querySelector('[data-slot="pin-layer"] [data-slot="markup-shapes"]')).not.toBeNull());
+  },
+};
+
+/** A drawing already on the screen, and its colours beside its row in the list. */
+export const WithADrawing: Story = {
+  args: { flows: drawnFlows },
+  play: async () => {
+    const body = within(document.body);
+    await onTheScreen();
+    const list = within(body.getByRole('region', { name: /Comments/ }));
+    await expect(list.getByRole('button', { name: /^Thread 7: .*drawn in blue, yellow, red, green, purple/ })).toBeInTheDocument();
+  },
+};
+
 /** From the keyboard: Enter puts a crosshair in the middle, arrows move it, Enter drops the pin. */
 export const PinWithTheKeyboard: Story = {
   play: async ({ args }) => {
     const body = within(document.body);
-    await body.findByRole('dialog');
+    await onTheScreen();
     await userEvent.click(body.getByRole('button', { name: 'Comment' }));
     const surface = await body.findByRole('application', { name: /Place a comment on/ });
     surface.focus();
@@ -79,18 +156,23 @@ export const PinWithTheKeyboard: Story = {
     await userEvent.keyboard('{ArrowRight}');
     await userEvent.keyboard('{Shift>}{ArrowDown}{/Shift}');
     await userEvent.keyboard('{Enter}');
-    await userEvent.type(await body.findByRole('textbox', { name: 'New comment' }), 'Here{Enter}');
+    // The composer's popover animates in; a busy browser takes longer than the default second.
+    await userEvent.type(await body.findByRole('textbox', { name: 'New comment' }, { timeout: 5000 }), 'Here{Enter}');
     const [input] = (args.comments!.onCreateThread as ReturnType<typeof fn>).mock.lastCall!;
     await expect(input.anchor.x).toBeCloseTo(0.51);
   },
 };
 
-/** Hovering a pin shows its thread. */
-export const HoverAPin: Story = {
+/** Hovering a pin leaves its thread closed; a click opens it. */
+export const ClickAPin: Story = {
   play: async () => {
     const body = within(document.body);
-    await body.findByRole('dialog');
-    await userEvent.hover(within(body.getByRole('region', { name: 'Checkpoint image' })).getByRole('button', { name: /^Thread 1: / }));
+    await onTheScreen();
+    const pin = within(body.getByRole('region', { name: 'Checkpoint image' })).getByRole('button', { name: /^Thread 1: / });
+    await userEvent.hover(pin);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    await expect(body.queryByRole('textbox', { name: 'Reply to thread 1' })).toBeNull();
+    await userEvent.click(pin);
     await waitFor(() => expect(body.getByRole('textbox', { name: 'Reply to thread 1' })).toBeVisible());
   },
 };
@@ -99,7 +181,7 @@ export const HoverAPin: Story = {
 export const OpenFromTheList: Story = {
   play: async ({ args }) => {
     const body = within(document.body);
-    await body.findByRole('dialog');
+    await onTheScreen();
     const list = within(body.getByRole('region', { name: /Comments/ }));
     await userEvent.click(list.getByRole('button', { name: /^Thread 2: / }));
     await waitFor(() => expect(body.getByRole('region', { name: 'Thread 2' })).toBeVisible());
@@ -135,7 +217,7 @@ export const ReadOnly: Story = {
   args: { canDecide: false, comments: { now: NOW } },
   play: async () => {
     const body = within(document.body);
-    await body.findByRole('dialog');
+    await onTheScreen();
     await expect(body.getByRole('radio', { name: 'Open, 5' })).toBeChecked();
     await expect(body.queryByRole('button', { name: 'Comment' })).toBeNull();
   },
@@ -160,6 +242,7 @@ export const OnTheImageItWasMadeOn: Story = {
   play: async () => {
     const body = within(document.body);
     await body.findByRole('dialog');
+    await userEvent.click(body.getByRole('button', { name: 'Compare' }));
     await userEvent.click(body.getByRole('button', { name: 'Side by side' }));
     const left = within(await body.findByRole('region', { name: /— Approved \(#470\)$/ }));
     await expect(left.getByRole('button', { name: /^Thread 1: / })).toBeInTheDocument();
@@ -175,16 +258,19 @@ export const VerifyTheFixes: Story = {
   args: { flows: verifyFlows },
   play: async ({ args }) => {
     const body = within(document.body);
-    await body.findByRole('dialog');
+    await onTheScreen();
     const list = within(body.getByRole('region', { name: /Comments/ }));
     await expect(list.getByText('2 comments to verify')).toBeInTheDocument();
     await expect(list.getByRole('list', { name: 'To verify' })).toBeInTheDocument();
     await expect(list.getByRole('list', { name: 'Waiting for a fix' })).toBeInTheDocument();
     await userEvent.click(list.getByRole('button', { name: 'Verify' }));
-    await expect(await body.findByText('Verify comment 1')).toBeInTheDocument();
+    // The screens fill the stage, then and now; the comment, and what to do about it, is in the side panel.
+    const panel = within(await body.findByRole('region', { name: 'Verifying comments' }));
+    await expect(await panel.findByRole('region', { name: 'Verify comment 1' })).toBeInTheDocument();
+    await expect(body.getByRole('region', { name: /the version commented on/ })).toBeInTheDocument();
     await userEvent.keyboard('e');
     await expect(args.comments!.onSetThreadStatus).toHaveBeenCalledWith({ threadId: 'thread-fixed', status: 'resolved', captureId: desktopCapture.id });
-    await expect(await body.findByText('Verify comment 3')).toBeInTheDocument();
+    await expect(await panel.findByRole('region', { name: 'Verify comment 3' })).toBeInTheDocument();
     await userEvent.keyboard('e');
     await expect(await body.findByText('Nothing left to verify')).toBeInTheDocument();
     await userEvent.click(body.getByRole('button', { name: 'Back to the screen' }));
@@ -197,7 +283,7 @@ export const FixWithAi: Story = {
   args: { flows: verifyFlows, comments: { ...comments, assistant: { setupHref: '#connect', project: 'acme/web' } } },
   play: async () => {
     const body = within(document.body);
-    await body.findByRole('dialog');
+    await onTheScreen();
     const list = within(body.getByRole('region', { name: /Comments/ }));
     await userEvent.click(list.getByRole('button', { name: 'Fix with AI' }));
     const item = await body.findByRole('menuitem', { name: 'Copy prompt' });
@@ -226,5 +312,64 @@ export const UncommentedRequestOnThisImage: Story = {
     await expect(body.getByRole('note')).toHaveTextContent(/asked for changes to this image without saying what/);
     await userEvent.click(body.getByRole('button', { name: 'Pin what should change' }));
     await expect(await body.findByRole('application', { name: /Place a comment on/ })).toBeInTheDocument();
+  },
+};
+
+/** A host that keeps the open thread's number, the way the app keeps it in the link (`thread=1`). */
+function LinkedHost(props: React.ComponentProps<typeof Hosted>) {
+  const [openThread, setOpenThread] = useState<number | null>(null);
+  return (
+    <Hosted
+      {...props}
+      comments={{
+        ...props.comments,
+        openThread,
+        onOpenThreadChange: (n) => {
+          setOpenThread(n);
+          props.comments?.onOpenThreadChange?.(n);
+        },
+      }}
+    />
+  );
+}
+
+/**
+ * Every variant on show, each numbering its threads from 1: a click on the
+ * mobile screen's pin 1 opens that thread, not the desktop screen's — even
+ * once the host has put the number in the link.
+ */
+export const PinOnTheSecondScreenOpensItsOwnThread: Story = {
+  args: { initial: { checkpointId: commentedCheckpointId, variant: null } },
+  render: (args) => <LinkedHost {...args} />,
+  play: async ({ args }) => {
+    const body = within(document.body);
+    await onTheScreen();
+    await userEvent.click(body.getByRole('button', { name: 'Image' }));
+    const desktop = within(await body.findByRole('region', { name: /desktop screen/ }));
+    const mobile = within(body.getByRole('region', { name: /mobile screen/ }));
+    await userEvent.click(mobile.getByRole('button', { name: /^Thread 1: / }));
+    await expect(args.comments!.onOpenThreadChange).toHaveBeenCalledWith(1);
+    await waitFor(() => expect(mobile.getByRole('button', { name: /^Thread 1: / })).toHaveAttribute('aria-expanded', 'true'));
+    await expect(desktop.getByRole('button', { name: /^Thread 1: / })).toHaveAttribute('aria-expanded', 'false');
+  },
+};
+
+/**
+ * Verifying with the screens filling the stage: then and now, half of it each,
+ * as tall as it is — what the comment says is in the side panel, not under them.
+ */
+export const VerifyFillsTheStage: Story = {
+  args: { flows: verifyFlows, frame: { preset: 'captured', width: 1280, height: 720, zoom: 'fit', fill: true } },
+  play: async () => {
+    const body = within(document.body);
+    await body.findByRole('dialog');
+    await expect(await body.findByRole('region', { name: 'Verify comment 1' })).toBeInTheDocument();
+    const stage = body.getByLabelText('Checkpoint screens');
+    const then = body.getByRole('region', { name: /the version commented on/ });
+    const now = body.getByRole('region', { name: /, now$/ });
+    await waitFor(() => expect(Math.abs(then.getBoundingClientRect().width - now.getBoundingClientRect().width)).toBeLessThanOrEqual(1));
+    // Once the side panel has opened and the stage has its width.
+    await waitFor(() => expect(then.getBoundingClientRect().width + now.getBoundingClientRect().width).toBeGreaterThan(stage.clientWidth - 4));
+    await waitFor(() => expect(Math.abs(now.getBoundingClientRect().bottom - stage.getBoundingClientRect().bottom)).toBeLessThanOrEqual(1));
   },
 };

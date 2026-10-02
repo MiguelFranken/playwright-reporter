@@ -1,4 +1,5 @@
 import type { ReviewFlowView } from '../lib/review';
+import { anchorForMarkup, type MarkupShape, type ReviewDrawingView } from '../lib/review-markup';
 import type { ReviewCommentView, ReviewThreadView } from '../lib/review-threads';
 import { USER_AVATAR } from './avatars';
 import { ago, NOW } from './now';
@@ -152,6 +153,45 @@ export const verifyThreads: ReviewThreadView[] = [fixedThread, totalsThread, mov
 export const verifyFlows: ReviewFlowView[] = [flowWithThreads(verifyThreads)];
 
 export const commentedFlows: ReviewFlowView[] = [flowWithThreads()];
+
+/** A drawing in four colours: what cannot be said with a pin. */
+export const drawingMarkup: MarkupShape[] = [
+  { tool: 'ellipse', color: 'blue', points: [0.52, 0.27, 0.74, 0.39] },
+  { tool: 'rect', color: 'yellow', points: [0.05, 0.5, 0.47, 0.67] },
+  { tool: 'arrow', color: 'red', points: [0.5, 0.58, 0.6, 0.42] },
+  { tool: 'highlighter', color: 'green', points: [0.08, 0.2, 0.18, 0.205, 0.3, 0.2, 0.4, 0.202] },
+  { tool: 'pen', color: 'purple', points: [0.78, 0.12, 0.8, 0.1, 0.84, 0.11, 0.86, 0.15, 0.84, 0.19, 0.8, 0.2, 0.78, 0.17, 0.78, 0.13] },
+];
+
+export const drawingThread: ReviewThreadView = {
+  id: 'thread-drawing',
+  number: 7,
+  status: 'open',
+  anchor: anchorForMarkup(drawingMarkup)!,
+  markup: drawingMarkup,
+  placement: 'exact',
+  originRunNumber: 483,
+  createdAt: ago(12).toISOString(),
+  comments: [comment('The blue area should be larger and the yellow one smaller — move the button (red arrow) up into the blue one. The green line wraps too early.', 12)],
+};
+
+/** Drawings on their own, without a comment: two of the viewer's (an arrow and a highlight) and Grace's circle. */
+export const reviewDrawings: ReviewDrawingView[] = [
+  { id: 'drawing-1', tool: 'arrow', color: 'red', points: [0.3, 0.55, 0.55, 0.36], authorId: VIEWER_ID, authorName: 'Ada Lovelace', createdAt: ago(8).toISOString() },
+  { id: 'drawing-2', tool: 'highlighter', color: 'yellow', points: [0.08, 0.2, 0.2, 0.203, 0.32, 0.2, 0.42, 0.201], authorId: VIEWER_ID, authorName: 'Ada Lovelace', createdAt: ago(7).toISOString() },
+  { id: 'drawing-3', tool: 'ellipse', color: 'blue', points: [0.52, 0.27, 0.74, 0.39], authorId: 'user-grace', authorName: 'Grace Hopper', createdAt: ago(5).toISOString() },
+];
+
+/** The commented checkout with drawings on it, on their own. */
+export const drawingsFlows: ReviewFlowView[] = [
+  (() => {
+    const flow = flowWithThreads();
+    return { ...flow, checkpoints: flow.checkpoints.map((cp, i) => (i === 1 ? { ...cp, captures: cp.captures.map((c) => (c.variant === 'desktop' ? { ...c, drawings: reviewDrawings } : c)) } : cp)) };
+  })(),
+];
+
+/** The commented checkout with a drawing on it too. */
+export const drawnFlows: ReviewFlowView[] = [flowWithThreads([...reviewThreads, drawingThread])];
 
 /** The checkpoint of `flowWithThreads` that carries the threads. */
 export const commentedCheckpointId = placeOrderFlow.checkpoints[1].id;

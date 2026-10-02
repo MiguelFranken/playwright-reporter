@@ -9,7 +9,7 @@
  * captures the journey again, and the last capture is the one that counts.
  */
 import { randomUUID } from 'node:crypto';
-import { and, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, ne, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { DecisionSource, ReviewDecision, ReviewStatus } from '@miguelfranken/ui/lib/review';
 import type { CommentSource } from '@miguelfranken/ui/lib/review-threads';
@@ -19,6 +19,7 @@ import {
   reviewCaptures,
   reviewCheckpoints,
   reviewDecisions,
+  reviewThreads,
   runs,
   testAttempts,
   testResults,
@@ -29,6 +30,7 @@ import {
 import { diffSettingsFor, diffsFor, identityKey, ignoreRegionsFor, pairKey, pairOf, type DiffRecord, type Rect } from './diff/lookup';
 import { withinTolerance } from './diff/settings';
 import { createThread, resolveThreadsOf, threadsForCaptures, type CaptureThread } from './threads';
+import { drawingsForCaptures, type CaptureDrawing } from './drawings';
 
 const thumbs = alias(attachments, 'thumb_attachments');
 
@@ -95,6 +97,8 @@ export interface ComparedCapture extends CaptureRecord {
   ignoreRegions: Rect[];
   /** The comment threads the image shows (see `threads.ts`). */
   threads: CaptureThread[];
+  /** The drawings on its pixels, on their own (see `drawings.ts`). */
+  drawings: CaptureDrawing[];
   /** The run it was captured in, where images of several runs are shown together (the library). */
   runNumber?: number;
 }
@@ -262,10 +266,11 @@ export async function compareCaptures(
       if (approved.captureId) baselineIds.add(approved.captureId);
     }
   }
-  const [baselineCaptures, previous, threads] = await Promise.all([
+  const [baselineCaptures, previous, threads, drawings] = await Promise.all([
     baselineIds.size ? selectCaptures(inArray(reviewCaptures.id, [...baselineIds])) : Promise.resolve([]),
     context ? previousCaptures(captures, context.runId, context.runStartedAt) : Promise.resolve(new Map<string, { capture: CaptureRecord; runNumber: number }>()),
     threadsForCaptures(captures),
+    drawingsForCaptures(captures),
   ]);
   const baselineById = new Map(baselineCaptures.map((c) => [c.id, c]));
 
@@ -285,7 +290,7 @@ export async function compareCaptures(
     const ignoreRegions = ignores.get(key) ?? [];
     const pair = settings.has(c.projectId) ? pairOf(c, reference, settings.get(c.projectId)!, ignoreRegions) : null;
     return {
-      compared: { ...c, status, decision: exact, baseline, previous: prev, request, diff: null, diffAgainst: baseline?.capture ? 'baseline' : prev ? 'previous' : null, withinTolerance: false, ignoreRegions, threads: threads.get(c.id) ?? [] } as ComparedCapture,
+      compared: { ...c, status, decision: exact, baseline, previous: prev, request, diff: null, diffAgainst: baseline?.capture ? 'baseline' : prev ? 'previous' : null, withinTolerance: false, ignoreRegions, threads: threads.get(c.id) ?? [], drawings: drawings.get(c.id) ?? [] } as ComparedCapture,
       pair,
     };
   });
@@ -573,6 +578,87 @@ export async function captureHistory(projectId: string, testId: string, checkpoi
     .limit(limit);
   const compared = await compareCaptures(rows.map((r) => toCapture(r as CaptureRow)));
   return compared.map((c, i) => ({ ...c, runNumber: rows[i].runNumber, branch: rows[i].branch, startedAt: rows[i].startedAt }));
+}
+
+/** Another run's capture of a screen, offered to compare an image with. */
+export interface CompareTargetRecord {
+  capture: CaptureRecord;
+  runNumber: number;
+  branch: string | null;
+  startedAt: Date;
+  /** Open threads placed on this capture. */
+  openThreads: number;
+}
+
+/**
+ * What an image can be compared with besides its baseline: the newest
+ * `limit` other runs that captured the same screen (checkpoint and variant),
+ * plus every earlier capture of it that still has open comment threads,
+ * however old. One capture per run, newest run first; the image's own run is
+ * left out. `null` when the capture is not in the project.
+ */
+export async function compareTargetsOf(projectId: string, captureId: string, limit = 10): Promise<{ sha256: string | null; targets: CompareTargetRecord[] } | null> {
+  if (!/^[0-9a-f-]{36}$/i.test(captureId)) return null;
+  const [self] = await db
+    .select({ testId: reviewCaptures.testId, checkpointName: reviewCaptures.checkpointName, variant: reviewCaptures.variant, sha256: reviewCaptures.sha256, runId: reviewCaptures.runId })
+    .from(reviewCaptures)
+    .where(and(eq(reviewCaptures.projectId, projectId), eq(reviewCaptures.id, captureId)));
+  if (!self) return null;
+  const open = await db
+    .select({ captureId: reviewThreads.originCaptureId, count: sql<number>`count(*)::int` })
+    .from(reviewThreads)
+    .where(
+      and(
+        eq(reviewThreads.projectId, projectId),
+        eq(reviewThreads.testId, self.testId),
+        eq(reviewThreads.checkpointName, self.checkpointName),
+        eq(reviewThreads.variant, self.variant),
+        eq(reviewThreads.status, 'open'),
+        isNotNull(reviewThreads.originCaptureId),
+      ),
+    )
+    .groupBy(reviewThreads.originCaptureId);
+  const openBy = new Map(open.map((r) => [r.captureId!, Number(r.count)]));
+  const sameScreen = and(
+    eq(reviewCaptures.projectId, projectId),
+    eq(reviewCaptures.testId, self.testId),
+    eq(reviewCaptures.checkpointName, self.checkpointName),
+    eq(reviewCaptures.variant, self.variant),
+    ne(reviewCaptures.runId, self.runId),
+  )!;
+  const select = (where: SQL, max: number) =>
+    db
+      .select({ ...captureColumns, runNumber: runs.number, branch: runs.gitBranch, startedAt: runs.startedAt })
+      .from(reviewCaptures)
+      .innerJoin(attachments, eq(attachments.id, reviewCaptures.attachmentId))
+      .leftJoin(thumbs, eq(thumbs.id, reviewCaptures.thumbnailAttachmentId))
+      .innerJoin(runs, eq(runs.id, reviewCaptures.runId))
+      .innerJoin(reviewCheckpoints, eq(reviewCheckpoints.id, reviewCaptures.checkpointId))
+      .innerJoin(testAttempts, eq(testAttempts.id, reviewCheckpoints.attemptId))
+      .where(where)
+      .orderBy(desc(runs.startedAt), desc(reviewCaptures.createdAt))
+      .limit(max);
+  const [recent, commented] = await Promise.all([
+    // A run can capture a screen once per attempt; the final one is what was reviewed.
+    select(and(sameScreen, isFinalAttempt)!, limit * 2),
+    openBy.size ? select(and(sameScreen, inArray(reviewCaptures.id, [...openBy.keys()]))!, 100) : Promise.resolve([]),
+  ]);
+  const byRun = new Map<string, CompareTargetRecord>();
+  const add = (r: (typeof recent)[number]) => {
+    const record: CompareTargetRecord = { capture: toCapture(r as CaptureRow), runNumber: r.runNumber, branch: r.branch, startedAt: r.startedAt, openThreads: openBy.get(r.id) ?? 0 };
+    const existing = byRun.get(record.capture.runId);
+    // One per run: the one with comments wins, since that is why it is listed.
+    if (!existing || record.openThreads > existing.openThreads) byRun.set(record.capture.runId, record);
+  };
+  const recentRuns = new Set<string>();
+  for (const r of recent) {
+    if (!recentRuns.has(r.runId) && recentRuns.size >= limit) continue;
+    recentRuns.add(r.runId);
+    add(r);
+  }
+  for (const r of commented) add(r);
+  const targets = [...byRun.values()].sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime() || b.runNumber - a.runNumber);
+  return { sha256: self.sha256, targets };
 }
 
 // ---------------------------------------------------------------- decisions

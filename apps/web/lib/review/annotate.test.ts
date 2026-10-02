@@ -38,4 +38,13 @@ describe('annotate', () => {
     expect(area!.region.w).toBeGreaterThan(1000);
     expect(await cropAround(bytes, pin(3, 0, 0, { anchor: { kind: 'image', x: 0, y: 0 } }), [], { maxBytes: 1 << 20 })).toBeNull();
   });
+
+  it('draws a thread’s drawing in its colours instead of the area it covers', async () => {
+    const markup = [{ tool: 'rect' as const, color: 'green' as const, points: [0.2, 0.2, 0.6, 0.6] }];
+    const out = await annotate(await blank(800, 600), [pin(1, 0.2, 0.2, { anchor: { kind: 'area', x: 0.2, y: 0.2, w: 0.4, h: 0.4 }, markup })], { maxBytes: 1 << 20 });
+    const [r, g, b] = await pixel(out.data, 480, 300); // the box's right edge
+    expect(g).toBeGreaterThan(r + 40);
+    expect(g).toBeGreaterThan(b + 20);
+    expect(await pixel(out.data, 320, 300)).toEqual([255, 255, 255]); // inside it: no area fill
+  });
 });

@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowRight, Bot, Check, Columns2, History, MessageSquare, MessageSquarePlus, RotateCcw } from 'lucide-react';
+import { ArrowRight, Bot, Check, CheckCheck, Columns2, History, MessageSquare, MessageSquarePlus, RotateCcw } from 'lucide-react';
 import { Button } from '../../components/button';
 import { Kbd } from '../../components/kbd';
 import { SegmentedControl } from '../../components/segmented-control';
@@ -22,7 +22,9 @@ import {
   type ThreadActions,
   type ThreadFilter,
 } from '../../lib/review-threads';
+import { COMMENT_TOOL_HINTS, markupColors, MARKUP_COLOR_LABELS, type CommentTool } from '../../lib/review-markup';
 import { CommentComposer } from '../../patterns/comment-composer';
+import { MarkupSwatch } from '../../patterns/markup-shapes';
 import { ProfileAvatar } from '../../patterns/profile-avatar';
 import { ThreadView } from './thread-view';
 
@@ -42,8 +44,10 @@ export interface ThreadListProps extends ThreadActions {
   onOpenThreadChange?: (threadId: string | null) => void;
   /** A row is hovered or focused: its pin pings. */
   onHighlight?: (threadId: string | null) => void;
-  /** Comment mode is on (the button reads "Commenting"). */
+  /** Comment mode is on; with `onCommentingChange`, the list has its own button for it and says how to use it. */
   commenting?: boolean;
+  /** The tool comment mode places comments with, for its hint. */
+  commentTool?: CommentTool;
   onCommentingChange?: (next: boolean) => void;
   /** The whole-image composer is open. */
   composing?: boolean;
@@ -56,6 +60,8 @@ export interface ThreadListProps extends ThreadActions {
   onVerify?: (threadId?: string) => void;
   /** Beside the heading: a hand-off of the open comments to an AI assistant. */
   headerActions?: React.ReactNode;
+  /** Where comments are placed from when the list has no button for it: said when there are none yet. */
+  emptyHint?: React.ReactNode;
   className?: string;
 }
 
@@ -81,6 +87,7 @@ export function ThreadList({
   onOpenThreadChange,
   onHighlight,
   commenting = false,
+  commentTool = 'pin',
   onCommentingChange,
   composing = false,
   onComposingChange,
@@ -96,11 +103,15 @@ export function ThreadList({
   onCompareThread,
   onVerify,
   headerActions,
+  emptyHint,
   className,
 }: ThreadListProps) {
   const all = groups.flatMap((g) => g.threads);
   const open = all.filter((t) => t.status === 'open').length;
   const resolved = all.length - open;
+  // With nothing resolved, every filter shows the same threads: there is no filter to offer.
+  const filtering = resolved > 0;
+  const shownFilter: ThreadFilter = filtering ? filter : 'open';
   const several = groups.length > 1;
   const threadProps = { now, viewerId, canComment, canModerate, onReply, onSetThreadStatus, onEditComment, onDeleteComment, onCompareThread };
   const target = groups.length === 1 ? groups[0] : null;
@@ -109,9 +120,16 @@ export function ThreadList({
   return (
     <section className={cn('flex flex-col gap-3', className)} aria-labelledby="review-threads-heading">
       <header className="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="review-threads-heading" className="text-label-m">
-          Comments
-        </h2>
+        <div className="flex items-center gap-2">
+          <h2 id="review-threads-heading" className="text-label-m">
+            Comments
+          </h2>
+          {all.length ? (
+            <span className={cn('rounded-full px-1.5 text-label-xs tabular-nums', open ? 'bg-accent-subtle text-accent-text' : 'bg-muted text-muted-foreground')}>
+              {open ? `${open} open` : 'all resolved'}
+            </span>
+          ) : null}
+        </div>
         <div className="flex items-center gap-1.5">
           {headerActions}
           {canComment && onCommentingChange ? (
@@ -140,13 +158,13 @@ export function ThreadList({
         </div>
       ) : null}
 
-      {commenting ? (
+      {commenting && onCommentingChange ? (
         <p className="animate-rise-in rounded-md bg-accent-subtle px-2.5 py-2 text-label-xs text-accent-text">
-          Click the screenshot to pin a comment, or drag to mark an area. <Kbd>Esc</Kbd> to stop.
+          {COMMENT_TOOL_HINTS[commentTool]} <Kbd>Esc</Kbd> to stop.
         </p>
       ) : null}
 
-      {all.length > 0 ? (
+      {filtering ? (
         <SegmentedControl
           aria-label="Show comments"
           value={filter}
@@ -169,14 +187,20 @@ export function ThreadList({
       ) : null}
 
       {groups.map((g) => {
-        const shown = sortThreads(g.threads.filter((t) => matchesThreadFilter(t, filter)));
+        const shown = sortThreads(g.threads.filter((t) => matchesThreadFilter(t, shownFilter)));
         if (!shown.length && several) return null;
+        const groupOpen = g.threads.filter((t) => t.status === 'open').length;
         const stages = (['verify', 'waiting', 'resolved'] as const).map((stage) => ({ stage, threads: shown.filter((t) => threadStage(t) === stage) })).filter((s) => s.threads.length);
         // Sections only when they tell threads apart.
         const sectioned = stages.length > 1;
         return (
           <div key={g.captureId} className="flex flex-col gap-2">
-            {several ? <h3 className="text-label-xs text-muted-foreground capitalize">{g.variant}</h3> : null}
+            {several ? (
+              <h3 className="flex items-center gap-2 border-b border-border pb-1 text-label-s capitalize">
+                {g.variant}
+                <span className="text-label-xs text-muted-foreground normal-case tabular-nums">{groupOpen ? `${groupOpen} open` : 'all resolved'}</span>
+              </h3>
+            ) : null}
             {stages.map(({ stage, threads }) => (
               <div key={stage} className="flex flex-col gap-1">
                 {sectioned ? (
@@ -218,16 +242,30 @@ export function ThreadList({
           <MessageSquare aria-hidden className="size-4" />
           <span>
             {canComment ? (
-              <>
-                No comments yet. Press <Kbd>C</Kbd> and click the screenshot to point at what should change.
-              </>
+              (emptyHint ?? (
+                <>
+                  No comments yet. Press <Kbd>C</Kbd> and click the screenshot to point at what should change.
+                </>
+              ))
             ) : (
               'No comments on this image.'
             )}
           </span>
         </p>
-      ) : all.every((t) => !matchesThreadFilter(t, filter)) ? (
-        <p className="text-label-s text-muted-foreground">{filter === 'open' ? 'Every thread is resolved.' : 'No resolved threads.'}</p>
+      ) : all.every((t) => !matchesThreadFilter(t, shownFilter)) ? (
+        shownFilter === 'open' ? (
+          <div className="flex flex-col items-center gap-2 rounded-lg border border-border bg-surface-sunken px-3 py-4 text-center">
+            <CheckCheck aria-hidden className="size-4 text-success-text" />
+            <p className="text-label-s">
+              {resolved === 1 ? 'The one comment is resolved.' : `All ${resolved} comments are resolved.`}
+            </p>
+            <Button size="xs" variant="outline" onClick={() => onFilterChange('resolved')}>
+              Show resolved
+            </Button>
+          </div>
+        ) : (
+          <p className="text-label-s text-muted-foreground">No resolved threads.</p>
+        )
       ) : null}
 
       {canComment && onCreateThread && target ? (
@@ -284,6 +322,8 @@ function ThreadRow({
   // The newest reply, when an agent wrote it: what it says it changed is what a reviewer checks next.
   const last = answers.at(-1);
   const agentReply = last && isAgentComment(last) ? last : null;
+  // The colours drawn with it: a comment saying "the blue area" is found by its swatch.
+  const inks = markupColors(thread.markup);
   return (
     <div
       className={cn(
@@ -321,6 +361,14 @@ function ThreadRow({
           {first && isAgentComment(first) ? <span className="shrink-0">agent</span> : null}
           <span aria-hidden>·</span>
           <span className="shrink-0">{thread.pending ? 'Posting…' : formatRelative(first?.at ?? thread.createdAt, { now })}</span>
+          {inks.length ? (
+            <span className="ms-auto flex shrink-0 items-center gap-0.5" title={`Drawn in ${inks.map((c) => MARKUP_COLOR_LABELS[c].toLowerCase()).join(', ')}`}>
+              <span className="sr-only">, drawn in {inks.map((c) => MARKUP_COLOR_LABELS[c].toLowerCase()).join(', ')}</span>
+              {inks.map((c) => (
+                <MarkupSwatch key={c} color={c} className="size-2" />
+              ))}
+            </span>
+          ) : null}
         </span>
         <span className="mt-0.5 line-clamp-2 text-sm text-pretty break-words">{first?.body ?? ''}</span>
         {agentReply ? (

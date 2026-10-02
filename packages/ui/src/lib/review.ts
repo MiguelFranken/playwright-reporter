@@ -7,6 +7,7 @@
  * content hash — and holds for every later capture of the same pixels. That is
  * what lets a run with nothing new ask for no review at all.
  */
+import type { ReviewDrawingView } from './review-markup';
 import type { ReviewThreadView } from './review-threads';
 import type { CasePriority } from './test-cases';
 import type { Tone } from './tone';
@@ -264,8 +265,88 @@ export interface ReviewCaptureView {
   ignoreRegions?: DiffRegion[];
   /** Comment threads on the image: its own and the open ones placed on earlier captures of it. */
   threads?: ReviewThreadView[];
+  /** Drawings on the image, on their own (pen, arrows, boxes): shown with the pins, erased with the eraser. */
+  drawings?: ReviewDrawingView[];
   /** The run it was captured in, where one flow shows several runs' images (the library). */
   runNumber?: number | null;
+}
+
+// ---------------------------------------------------------------- what to compare with
+
+/**
+ * What the viewer compares an image with, chosen by the reviewer. A rule, not
+ * a pair: it holds while the reviewer moves from checkpoint to checkpoint.
+ * - `auto`: the approved baseline, else the run before (what a review needs).
+ * - `baseline`: the approved baseline.
+ * - `previous`: the same screen in the run before this one.
+ * - `comments`: the newest earlier image that still has open comments.
+ * - `run:<n>`: the same screen as run n captured it.
+ */
+export const COMPARE_RULES = ['auto', 'baseline', 'previous', 'comments'] as const;
+export type CompareRule = (typeof COMPARE_RULES)[number] | `run:${number}`;
+
+export const COMPARE_RULE_LABELS: Record<(typeof COMPARE_RULES)[number], string> = {
+  auto: 'Automatic',
+  baseline: 'Approved baseline',
+  previous: 'Run before',
+  comments: 'Latest open comments',
+};
+
+export function parseCompareRule(value: string | null | undefined): CompareRule {
+  if ((COMPARE_RULES as readonly string[]).includes(value ?? '')) return value as CompareRule;
+  const run = /^run:(\d{1,9})$/.exec(value ?? '');
+  return run && Number(run[1]) > 0 ? `run:${Number(run[1])}` : 'auto';
+}
+
+/** The run number a `run:<n>` rule names. */
+export const compareRuleRun = (rule: CompareRule): number | null => (rule.startsWith('run:') ? Number(rule.slice(4)) : null);
+
+/** Another run's capture of the same screen (checkpoint and variant) that an image can be compared with. */
+export interface CompareTargetView {
+  captureId: string;
+  runNumber: number;
+  image: ReviewImage;
+  /** The same pixels as the image it would be compared with. */
+  same: boolean;
+  branch?: string | null;
+  /** When its run started. */
+  at?: string | null;
+  /** Open comment threads placed on this image; resolved ones do not count. */
+  openThreads: number;
+}
+
+/** What an image is compared with under a rule, and whether the rule had to fall back to `auto`. */
+export interface ResolvedCompare {
+  /** The reference to show instead of the default one; `null` keeps the default (baseline, else the run before). */
+  target: { captureId: string; image: ReviewImage; label: string; same: boolean } | null;
+  /** The rule found nothing for this image, so the default is shown. */
+  fellBack: boolean;
+}
+
+/**
+ * The reference a rule picks for a capture, from what the capture knows
+ * (baseline, run before) and the other runs' captures of its screen. A
+ * reference that is the default one anyway comes back as `null`, so the
+ * comparison already measured for it is kept.
+ */
+export function resolveCompare(capture: Pick<ReviewCaptureView, 'id' | 'baseline' | 'previous'>, rule: CompareRule, targets: readonly CompareTargetView[] | null | undefined): ResolvedCompare {
+  if (rule === 'auto') return { target: null, fellBack: false };
+  const defaultId = capture.baseline?.captureId ?? capture.previous?.captureId ?? null;
+  const pick = (t: ResolvedCompare['target']): ResolvedCompare => (t ? { target: t.captureId === defaultId ? null : t, fellBack: false } : { target: null, fellBack: true });
+  if (rule === 'baseline') {
+    const b = capture.baseline;
+    return pick(b ? { captureId: b.captureId, image: b.image, label: `Approved${b.runNumber ? ` (#${b.runNumber})` : ''}`, same: b.same } : null);
+  }
+  if (rule === 'previous') {
+    const p = capture.previous;
+    return pick(p ? { captureId: p.captureId, image: p.image, label: `Run #${p.runNumber}`, same: p.same } : null);
+  }
+  // The rest need the other runs; until they arrive the default stays on show without a note.
+  if (!targets) return { target: null, fellBack: false };
+  const others = targets.filter((t) => t.captureId !== capture.id);
+  const run = compareRuleRun(rule);
+  const found = rule === 'comments' ? others.find((t) => t.openThreads > 0) : others.find((t) => t.runNumber === run);
+  return pick(found ? { captureId: found.captureId, image: found.image, label: `Run #${found.runNumber}`, same: found.same } : null);
 }
 
 export interface ReviewCheckpointView {
@@ -396,16 +477,41 @@ export type FramePreset = (typeof FRAME_PRESETS)[number]['value'];
 export const ZOOM_LEVELS = [0.25, 0.33, 0.5, 0.67, 0.75, 1, 1.25, 1.5] as const;
 
 /**
+ * The viewer's side panel — deciding and the comments: shown or folded away,
+ * and how wide, in pixels. Kept from one session to the next.
+ */
+export interface ReviewPanelSettings {
+  open: boolean;
+  width: number;
+}
+
+/** How wide the viewer's side panel can be dragged, and where it starts. */
+export const REVIEW_PANEL = { min: 280, max: 640, default: 320 } as const;
+
+export const DEFAULT_REVIEW_PANEL: ReviewPanelSettings = { open: true, width: REVIEW_PANEL.default };
+
+/** A saved panel setting made safe: the width within its limits, open unless it was folded. */
+export function reviewPanel(saved: Partial<ReviewPanelSettings> | null | undefined): ReviewPanelSettings {
+  const width = typeof saved?.width === 'number' && Number.isFinite(saved.width) ? Math.round(Math.min(REVIEW_PANEL.max, Math.max(REVIEW_PANEL.min, saved.width))) : REVIEW_PANEL.default;
+  return { open: saved?.open !== false, width };
+}
+
+/**
  * How the viewer frames an image: a screen of `width` × `height` CSS pixels
  * the capture is scaled into (by width) and scrolls in, shown at `zoom`.
  * `captured` uses each capture's own viewport; `fit` picks the zoom that
- * shows the whole frame.
+ * shows the whole frame. The viewer never shows a frame wider than it has
+ * room for, nor taller: a zoom above what fits the width is held at it, and a
+ * frame taller than the space ends there and scrolls inside. `fill` drops
+ * the frame altogether: the screens span the whole space, edge to edge, at
+ * the zoom that fits their width — a desktop capture on a small laptop.
  */
 export interface FrameSettings {
   preset: FramePreset;
   width: number;
   height: number;
   zoom: number | 'fit';
+  fill?: boolean;
 }
 
 export const DEFAULT_FRAME: FrameSettings = { preset: 'captured', width: 1280, height: 720, zoom: 'fit' };
@@ -416,12 +522,41 @@ export function frameFor(settings: FrameSettings, capture: Parameters<typeof cap
   return { width: Math.max(160, Math.round(settings.width)), height: Math.max(160, Math.round(settings.height)) };
 }
 
+const MIN_ZOOM = 0.1;
+
+/** The largest zoom at which frames side by side (with `gap` between them) fit into `available` CSS pixels of width. */
+export function widthZoom(frames: readonly FrameSize[], available: number, gap = 24): number {
+  if (frames.length === 0 || available <= 0) return 1;
+  // The gaps between the screens stay their size at any zoom.
+  const width = frames.reduce((sum, f) => sum + f.width, 0);
+  return Math.max(MIN_ZOOM, (available - gap * (frames.length - 1)) / width);
+}
+
 /** The zoom that fits frames side by side (with `gap` between them) into the space available. */
 export function fitZoom(frames: readonly FrameSize[], available: FrameSize, gap = 24): number {
   if (frames.length === 0 || available.width <= 0 || available.height <= 0) return 1;
-  const width = frames.reduce((sum, f) => sum + f.width, 0) + gap * (frames.length - 1);
   const height = Math.max(...frames.map((f) => f.height));
-  return Math.max(0.1, Math.min(1, available.width / width, available.height / height));
+  return Math.max(MIN_ZOOM, Math.min(1, widthZoom(frames, available.width, gap), available.height / height));
+}
+
+/**
+ * The zoom a frame is shown at: `fit`, else the zoom asked for, held at the
+ * largest that fits the width — the space never scrolls sideways.
+ */
+export function shownZoom(zoom: FrameSettings['zoom'], frames: readonly FrameSize[], available: FrameSize, gap = 24): number {
+  return zoom === 'fit' ? fitZoom(frames, available, gap) : Math.min(zoom, widthZoom(frames, available.width, gap));
+}
+
+/** Screens spanning the whole space: as wide as it is at the zoom that fits their width (gaps included), and as tall. */
+export function fillFrames(frames: readonly FrameSize[], available: FrameSize, gap = 24): { zoom: number; screens: FrameSize[] } {
+  const zoom = widthZoom(frames, available.width, gap);
+  return { zoom, screens: frames.map((f) => (available.height > 0 ? { width: f.width, height: Math.max(24, Math.floor(available.height)) / zoom } : f)) };
+}
+
+/** A frame cut to the `height` CSS pixels there is room for at `zoom`: a longer screen ends at the space's edge and scrolls inside. */
+export function frameWithin(frame: FrameSize, height: number, zoom: number): FrameSize {
+  if (height <= 0) return frame;
+  return { width: frame.width, height: Math.max(24 / zoom, Math.min(frame.height, Math.floor(height) / zoom)) };
 }
 
 /**
@@ -448,8 +583,9 @@ export interface ReviewFolder {
   path: string[];
   flows: ReviewFlowView[];
   children: ReviewFolder[];
-  /** Over this folder and everything below it. */
+  /** Flows in this folder and everything below it. */
   total: number;
+  /** Of those, the flows with a screen that still needs review. */
   needsReview: number;
 }
 
@@ -465,7 +601,11 @@ export function folderPathOf(flow: ReviewFlowView, grouping: ReviewGrouping): st
 
 export const folderId = (path: readonly string[]) => path.join(' / ');
 
-/** The flows as a tree of folders, in the order they come. Counts cover every capture below a folder. */
+/**
+ * The flows as a tree of folders, in the order they come. Counts are flows,
+ * the unit people browse and act on: how many screens a flow captures (and in
+ * how many variants) says nothing about how much there is to look at.
+ */
 export function buildReviewTree(flows: readonly ReviewFlowView[], grouping: ReviewGrouping): ReviewFolder[] {
   const roots: ReviewFolder[] = [];
   const index = new Map<string, ReviewFolder>();
@@ -483,11 +623,11 @@ export function buildReviewTree(flows: readonly ReviewFlowView[], grouping: Revi
     const path = folderPathOf(flow, grouping);
     const folder = node(path);
     folder.flows.push(flow);
-    const captures = flow.checkpoints.flatMap((c) => c.captures);
+    const waits = flow.checkpoints.some((c) => c.captures.some((cap) => NEEDS_REVIEW.includes(cap.status)));
     for (let i = 1; i <= path.length; i++) {
       const f = index.get(folderId(path.slice(0, i)))!;
-      f.total += captures.length;
-      f.needsReview += captures.filter((c) => NEEDS_REVIEW.includes(c.status)).length;
+      f.total++;
+      if (waits) f.needsReview++;
     }
   }
   // Unlinked tests last: the curated suites are what people browse first.

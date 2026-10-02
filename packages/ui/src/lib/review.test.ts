@@ -6,10 +6,17 @@ import {
   describeDiff,
   diffMagnitude,
   fitZoom,
+  fillFrames,
+  frameWithin,
+  shownZoom,
+  widthZoom,
   flattenFolders,
   folderPathOf,
   formatChangedShare,
   inFolder,
+  parseCompareRule,
+  resolveCompare,
+  type CompareTargetView,
   sizeChange,
   type ReviewDiffView,
   type ReviewFlowView,
@@ -41,6 +48,33 @@ describe('fitZoom', () => {
     expect(fitZoom([{ width: 1280, height: 720 }], { width: 640, height: 2000 })).toBe(0.5);
     expect(fitZoom([{ width: 390, height: 844 }], { width: 2000, height: 422 })).toBe(0.5);
     expect(fitZoom([{ width: 100, height: 100 }], { width: 2000, height: 2000 })).toBe(1);
+  });
+});
+
+describe('shownZoom', () => {
+  const desktop = { width: 1280, height: 720 };
+  it('holds a zoom asked for at what fits the width, gaps included', () => {
+    expect(widthZoom([desktop, desktop], 2584)).toBe(1);
+    expect(widthZoom([desktop, { width: 390, height: 844 }], 859)).toBe(0.5);
+    expect(shownZoom(1.5, [desktop], { width: 1600, height: 400 })).toBe(1.25);
+    expect(shownZoom(0.5, [desktop], { width: 1600, height: 400 })).toBe(0.5);
+  });
+  it('fits the whole screen for fit', () => {
+    expect(shownZoom('fit', [desktop], { width: 1600, height: 360 })).toBe(0.5);
+  });
+});
+
+describe('fillFrames', () => {
+  it('spans the whole space: its width at the zoom that fits, its full height', () => {
+    expect(fillFrames([{ width: 1280, height: 720 }], { width: 1920, height: 900 })).toEqual({ zoom: 1.5, screens: [{ width: 1280, height: 600 }] });
+  });
+});
+
+describe('frameWithin', () => {
+  it('ends a screen longer than the room at its edge', () => {
+    expect(frameWithin({ width: 390, height: 844 }, 500, 1.25)).toEqual({ width: 390, height: 400 });
+    expect(frameWithin({ width: 390, height: 844 }, 2000, 1)).toEqual({ width: 390, height: 844 });
+    expect(frameWithin({ width: 390, height: 844 }, 0, 1)).toEqual({ width: 390, height: 844 });
   });
 });
 
@@ -114,5 +148,46 @@ describe('diffs', () => {
     const grew = changeScore({ status: 'changed', diff: diff({ sizeChanged: true }) });
     expect(grew).toBeGreaterThan(changeScore({ status: 'changed', diff: diff({ ratio: 0.5 }) }));
     expect(changeScore({ status: 'changed', diff: null })).toBeGreaterThan(changeScore({ status: 'approved', diff: null }));
+  });
+});
+
+describe('compare rules', () => {
+  const img = { url: '#', available: true };
+  const capture = {
+    id: 'now',
+    baseline: { captureId: 'base', image: img, runNumber: 470, same: false, approvedAt: '' },
+    previous: { captureId: 'prev', image: img, runNumber: 481, same: false },
+  };
+  const targets: CompareTargetView[] = [
+    { captureId: 'now', runNumber: 482, image: img, same: true, openThreads: 3 },
+    { captureId: 'prev', runNumber: 481, image: img, same: false, openThreads: 0 },
+    { captureId: 'c', runNumber: 478, image: img, same: false, openThreads: 2 },
+    { captureId: 'd', runNumber: 475, image: img, same: true, openThreads: 1 },
+  ];
+
+  it('parses what a URL may carry, and nothing else', () => {
+    expect(parseCompareRule('previous')).toBe('previous');
+    expect(parseCompareRule('run:38')).toBe('run:38');
+    expect(parseCompareRule('run:0')).toBe('auto');
+    expect(parseCompareRule('run:x')).toBe('auto');
+    expect(parseCompareRule(null)).toBe('auto');
+  });
+
+  it('keeps the default reference for auto and for the rule that names it', () => {
+    expect(resolveCompare(capture, 'auto', targets)).toEqual({ target: null, fellBack: false });
+    expect(resolveCompare(capture, 'baseline', targets)).toEqual({ target: null, fellBack: false });
+  });
+
+  it('picks the run before, a named run, or the newest other image with open comments', () => {
+    expect(resolveCompare(capture, 'previous', targets).target?.captureId).toBe('prev');
+    expect(resolveCompare(capture, 'run:475', targets).target).toMatchObject({ captureId: 'd', label: 'Run #475', same: true });
+    // The image's own comments do not count: it would be compared with itself.
+    expect(resolveCompare(capture, 'comments', targets).target?.captureId).toBe('c');
+  });
+
+  it('falls back when the rule finds nothing, and waits for the runs before saying so', () => {
+    expect(resolveCompare({ id: 'now', baseline: null, previous: null }, 'baseline', targets)).toEqual({ target: null, fellBack: true });
+    expect(resolveCompare(capture, 'run:999', targets)).toEqual({ target: null, fellBack: true });
+    expect(resolveCompare(capture, 'comments', undefined)).toEqual({ target: null, fellBack: false });
   });
 });
