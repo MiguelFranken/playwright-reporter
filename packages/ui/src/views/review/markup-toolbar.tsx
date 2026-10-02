@@ -1,10 +1,12 @@
 'use client';
 
-import { Circle, Eraser, Highlighter, MessageSquarePlus, MoveUpRight, Pencil, Square, SquareDashedMousePointer, Undo2, X } from 'lucide-react';
+import { Circle, Eraser, GripVertical, Highlighter, MessageSquarePlus, MoveUpRight, Pencil, Square, SquareDashedMousePointer, Undo2, X } from 'lucide-react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Button } from '../../components/button';
 import { Kbd } from '../../components/kbd';
 import { ToggleGroup, ToggleGroupItem } from '../../components/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../components/tooltip';
+import { useFloatingOffset } from '../../hooks/use-floating-offset';
 import { cn } from '../../lib/cn';
 import { COMMENT_TOOL_LABELS, COMMENT_TOOLS, isMarkupTool, MARKUP_COLOR_LABELS, MARKUP_COLORS, MARKUP_INK, type CommentTool, type MarkupColor } from '../../lib/review-markup';
 
@@ -47,7 +49,21 @@ export interface MarkupToolbarProps {
  * only while one is picked), and undo. The keys 1–8 pick a tool. The colours
  * have names, so a comment can say "the blue box".
  */
-export function MarkupToolbar({ tool, onToolChange, color, onColorChange, canUndo = false, onUndo, onClose, className }: MarkupToolbarProps) {
+export function MarkupToolbar({ className, ...props }: MarkupToolbarProps) {
+  return (
+    <div
+      role="toolbar"
+      aria-label="Comment tools"
+      data-slot="markup-toolbar"
+      className={cn('flex animate-rise-in items-center gap-1 rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-e3', className)}
+    >
+      <MarkupTools {...props} />
+    </div>
+  );
+}
+
+/** What the bar holds; the colours slide open beside the tools while one draws, and slide shut again. */
+function MarkupTools({ tool, onToolChange, color, onColorChange, canUndo = false, onUndo, onClose }: Omit<MarkupToolbarProps, 'className'>) {
   const drawing = isMarkupTool(tool);
   const group = (label: string, tools: readonly CommentTool[]) => (
     <ToggleGroup aria-label={label} size="sm" spacing={0.5} value={tools.includes(tool) ? [tool] : []} onValueChange={(v) => v[0] && onToolChange(v[0] as CommentTool)}>
@@ -67,34 +83,47 @@ export function MarkupToolbar({ tool, onToolChange, color, onColorChange, canUnd
     </ToggleGroup>
   );
   return (
-    <div
-      role="toolbar"
-      aria-label="Comment tools"
-      data-slot="markup-toolbar"
-      className={cn('flex animate-rise-in items-center gap-1 rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-e3', className)}
-    >
+    <>
       {group('Comment', COMMENTING)}
 
       <span aria-hidden className="mx-1 h-5 w-px bg-border" />
 
       {group('Draw', DRAWING)}
 
-      {drawing ? (
-        <>
-          <span aria-hidden className="mx-1 h-5 w-px bg-border" />
-          <ToggleGroup aria-label="Colour" size="sm" spacing={0.5} value={[color]} onValueChange={(v) => v[0] && onColorChange(v[0] as MarkupColor)} className="animate-rise-in">
-            {MARKUP_COLORS.map((c) => (
-              <ToggleGroupItem key={c} value={c} aria-label={MARKUP_COLOR_LABELS[c]} title={MARKUP_COLOR_LABELS[c]} className="group/swatch size-8 px-0 hover:bg-muted aria-pressed:bg-transparent data-[state=on]:bg-transparent">
+      {/* Always there, so it can open and shut: a grid column eases between none of its width and all of it. */}
+      <div
+        aria-hidden={!drawing}
+        inert={!drawing}
+        data-open={drawing || undefined}
+        className="-mx-0.5 grid grid-cols-[0fr] opacity-0 transition-[grid-template-columns,opacity] duration-300 ease-emphasized data-open:grid-cols-[1fr] data-open:opacity-100 motion-reduce:transition-none"
+      >
+        <div className="flex min-w-0 items-center overflow-hidden px-0.5">
+          <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-border" />
+          <ToggleGroup aria-label="Colour" size="sm" spacing={0.5} value={[color]} onValueChange={(v) => v[0] && onColorChange(v[0] as MarkupColor)} className="py-0.5">
+            {MARKUP_COLORS.map((c, i) => (
+              <ToggleGroupItem
+                key={c}
+                value={c}
+                aria-label={MARKUP_COLOR_LABELS[c]}
+                title={MARKUP_COLOR_LABELS[c]}
+                className="group/swatch size-8 px-0 hover:bg-muted aria-pressed:bg-transparent data-[state=on]:bg-transparent"
+              >
+                {/* Each swatch pops in a beat after the one before it as the colours open. */}
                 <span
                   aria-hidden
-                  className="size-4.5 rounded-full ring-1 ring-foreground/15 transition-[box-shadow,scale] duration-150 group-hover/swatch:scale-110 group-data-[state=on]/swatch:ring-2 group-data-[state=on]/swatch:ring-foreground group-data-[state=on]/swatch:ring-offset-2 group-data-[state=on]/swatch:ring-offset-popover group-aria-pressed/swatch:ring-2 group-aria-pressed/swatch:ring-foreground group-aria-pressed/swatch:ring-offset-2 group-aria-pressed/swatch:ring-offset-popover"
-                  style={{ background: MARKUP_INK[c] }}
-                />
+                  className={cn('flex transition-[scale,opacity] duration-300 ease-spring motion-reduce:transition-none', drawing ? 'scale-100 opacity-100' : 'scale-50 opacity-0')}
+                  style={{ transitionDelay: drawing ? `${60 + i * 30}ms` : '0ms' }}
+                >
+                  <span
+                    className="size-4.5 rounded-full ring-1 ring-foreground/15 transition-[box-shadow,scale] duration-150 group-hover/swatch:scale-110 group-data-[state=on]/swatch:ring-2 group-data-[state=on]/swatch:ring-foreground group-data-[state=on]/swatch:ring-offset-2 group-data-[state=on]/swatch:ring-offset-popover group-aria-pressed/swatch:ring-2 group-aria-pressed/swatch:ring-foreground group-aria-pressed/swatch:ring-offset-2 group-aria-pressed/swatch:ring-offset-popover"
+                    style={{ background: MARKUP_INK[c] }}
+                  />
+                </span>
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
-        </>
-      ) : null}
+        </div>
+      </div>
 
       <span aria-hidden className="mx-1 h-5 w-px bg-border" />
 
@@ -116,7 +145,7 @@ export function MarkupToolbar({ tool, onToolChange, color, onColorChange, canUnd
           </TooltipContent>
         </Tooltip>
       ) : null}
-    </div>
+    </>
   );
 }
 
@@ -126,31 +155,100 @@ export interface CommentBarProps extends Omit<MarkupToolbarProps, 'onClose'> {
   onCommentingChange: (next: boolean) => void;
   /** Open comments on the screens on show, said on the folded bar. */
   openCount?: number;
+  /** Where the browser remembers the place the bar was moved to; not remembered without one. */
+  positionKey?: string;
 }
 
 /**
  * Commenting, at hand over the screenshot: folded, one button that turns
  * comment mode on (C); unfolded, the tools to place and draw comments with,
- * and the button that folds it again (Esc).
+ * and the button that folds it again (Esc). Its grip moves it out of the way
+ * of what is under it — dragged, or with the arrow keys; a double-click or
+ * Home sends it back — and it stays inside the closest `data-float-bounds`.
+ * Folding, unfolding and the colours opening ease its width.
  */
-export function CommentBar({ commenting, onCommentingChange, openCount = 0, className, ...tools }: CommentBarProps) {
-  if (commenting) return <MarkupToolbar {...tools} className={className} onClose={() => onCommentingChange(false)} />;
+export function CommentBar({ commenting, onCommentingChange, openCount = 0, positionKey, className, ...tools }: CommentBarProps) {
+  const { ref, offset, dragging, handleProps } = useFloatingOffset<HTMLDivElement>(positionKey);
+  const width = useContentWidth<HTMLDivElement>();
+  // Folding and unfolding swap what the bar holds at once, so the bar eases between the two widths. Anything
+  // else (the colours) eases inside it already: then the bar keeps to its content, rather than trailing it.
+  const [swapping, setSwapping] = useState(false);
+  const [wasCommenting, setWasCommenting] = useState(commenting);
+  if (wasCommenting !== commenting) {
+    setWasCommenting(commenting);
+    setSwapping(true);
+  }
+  useEffect(() => {
+    if (!swapping) return;
+    const timer = setTimeout(() => setSwapping(false), 320);
+    return () => clearTimeout(timer);
+  }, [swapping]);
   return (
-    <div data-slot="comment-bar" className={cn('flex animate-rise-in items-center rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-e3', className)}>
-      <Tooltip>
-        <TooltipTrigger render={<Button variant="ghost" size="sm" aria-pressed={false} aria-keyshortcuts="C" className="gap-2 px-3" onClick={() => onCommentingChange(true)} />}>
-          <MessageSquarePlus /> Comment
-          {openCount ? (
-            <span aria-hidden title={`${openCount} open`} className="rounded-full bg-accent-subtle px-1.5 text-label-xs text-accent-text tabular-nums">
-              {openCount}
-            </span>
-          ) : null}
-          <Kbd aria-hidden className="h-4 min-w-4 text-[10px]">
-            C
-          </Kbd>
-        </TooltipTrigger>
-        <TooltipContent side="top">Click to pin a comment, drag for an area, or draw on the screen</TooltipContent>
-      </Tooltip>
+    <div
+      ref={ref}
+      data-slot="comment-bar"
+      data-dragging={dragging || undefined}
+      className={cn(
+        'box-content animate-rise-in overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-e3 duration-300 ease-emphasized data-dragging:ring-1 data-dragging:ring-foreground/10 motion-reduce:transition-none',
+        // Dragged, it follows the pointer; let go or nudged, it glides.
+        dragging ? (swapping ? 'transition-[width]' : 'transition-none') : swapping ? 'transition-[width,translate]' : 'transition-[translate]',
+        className,
+      )}
+      style={{ width: width.value, translate: `${offset.x}px ${offset.y}px` }}
+    >
+      <div ref={width.ref} className="flex w-max items-center gap-1 p-1">
+        <button
+          type="button"
+          aria-label="Move the comment bar"
+          aria-description="Drag, or use the arrow keys. Double-click or Home puts it back."
+          title="Drag to move · double-click to put back"
+          className="flex h-8 w-4 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground/70 outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40 active:cursor-grabbing"
+          {...handleProps}
+        >
+          <GripVertical className="size-4" />
+        </button>
+        {commenting ? (
+          <div key="tools" role="toolbar" aria-label="Comment tools" data-slot="markup-toolbar" className="flex animate-fade-in items-center gap-1">
+            <MarkupTools {...tools} onClose={() => onCommentingChange(false)} />
+          </div>
+        ) : (
+          <div key="folded" className="flex animate-fade-in items-center">
+            <Tooltip>
+              <TooltipTrigger render={<Button variant="ghost" size="sm" aria-pressed={false} aria-keyshortcuts="C" className="gap-2 px-3" onClick={() => onCommentingChange(true)} />}>
+                <MessageSquarePlus /> Comment
+                {openCount ? (
+                  <span aria-hidden title={`${openCount} open`} className="rounded-full bg-accent-subtle px-1.5 text-label-xs text-accent-text tabular-nums">
+                    {openCount}
+                  </span>
+                ) : null}
+                <Kbd aria-hidden className="h-4 min-w-4 text-[10px]">
+                  C
+                </Kbd>
+              </TooltipTrigger>
+              <TooltipContent side="top">Click to pin a comment, drag for an area, or draw on the screen</TooltipContent>
+            </Tooltip>
+          </div>
+        )}
+      </div>
     </div>
   );
+}
+
+/**
+ * The width of what an element holds, measured as it changes — so the element
+ * around it can be given that width explicitly and ease to it (CSS cannot
+ * transition `width: auto`). Undefined until measured, which is auto.
+ */
+function useContentWidth<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+  const [value, setValue] = useState<number | undefined>(undefined);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    setValue(el.offsetWidth);
+    const observer = new ResizeObserver(() => setValue(el.offsetWidth));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  return { ref, value };
 }

@@ -55,3 +55,48 @@ export const Interactive: Story = {
     await expect(await canvas.findByRole('button', { name: 'Comment' })).toBeInTheDocument();
   },
 };
+
+const POSITION_KEY = 'story:comment-bar-position';
+
+/** Moved off what it covers by its grip, with the keys here; the browser remembers where, and Home puts it back. */
+export const Moved: Story = {
+  args: { positionKey: POSITION_KEY },
+  decorators: [
+    (Story) => (
+      <div data-float-bounds className="flex h-72 w-96 items-end justify-center rounded-lg border border-dashed border-border pb-4">
+        <Story />
+      </div>
+    ),
+  ],
+  beforeEach: () => {
+    localStorage.removeItem(POSITION_KEY);
+    return () => localStorage.removeItem(POSITION_KEY);
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const grip = canvas.getByRole('button', { name: 'Move the comment bar' });
+    grip.focus();
+    await userEvent.keyboard('{ArrowUp}{ArrowUp}{ArrowLeft}');
+    // The inline value: the computed one is still easing there.
+    await expect(canvasElement.querySelector<HTMLElement>('[data-slot="comment-bar"]')?.style.translate).toBe('-16px -32px');
+    await expect(JSON.parse(localStorage.getItem(POSITION_KEY) ?? 'null')).toEqual({ x: -16, y: -32 });
+    await userEvent.keyboard('{Home}');
+    await expect(localStorage.getItem(POSITION_KEY)).toBeNull();
+  },
+};
+
+/** Drawing: the colours have slid open beside the tools, and the bar has eased wider to hold them. */
+export const Drawing: Story = {
+  render: (args) => {
+    const [tool, setTool] = useState<CommentTool>('pin');
+    const [color, setColor] = useState<MarkupColor>('red');
+    return <CommentBar {...args} commenting tool={tool} onToolChange={setTool} color={color} onColorChange={setColor} />;
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.queryByRole('button', { name: 'Blue' })).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: 'Pen' }));
+    await userEvent.click(await canvas.findByRole('button', { name: 'Blue' }));
+    await expect(canvas.getByRole('button', { name: 'Blue' })).toHaveAttribute('aria-pressed', 'true');
+  },
+};

@@ -403,6 +403,11 @@
   --animate-pin-breathe: pin-breathe 1.2s ease-in-out infinite;
   --animate-pin-ping: pin-ping 600ms cubic-bezier(0.2, 0, 0, 1) 1;
   --animate-rise-in: rise-in 150ms cubic-bezier(0.2, 0, 0, 1) both;
+  /* Content swapped inside a bar that eases to its new width. */
+  --animate-fade-in: fade-in 220ms cubic-bezier(0.2, 0, 0, 1) both;
+  /* Movement that settles: fast out, gentle in; and one that overshoots a touch. */
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   /* A loading image: a soft band of light sweeping across its placeholder. */
   --animate-shimmer: shimmer 1.6s ease-in-out infinite;
 
@@ -448,6 +453,16 @@
     }
     to {
       box-shadow: 0 0 0 12px color-mix(in oklch, var(--accent-solid) 0%, transparent);
+    }
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      filter: blur(2px);
+    }
+    to {
+      opacity: 1;
+      filter: none;
     }
   }
   @keyframes rise-in {

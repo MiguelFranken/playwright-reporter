@@ -1200,7 +1200,7 @@ export function CheckpointViewer({
             </header>
 
             <div className="grid shrink-0 grow grid-cols-1 lg:h-full lg:min-h-0" style={overlaid ? { gridTemplateColumns: panel.open ? `minmax(0,1fr) ${panelWidth}px` : 'minmax(0,1fr)' } : undefined}>
-              <section className="relative flex min-h-0 flex-col bg-surface" aria-label="Checkpoint image">
+              <section data-float-bounds className="relative flex min-h-0 flex-col bg-surface" aria-label="Checkpoint image">
                 <div
                   ref={setToolbarEl}
                   className="z-20 flex flex-wrap items-center justify-between gap-2 border-b border-border bg-surface/85 px-4 py-2 backdrop-blur-sm lg:absolute lg:inset-x-0"
@@ -1413,9 +1413,11 @@ export function CheckpointViewer({
                 />
                 {canComment && pinsOn && !verifying && !(resolving && ended) ? (
                   // Over the bottom of the screens, the way a drawing tool's bar floats: always at hand, never in the layout.
+                  // Its grip moves it off whatever it covers, and the browser remembers where.
                   <div className="pointer-events-none absolute inset-x-0 z-40 flex justify-center px-4" style={{ bottom: overlaid ? stripHeight : 16 }}>
                     <CommentBar
                       className="pointer-events-auto"
+                      positionKey="review:comment-bar-position"
                       commenting={commenting}
                       onCommentingChange={toggleCommenting}
                       openCount={openCount}
