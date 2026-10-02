@@ -1210,7 +1210,7 @@ export function CheckpointViewer({
                   tabIndex={0}
                   aria-label="Checkpoint screens"
                   className={cn(
-                    // Its focus ring and the commenting outline are drawn by the frame after it, around the part the bars leave clear.
+                    // Its focus ring is drawn by the frame after it, around the part the bars leave clear.
                     'peer min-h-0 flex-1 outline-none',
                     // The screens fit; only a comparison while verifying, the summary after resolving and the editor's list below
                     // the screen can run longer.
@@ -1371,10 +1371,7 @@ export function CheckpointViewer({
                 </div>
                 <div
                   aria-hidden
-                  className={cn(
-                    'pointer-events-none absolute inset-x-0 z-10 transition-shadow duration-150 peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/25 peer-focus-visible:ring-inset',
-                    commenting && 'shadow-[inset_0_0_0_2px_var(--accent-solid)]',
-                  )}
+                  className="pointer-events-none absolute inset-x-0 z-10 peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/25 peer-focus-visible:ring-inset"
                   style={{ top: inset.top, bottom: inset.bottom }}
                 />
                 {canComment && pinsOn && !verifying && !(resolving && ended) ? (
