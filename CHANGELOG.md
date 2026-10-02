@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.77](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.76...v0.0.77) (2026-10-02)
+
+### Features
+
+* **review:** the viewer's screen scrolls on under blurred bars ([#83](https://github.com/MiguelFranken/playwright-reporter/issues/83)) ([34e5d93](https://github.com/MiguelFranken/playwright-reporter/commit/34e5d93d45e50dd49cc9ff36e9156261f51a82a3))
+
 ## [0.0.76](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.75...v0.0.76) (2026-10-01)
 
 ### Features
