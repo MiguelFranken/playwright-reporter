@@ -268,6 +268,84 @@ export interface ReviewCaptureView {
   runNumber?: number | null;
 }
 
+// ---------------------------------------------------------------- what to compare with
+
+/**
+ * What the viewer compares an image with, chosen by the reviewer. A rule, not
+ * a pair: it holds while the reviewer moves from checkpoint to checkpoint.
+ * - `auto`: the approved baseline, else the run before (what a review needs).
+ * - `baseline`: the approved baseline.
+ * - `previous`: the same screen in the run before this one.
+ * - `comments`: the newest earlier image that still has open comments.
+ * - `run:<n>`: the same screen as run n captured it.
+ */
+export const COMPARE_RULES = ['auto', 'baseline', 'previous', 'comments'] as const;
+export type CompareRule = (typeof COMPARE_RULES)[number] | `run:${number}`;
+
+export const COMPARE_RULE_LABELS: Record<(typeof COMPARE_RULES)[number], string> = {
+  auto: 'Automatic',
+  baseline: 'Approved baseline',
+  previous: 'Run before',
+  comments: 'Latest open comments',
+};
+
+export function parseCompareRule(value: string | null | undefined): CompareRule {
+  if ((COMPARE_RULES as readonly string[]).includes(value ?? '')) return value as CompareRule;
+  const run = /^run:(\d{1,9})$/.exec(value ?? '');
+  return run && Number(run[1]) > 0 ? `run:${Number(run[1])}` : 'auto';
+}
+
+/** The run number a `run:<n>` rule names. */
+export const compareRuleRun = (rule: CompareRule): number | null => (rule.startsWith('run:') ? Number(rule.slice(4)) : null);
+
+/** Another run's capture of the same screen (checkpoint and variant) that an image can be compared with. */
+export interface CompareTargetView {
+  captureId: string;
+  runNumber: number;
+  image: ReviewImage;
+  /** The same pixels as the image it would be compared with. */
+  same: boolean;
+  branch?: string | null;
+  /** When its run started. */
+  at?: string | null;
+  /** Open comment threads placed on this image; resolved ones do not count. */
+  openThreads: number;
+}
+
+/** What an image is compared with under a rule, and whether the rule had to fall back to `auto`. */
+export interface ResolvedCompare {
+  /** The reference to show instead of the default one; `null` keeps the default (baseline, else the run before). */
+  target: { captureId: string; image: ReviewImage; label: string; same: boolean } | null;
+  /** The rule found nothing for this image, so the default is shown. */
+  fellBack: boolean;
+}
+
+/**
+ * The reference a rule picks for a capture, from what the capture knows
+ * (baseline, run before) and the other runs' captures of its screen. A
+ * reference that is the default one anyway comes back as `null`, so the
+ * comparison already measured for it is kept.
+ */
+export function resolveCompare(capture: Pick<ReviewCaptureView, 'id' | 'baseline' | 'previous'>, rule: CompareRule, targets: readonly CompareTargetView[] | null | undefined): ResolvedCompare {
+  if (rule === 'auto') return { target: null, fellBack: false };
+  const defaultId = capture.baseline?.captureId ?? capture.previous?.captureId ?? null;
+  const pick = (t: ResolvedCompare['target']): ResolvedCompare => (t ? { target: t.captureId === defaultId ? null : t, fellBack: false } : { target: null, fellBack: true });
+  if (rule === 'baseline') {
+    const b = capture.baseline;
+    return pick(b ? { captureId: b.captureId, image: b.image, label: `Approved${b.runNumber ? ` (#${b.runNumber})` : ''}`, same: b.same } : null);
+  }
+  if (rule === 'previous') {
+    const p = capture.previous;
+    return pick(p ? { captureId: p.captureId, image: p.image, label: `Run #${p.runNumber}`, same: p.same } : null);
+  }
+  // The rest need the other runs; until they arrive the default stays on show without a note.
+  if (!targets) return { target: null, fellBack: false };
+  const others = targets.filter((t) => t.captureId !== capture.id);
+  const run = compareRuleRun(rule);
+  const found = rule === 'comments' ? others.find((t) => t.openThreads > 0) : others.find((t) => t.runNumber === run);
+  return pick(found ? { captureId: found.captureId, image: found.image, label: `Run #${found.runNumber}`, same: found.same } : null);
+}
+
 export interface ReviewCheckpointView {
   id: string;
   /** Ids of checkpoints merged into this one (the same test in another Playwright project): links to them open this one. */

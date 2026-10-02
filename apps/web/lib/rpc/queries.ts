@@ -45,6 +45,21 @@ export function captureDiffQuery(ref: ProjectRef, captureId: string, compareCapt
 }
 
 /**
+ * The other runs' captures of the open image's screen, for the viewer's
+ * "Compare with". New runs and new comments arrive while a review goes on,
+ * so a minute is fresh enough; going back to a checkpoint answers from the
+ * cache.
+ */
+export function compareTargetsQuery(ref: ProjectRef, captureId: string) {
+  return orpc.review.compareTargets.queryOptions({
+    input: { ...ref, captureId },
+    staleTime: 60_000,
+    gcTime: 10 * 60_000,
+    retry: false,
+  });
+}
+
+/**
  * What a retention form would delete if saved as it is being edited. Each
  * set of fields is its own entry, so going back to values already previewed
  * answers from the cache; the previous answer stays on screen while the next

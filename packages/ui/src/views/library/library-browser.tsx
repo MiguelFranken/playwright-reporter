@@ -27,6 +27,7 @@ import {
 import { defaultFeedbackScope, feedbackQueue, feedbackScopeCounts, flowsWithFeedback, type FeedbackItem, type FeedbackScope } from '../../lib/feedback-queue';
 import { buildReviewTree, DEFAULT_FRAME, folderId, folderPathOf, inFolder, variantsOf, type FrameSettings, type ReviewPanelSettings, type ReviewDecisionInput, type ReviewFlowView, type ReviewGrouping } from '../../lib/review';
 import { CheckpointViewer, type ReviewCommentsProps, type ReviewSelection } from '../review/checkpoint-viewer';
+import type { CompareWithProps } from '../review/compare-target-picker';
 import type { IgnoreRect } from '../review/ignore-regions-editor';
 import { filterFlows } from '../review/review-storyboard';
 import { approveFolderAction, ReviewTree, type FolderAction, type FolderMenuTarget } from '../review/review-tree';
@@ -115,6 +116,8 @@ export interface LibraryBrowserProps {
    */
   resolving?: FeedbackScope | null;
   onResolvingChange?: (next: FeedbackScope | null) => void;
+  /** What the viewer compares the open screen with. */
+  compareWith?: CompareWithProps;
   emptyTitle?: string;
   emptyDescription?: React.ReactNode;
 }
@@ -168,6 +171,7 @@ export function LibraryBrowser({
   ignorePendingId,
   resolving: resolvingProp,
   onResolvingChange,
+  compareWith,
   emptyTitle = 'No screens yet',
   emptyDescription,
 }: LibraryBrowserProps) {
@@ -518,6 +522,7 @@ export function LibraryBrowser({
               }
             : null
         }
+        compareWith={compareWith}
       />
       <FeedbackInbox open={inbox} onOpenChange={setInbox} flows={visible} now={comments.now} onOpenThread={openThread} onResolve={(scope) => startResolving(scope)} />
       <LibraryViewEditor

@@ -109,6 +109,19 @@ percentage. The page scrolls inside the screen. Compare every variant side by si
 side, with a slider, as a **Difference** (identical pixels turn black, every change lights up) or as an overlay. Next
 to it: the steps it was captured in, the URL, the viewport, and a link to the moment in the video.
 
+**Compare with** chooses the image a variant is compared with. **Automatic** uses the approved baseline, or the run
+before when nothing is approved yet. You can also pick one of these:
+
+- **Approved baseline** or **Run before**.
+- **Latest open comments**: the newest earlier image that still has unresolved comments, so you can check whether
+  they were fixed. Side by side, its pins sit where they were placed.
+- Any of the last ten runs that captured the screen. Every earlier image with open comments is listed too, however
+  old, with the number of open comments. Resolved comments are not counted.
+
+Your choice stays as you move from checkpoint to checkpoint, and it is part of the link (`against=previous`,
+`against=run:38`). Where it finds nothing, for example a run that did not capture this screen, the viewer says so
+and shows the automatic comparison. The difference to the chosen image is measured the first time you open it.
+
 | Key | Does |
 | --- | --- |
 | <kbd>←</kbd> <kbd>→</kbd> | Previous / next checkpoint |

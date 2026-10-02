@@ -7,13 +7,13 @@
  * merged when their variants do not collide, so the storyboard shows the two
  * devices side by side, as it does for resized variants of one test.
  */
-import type { ReviewCaseRef, ReviewCaptureView, ReviewCheckpointView, ReviewDiffView, ReviewFlowView, ReviewImage, ReviewStatus } from '@miguelfranken/ui/lib/review';
+import type { CompareTargetView, ReviewCaseRef, ReviewCaptureView, ReviewCheckpointView, ReviewDiffView, ReviewFlowView, ReviewImage, ReviewStatus } from '@miguelfranken/ui/lib/review';
 import { projectAnchor, type ReviewCommentView, type ReviewThreadView } from '@miguelfranken/ui/lib/review-threads';
 import { projectMarkup } from '@miguelfranken/ui/lib/review-markup';
 import { displayableAvatar } from '@/lib/avatars';
 import type { DiffRecord } from './diff/lookup';
 import { traceViewerUrl } from '@/lib/trace-viewer/url';
-import type { AttachmentState, CaptureRecord, CheckpointRecord, ComparedCapture, ReviewFlowRecord } from './queries';
+import type { AttachmentState, CaptureRecord, CheckpointRecord, ComparedCapture, CompareTargetRecord, ReviewFlowRecord } from './queries';
 import type { CaptureThread, CommentRecord } from './threads';
 
 export const artifactUrl = (id: string) => `/api/artifacts/${id}`;
@@ -140,6 +140,19 @@ export function toCaptureView(c: ComparedCapture): ReviewCaptureView {
     ignoreRegions: c.ignoreRegions.length ? c.ignoreRegions.map((r) => ({ ...r, pixels: 0 })) : undefined,
     threads: c.threads.map(toThreadView),
     runNumber: c.runNumber ?? null,
+  };
+}
+
+/** Another run's capture of the screen, as the viewer's "Compare with" lists it; `sha256` is the image it would be compared with. */
+export function toCompareTargetView(t: CompareTargetRecord, sha256: string | null): CompareTargetView {
+  return {
+    captureId: t.capture.id,
+    runNumber: t.runNumber,
+    image: toReviewImage(t.capture),
+    same: Boolean(sha256 && t.capture.sha256 === sha256),
+    branch: t.branch,
+    at: t.startedAt.toISOString(),
+    openThreads: t.openThreads,
   };
 }
 
