@@ -9,6 +9,7 @@
  * (0–1000 on each axis, like Gemini's bounding boxes), never image pixels:
  * a model cannot know the image's size, and a crop is what it looked at.
  */
+import { NoObjectGeneratedError } from 'ai';
 import { z } from 'zod';
 import { ANALYSIS_HYPOTHESES, ANALYSIS_RECOMMENDATIONS, intersection, type Rect, type VisualDiffRegion } from '@miguelfranken/ui/lib/visual-diff';
 
@@ -18,7 +19,13 @@ export const SCHEMA_VERSION = 'visual-diff-suggestions/1';
 /** Regions per analysis and crops per region: what keeps a call bounded and its cost known. */
 export const MAX_REGIONS_PER_ANALYSIS = 4;
 export const MAX_CROPS_PER_ANALYSIS = 8;
-export const MAX_OUTPUT_TOKENS = 1_500;
+/**
+ * The answer's token limit. Room for four regions at the schema's longest
+ * fields (about 1,600 tokens) plus the reasoning a thinking model does before
+ * it writes, which counts against the same limit: an answer cut off here is
+ * not JSON, and the call fails.
+ */
+export const MAX_OUTPUT_TOKENS = 4_000;
 /** Tokens the text of the prompt costs at most, for the reservation. */
 export const PROMPT_TEXT_TOKENS = 1_200;
 
@@ -149,4 +156,15 @@ function mergeOverlapping(input: readonly Rect[]): Rect[] {
     hit.height = y1 - hit.y;
   }
   return out;
+}
+
+/** Why a model call failed, in words a person can act on: a cut-off answer says so rather than that it could not be parsed. */
+export function modelErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  if (!NoObjectGeneratedError.isInstance(error)) return `The model call failed: ${message}`;
+  const used = error.usage?.outputTokens;
+  const reasoning = error.usage?.outputTokenDetails?.reasoningTokens;
+  const tokens = used != null ? ` (${used} output tokens${reasoning ? `, ${reasoning} of them reasoning` : ''})` : '';
+  if (error.finishReason === 'length') return `The model's answer was cut off at the output limit${tokens} before it was complete.`;
+  return `The model call failed: ${message} Finish reason: ${error.finishReason ?? 'unknown'}${tokens}.`;
 }
