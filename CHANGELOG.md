@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.91](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.90...v0.0.91) (2026-10-04)
+
+### Features
+
+* **review:** dock the comment bar upright against the left or right edge ([#93](https://github.com/MiguelFranken/playwright-reporter/issues/93)) ([a786e0f](https://github.com/MiguelFranken/playwright-reporter/commit/a786e0fbbb03e9649fd447637af85adbafab7915))
+
 ## [0.0.90](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.89...v0.0.90) (2026-10-04)
 
 ### Features
