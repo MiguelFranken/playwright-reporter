@@ -1,9 +1,10 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { useMemo, useState } from 'react';
 import { Button } from '@miguelfranken/ui/components/button';
-import type { ReviewDecisionInput } from '@miguelfranken/ui/lib/review';
+import { parseCompareRule, type ReviewDecisionInput } from '@miguelfranken/ui/lib/review';
 import { EmptyState } from '@miguelfranken/ui/patterns/empty-state';
 import { ReviewStoryboardSkeleton } from '@miguelfranken/ui/views/review/review-skeleton';
 import { ImageOff } from 'lucide-react';
@@ -11,7 +12,7 @@ import { UrlReviewStoryboard } from '@/components/review/url-review-storyboard';
 import { applyDecision } from '@/lib/review/patch-flows';
 import type { RunReviewData } from '@/lib/review/run-flows';
 import { orpc } from '@/lib/rpc/client';
-import { runReviewQuery } from '@/lib/rpc/queries';
+import { runCompareTargetsQuery, runReviewQuery, runReviewQueryKey } from '@/lib/rpc/queries';
 
 /**
  * A run's storyboard, read from its query: the page renders the answer on the
@@ -22,6 +23,10 @@ import { runReviewQuery } from '@/lib/rpc/queries';
  * on their way, never behind them; the server's answer adds who made it. The
  * page is not rendered again for it. When one fails the run is read again,
  * which puts back what the server holds.
+ *
+ * `?against=` compares the whole run with the run before or another run: each
+ * comparison is its own answer, read when the reviewer picks it while the one
+ * before stays on screen, and a decision changes all of them.
  */
 export function RunReviewStoryboard({
   team,
@@ -41,23 +46,30 @@ export function RunReviewStoryboard({
   viewerId?: string | null;
 }) {
   const queryClient = useQueryClient();
-  const options = useMemo(() => runReviewQuery({ team, project, runNumber }), [team, project, runNumber]);
+  const against = parseCompareRule(useSearchParams().get('against'));
+  const ref = useMemo(() => ({ team, project, runNumber }), [team, project, runNumber]);
+  const options = useMemo(() => runReviewQuery(ref, against), [ref, against]);
   const query = useQuery(options);
-  const patch = (update: (data: RunReviewData) => RunReviewData) => queryClient.setQueryData(options.queryKey, (data) => (data ? update(data) : data));
+  // Every comparison of the run in the cache: a decision is the same whatever the screens are compared with.
+  const allKey = runReviewQueryKey(ref);
+  const patch = (update: (data: RunReviewData) => RunReviewData) => queryClient.setQueriesData<RunReviewData>({ queryKey: allKey }, (data) => (data ? update(data) : data));
+  // The other runs are read only when the reviewer reaches for the list.
+  const [targetsWanted, setTargetsWanted] = useState(false);
+  const targets = useQuery({ ...runCompareTargetsQuery(ref), enabled: targetsWanted });
 
   const mutation = useMutation(
     orpc.review.decide.mutationOptions({
       onMutate: async (input) => {
         // An answer read before this decision must not put the old status back.
-        await queryClient.cancelQueries({ queryKey: options.queryKey });
+        await queryClient.cancelQueries({ queryKey: allKey });
         patch((data) => ({ ...data, flows: applyDecision(data.flows, input) }));
       },
       onSuccess: (res, input) => {
         if (res.by) patch((data) => ({ ...data, flows: applyDecision(data.flows, input, res.by ?? undefined) }));
         // A change request's comment opened a thread, or an approval resolved some: the threads are the server's to tell.
-        if (input.comment || res.resolvedThreads) void queryClient.invalidateQueries({ queryKey: options.queryKey });
+        if (input.comment || res.resolvedThreads) void queryClient.invalidateQueries({ queryKey: allKey });
       },
-      onError: () => queryClient.invalidateQueries({ queryKey: options.queryKey }),
+      onError: () => queryClient.invalidateQueries({ queryKey: allKey }),
     }),
   );
 
@@ -82,7 +94,12 @@ export function RunReviewStoryboard({
         canModerate={canModerate}
         viewerId={viewerId}
         // Comments are saved by server actions; the run's query reads them back.
-        onCommentsChanged={() => void queryClient.invalidateQueries({ queryKey: options.queryKey })}
+        onCommentsChanged={() => void queryClient.invalidateQueries({ queryKey: allKey })}
+        runCompare={{
+          targets: targets.isError ? [] : targets.data?.targets,
+          onTargetsWanted: () => setTargetsWanted(true),
+          pending: query.isPlaceholderData,
+        }}
       />
     );
   if (query.isError)

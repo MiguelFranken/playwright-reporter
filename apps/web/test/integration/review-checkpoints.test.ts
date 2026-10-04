@@ -11,7 +11,8 @@ import { eq, sql } from 'drizzle-orm';
 import type { Checkpoint } from '@miguelfranken/protocol';
 import { getRunForProject, ingestEvents, startRun } from '@/lib/ingest/service';
 import { attachments, projects, reviewCaptures, reviewCheckpoints, reviewDecisions } from '@/lib/db/schema';
-import { captureHistory, decide, reviewQueue, runReview, runReviewCounts } from '@/lib/review/queries';
+import { captureHistory, decide, reviewQueue, runCapturesByScreen, runCompareTargetsOf, runReview, runReviewCounts } from '@/lib/review/queries';
+import { compareRunReview, toRunReviewData } from '@/lib/review/run-flows';
 import { libraryFlows } from '@/lib/review/library';
 import { dueWhere } from '@/lib/storage/retention';
 import { casesOfTests } from '@/lib/review/cases';
@@ -189,6 +190,47 @@ describe('statuses', () => {
     await runWithCheckpoints(tenant, { hashes: [sha('a'), sha('b')] });
     const [capture] = await db.select().from(reviewCaptures);
     await expect(decide({ projectId: randomUUID(), captureIds: [capture.id], decision: 'approved', userId: null })).rejects.toThrow('not in this project');
+  });
+});
+
+describe('comparing a whole run', () => {
+  test('lists the other runs with the screens they share, and compares every screen with the one chosen', async ({ tenant }) => {
+    const t0 = new Date(Date.now() - 3 * 60_000);
+    const first = await runWithCheckpoints(tenant, { hashes: [sha('a'), sha('b')], startedAt: t0 });
+    const [firstFlow] = await runReview({ id: first.run.id, startedAt: t0 });
+    const firstDesktop = firstFlow.checkpoints[0].captures.find((c) => c.variant === 'desktop')!;
+    await decide({ projectId: tenant.project.id, captureIds: [firstDesktop.id], decision: 'approved', userId: tenant.adminUser.id });
+    const t1 = new Date(Date.now() - 2 * 60_000);
+    const second = await runWithCheckpoints(tenant, { hashes: [sha('c'), sha('b')], branch: 'feat/x', startedAt: t1 });
+    const t2 = new Date(Date.now() - 60_000);
+    const third = await runWithCheckpoints(tenant, { hashes: [sha('d'), sha('e')], startedAt: t2 });
+
+    const targets = await runCompareTargetsOf(tenant.project.id, third.run.id);
+    expect(targets.map((t) => [t.runNumber, t.branch, t.screens])).toEqual([
+      [second.run.number, 'feat/x', 2],
+      [first.run.number, 'main', 2],
+    ]);
+    expect((await runCapturesByScreen(tenant.project.id, second.run.number))?.captures.size).toBe(2);
+    expect(await runCapturesByScreen(tenant.project.id, 9999)).toBeNull();
+
+    const records = await runReview({ id: third.run.id, startedAt: t2 });
+    const data = toRunReviewData(records, {}, '/teams/t/projects/p', third.run.number);
+    const compared = (rule: Parameters<typeof compareRunReview>[3]) =>
+      compareRunReview(tenant.project.id, records, data, rule).then((d) => Object.fromEntries(d.flows[0].checkpoints[0].captures.map((c) => [c.variant, c.compare ?? null])));
+
+    // Against run #first: desktop's pick is its approved baseline, the default — left as it is; mobile is compared with it.
+    const withFirst = await compared(`run:${first.run.number}`);
+    expect(withFirst.desktop).toBeNull();
+    expect(withFirst.mobile).toMatchObject({ label: `Run #${first.run.number}`, runNumber: first.run.number, same: false });
+    // The run before: desktop (default: the baseline) is compared with run #second; mobile's default is the run before already.
+    const withBefore = await compared('previous');
+    expect(withBefore.desktop).toMatchObject({ label: `Run #${second.run.number}`, runNumber: second.run.number });
+    expect(withBefore.mobile).toBeNull();
+    // The default, and the rules the viewer picks per image, change nothing.
+    expect(await compared('auto')).toEqual({ desktop: null, mobile: null });
+    expect(await compared('comments')).toEqual({ desktop: null, mobile: null });
+    // A run that does not exist leaves the review as it is.
+    expect(await compared('run:9999')).toEqual({ desktop: null, mobile: null });
   });
 });
 

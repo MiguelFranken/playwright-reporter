@@ -37,6 +37,7 @@ import { toneSolid } from '../../lib/tone';
 import { IGNORE_FILTER_HINTS, IGNORE_FILTER_LABELS, IGNORE_FILTERS, matchesIgnoreFilter, type IgnoreFilter, type IgnorePreviewView } from '../../lib/visual-diff';
 import { CheckpointViewer, type ReviewCommentsProps, type ReviewSelection } from './checkpoint-viewer';
 import type { CompareWithProps } from './compare-target-picker';
+import { RunComparePicker, type RunCompareProps } from './run-compare-picker';
 import type { IgnoreRect, IgnoreRulesChange } from './ignore-regions-editor';
 import { approveFolderAction, ReviewTree } from './review-tree';
 import { SCREEN_ZOOM_VAR } from './screen-frame';
@@ -142,6 +143,7 @@ export function ReviewStoryboard({
   analysis,
   comments,
   compareWith,
+  runCompare,
 }: {
   flows: readonly ReviewFlowView[];
   filter?: ReviewFilter;
@@ -193,6 +195,8 @@ export function ReviewStoryboard({
   comments?: ReviewCommentsProps;
   /** What the viewer compares the open image with. */
   compareWith?: CompareWithProps;
+  /** What every screen of the run is compared with, chosen above the rows (a run's review). */
+  runCompare?: RunCompareProps;
 }) {
   const library = mode === 'library';
   const hasNeedsReview = useMemo(() => flows.some((f) => f.checkpoints.some((c) => c.captures.some((cap) => NEEDS_REVIEW.includes(cap.status)))), [flows]);
@@ -342,6 +346,7 @@ export function ReviewStoryboard({
           </div>
           )}
           <div className="flex flex-wrap items-center gap-3">
+            {runCompare && !library ? <RunComparePicker {...runCompare} /> : null}
             {variants.length > 1 ? (
               <ToggleGroup variant="segment" size="sm" value={[variant ?? 'all']} onValueChange={(v) => v[0] && setVariant(v[0] === 'all' ? null : String(v[0]))} aria-label="Variant">
                 <ToggleGroupItem value="all">All variants</ToggleGroupItem>

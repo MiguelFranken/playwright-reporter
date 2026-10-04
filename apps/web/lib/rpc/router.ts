@@ -50,12 +50,12 @@ import { diffSettingsFor } from '@/lib/review/diff/lookup';
 import { readCaptureBytes } from '@/lib/review/images';
 import { diffsEnabled, requestCaptureDiff } from '@/lib/review/diff/dispatch';
 import { needsPlanning } from '@/lib/review/diff/store';
-import { REVIEW_DECISIONS } from '@miguelfranken/ui/lib/review';
+import { parseCompareRule, REVIEW_DECISIONS } from '@miguelfranken/ui/lib/review';
 import { afterCapturesShown } from '@/lib/review/diff/dispatch';
 import { casesOfTests } from '@/lib/review/cases';
-import { captureInProject, compareTargetsOf, decide, MAX_DECISION_CAPTURES, ReviewError, runReview } from '@/lib/review/queries';
-import { toRunReviewData } from '@/lib/review/run-flows';
-import { pendingDiff, toCompareTargetView, toDiffView } from '@/lib/review/view-model';
+import { captureInProject, compareTargetsOf, decide, MAX_DECISION_CAPTURES, ReviewError, runCompareTargetsOf, runReview } from '@/lib/review/queries';
+import { compareRunReview, toRunReviewData } from '@/lib/review/run-flows';
+import { pendingDiff, toCompareTargetView, toDiffView, toRunCompareTargetView } from '@/lib/review/view-model';
 import { MAX_AUDIO_BYTES, transcriptionStreaming } from '@/lib/transcription/config';
 import { canDictate, streamingToken, transcribeAudio } from '@/lib/transcription/transcribe';
 
@@ -211,9 +211,11 @@ export const appRouter = {
     /**
      * A run's review as its storyboard shows it. The page renders the same
      * answer into the cache (`runReviewQuery`); the browser asks for it again
-     * only when that is gone or after a decision failed.
+     * only when that is gone or after a decision failed. `against` compares
+     * the whole review with the run before or another run (`run:38`), as the
+     * page's `?against=` says.
      */
-    run: authed.input(project.extend({ runNumber: z.number().int().positive() })).handler(async ({ input }) => {
+    run: authed.input(project.extend({ runNumber: z.number().int().positive(), against: z.string().max(32).optional() })).handler(async ({ input }) => {
       const projectId = await readableProjectId(input.team, input.project);
       const [found] = await db
         .select({ id: runs.id, number: runs.number, startedAt: runs.startedAt })
@@ -224,7 +226,23 @@ export const appRouter = {
       const records = await runReview({ id: found.id, startedAt: found.startedAt });
       afterCapturesShown(found.id, records.flatMap((r) => r.checkpoints.flatMap((c) => c.captures)));
       const byTest = await casesOfTests(projectId, records.map((r) => r.testId));
-      return toRunReviewData(records, byTest, `/teams/${input.team}/projects/${input.project}`, found.number);
+      const data = toRunReviewData(records, byTest, `/teams/${input.team}/projects/${input.project}`, found.number);
+      return compareRunReview(projectId, records, data, parseCompareRule(input.against));
+    }),
+
+    /**
+     * The runs a run's whole review can be compared with: the newest runs
+     * that captured any of its screens, with how many.
+     */
+    runCompareTargets: authed.input(project.extend({ runNumber: z.number().int().positive() })).handler(async ({ input }) => {
+      const projectId = await readableProjectId(input.team, input.project);
+      const [found] = await db
+        .select({ id: runs.id })
+        .from(runs)
+        .where(and(eq(runs.projectId, projectId), eq(runs.number, input.runNumber)))
+        .limit(1);
+      if (!found) throw new ORPCError('NOT_FOUND');
+      return { targets: (await runCompareTargetsOf(projectId, found.id)).map(toRunCompareTargetView) };
     }),
 
     /**

@@ -260,8 +260,12 @@ export interface ReviewCaptureView {
    * on an earlier image this one replaced, which is then to be checked.
    */
   request?: { by?: string | null; at: string; runNumber?: number | null; captureId?: string | null; onThisImage: boolean } | null;
-  /** Another line of work's capture of the same screen, when the library compares two. */
-  compare?: { captureId: string; image: ReviewImage; label: string; same: boolean } | null;
+  /**
+   * What the image is compared with instead of its default reference: another
+   * line of work's capture of the same screen (the library compares two), or
+   * the run a reviewer compares the whole review with (`runNumber`).
+   */
+  compare?: { captureId: string; image: ReviewImage; label: string; same: boolean; runNumber?: number } | null;
   /** How the image differs from the one the viewer compares it with, when measured. */
   diff?: ReviewDiffView | null;
   /** Areas left out of the comparison (a clock, an ad), in this image's pixels: the active rules that fit it. */
@@ -328,6 +332,32 @@ export interface CompareTargetView {
   openThreads: number;
 }
 
+/**
+ * The rules a whole run's review can be compared under: every screen with
+ * the run before it, or with run n. The others pick per image.
+ */
+export const isRunCompareRule = (rule: CompareRule): boolean => rule === 'previous' || compareRuleRun(rule) !== null;
+
+/** The capture already shows what the rule picks: the server compared the whole review with it. */
+export function comparedByRule(capture: Pick<ReviewCaptureView, 'previous' | 'compare'>, rule: CompareRule): boolean {
+  const compare = capture.compare;
+  if (!compare) return false;
+  if (rule === 'previous') return Boolean(capture.previous && compare.captureId === capture.previous.captureId);
+  const run = compareRuleRun(rule);
+  return run !== null && compare.runNumber === run;
+}
+
+/** Another run a whole run's review can be compared with, as its "Compare with" lists it. */
+export interface RunCompareTargetView {
+  runNumber: number;
+  branch?: string | null;
+  sha?: string | null;
+  /** When it started. */
+  at?: string | null;
+  /** How many of the reviewed run's screens it captured too (with the image still stored). */
+  screens: number;
+}
+
 /** What an image is compared with under a rule, and whether the rule had to fall back to `auto`. */
 export interface ResolvedCompare {
   /** The reference to show instead of the default one; `null` keeps the default (baseline, else the run before). */
@@ -342,8 +372,12 @@ export interface ResolvedCompare {
  * reference that is the default one anyway comes back as `null`, so the
  * comparison already measured for it is kept.
  */
-export function resolveCompare(capture: Pick<ReviewCaptureView, 'id' | 'baseline' | 'previous'>, rule: CompareRule, targets: readonly CompareTargetView[] | null | undefined): ResolvedCompare {
-  if (rule === 'auto') return { target: null, fellBack: false };
+export function resolveCompare(
+  capture: Pick<ReviewCaptureView, 'id' | 'baseline' | 'previous' | 'compare'>,
+  rule: CompareRule,
+  targets: readonly CompareTargetView[] | null | undefined,
+): ResolvedCompare {
+  if (rule === 'auto' || comparedByRule(capture, rule)) return { target: null, fellBack: false };
   const defaultId = capture.baseline?.captureId ?? capture.previous?.captureId ?? null;
   const pick = (t: ResolvedCompare['target']): ResolvedCompare => (t ? { target: t.captureId === defaultId ? null : t, fellBack: false } : { target: null, fellBack: true });
   if (rule === 'baseline') {

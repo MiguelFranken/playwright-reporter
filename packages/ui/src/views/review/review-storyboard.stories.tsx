@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
-import { approvedFlows, diffStatesFlow, failedFlow, libraryCompareFlows, legacyFlow, longTextFlow, manyFlows, placeOrderFlow, reviewFlows, unavailableFlow } from '../../fixtures/review';
+import { approvedFlows, diffStatesFlow, failedFlow, libraryCompareFlows, legacyFlow, NOW, runCompareFlows, runCompareTargets, longTextFlow, manyFlows, placeOrderFlow, reviewFlows, unavailableFlow } from '../../fixtures/review';
 import { ReviewStoryboard } from './review-storyboard';
 
 const meta = {
@@ -133,6 +133,17 @@ export const LibraryComparison: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getAllByText('same as main').length).toBeGreaterThan(0);
+    await expect(canvas.getByLabelText('0.51% changed')).toBeInTheDocument();
+  },
+};
+
+/** A run's review compared with run #479 as a whole: what changed since is measured, the rest says it is the same. */
+export const ComparedWithARun: Story = {
+  args: { flows: runCompareFlows, filter: 'all', runCompare: { rule: 'run:479', onRuleChange: fn(), targets: runCompareTargets, now: NOW } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('combobox', { name: 'Compare the run with' })).toHaveTextContent('vs. Run #479');
+    await expect(canvas.getAllByText('same as Run #479').length).toBeGreaterThan(0);
     await expect(canvas.getByLabelText('0.51% changed')).toBeInTheDocument();
   },
 };

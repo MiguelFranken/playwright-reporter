@@ -7,13 +7,13 @@
  * merged when their variants do not collide, so the storyboard shows the two
  * devices side by side, as it does for resized variants of one test.
  */
-import type { CompareTargetView, ReviewCaseRef, ReviewCaptureView, ReviewCheckpointView, ReviewDiffView, ReviewFlowView, ReviewImage, ReviewStatus } from '@miguelfranken/ui/lib/review';
+import type { CompareTargetView, ReviewCaseRef, RunCompareTargetView, ReviewCaptureView, ReviewCheckpointView, ReviewDiffView, ReviewFlowView, ReviewImage, ReviewStatus } from '@miguelfranken/ui/lib/review';
 import { projectAnchor, type ReviewCommentView, type ReviewThreadView } from '@miguelfranken/ui/lib/review-threads';
 import { projectMarkup, type ReviewDrawingView } from '@miguelfranken/ui/lib/review-markup';
 import { displayableAvatar } from '@/lib/avatars';
 import type { DiffRecord } from './diff/lookup';
 import { traceViewerUrl } from '@/lib/trace-viewer/url';
-import type { AttachmentState, CaptureRecord, CheckpointRecord, ComparedCapture, CompareTargetRecord, ReviewFlowRecord } from './queries';
+import type { AttachmentState, CaptureRecord, CheckpointRecord, ComparedCapture, CompareTargetRecord, ReviewFlowRecord, RunCompareTargetRecord } from './queries';
 import type { CaptureThread, CommentRecord } from './threads';
 import type { CaptureDrawing } from './drawings';
 
@@ -170,6 +170,11 @@ export function toCompareTargetView(t: CompareTargetRecord, sha256: string | nul
     at: t.startedAt.toISOString(),
     openThreads: t.openThreads,
   };
+}
+
+/** Another run, as the run review's "Compare with" lists it. */
+export function toRunCompareTargetView(t: RunCompareTargetRecord): RunCompareTargetView {
+  return { runNumber: t.runNumber, branch: t.branch, sha: t.sha, at: t.startedAt.toISOString(), screens: t.screens };
 }
 
 export function toCheckpointView(cp: CheckpointRecord): ReviewCheckpointView {

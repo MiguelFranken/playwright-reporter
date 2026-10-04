@@ -7,7 +7,7 @@
  */
 import { after } from 'next/server';
 import type { ReviewFlowView } from '@miguelfranken/ui/lib/review';
-import type { ComparedCapture, ReviewFlowRecord } from '../queries';
+import type { CaptureRecord, ComparedCapture, ReviewFlowRecord } from '../queries';
 import { toDiffView, pendingDiff, toReviewImage } from '../view-model';
 import { diffsEnabled, dispatchPairs } from './dispatch';
 import { diffSettingsFor, diffsFor, identityKey, pairKey, pairOf } from './lookup';
@@ -18,15 +18,36 @@ const capturesOf = (records: readonly ReviewFlowRecord[]) => records.flatMap((r)
 export async function compareFlowViews(views: ReviewFlowView[], shown: readonly ReviewFlowRecord[], other: readonly ReviewFlowRecord[], label: string): Promise<ReviewFlowView[]> {
   const theirs = new Map<string, ComparedCapture>();
   for (const c of capturesOf(other)) theirs.set(identityKey(c), c);
+  return compareEachWith(views, shown, (mine) => {
+    const capture = theirs.get(identityKey(mine));
+    return capture ? { capture, label } : null;
+  });
+}
+
+/** The capture a screen is compared with, and the caption it carries (`Run #38`). */
+export interface PickedReference {
+  capture: CaptureRecord;
+  label: string;
+  runNumber?: number;
+}
+
+/**
+ * Every capture shown compared with the reference `pick` chooses for it (none:
+ * left as it is), with the measured difference where it is known. Comparisons
+ * nobody measured yet are planned and measured after the response; the
+ * screens show them as pending meanwhile.
+ */
+export async function compareEachWith(views: ReviewFlowView[], shown: readonly ReviewFlowRecord[], pick: (mine: ComparedCapture) => PickedReference | null): Promise<ReviewFlowView[]> {
   const ours = capturesOf(shown);
   const settings = await diffSettingsFor(ours.map((c) => c.projectId));
-  const matched = new Map<string, { mine: ComparedCapture; theirs: ComparedCapture; pair: PlannedPair['pair'] | null }>();
+  const matched = new Map<string, { mine: ComparedCapture; theirs: PickedReference; pair: PlannedPair['pair'] | null }>();
   for (const mine of ours) {
-    const other = theirs.get(identityKey(mine));
+    const other = pick(mine);
     if (!other) continue;
     const s = settings.get(mine.projectId);
-    matched.set(mine.id, { mine, theirs: other, pair: s ? pairOf(mine, other, s, mine.ignoreRegions) : null });
+    matched.set(mine.id, { mine, theirs: other, pair: s ? pairOf(mine, other.capture, s, mine.ignoreRegions) : null });
   }
+  if (matched.size === 0) return views;
   const diffs = await diffsFor([...matched.values()].flatMap((m) => (m.pair ? [m.pair] : [])));
 
   const toPlan: PlannedPair[] = [];
@@ -37,12 +58,13 @@ export async function compareFlowViews(views: ReviewFlowView[], shown: readonly 
       captures: cp.captures.map((view) => {
         const m = matched.get(view.id);
         if (!m) return view;
-        const same = Boolean(m.mine.sha256 && m.mine.sha256 === m.theirs.sha256);
+        const { capture: theirs, label, runNumber } = m.theirs;
+        const same = Boolean(m.mine.sha256 && m.mine.sha256 === theirs.sha256);
         const diff = m.pair ? (diffs.get(pairKey(m.pair.projectId, m.pair.baseSha256, m.pair.headSha256, m.pair.optionsKey)) ?? null) : null;
-        if (m.pair && (!diff || diff.status === 'pending')) toPlan.push({ pair: m.pair, head: m.mine.attachment, base: m.theirs.attachment });
+        if (m.pair && (!diff || diff.status === 'pending')) toPlan.push({ pair: m.pair, head: m.mine.attachment, base: theirs.attachment });
         return {
           ...view,
-          compare: { captureId: m.theirs.id, image: toReviewImage(m.theirs), label, same },
+          compare: { captureId: theirs.id, image: toReviewImage(theirs), label, same, ...(runNumber ? { runNumber } : {}) },
           diff: diff ? toDiffView(diff, 'compare') : m.pair && diffsEnabled() ? pendingDiff('compare') : null,
         };
       }),
@@ -56,7 +78,7 @@ export async function compareFlowViews(views: ReviewFlowView[], shown: readonly 
         const plan = await planPairs(toPlan);
         if (runId) await dispatchPairs(plan.ids, runId);
       } catch (err) {
-        console.error('[image-diff] planning a library comparison failed', err);
+        console.error('[image-diff] planning a comparison failed', err);
       }
     });
   }

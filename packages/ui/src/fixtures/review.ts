@@ -1,4 +1,4 @@
-import type { CompareTargetView, DiffRegion, ReviewCaptureView, ReviewCheckpointView, ReviewDiffView, ReviewFlowView, ReviewImage } from '../lib/review';
+import type { CompareTargetView, DiffRegion, RunCompareTargetView, ReviewCaptureView, ReviewCheckpointView, ReviewDiffView, ReviewFlowView, ReviewImage } from '../lib/review';
 import type { ReviewQueueRow } from '../views/review/review-queue';
 import { ago, NOW } from './now';
 
@@ -426,6 +426,33 @@ export const checkoutCompareTargets: CompareTargetView[] = (() => {
     run(468, 60 * 30, { branch: null }),
   ];
 })();
+
+/** The runs a run's whole review can be compared with, newest first, as its "Compare with" lists them. */
+export const runCompareTargets: RunCompareTargetView[] = [
+  { runNumber: 481, branch: 'main', sha: '4f2a9c1', at: ago(60 * 5).toISOString(), screens: 14 },
+  { runNumber: 479, branch: 'feat/checkout-redesign', sha: 'b81e0d7', at: ago(60 * 9).toISOString(), screens: 14 },
+  { runNumber: 477, branch: 'feat/checkout-sidebar-with-a-very-long-branch-name', sha: '0c3d5e2', at: ago(60 * 20).toISOString(), screens: 6 },
+  { runNumber: 470, branch: 'main', sha: '9a7b6c5', at: ago(60 * 26).toISOString(), screens: 1 },
+  { runNumber: 468, branch: null, sha: null, at: ago(60 * 30).toISOString(), screens: 12 },
+];
+
+/** A run's review compared with run #479: the checkout changed since, the cart is the same. */
+export const runCompareFlows: ReviewFlowView[] = [
+  {
+    ...placeOrderFlow,
+    checkpoints: placeOrderFlow.checkpoints.map((cp) => ({
+      ...cp,
+      captures: cp.captures.map((c) => {
+        const changed = cp.name === 'checkout-ready';
+        return {
+          ...c,
+          compare: { captureId: `run-479-${c.id}`, image: c.baseline?.image ?? c.image, label: 'Run #479', same: !changed, runNumber: 479 },
+          diff: changed && c.diff ? { ...c.diff, against: 'compare' as const } : null,
+        };
+      }),
+    })),
+  },
+];
 
 /**
  * A run the size of a real suite: 240 tests in twelve spec files, each a copy

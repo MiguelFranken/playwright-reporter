@@ -745,6 +745,65 @@ export async function compareTargetsOf(projectId: string, captureId: string, lim
   return { sha256: self.sha256, targets };
 }
 
+/** A whole run another run's review can be compared with. */
+export interface RunCompareTargetRecord {
+  runNumber: number;
+  branch: string | null;
+  sha: string | null;
+  startedAt: Date;
+  /** Screens (checkpoint and variant of a test) both runs captured, with the other run's image still stored. */
+  screens: number;
+}
+
+/**
+ * The runs a run's review can be compared with as a whole: the newest
+ * `limit` other runs of the project that captured at least one of its
+ * screens and still have the image, newest first, each with how many of the
+ * run's screens it holds.
+ */
+export async function runCompareTargetsOf(projectId: string, runId: string, limit = 25): Promise<RunCompareTargetRecord[]> {
+  const rows = await db.execute<{ number: number; git_branch: string | null; git_short_sha: string | null; started_at: Date | string; screens: string }>(sql`
+    select r.number, r.git_branch, r.git_short_sha, r.started_at, count(distinct (o.test_id, o.checkpoint_name, o.variant)) as screens
+    from ${reviewCaptures} o
+    join ${runs} r on r.id = o.run_id
+    join ${attachments} a on a.id = o.attachment_id
+    where o.project_id = ${projectId}
+      and o.run_id <> ${runId}
+      and a.status not in ('expired', 'failed')
+      and exists (
+        select 1 from ${reviewCaptures} m
+        where m.run_id = ${runId} and m.test_id = o.test_id and m.checkpoint_name = o.checkpoint_name and m.variant = o.variant
+      )
+    group by r.id
+    order by r.started_at desc, r.number desc
+    limit ${limit}
+  `);
+  return rows.map((r) => ({ runNumber: Number(r.number), branch: r.git_branch, sha: r.git_short_sha, startedAt: new Date(r.started_at), screens: Number(r.screens) }));
+}
+
+/**
+ * Every screen a run captured, by `identityKey`, as its final attempt shows
+ * it and only where the image is still stored: what another run's review is
+ * compared with. `null` when the project has no such run.
+ */
+export async function runCapturesByScreen(projectId: string, runNumber: number): Promise<{ runNumber: number; captures: Map<string, CaptureRecord> } | null> {
+  const [run] = await db.select({ id: runs.id }).from(runs).where(and(eq(runs.projectId, projectId), eq(runs.number, runNumber))).limit(1);
+  if (!run) return null;
+  const rows = await db
+    .select(captureColumns)
+    .from(reviewCaptures)
+    .innerJoin(attachments, eq(attachments.id, reviewCaptures.attachmentId))
+    .leftJoin(thumbs, eq(thumbs.id, reviewCaptures.thumbnailAttachmentId))
+    .innerJoin(reviewCheckpoints, eq(reviewCheckpoints.id, reviewCaptures.checkpointId))
+    .innerJoin(testAttempts, eq(testAttempts.id, reviewCheckpoints.attemptId))
+    .where(and(eq(reviewCaptures.projectId, projectId), eq(reviewCaptures.runId, run.id), isFinalAttempt, imageKept))
+    .orderBy(reviewCaptures.createdAt);
+  const captures = new Map<string, CaptureRecord>();
+  // The newest capture of a screen wins, as in the run's own review.
+  for (const r of rows) captures.set(identityKey(r as never), toCapture(r as CaptureRow));
+  return { runNumber, captures };
+}
+
 // ---------------------------------------------------------------- decisions
 
 export class ReviewError extends Error {}
