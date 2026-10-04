@@ -10,6 +10,7 @@
  * writes expecting 3 is refused when somebody saved 4 in between.
  */
 import { randomUUID } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import { and, eq, sql } from 'drizzle-orm';
 import { IGNORE_CATEGORIES, unionArea, type IgnoreCategory, type IgnoreGeometry, type IgnoreRule, type IgnoreSource } from '@miguelfranken/ui/lib/visual-diff';
 import { db } from '@/lib/db/drizzle';
@@ -128,6 +129,29 @@ export async function rulesFor(identities: readonly Identity[]): Promise<Map<str
   return out;
 }
 
+/**
+ * A screen's rule set without a capture — for a set whose images are all
+ * gone (retention, a renamed checkpoint): it can still be pruned. Answers
+ * the set with a stand-in capture that has no image, so nothing can be
+ * drawn on it. Null when the project has no rules for the screen.
+ */
+export async function rulesOfIdentity(projectId: string, identity: Identity) {
+  const [row] = await db
+    .select({ regions: reviewIgnoreRegions.regions, rules: reviewIgnoreRegions.rules, revision: reviewIgnoreRegions.revision, updatedAt: reviewIgnoreRegions.updatedAt })
+    .from(reviewIgnoreRegions)
+    .where(
+      and(
+        eq(reviewIgnoreRegions.projectId, projectId),
+        eq(reviewIgnoreRegions.testId, identity.testId),
+        eq(reviewIgnoreRegions.checkpointName, identity.checkpointName),
+        eq(reviewIgnoreRegions.variant, identity.variant),
+      ),
+    );
+  if (!row) return null;
+  const capture = { id: '', ...identity, width: null, height: null, viewportWidth: null, viewportHeight: null, deviceScaleFactor: null };
+  return { capture, ...ruleSetOf(row) };
+}
+
 /** The rule set of one capture's checkpoint and variant, with the capture; null when the capture is not in the project. */
 export async function rulesOfCapture(projectId: string, captureId: string) {
   const [capture] = await db
@@ -153,7 +177,8 @@ export interface SetRulesInput {
   projectId: string;
   /** The capture the rules are drawn on: its identity gets the rules, its geometry is recorded on new ones. */
   capture: Pick<CaptureRecord, 'id' | 'testId' | 'checkpointName' | 'variant' | 'width' | 'height' | 'viewportWidth' | 'viewportHeight' | 'deviceScaleFactor'>;
-  rules: readonly RuleInput[];
+  /** The whole set after the change, or how to make it from the set as saved (read under the row lock, so a merge cannot lose a concurrent write). */
+  rules: readonly RuleInput[] | ((current: RuleSet) => readonly RuleInput[]);
   /** The revision the caller read; the write is refused when it moved. Omit to overwrite whatever is there. */
   expectedRevision?: number | null;
   reason?: string | null;
@@ -170,7 +195,7 @@ export interface SetRulesInput {
  * Writes the new revision to the history and answers the new set.
  */
 export async function setRules(input: SetRulesInput): Promise<RuleSet> {
-  if (input.rules.length > MAX_IGNORE_REGIONS) throw new IgnoreRegionsError(`At most ${MAX_IGNORE_REGIONS} areas.`);
+  if (typeof input.rules !== 'function' && input.rules.length > MAX_IGNORE_REGIONS) throw new IgnoreRegionsError(`At most ${MAX_IGNORE_REGIONS} areas.`);
   const { capture } = input;
   const [author] = input.userId ? await db.select({ name: users.name }).from(users).where(eq(users.id, input.userId)) : [];
   const geometry: IgnoreGeometry | null =
@@ -185,10 +210,12 @@ export async function setRules(input: SetRulesInput): Promise<RuleSet> {
       .for('update');
     const current = ruleSetOf(existing);
     if (input.expectedRevision != null && input.expectedRevision !== current.revision) throw new IgnoreRevisionConflict(input.expectedRevision, current.revision);
+    const wanted = typeof input.rules === 'function' ? input.rules(current) : input.rules;
+    if (wanted.length > MAX_IGNORE_REGIONS) throw new IgnoreRegionsError(`At most ${MAX_IGNORE_REGIONS} areas.`);
     const byId = new Map(current.rules.map((r) => [r.id, r]));
     const now = new Date().toISOString();
     const source: IgnoreSource = input.source === 'ai_suggestion' ? 'ai_suggestion' : 'manual';
-    const next: IgnoreRule[] = input.rules.map((r) => {
+    const next: IgnoreRule[] = wanted.map((r) => {
       const kept = r.id ? byId.get(r.id) : undefined;
       const sameRect = kept && kept.x === r.x && kept.y === r.y && kept.width === r.width && kept.height === r.height;
       return {
@@ -208,7 +235,8 @@ export async function setRules(input: SetRulesInput): Promise<RuleSet> {
         geometry: kept && sameRect ? kept.geometry : geometry,
       };
     });
-    const unchanged = existing && JSON.stringify(current.rules) === JSON.stringify(next);
+    // Compared as values: jsonb hands the saved rules back with their keys in another order.
+    const unchanged = existing && isDeepStrictEqual(current.rules, next);
     if (unchanged) return current;
     const revision = current.revision + 1;
     const regions = next.filter((r) => r.active).map(({ x, y, width, height }) => ({ x, y, width, height }));
@@ -245,6 +273,38 @@ export async function setIgnoreRegions(projectId: string, captureId: string, rul
   if (!found) return null;
   const set = await setRules({ projectId, capture: found.capture, rules, expectedRevision: opts.expectedRevision, reason: opts.reason, source: opts.source ?? 'app', userId });
   return { capture: found.capture, ...set };
+}
+
+export interface RulePatch {
+  /** New rectangles. One the same as a rule already there is not added twice, so a retried call changes nothing. */
+  add?: readonly RuleInput[];
+  /** Ids of rules to remove (kept in the history). */
+  remove?: readonly string[];
+  /** Ids of rules to switch off (kept, not applied) or back on. */
+  deactivate?: readonly string[];
+  activate?: readonly string[];
+}
+
+/**
+ * A set with rules added and removed, every other rule as it was — the
+ * change an assistant means by "also leave this name out", without
+ * re-sending (and possibly dropping) the rules it did not touch.
+ */
+export function patchRules(current: RuleSet, patch: RulePatch): RuleInput[] {
+  const remove = new Set(patch.remove ?? []);
+  const off = new Set(patch.deactivate ?? []);
+  const on = new Set(patch.activate ?? []);
+  const named = [...remove, ...off, ...on];
+  const unknown = [...new Set(named)].filter((id) => !current.rules.some((r) => r.id === id));
+  if (unknown.length) throw new IgnoreRegionsError(`No rule ${unknown.join(', ')} in this set. Read the rules again.`);
+  if (new Set(named).size !== named.length) throw new IgnoreRegionsError('Name each rule once: to remove, to switch off or to switch on.');
+  const kept: RuleInput[] = current.rules
+    .filter((r) => !remove.has(r.id))
+    .map(({ id, x, y, width, height, active }) => ({ id, x, y, width, height, active: off.has(id) ? false : on.has(id) ? true : active }));
+  const same = (a: Rect, b: Rect) => a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
+  const added: RuleInput[] = [];
+  for (const r of patch.add ?? []) if (![...kept, ...added].some((k) => k.active !== false && same(k, r))) added.push({ ...r, id: null, active: true });
+  return [...kept, ...added];
 }
 
 /** The history of a checkpoint and variant's rules, newest first. */

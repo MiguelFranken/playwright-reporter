@@ -334,6 +334,25 @@ figure.shiki pre {
   line-height: 1.7;
 }
 
+/* A prompt is prose to copy: wrapped, a hanging indent for list items, never cut off. */
+.docs-prompt figure.shiki pre {
+  width: auto;
+}
+
+.docs-prompt figure.shiki .fd-scroll-container {
+  max-height: none;
+}
+
+.docs-prompt figure.shiki pre .line {
+  display: block;
+  min-height: 1.7em;
+  padding-left: calc(1rem + 3ch);
+  padding-right: 1rem;
+  text-indent: -3ch;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* ----------------------------------------------------------------- steps */
 
 .fd-steps {

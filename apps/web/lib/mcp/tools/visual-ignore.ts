@@ -13,9 +13,11 @@ import { inArray } from 'drizzle-orm';
 import { db } from '@/lib/db/drizzle';
 import { tests } from '@/lib/db/schema';
 import { compare, contextFor, resolvePair } from '@/lib/review/diff/comparison';
-import { IgnoreRegionsError, IgnoreRevisionConflict, listRuleSets, MAX_IGNORE_REGIONS, previewRules, ruleHistory, rulesOfCapture, setRules } from '@/lib/review/diff/ignore';
+import { IgnoreRegionsError, IgnoreRevisionConflict, listRuleSets, MAX_IGNORE_REGIONS, patchRules, previewRules, ruleHistory, rulesOfCapture, rulesOfIdentity, setRules } from '@/lib/review/diff/ignore';
 import { decidePolicy, policyTargetsFor } from '@/lib/review/diff/policy';
 import { requestCaptureDiff } from '@/lib/review/diff/dispatch';
+import { ASSESS_CAPTURES, assessRuleSets, RULE_ASSESSMENTS, STALE_ASSESSMENTS, type SetCheck } from '@/lib/review/diff/rule-review';
+import { identityKey } from '@/lib/review/diff/lookup';
 import { readCaptureBytes } from '@/lib/review/images';
 import { captureInProject } from '@/lib/review/queries';
 import { decodeComparisonId } from '@miguelfranken/ui/lib/visual-diff';
@@ -41,9 +43,19 @@ const ruleOut = z.object({
   createdBy: z.string().nullable(),
   drawnOn: z.object({ captureId: z.string().nullable(), imageWidth: z.number(), imageHeight: z.number() }).nullable().describe('The image the rule was drawn on; null for a legacy rule, applied unchecked.'),
   validity: z.enum(RULE_VALIDITIES).nullable().describe('On the capture asked about: valid, legacy, geometry_changed (suspended), out_of_bounds (suspended) or inactive.'),
+  check: z
+    .object({
+      assessment: z.enum(RULE_ASSESSMENTS).describe('in_use: covered a change lately; unused: applied in 2+ measured comparisons and covered none — what it guards may have become stable; suspended: does not fit the image as captured now; not_captured: the screen is no longer captured; inactive; unmeasured: too few measurements to tell.'),
+      validityNow: z.enum(RULE_VALIDITIES).nullable().describe('On the latest capture of the screen.'),
+      comparisons: z.number().describe('Measured comparisons of the latest runs it was applied in.'),
+      matched: z.number().describe('Of those, how many it covered a changed region in.'),
+      coveredPixels: z.number(),
+    })
+    .optional()
+    .describe('With assess: the rule judged on the screen’s latest runs.'),
 });
 
-const ruleOutOf = (r: IgnoreRule, image: { width: number | null; height: number | null } | null): z.infer<typeof ruleOut> => ({
+const ruleOutOf = (r: IgnoreRule, image: { width: number | null; height: number | null } | null, check?: SetCheck): z.infer<typeof ruleOut> => ({
   id: r.id,
   x: r.x,
   y: r.y,
@@ -57,7 +69,15 @@ const ruleOutOf = (r: IgnoreRule, image: { width: number | null; height: number 
   createdBy: r.createdBy,
   drawnOn: r.geometry ? { captureId: r.geometry.originCaptureId, imageWidth: r.geometry.imageWidth, imageHeight: r.geometry.imageHeight } : null,
   validity: image ? ruleValidity(r, image) : null,
+  ...(check ? { check: checkOf(check, r.id) } : {}),
 });
+
+function checkOf(check: SetCheck, ruleId: string) {
+  const { assessment, validityNow, comparisons, matched, coveredPixels } = check.rules.find((c) => c.ruleId === ruleId)!;
+  return { assessment, validityNow, comparisons, matched, coveredPixels };
+}
+
+const latestOut = z.object({ captureId: z.string(), run: z.number(), at: z.string(), width: z.number().nullable(), height: z.number().nullable() });
 
 // ---------------------------------------------------------------- list_visual_ignore_rules
 
@@ -65,7 +85,8 @@ const listInput = z.object({
   ...commonParams,
   capture: z.string().optional().describe('One capture: the rules of its checkpoint and variant, each checked against this image, with the history of the set.'),
   test: z.string().optional().describe('Part of a test title or file.'),
-  status: z.enum(['active', 'all']).optional().describe('active (default): sets with a rule switched on; all: every set ever saved.'),
+  status: z.enum(['active', 'all', 'stale']).optional().describe('active (default): sets with a rule switched on; all: every set ever saved; stale: sets with a rule that is unused, suspended or on a screen no longer captured (implies assess).'),
+  assess: z.boolean().optional().describe(`Judge each rule on the screen’s latest ${ASSESS_CAPTURES} captures: does it still fit the image, and did it cover any change? Use it to find rules to remove.`),
   limit: z.number().int().min(1).max(100).optional(),
   cursor: cursorParam,
 });
@@ -78,6 +99,8 @@ const setOut = z.object({
   updatedAt: z.string(),
   rules: z.array(ruleOut),
   states: z.array(z.enum(IGNORE_FILTERS)).optional(),
+  latestCapture: latestOut.nullable().optional().describe('With assess: the newest capture of the screen; null when none is stored any more.'),
+  comparisonsChecked: z.number().optional().describe('With assess: measured comparisons of the latest runs looked at.'),
   history: z.array(z.object({ revision: z.number(), at: z.string(), by: z.string().nullable(), source: z.string(), reason: z.string().nullable(), rules: z.number() })).optional(),
 });
 
@@ -93,7 +116,7 @@ export const listVisualIgnoreRules = defineTool({
   title: 'List the areas left out of comparisons',
   toolset: 'core',
   description:
-    'The rules that leave areas of review screens out of their pixel comparisons (a clock, a generated name), per checkpoint and variant: each rule’s rectangle, reason, who drew it on which image, whether it is switched on, and — for one capture — whether it still fits that image or is suspended, plus the revision history of the set. Pass the revision to set_visual_ignore_rules.',
+    'The rules that leave areas of review screens out of their pixel comparisons (a clock, a generated name), per checkpoint and variant: each rule’s rectangle, reason, who drew it on which image, whether it is switched on, and — for one capture — whether it still fits that image, plus the history of the set. With assess (or status "stale") each rule is judged on the screen’s latest runs: in use, unused (covered no change lately), suspended (no longer fits the image) or on a screen no longer captured — the ones to review and remove with update_visual_ignore_rules.',
   input: listInput,
   output: listOutput,
   async handler(args, ctx) {
@@ -114,6 +137,13 @@ export const listVisualIgnoreRules = defineTool({
         states: [...ignoreStates(c.ignore)],
         history: history.map((h) => ({ revision: h.revision, at: h.createdAt.toISOString(), by: h.changedBy, source: h.source, reason: h.reason, rules: h.rules.length })),
       };
+      if (args.assess) {
+        const identity = { testId: c.testId, checkpointName: c.checkpointName, variant: c.variant };
+        const check = (await assessRuleSets(project.project.id, [{ identity, rules: c.ignore.rules }])).get(identityKey(identity))!;
+        set.rules = c.ignore.rules.map((r) => ruleOutOf(r, { width: c.width, height: c.height }, check));
+        set.latestCapture = check.latest;
+        set.comparisonsChecked = check.comparisons;
+      }
       const [context] = [...(await contextFor([c])).values()];
       if (context) set.test = { testId: context.test.testId, title: context.test.titlePath.join(' › ') || context.test.title, file: context.test.file };
       return {
@@ -128,25 +158,33 @@ export const listVisualIgnoreRules = defineTool({
       };
     }
     const all = await listRuleSets(project.project.id);
-    const wanted = (args.status ?? 'active') === 'all' ? all : all.filter((s) => s.rules.some((r) => r.active));
+    const status = args.status ?? 'active';
+    const wanted = status === 'all' ? all : all.filter((s) => s.rules.some((r) => r.active));
     const q = args.test?.toLowerCase();
     const testIds = [...new Set(wanted.map((s) => s.identity.testId))];
     const titles = testIds.length ? await db.select({ id: tests.id, title: tests.title, titlePath: tests.titlePath, file: tests.file }).from(tests).where(inArray(tests.id, testIds)) : [];
     const titleOf = new Map(titles.map((t) => [t.id, t]));
-    const filtered = wanted.filter((s) => {
+    let filtered = wanted.filter((s) => {
       const t = titleOf.get(s.identity.testId);
       return !q || (t && (t.title.toLowerCase().includes(q) || t.titlePath.join(' ').toLowerCase().includes(q) || t.file.toLowerCase().includes(q)));
     });
-    const page = readPage('list_visual_ignore_rules', { status: args.status, test: args.test }, { limit: args.limit ?? 50, cursor: args.cursor });
-    const sets = filtered.slice(page.offset, page.offset + page.limit).map((s): z.infer<typeof setOut> => {
+    const checks = status === 'stale' ? await assessRuleSets(project.project.id, filtered) : new Map<string, SetCheck>();
+    if (status === 'stale') filtered = filtered.filter((s) => checks.get(identityKey(s.identity))!.rules.some((r) => STALE_ASSESSMENTS.includes(r.assessment)));
+    const filters = { status: args.status, test: args.test, assess: args.assess };
+    const page = readPage('list_visual_ignore_rules', filters, { limit: args.limit ?? 50, cursor: args.cursor });
+    const shown = filtered.slice(page.offset, page.offset + page.limit);
+    if (args.assess && status !== 'stale') for (const [k, v] of await assessRuleSets(project.project.id, shown)) checks.set(k, v);
+    const sets = shown.map((s): z.infer<typeof setOut> => {
       const t = titleOf.get(s.identity.testId);
+      const check = checks.get(identityKey(s.identity));
       return {
         test: { testId: s.identity.testId, title: t ? t.titlePath.join(' › ') || t.title : '', file: t?.file ?? '' },
         checkpoint: { name: s.identity.checkpointName, title: checkpointLabel(s.identity.checkpointName) },
         variant: s.identity.variant,
         revision: s.revision,
         updatedAt: s.updatedAt.toISOString(),
-        rules: s.rules.map((r) => ruleOutOf(r, null)),
+        rules: s.rules.map((r) => ruleOutOf(r, check?.latest ?? null, check)),
+        ...(check ? { latestCapture: check.latest, comparisonsChecked: check.comparisons } : {}),
       };
     });
     return {
@@ -154,14 +192,25 @@ export const listVisualIgnoreRules = defineTool({
         project: project.ref,
         counts: { sets: filtered.length, rules: filtered.reduce((n, s) => n + s.rules.length, 0), active: filtered.reduce((n, s) => n + s.rules.filter((r) => r.active).length, 0), returned: sets.length },
         sets,
-        nextCursor: nextCursor('list_visual_ignore_rules', { status: args.status, test: args.test }, page, filtered.length),
+        nextCursor: nextCursor('list_visual_ignore_rules', filters, page, filtered.length),
       },
       render(md, d) {
         md.heading(`Areas left out of comparisons in ${d.project}`, 2);
         md.line(`${d.counts.sets} screen${d.counts.sets === 1 ? '' : 's'} with rules, ${d.counts.active} rule${d.counts.active === 1 ? '' : 's'} switched on. Showing ${d.counts.returned}${d.nextCursor ? ' — more with nextCursor' : ''}.`);
         if (!d.sets.length) md.line('No rules. Every comparison counts every pixel.');
-        md.table(['Test', 'Checkpoint', 'Variant', 'Revision', 'Rules', 'Rectangles (x, y, w, h)'], d.sets.map((s) => [s.test.title, s.checkpoint.title, s.variant, s.revision, `${s.rules.filter((r) => r.active).length} on / ${s.rules.length}`, s.rules.map((r) => `${r.id.slice(0, 8)}: ${r.x}, ${r.y}, ${r.width}, ${r.height}${r.reason ? ` — ${r.reason}` : ''}`).join('; ')]));
-        md.line('Pass a capture id for the rules checked against one image and the history of the set.');
+        md.table(
+          ['Test', 'Checkpoint', 'Variant', 'Revision', 'Rules', 'Rectangles (x, y, w, h)', 'Latest capture'],
+          d.sets.map((s) => [
+            s.test.title,
+            `${s.checkpoint.title} (${s.checkpoint.name})`,
+            s.variant,
+            s.revision,
+            `${s.rules.filter((r) => r.active).length} on / ${s.rules.length}`,
+            s.rules.map((r) => `${r.id}: ${r.x}, ${r.y}, ${r.width}, ${r.height}${r.check ? ` [${r.check.assessment}, covered a change in ${r.check.matched}/${r.check.comparisons}]` : ''}${r.reason ? ` — ${r.reason}` : ''}`).join('; '),
+            s.latestCapture === undefined ? '—' : s.latestCapture ? `run #${s.latestCapture.run}, ${s.latestCapture.captureId}` : 'none stored',
+          ]),
+        );
+        md.line(d.sets.some((s) => s.latestCapture !== undefined) ? 'Remove what is stale with update_visual_ignore_rules (remove, by capture or by screen: testId, checkpoint name, variant) — only when the user asked.' : 'Pass assess: true (or status "stale") to judge each rule on the latest runs; pass a capture id for one image and the history of the set.');
       },
     };
   },
@@ -169,7 +218,20 @@ export const listVisualIgnoreRules = defineTool({
 
 function renderRules(md: { table(h: string[], rows: (string | number | null | undefined)[][]): number; line(s: string): void }, s: z.infer<typeof setOut>) {
   if (!s.rules.length) return void md.line('No rules.');
-  md.table(['Id', 'Rectangle (x, y, w, h)', 'On', 'Source', 'Validity here', 'Reason', 'Drawn on'], s.rules.map((r) => [r.id, `${r.x}, ${r.y}, ${r.width}, ${r.height}`, r.active ? 'yes' : 'no', r.source, r.validity ?? '—', r.reason, r.drawnOn ? `${r.drawnOn.imageWidth}×${r.drawnOn.imageHeight}${r.drawnOn.captureId ? ` (${r.drawnOn.captureId})` : ''}` : 'legacy']));
+  const checked = s.rules.some((r) => r.check);
+  md.table(
+    ['Id', 'Rectangle (x, y, w, h)', 'On', 'Source', 'Validity here', 'Reason', 'Drawn on', ...(checked ? ['Lately'] : [])],
+    s.rules.map((r) => [
+      r.id,
+      `${r.x}, ${r.y}, ${r.width}, ${r.height}`,
+      r.active ? 'yes' : 'no',
+      r.source,
+      r.validity ?? '—',
+      r.reason,
+      r.drawnOn ? `${r.drawnOn.imageWidth}×${r.drawnOn.imageHeight}${r.drawnOn.captureId ? ` (${r.drawnOn.captureId})` : ''}` : 'legacy',
+      ...(checked ? [r.check ? `${r.check.assessment}: covered a change in ${r.check.matched} of ${r.check.comparisons}` : '—'] : []),
+    ]),
+  );
 }
 
 // ---------------------------------------------------------------- preview_visual_ignore_rules
@@ -328,4 +390,150 @@ export const setVisualIgnoreRules = defineTool({
   },
 });
 
-export const VISUAL_IGNORE_TOOLS = [listVisualIgnoreRules, previewVisualIgnoreRules, setVisualIgnoreRules];
+// ---------------------------------------------------------------- update_visual_ignore_rules
+
+export const MAX_RULE_CHANGES = 50;
+
+const changeIn = z.object({
+  comparison: z.string().optional().describe('The comparisonId the rectangles were measured on: they are drawn on its head image. Or pass capture.'),
+  capture: z.string().optional().describe('Instead of comparison: the capture the rectangles are drawn on.'),
+  screen: z
+    .object({ testId: z.string(), checkpoint: z.string().describe('The checkpoint name (key), not its title.'), variant: z.string() })
+    .optional()
+    .describe('Instead: the screen, as list_visual_ignore_rules names it — for removing or switching rules on a screen with no stored capture. Cannot add.'),
+  add: z
+    .array(
+      rectIn.extend({
+        reason: z.string().trim().min(1).max(500).describe('Why this area changes between runs on purpose, e.g. "workshop name gets a random suffix per run".'),
+        category: z.enum(IGNORE_CATEGORIES).optional(),
+      }),
+    )
+    .max(MAX_IGNORE_REGIONS)
+    .optional()
+    .describe('Rectangles to leave out, in the image’s pixels (a region’s headRect from get_visual_diff, or tighter). One that is already a rule is not added twice.'),
+  remove: z.array(z.string()).max(MAX_IGNORE_REGIONS).optional().describe('Ids of rules to remove (from list_visual_ignore_rules); the history keeps them.'),
+  deactivate: z.array(z.string()).max(MAX_IGNORE_REGIONS).optional().describe('Ids of rules to switch off: kept, but no longer applied.'),
+  activate: z.array(z.string()).max(MAX_IGNORE_REGIONS).optional().describe('Ids of rules to switch back on.'),
+  expectedRevision: z.number().int().min(0).optional().describe('Refuse this change if the set moved past the revision you read (ignoreRuleRevision of get_visual_diff). Without it, the change is merged into whatever is saved.'),
+});
+
+const updateInput = z.object({
+  ...commonParams,
+  changes: z.array(changeIn).min(1).max(MAX_RULE_CHANGES).describe(`One entry per screen (checkpoint and variant), at most ${MAX_RULE_CHANGES}. Each is saved on its own: one refused does not stop the others.`),
+  reason: z.string().trim().min(1).max(500).describe('Why, for the history of every set changed — e.g. "fixture data is randomized per run".'),
+});
+
+const changeOut = z.object({
+  index: z.number(),
+  captureId: z.string().nullable(),
+  testId: z.string().nullable(),
+  checkpoint: z.string().nullable(),
+  variant: z.string().nullable(),
+  status: z.enum(['saved', 'unchanged', 'failed']),
+  revision: z.number().nullable(),
+  added: z.array(ruleOut),
+  removed: z.array(z.string()),
+  activeRules: z.number().nullable(),
+  remeasured: z.boolean(),
+  error: z.object({ code: z.string(), message: z.string() }).nullable(),
+});
+
+const updateOutput = output({
+  project: z.string(),
+  counts: z.object({ saved: z.number(), unchanged: z.number(), failed: z.number() }),
+  changes: z.array(changeOut),
+});
+
+export const updateVisualIgnoreRules = defineTool({
+  name: 'update_visual_ignore_rules',
+  title: 'Add or remove areas left out, on many screens',
+  toolset: 'write',
+  description:
+    'Adds, removes and switches off rules that leave areas out of comparisons, on many screens in one call, every other rule of a set kept: leave out a generated name seen on several checkpoints (each rule with its reason), or prune rules list_visual_ignore_rules judged stale. Address a screen by comparisonId, capture, or (to prune a screen no longer captured) screen. A retry changes nothing twice. Each screen answers saved, unchanged or failed with why. Only for areas that change by design, never to hide a real change.',
+  input: updateInput,
+  output: updateOutput,
+  annotations: WRITE,
+  async handler(args, ctx) {
+    const project = await ctx.project(args.project, { review: ['decide'] });
+    const results: z.infer<typeof changeOut>[] = [];
+    for (const [index, change] of args.changes.entries()) {
+      const result: z.infer<typeof changeOut> = { index, captureId: null, testId: null, checkpoint: null, variant: null, status: 'failed', revision: null, added: [], removed: [], activeRules: null, remeasured: false, error: null };
+      results.push(result);
+      try {
+        if ([change.comparison, change.capture, change.screen].filter(Boolean).length !== 1) throw invalid('Pass one of "comparison", "capture" or "screen".');
+        if (!change.add?.length && !change.remove?.length && !change.deactivate?.length && !change.activate?.length) throw invalid('Nothing to change: pass "add", "remove", "deactivate" or "activate".');
+        let found;
+        if (change.screen) {
+          if (change.add?.length) throw invalid('A screen has no image to draw on: add by comparison or capture.');
+          if (!isUuid(change.screen.testId)) throw invalid('"screen.testId" is a test id.');
+          const identity = { testId: change.screen.testId.toLowerCase(), checkpointName: change.screen.checkpoint, variant: change.screen.variant };
+          found = await rulesOfIdentity(project.project.id, identity);
+          if (!found) throw notFound(`No rules for checkpoint "${identity.checkpointName}" (${identity.variant}) of test ${identity.testId} in ${project.ref}.`);
+        } else {
+          let captureId = change.capture?.trim().toLowerCase();
+          if (change.comparison) {
+            const decoded = decodeComparisonId(change.comparison.trim());
+            if (!decoded) throw new ToolError('INVALID_COMPARISON', `"${change.comparison}" is not a comparison id.`, 'Use the comparisonId from list_visual_diffs.');
+            captureId = decoded.headCaptureId;
+          }
+          if (!captureId || !isUuid(captureId)) throw invalid('"capture" is a capture id.');
+          found = await rulesOfCapture(project.project.id, captureId);
+          if (!found) throw notFound(`Capture ${captureId} not found in ${project.ref}.`);
+        }
+        const c = found.capture;
+        Object.assign(result, { captureId: c.id || null, testId: c.testId, checkpoint: c.checkpointName, variant: c.variant });
+        const outside = c.width && c.height ? change.add?.find((r) => r.x + r.width > c.width! || r.y + r.height > c.height!) : undefined;
+        if (outside) throw invalid(`The rectangle ${outside.x}, ${outside.y}, ${outside.width}, ${outside.height} reaches outside the ${c.width}×${c.height} image.`, 'Use the head image’s pixels, as get_visual_diff reports them.');
+        // Only leaving more out asks the policy: removing or switching off a rule is always allowed.
+        if (change.add?.length || change.activate?.length) {
+          const target = (await policyTargetsFor([c])).get(c.id)!;
+          const policy = decidePolicy(project.project.settings, 'ignore', target);
+          if (!policy.allowed) throw new ToolError('POLICY_DENIED', `Leaving areas out is not allowed for this screen: ${policy.reason}`, 'A project admin can change the policy under Settings → Visual comparison.');
+        }
+        let before: Set<string> = new Set();
+        const set = await setRules({
+          projectId: project.project.id,
+          capture: c,
+          rules: (current) => {
+            before = new Set(current.rules.map((r) => r.id));
+            return patchRules(current, { add: change.add?.map((r) => ({ ...r, category: r.category ?? null })), remove: change.remove, deactivate: change.deactivate, activate: change.activate });
+          },
+          expectedRevision: change.expectedRevision,
+          reason: args.reason,
+          source: 'mcp',
+          userId: project.user.id,
+        });
+        const image = { width: c.width, height: c.height };
+        const after = new Set(set.rules.map((r) => r.id));
+        result.revision = set.revision;
+        result.added = set.rules.filter((r) => !before.has(r.id)).map((r) => ruleOutOf(r, image));
+        result.removed = [...before].filter((id) => !after.has(id));
+        result.activeRules = set.rules.filter((r) => r.active).length;
+        result.status = set.revision === found.revision ? 'unchanged' : 'saved';
+        if (result.status === 'saved' && c.id) {
+          const compared = await captureInProject(project.project.id, c.id);
+          result.remeasured = compared ? await requestCaptureDiff(compared.capture) : false;
+        }
+      } catch (error) {
+        if (error instanceof ToolError) result.error = { code: error.code, message: error.message };
+        else if (error instanceof IgnoreRevisionConflict) result.error = { code: 'REVISION_CONFLICT', message: error.message };
+        else if (error instanceof IgnoreRegionsError) result.error = { code: 'INVALID_ARGUMENT', message: error.message };
+        else throw error;
+      }
+    }
+    const count = (s: z.infer<typeof changeOut>['status']) => results.filter((r) => r.status === s).length;
+    return {
+      data: { project: project.ref, counts: { saved: count('saved'), unchanged: count('unchanged'), failed: count('failed') }, changes: results },
+      render(md, d) {
+        md.line(`${d.counts.saved} screen${d.counts.saved === 1 ? '' : 's'} saved, ${d.counts.unchanged} unchanged, ${d.counts.failed} failed.${d.counts.saved ? ' Saved screens are being measured again.' : ''}`);
+        md.table(
+          ['#', 'Checkpoint', 'Variant', 'Status', 'Revision', 'Added', 'Removed', 'Error'],
+          d.changes.map((r) => [r.index, r.checkpoint, r.variant, r.status, r.revision, r.added.map((a) => `${a.id.slice(0, 8)}: ${a.x}, ${a.y}, ${a.width}, ${a.height}`).join('; '), r.removed.map((id) => id.slice(0, 8)).join(', '), r.error ? `${r.error.code}: ${r.error.message}` : null]),
+        );
+        if (d.counts.saved) md.line('Next: get_visual_diff on the same comparisons shows what remains once measured again.');
+      },
+    };
+  },
+});
+
+export const VISUAL_IGNORE_TOOLS = [listVisualIgnoreRules, previewVisualIgnoreRules, setVisualIgnoreRules, updateVisualIgnoreRules];

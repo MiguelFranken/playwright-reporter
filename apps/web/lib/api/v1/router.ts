@@ -44,7 +44,7 @@ import { commentOnReview, listReviewThreads, resolveReviewThread } from '@/lib/m
 import { getLibraryFlows, listLibrary, setLibraryReferenceTool } from '@/lib/mcp/tools/library';
 import { listFeedbackRequests } from '@/lib/mcp/tools/feedback';
 import { getVisualDiff, getVisualDiffImage, listVisualDiffs } from '@/lib/mcp/tools/visual-diffs';
-import { listVisualIgnoreRules, previewVisualIgnoreRules, setVisualIgnoreRules } from '@/lib/mcp/tools/visual-ignore';
+import { listVisualIgnoreRules, previewVisualIgnoreRules, setVisualIgnoreRules, updateVisualIgnoreRules } from '@/lib/mcp/tools/visual-ignore';
 import { analyzeVisualDiff, decideVisualSuggestion, getVisualDiffAnalysis } from '@/lib/mcp/tools/visual-analysis';
 import type { ToolDef } from '@/lib/mcp/registry';
 import { authed } from '../base';
@@ -423,6 +423,14 @@ export const router = {
       description: 'Replaces the rule set of the capture’s checkpoint and variant under a revision check (`expectedRevision`), with a reason; later runs are measured without those areas. Needs the `write` scope and the review permission; refused where the project’s policy denies it (`POLICY_DENIED`) or the revision moved (`REVISION_CONFLICT`).',
       tags: ['Visual review'],
       params: { capture: captureRef },
+    }),
+    update: fromTool(tool(updateVisualIgnoreRules), {
+      method: 'POST',
+      path: `${P}/visual-ignore-rules/changes`,
+      summary: 'Add or remove areas left out, on many screens',
+      description:
+        'Adds and removes rules on up to 50 screens in one request, each screen addressed by the `comparison` its rectangles were measured on (or a `capture`), each added rule with its `reason`; the other rules of a set are kept, and a rule already there is not added twice. Each screen is saved on its own and answers `saved`, `unchanged` or `failed` with an error code (`POLICY_DENIED`, `REVISION_CONFLICT` with `expectedRevision`, `INVALID_ARGUMENT`). Needs the `write` scope and the review permission.',
+      tags: ['Visual review'],
     }),
   },
   visualAnalyses: {

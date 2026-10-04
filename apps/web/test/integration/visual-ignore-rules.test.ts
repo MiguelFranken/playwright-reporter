@@ -17,6 +17,7 @@ import { captureInProject, decide, runReview, runReviewCounts } from '@/lib/revi
 import { attachmentRef, attemptEnd, eventBatch, runStart, testBegin } from './factories';
 import { afterEach, beforeEach, createMember, describe, expect, test, type Db, type Tenant } from './fixtures';
 import { call, createPat, mcpClient } from './mcp/client';
+import { POST } from '@/app/api/v1/[[...rest]]/route';
 
 const KEY = 'tests/booking.spec.ts::books a workshop';
 
@@ -78,6 +79,11 @@ describe('rule sets', () => {
     const [row] = await db.select().from(reviewIgnoreRegions);
     expect(row.regions).toHaveLength(2);
     expect(row.revision).toBe(2);
+    expect(await db.select().from(reviewIgnoreRevisions)).toHaveLength(2);
+
+    // Saving the same set again is no new revision.
+    const again = await saveIgnoreRegions(ref, { captureId: capture.id, regions: after.rules.map(({ id, x, y, width, height }) => ({ id, x, y, width, height })), expectedRevision: 2 });
+    expect(again).toMatchObject({ ok: true, revision: 2 });
     expect(await db.select().from(reviewIgnoreRevisions)).toHaveLength(2);
 
     // Somebody else saved since: refused, nothing changed.
@@ -211,6 +217,134 @@ describe('through MCP', () => {
     await db.update(projects).set({ settings: { visualPolicies: [{ id: 'p1', scope: { kind: 'file', path: 'tests' }, capability: 'ignore', effect: 'deny' }] } }).where(eq(projects.id, tenant.project.id));
     const denied = await call(writer, 'set_visual_ignore_rules', { project, capture: second.capture.id, expectedRevision: 1, rules: [] });
     expect((denied.structuredContent as { error: { code: string } }).error.code).toBe('POLICY_DENIED');
+    await writer.close();
+  });
+
+  test('adds and removes rules on many screens at once, keeps the others, retries change nothing, and reports each screen', async ({ db, tenant }) => {
+    const base = await page([{ x: 100, y: 60, width: 60, height: 12 }]);
+    const head = await page([{ x: 100, y: 60, width: 90, height: 12 }]);
+    const first = await runWith(db, tenant, base, t0);
+    const second = await runWith(db, tenant, head, t1);
+    const project = `${tenant.team.slug}/${tenant.project.slug}`;
+    const reader = await mcpClient({ token: (await createPat(tenant.adminUser)).token });
+    expect((await reader.listTools()).tools.map((t) => t.name)).not.toContain('update_visual_ignore_rules');
+    await reader.close();
+
+    const writer = await mcpClient({ token: (await createPat(tenant.adminUser, { scopes: ['read', 'write'] })).token });
+    const listed = await call(writer, 'list_visual_diffs', { project, headRun: second.number, baseRun: first.number });
+    const comparison = (listed.structuredContent!.comparisons as { comparisonId: string }[])[0].comparisonId;
+    type Change = { status: string; revision: number | null; added: { id: string; reason: string; category: string | null; validity: string }[]; removed: string[]; activeRules: number | null; error: { code: string } | null };
+    const update = async (changes: unknown[], reason = 'booking names are generated per run') => {
+      const res = await call(writer, 'update_visual_ignore_rules', { project, changes, reason });
+      expect(res.isError, JSON.stringify(res.structuredContent)).toBeFalsy();
+      return res.structuredContent as { counts: Record<string, number>; changes: Change[] };
+    };
+
+    // By comparison, one good change and two refused ones: each answers for itself.
+    const name = { x: 150, y: 55, width: 50, height: 22, reason: 'random booking name', category: 'dynamic_text' };
+    const one = await update([{ comparison, add: [name] }, { comparison: 'vc_nope', add: [name] }, { capture: second.capture.id, add: [{ x: 190, y: 140, width: 20, height: 20, reason: 'too far' }] }]);
+    expect(one.counts).toEqual({ saved: 1, unchanged: 0, failed: 2 });
+    expect(one.changes[0]).toMatchObject({ status: 'saved', revision: 1, activeRules: 1, added: [{ reason: 'random booking name', category: 'dynamic_text', validity: 'valid' }] });
+    expect(one.changes[1].error!.code).toBe('INVALID_COMPARISON');
+    expect(one.changes[2].error!.code).toBe('INVALID_ARGUMENT');
+    const nameId = one.changes[0].added[0].id;
+
+    // A retry adds nothing; a second rule keeps the first.
+    expect((await update([{ comparison, add: [name] }])).changes[0]).toMatchObject({ status: 'unchanged', revision: 1, added: [] });
+    const two = await update([{ capture: second.capture.id, add: [{ x: 0, y: 0, width: 40, height: 10, reason: 'clock' }] }]);
+    expect(two.changes[0]).toMatchObject({ status: 'saved', revision: 2, activeRules: 2 });
+    const stored = await rulesOfCapture(tenant.project.id, second.capture.id);
+    expect(stored!.rules.map((r) => r.reason)).toEqual(['random booking name', 'clock']);
+    expect(stored!.rules[0].id).toBe(nameId);
+
+    // Removing under a stale revision is refused; under the current one it removes only that rule.
+    expect((await update([{ comparison, remove: [nameId], expectedRevision: 1 }])).changes[0].error!.code).toBe('REVISION_CONFLICT');
+    expect((await update([{ comparison, remove: ['missing'] }])).changes[0].error!.code).toBe('INVALID_ARGUMENT');
+    expect((await update([{ comparison, remove: [nameId], expectedRevision: 2 }], 'name is stable now')).changes[0]).toMatchObject({ status: 'saved', revision: 3, removed: [nameId], activeRules: 1 });
+
+    const history = await db.select().from(reviewIgnoreRevisions).where(eq(reviewIgnoreRevisions.testId, second.capture.testId));
+    expect(history.map((h) => [h.revision, h.source, h.reason]).sort()).toEqual([
+      [1, 'mcp', 'booking names are generated per run'],
+      [2, 'mcp', 'booking names are generated per run'],
+      [3, 'mcp', 'name is stable now'],
+    ]);
+
+    // The same through REST.
+    const { token } = await createPat(tenant.adminUser, { scopes: ['read', 'write'] });
+    const response = await POST(
+      new Request(`http://test.local/api/v1/projects/${tenant.team.slug}/${tenant.project.slug}/visual-ignore-rules/changes`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ changes: [{ comparison, add: [name] }], reason: 'back again' }),
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ counts: { saved: 1 }, changes: [{ status: 'saved', revision: 4, activeRules: 2 }] });
+    await writer.close();
+  });
+
+  test('judges rules on the latest runs, lists the stale ones and prunes them, also on a screen no longer captured', async ({ db, tenant }) => {
+    const name = (w: number) => page([{ x: 100, y: 60, width: w, height: 12 }]);
+    const first = await runWith(db, tenant, await name(60), t0);
+    const second = await runWith(db, tenant, await name(90), t1);
+    const third = await runWith(db, tenant, await name(70), t2);
+    for (const r of [second, third]) await measureAll(r.run.id);
+    const project = `${tenant.team.slug}/${tenant.project.slug}`;
+    const writer = await mcpClient({ token: (await createPat(tenant.adminUser, { scopes: ['read', 'write'] })).token });
+    const update = async (changes: unknown[]) => {
+      const res = await call(writer, 'update_visual_ignore_rules', { project, changes, reason: 'tidy up' });
+      expect(res.isError, JSON.stringify(res.structuredContent)).toBeFalsy();
+      return res.structuredContent as { changes: { status: string; revision: number; removed: string[]; error: { code: string } | null }[] };
+    };
+    // One rule over the generated name, one over a corner that never changes.
+    const saved = await update([{ capture: third.capture.id, add: [{ x: 95, y: 55, width: 100, height: 22, reason: 'generated name' }, { x: 0, y: 0, width: 40, height: 10, reason: 'old clock' }] }]);
+    expect(saved.changes[0]).toMatchObject({ status: 'saved', revision: 1 });
+    // A screen whose images are gone (a renamed checkpoint) still has its rules.
+    await setRules({ projectId: tenant.project.id, capture: { ...third.capture, checkpointName: 'renamed-away' }, rules: [{ x: 1, y: 1, width: 5, height: 5, reason: 'gone' }], source: 'api', userId: null });
+
+    type Rule = { id: string; reason: string; active: boolean; check: { assessment: string; comparisons: number; matched: number } };
+    type Set = { checkpoint: { name: string }; latestCapture: { captureId: string; run: number } | null; rules: Rule[] };
+    const assessed = (await call(writer, 'list_visual_ignore_rules', { project, assess: true })).structuredContent as { sets: Set[] };
+    const screen = assessed.sets.find((s) => s.checkpoint.name === 'summary')!;
+    expect(screen.latestCapture).toMatchObject({ captureId: third.capture.id, run: third.number });
+    const byReason = Object.fromEntries(screen.rules.map((r) => [r.reason, r]));
+    expect(byReason['generated name'].check).toMatchObject({ assessment: 'in_use', comparisons: 2, matched: 2 });
+    expect(byReason['old clock'].check).toMatchObject({ assessment: 'unused', comparisons: 2, matched: 0 });
+    const gone = assessed.sets.find((s) => s.checkpoint.name === 'renamed-away')!;
+    expect(gone.latestCapture).toBeNull();
+    expect(gone.rules[0].check.assessment).toBe('not_captured');
+
+    // status stale: both screens, each for its stale rule.
+    const stale = (await call(writer, 'list_visual_ignore_rules', { project, status: 'stale' })).structuredContent as { sets: Set[] };
+    expect(stale.sets.map((s) => s.checkpoint.name).sort()).toEqual(['renamed-away', 'summary']);
+
+    // Leaving areas out is denied here now: pruning still works, adding does not.
+    await db.update(projects).set({ settings: { visualPolicies: [{ id: 'p1', scope: { kind: 'file', path: 'tests' }, capability: 'ignore', effect: 'deny' }] } }).where(eq(projects.id, tenant.project.id));
+    const pruned = await update([
+      { capture: third.capture.id, deactivate: [byReason['old clock'].id] },
+      { screen: { testId: third.capture.testId, checkpoint: 'renamed-away', variant: 'desktop' }, remove: [gone.rules[0].id] },
+      { capture: third.capture.id, add: [{ x: 0, y: 20, width: 5, height: 5, reason: 'more' }] },
+      { screen: { testId: third.capture.testId, checkpoint: 'renamed-away', variant: 'desktop' }, add: [{ x: 0, y: 20, width: 5, height: 5, reason: 'more' }] },
+    ]);
+    expect(pruned.changes.map((c) => c.status)).toEqual(['saved', 'saved', 'failed', 'failed']);
+    expect(pruned.changes[1].removed).toEqual([gone.rules[0].id]);
+    expect(pruned.changes[2].error!.code).toBe('POLICY_DENIED');
+    expect(pruned.changes[3].error!.code).toBe('INVALID_ARGUMENT');
+
+    const after = (await call(writer, 'list_visual_ignore_rules', { project, status: 'all', assess: true })).structuredContent as { sets: Set[] };
+    expect(after.sets.find((s) => s.checkpoint.name === 'renamed-away')!.rules).toEqual([]);
+    expect(after.sets.find((s) => s.checkpoint.name === 'summary')!.rules.map((r) => [r.reason, r.active, r.check.assessment])).toEqual([
+      ['generated name', true, 'in_use'],
+      ['old clock', false, 'inactive'],
+    ]);
+    expect(((await call(writer, 'list_visual_ignore_rules', { project, status: 'stale' })).structuredContent as { sets: Set[] }).sets).toEqual([]);
+
+    // A capture of another size: the rule no longer fits.
+    await db.update(projects).set({ settings: {} }).where(eq(projects.id, tenant.project.id));
+    await runWith(db, tenant, await page([], 200, 180), new Date(), { width: 200, height: 180 });
+    const resized = (await call(writer, 'list_visual_ignore_rules', { project, status: 'stale' })).structuredContent as { sets: Set[] };
+    expect(resized.sets[0].rules.find((r) => r.reason === 'generated name')!.check.assessment).toBe('suspended');
+    void first;
     await writer.close();
   });
 });
