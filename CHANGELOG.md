@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.92](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.91...v0.0.92) (2026-10-04)
+
+### Features
+
+* **review:** compare a whole run's visual review with the run before or any other run ([#94](https://github.com/MiguelFranken/playwright-reporter/issues/94)) ([0342651](https://github.com/MiguelFranken/playwright-reporter/commit/03426519fdea6b3de97357a96de58f3680ad942f))
+
 ## [0.0.91](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.90...v0.0.91) (2026-10-04)
 
 ### Features
