@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.89](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.88...v0.0.89) (2026-10-04)
+
+### Bug Fixes
+
+* **review:** stop AI analyses failing when the model's answer is cut off ([#91](https://github.com/MiguelFranken/playwright-reporter/issues/91)) ([f8ef159](https://github.com/MiguelFranken/playwright-reporter/commit/f8ef159977f886861bbf845bd515e5eafcb68663))
+
 ## [0.0.88](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.87...v0.0.88) (2026-10-04)
 
 ### Bug Fixes
