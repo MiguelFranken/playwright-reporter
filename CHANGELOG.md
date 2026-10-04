@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.90](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.89...v0.0.90) (2026-10-04)
+
+### Features
+
+* **review:** manage visual ignore rules from MCP/API — add on many screens, review and prune stale ones ([#92](https://github.com/MiguelFranken/playwright-reporter/issues/92)) ([0609fdc](https://github.com/MiguelFranken/playwright-reporter/commit/0609fdceb8fa21e9b8e1ec301fa8bc47a4b51471))
+
 ## [0.0.89](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.88...v0.0.89) (2026-10-04)
 
 ### Bug Fixes
