@@ -9,7 +9,7 @@
  * captures the journey again, and the last capture is the one that counts.
  */
 import { randomUUID } from 'node:crypto';
-import { and, desc, eq, inArray, isNotNull, ne, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, ne, notInArray, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { DecisionSource, ReviewDecision, ReviewStatus } from '@miguelfranken/ui/lib/review';
 import type { CommentSource } from '@miguelfranken/ui/lib/review-threads';
@@ -39,6 +39,13 @@ const thumbs = alias(attachments, 'thumb_attachments');
 
 /** The newest attempt of the checkpoint's result: the one a reviewer looks at. */
 export const isFinalAttempt = sql`${testAttempts.retry} = (select max(ta2.retry) from ${testAttempts} ta2 where ta2.test_result_id = ${testAttempts.testResultId})`;
+
+/**
+ * The capture's image is still stored, or on its way: the retention sweep
+ * has not deleted it and its upload did not fail. Another run's image is
+ * offered as a reference only while it holds.
+ */
+const imageKept = notInArray(attachments.status, ['expired', 'failed']);
 
 export type AttachmentState = Pick<Attachment, 'id' | 'status'>;
 
@@ -237,7 +244,8 @@ async function decisionsFor(captures: readonly CaptureRecord[]): Promise<Map<str
 
 /**
  * The newest capture of each checkpoint and variant from a run that started
- * before `before`: the image a reviewer compares with when nothing is approved.
+ * before `before` and still has its image: what a reviewer compares with when
+ * nothing is approved.
  */
 async function previousCaptures(captures: readonly CaptureRecord[], runId: string, before: Date) {
   const out = new Map<string, { capture: CaptureRecord; runNumber: number }>();
@@ -257,6 +265,7 @@ async function previousCaptures(captures: readonly CaptureRecord[], runId: strin
         sql`${reviewCaptures.runId} <> ${runId}`,
         sql`${runs.startedAt} < ${before.toISOString()}`,
         isFinalAttempt,
+        imageKept,
       ),
     )
     .orderBy(reviewCaptures.testId, reviewCaptures.checkpointName, reviewCaptures.variant, desc(runs.startedAt));
@@ -666,8 +675,10 @@ export interface CompareTargetRecord {
  * What an image can be compared with besides its baseline: the newest
  * `limit` other runs that captured the same screen (checkpoint and variant),
  * plus every earlier capture of it that still has open comment threads,
- * however old. One capture per run, newest run first; the image's own run is
- * left out. `null` when the capture is not in the project.
+ * however old. Only images still stored count: one the retention policy
+ * deleted cannot be compared with, so its run is not offered (and does not
+ * use up the limit). One capture per run, newest run first; the image's own
+ * run is left out. `null` when the capture is not in the project.
  */
 export async function compareTargetsOf(projectId: string, captureId: string, limit = 10): Promise<{ sha256: string | null; targets: CompareTargetRecord[] } | null> {
   if (!/^[0-9a-f-]{36}$/i.test(captureId)) return null;
@@ -697,6 +708,7 @@ export async function compareTargetsOf(projectId: string, captureId: string, lim
     eq(reviewCaptures.checkpointName, self.checkpointName),
     eq(reviewCaptures.variant, self.variant),
     ne(reviewCaptures.runId, self.runId),
+    imageKept,
   )!;
   const select = (where: SQL, max: number) =>
     db

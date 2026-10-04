@@ -2,6 +2,7 @@
 
 import { GitCompareArrows, MessageSquare } from 'lucide-react';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger } from '../../components/select';
+import { Skeleton } from '../../components/skeleton';
 import { cn } from '../../lib/cn';
 import { formatRelative } from '../../lib/format';
 import { COMPARE_RULE_LABELS, parseCompareRule, type CompareRule, type CompareTargetView, type ReviewCaptureView } from '../../lib/review';
@@ -10,8 +11,17 @@ import { COMPARE_RULE_LABELS, parseCompareRule, type CompareRule, type CompareTa
 export interface CompareWithProps {
   rule: CompareRule;
   onRuleChange: (next: CompareRule) => void;
-  /** The other runs' captures of the open image's screen, newest first; `undefined` while they load. */
+  /**
+   * The other runs' captures of the open image's screen that still have
+   * their image, newest first; `undefined` until they have loaded.
+   */
   targets?: readonly CompareTargetView[] | null;
+  /**
+   * The reviewer is about to look at the list (it opens, or the pointer or
+   * focus reaches its trigger): the host loads the other runs only then,
+   * unless the rule needs them anyway.
+   */
+  onTargetsWanted?: () => void;
   /** The reference instant for relative times (stories pin it). */
   now?: Date;
 }
@@ -30,6 +40,7 @@ export function CompareTargetPicker({
   rule,
   onRuleChange,
   targets,
+  onTargetsWanted,
   now,
   className,
 }: CompareWithProps & {
@@ -66,8 +77,15 @@ export function CompareTargetPicker({
   );
 
   return (
-    <Select value={rule} onValueChange={(next) => next && onRuleChange(parseCompareRule(String(next)))}>
-      <SelectTrigger size="sm" className={cn('max-w-60 text-label-s', className)} aria-label="Compare with" title="What this image is compared with">
+    <Select value={rule} onValueChange={(next) => next && onRuleChange(parseCompareRule(String(next)))} onOpenChange={(open) => open && onTargetsWanted?.()}>
+      <SelectTrigger
+        size="sm"
+        className={cn('max-w-60 text-label-s', className)}
+        aria-label="Compare with"
+        title="What this image is compared with"
+        onPointerEnter={onTargetsWanted}
+        onFocus={onTargetsWanted}
+      >
         <GitCompareArrows aria-hidden className="text-muted-foreground" />
         <span className="truncate">
           <span className="text-muted-foreground">vs. </span>
@@ -90,16 +108,24 @@ export function CompareTargetPicker({
           </SelectItem>
           <SelectItem value="comments" disabled={!loading && commented.length === 0} className="text-label-s">
             <span>{COMPARE_RULE_LABELS.comments}</span>
-            <span className={hint}>{loading ? '…' : commented[0] ? `#${commented[0].runNumber}` : 'none open'}</span>
+            <span className={hint}>{loading ? <Skeleton aria-hidden className="ms-auto h-3 w-8" /> : commented[0] ? `#${commented[0].runNumber}` : 'none open'}</span>
           </SelectItem>
         </SelectGroup>
         {loading ? (
           <>
             <SelectSeparator />
-            {/* A listbox holds only options: the notes are disabled ones. */}
-            <SelectItem value="__loading" disabled className="text-body-xs text-muted-foreground">
-              Loading the other runs…
-            </SelectItem>
+            <SelectGroup>
+              <SelectLabel>Other runs</SelectLabel>
+              {/* A listbox holds only options: the placeholders are disabled ones, named for a screen reader. */}
+              {[0, 1, 2].map((i) => (
+                <SelectItem key={i} value={`__loading:${i}`} disabled aria-label="Loading the other runs…" className="text-label-s data-disabled:opacity-100">
+                  <span aria-hidden className="flex flex-col gap-1.5 py-0.5">
+                    <Skeleton className="h-3.5 w-20" />
+                    <Skeleton className="h-3 w-44" />
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectGroup>
           </>
         ) : null}
         {commented.length ? (
@@ -124,7 +150,7 @@ export function CompareTargetPicker({
           <>
             <SelectSeparator />
             <SelectItem value="__none" disabled className="text-body-xs text-muted-foreground">
-              No other run captured this screen.
+              No other run still has an image of this screen.
             </SelectItem>
           </>
         ) : null}
