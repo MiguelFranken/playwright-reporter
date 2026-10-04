@@ -4,6 +4,7 @@ import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 import type { MDXComponents } from 'mdx/types';
 import { Callout } from './callout';
 import { Card, Cards } from './cards';
+import { Prompt } from './prompt';
 
 export function getMDXComponents(components?: MDXComponents) {
   return {
@@ -11,6 +12,7 @@ export function getMDXComponents(components?: MDXComponents) {
     Callout,
     Card,
     Cards,
+    Prompt,
     Step,
     Steps,
     Tab,

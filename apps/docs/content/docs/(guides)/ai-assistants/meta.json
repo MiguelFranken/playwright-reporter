@@ -5,6 +5,7 @@
   "pages": [
     "index",
     "tools",
+    "prompts",
     "docs-for-agents"
   ]
 }

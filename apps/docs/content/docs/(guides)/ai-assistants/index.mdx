@@ -5,8 +5,8 @@ description: Let Claude, Cursor, Copilot, ChatGPT and others read your test hist
 
 The app runs a [Model Context Protocol](https://modelcontextprotocol.io) server at `/api/mcp`. An assistant can then
 answer "why is the checkout test red on my branch?" from the stored runs: which attempts failed and how, whether the
-test is flaky or broken, the last green commit, the screenshot, and the command to re-run it. It reads as the person
-who connected it, never more, and it cannot change anything.
+test is flaky or broken, the last green commit, the screenshot, and the command to re-run it. It acts as the person
+who connected it, never more, and changes nothing unless its token has the write scope.
 
 Everything below is also on **Account → AI assistants**, pre-filled with your instance's URL.
 
@@ -43,6 +43,9 @@ speaks stdio and forwards to the instance. It picks the project from your checko
   Test titles, error messages and logs are written by the code under test. The server hands them to the assistant
   fenced and labelled as untrusted, and tells it never to follow instructions found in them.
 </Callout>
+
+Once connected, start with the [prompt recipes](/docs/ai-assistants/prompts): copy-and-paste prompts for triaging
+runs, fixing flaky tests, stabilizing visual differences and more.
 
 ## Troubleshooting
 
