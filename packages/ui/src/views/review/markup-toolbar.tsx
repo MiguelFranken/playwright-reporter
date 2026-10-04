@@ -1,7 +1,7 @@
 'use client';
 
 import { Circle, Eraser, GripHorizontal, GripVertical, Highlighter, MessageSquarePlus, MoveUpRight, Pencil, Square, SquareDashedMousePointer, Undo2, X } from 'lucide-react';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Button } from '../../components/button';
 import { Kbd } from '../../components/kbd';
 import { ToggleGroup, ToggleGroupItem } from '../../components/toggle-group';
@@ -74,8 +74,10 @@ function Divider({ orientation }: { orientation: Orientation }) {
  * What the bar holds; the colours slide open beside the tools while one draws,
  * and slide shut again. Upright, the same runs top to bottom. `data-flip`
  * names each control, so the bar can fly it from its old place to its new one.
+ * Memoised: the bar renders as it docks or its tooltips switch, and the
+ * seventeen tooltips in here only need to when what they show changes.
  */
-function MarkupTools({
+const MarkupTools = memo(function MarkupTools({
   tool,
   onToolChange,
   color,
@@ -193,7 +195,7 @@ function MarkupTools({
       ) : null}
     </>
   );
-}
+});
 
 export interface CommentBarProps extends Omit<MarkupToolbarProps, 'onClose'> {
   /** Comment mode is on: the bar shows its tools. */
@@ -226,50 +228,80 @@ const prefersReducedMotion = () => typeof window !== 'undefined' && window.match
  * opening ease its size.
  */
 export function CommentBar({ commenting, onCommentingChange, openCount = 0, positionKey, className, ...tools }: CommentBarProps) {
-  const size = useContentSize<HTMLDivElement>();
+  const contentRef = useRef<HTMLDivElement>(null);
   const flipFrom = useRef<Map<string, Point> | null>(null);
-  const { ref, gripRef, dock, dragging, gliding, handleProps } = useFloatingPlacement<HTMLDivElement, HTMLButtonElement>({
+  const { ref, gripRef, dock, handleProps } = useFloatingPlacement<HTMLDivElement, HTMLButtonElement>({
     storageKey: positionKey,
     onBeforeDockChange: () => {
-      flipFrom.current = measureControls(size.ref.current, gripRef.current);
+      flipFrom.current = measureControls(contentRef.current, gripRef.current);
     },
   });
   const upright = dock !== null;
   const orientation: Orientation = upright ? 'vertical' : 'horizontal';
   // Tooltips open into the screen, away from the edge the bar stands along.
   const tipSide: TipSide = dock === 'left' ? 'right' : dock === 'right' ? 'left' : 'top';
+  const onClose = useCallback(() => onCommentingChange(false), [onCommentingChange]);
 
-  // Folding, unfolding and turning swap what the bar holds at once, so the bar eases between the two sizes. The
-  // colours ease inside it already: then the bar keeps to its content, rather than trailing it.
-  const drawing = commenting && isMarkupTool(tools.tool);
-  const [shape, setShape] = useState({ commenting, drawing, upright });
-  const [swapping, setSwapping] = useState(false);
   // The bar is changing size. It grows from its middle, so its tools slide along under a pointer that has
   // not moved — and each one it passed would flash its tooltip. So its tooltips are off from the moment it
   // starts to the moment the pointer itself moves again; a click still lands on whatever is under it.
-  const [resizing, setResizing] = useState(false);
+  const drawing = commenting && isMarkupTool(tools.tool);
+  const [shape, setShape] = useState({ commenting, drawing, upright });
   const [tooltips, setTooltips] = useState(true);
   if (shape.commenting !== commenting || shape.drawing !== drawing || shape.upright !== upright) {
     setShape({ commenting, drawing, upright });
-    if (shape.commenting !== commenting || shape.upright !== upright) setSwapping(true);
-    setResizing(true);
     setTooltips(false);
   }
+  // The bar's size is its content's, left to the layout: the colours ease open inside it, and it follows. Folding,
+  // unfolding and turning swap what it holds at once, though; then it is held at the size it had and eased to the
+  // new one (`data-swapping`), and let go again. The size it had is the last one the observer saw — nothing is
+  // written from the observer, and nothing in all this renders.
+  const resizing = useRef(false);
+  const shapeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const lastShape = useRef(shape);
+  const lastSize = useRef<{ width: number; height: number } | null>(null);
   useEffect(() => {
-    if (!resizing) return;
+    const el = ref.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (el.dataset.swapping === undefined) lastSize.current = { width: entry.contentRect.width, height: entry.contentRect.height };
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [ref]);
+  useLayoutEffect(() => {
+    const was = lastShape.current;
+    lastShape.current = shape;
+    const el = ref.current;
+    const content = contentRef.current;
+    if (was === shape || !el || !content) return;
+    resizing.current = true;
+    const from = lastSize.current;
+    if ((was.commenting !== shape.commenting || was.upright !== shape.upright) && from && !prefersReducedMotion()) {
+      el.style.width = `${from.width}px`;
+      el.style.height = `${from.height}px`;
+      el.dataset.swapping = '';
+      // The old size has to be laid out before the new one is set, or there is nothing to ease from.
+      void el.offsetWidth;
+      el.style.width = `${content.offsetWidth}px`;
+      el.style.height = `${content.offsetHeight}px`;
+    }
     // Started over by every change, so a quick second one gets its own full ease.
-    const timer = setTimeout(() => {
-      setResizing(false);
-      setSwapping(false);
+    clearTimeout(shapeTimer.current);
+    shapeTimer.current = setTimeout(() => {
+      resizing.current = false;
+      delete el.dataset.swapping;
+      el.style.width = '';
+      el.style.height = '';
     }, SHAPE_MS);
-    return () => clearTimeout(timer);
-  }, [resizing, shape]);
+  }, [shape, ref]);
+  useEffect(() => () => clearTimeout(shapeTimer.current), []);
 
   // Turned upright or back: every control starts where it was, seen from the grip, and flies to its new place.
   useLayoutEffect(() => {
     const from = flipFrom.current;
     flipFrom.current = null;
-    const root = size.ref.current;
+    const root = contentRef.current;
     if (!from || !root || prefersReducedMotion()) return;
     const to = measureControls(root, gripRef.current);
     if (!to) return;
@@ -292,41 +324,50 @@ export function CommentBar({ commenting, onCommentingChange, openCount = 0, posi
     for (const el of root.querySelectorAll<HTMLElement>('[data-flip-fade]')) {
       el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180, delay: SHAPE_MS / 2, easing: 'ease-out', fill: 'backwards' });
     }
-  }, [upright, gripRef, size.ref]);
+  }, [upright, gripRef]);
 
   // Where the pointer was last seen over the bar: the browser re-sends a still pointer's position once the
-  // tools stop under it, and that is not the reviewer reaching for one.
+  // tools stop under it, and that is not the reviewer reaching for one. Not while it is dragged: the tooltips
+  // come back once it is let go and the pointer moves on, rather than costing a render mid-drag. A native
+  // listener, so the many moves over the bar do not each go through React's events.
   const lastPointer = useRef<Point | null>(null);
-  const rearm = (e: React.PointerEvent) => {
-    const last = lastPointer.current;
-    lastPointer.current = { x: e.clientX, y: e.clientY };
-    if (tooltips || resizing || !last) return;
-    if (Math.abs(e.clientX - last.x) + Math.abs(e.clientY - last.y) > 2) setTooltips(true);
-  };
+  const tooltipsOn = useRef(tooltips);
+  useLayoutEffect(() => {
+    tooltipsOn.current = tooltips;
+  }, [tooltips]);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const rearm = (e: PointerEvent) => {
+      const last = lastPointer.current;
+      lastPointer.current = { x: e.clientX, y: e.clientY };
+      if (tooltipsOn.current || resizing.current || !last || el.dataset.dragging !== undefined) return;
+      if (Math.abs(e.clientX - last.x) + Math.abs(e.clientY - last.y) > 2) setTooltips(true);
+    };
+    el.addEventListener('pointermove', rearm);
+    return () => el.removeEventListener('pointermove', rearm);
+  }, [ref]);
   return (
     <div
       ref={ref}
       data-slot="comment-bar"
       data-dock={dock ?? undefined}
-      data-dragging={dragging || undefined}
       className={cn(
-        'relative box-content animate-rise-in overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-e3 duration-300 ease-emphasized data-dragging:ring-1 data-dragging:ring-foreground/10 motion-reduce:transition-none',
-        // It eases its size around its content while it changes shape, and glides when a key, a snap to an edge or
-        // a jump home moves it; dragged, it is written under the pointer frame by frame.
-        swapping && gliding ? 'transition-[width,height,translate]' : swapping ? 'transition-[width,height]' : gliding ? 'transition-[translate]' : 'transition-none',
+        'relative box-content animate-rise-in overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-e3 duration-300 ease-emphasized [will-change:translate] data-dragging:ring-1 data-dragging:ring-foreground/10',
+        // It eases its size around its content while it changes shape, and glides when a key or a jump home moves
+        // it; dragged, it is written under the pointer frame by frame, with nothing easing behind it.
+        'transition-none data-gliding:transition-[translate] data-swapping:transition-[width,height] data-swapping:data-gliding:transition-[width,height,translate] motion-reduce:transition-none!',
         className,
       )}
-      style={{ width: size.value?.width, height: size.value?.height }}
-      onPointerMove={rearm}
       onPointerLeave={() => {
         lastPointer.current = null;
-        if (!resizing) setTooltips(true);
+        if (!resizing.current) setTooltips(true);
       }}
       onKeyDown={() => {
-        if (!resizing) setTooltips(true);
+        if (!resizing.current) setTooltips(true);
       }}
     >
-      <div ref={size.ref} className={cn('flex w-max items-center gap-1 p-1', upright && 'h-max flex-col')}>
+      <div ref={contentRef} className={cn('flex w-max items-center gap-1 p-1', upright && 'h-max flex-col')}>
         <button
           ref={gripRef}
           type="button"
@@ -350,7 +391,7 @@ export function CommentBar({ commenting, onCommentingChange, openCount = 0, posi
             data-slot="markup-toolbar"
             className={cn('flex animate-fade-in items-center gap-1', upright && 'flex-col')}
           >
-            <MarkupTools {...tools} tooltips={tooltips} orientation={orientation} tipSide={tipSide} onClose={() => onCommentingChange(false)} />
+            <MarkupTools {...tools} tooltips={tooltips} orientation={orientation} tipSide={tipSide} onClose={onClose} />
           </div>
         ) : (
           <div key="folded" className="flex animate-fade-in items-center">
@@ -416,24 +457,4 @@ function measureControls(root: HTMLElement | null, grip: HTMLElement | null): Ma
     out.set(el.dataset.flip!, { x: r.left - ox, y: r.top - oy });
   }
   return out;
-}
-
-/**
- * The size of what an element holds, measured as it changes — so the element
- * around it can be given that size explicitly and ease to it (CSS cannot
- * transition `auto`). Undefined until measured, which is auto.
- */
-function useContentSize<T extends HTMLElement>() {
-  const ref = useRef<T>(null);
-  const [value, setValue] = useState<{ width: number; height: number } | undefined>(undefined);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const measure = () => setValue((prev) => (prev && prev.width === el.offsetWidth && prev.height === el.offsetHeight ? prev : { width: el.offsetWidth, height: el.offsetHeight }));
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-  return { ref, value };
 }
