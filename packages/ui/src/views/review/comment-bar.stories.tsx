@@ -137,21 +137,27 @@ export const DockByDragging: Story = {
   beforeEach: remembering(),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    // One pointer for the whole story: the button is still held from one step to the next.
+    const user = userEvent.setup();
     const grip = canvas.getByRole('button', { name: 'Move the comment bar' });
     const stage = canvasElement.querySelector<HTMLElement>('[data-float-bounds]')!.getBoundingClientRect();
     const g = grip.getBoundingClientRect();
     const start = { clientX: g.left + g.width / 2, clientY: g.top + g.height / 2 };
-    await userEvent.pointer([
+    await user.pointer([
       { keys: '[MouseLeft>]', target: grip, coords: start },
       { target: grip, coords: { clientX: stage.left + stage.width / 2, clientY: stage.top + stage.height / 2 } },
       { target: grip, coords: { clientX: stage.right - 12, clientY: stage.top + stage.height / 2 } },
-      { keys: '[/MouseLeft]', target: grip, coords: { clientX: stage.right - 12, clientY: stage.top + stage.height / 2 } },
     ]);
     await waitFor(() => expect(bar(canvasElement)).toHaveAttribute('data-dock', 'right'));
+    // Held, it is where the pointer has it at once: its place does not ease after it, docking or not.
+    await expect(bar(canvasElement)).toHaveAttribute('data-dragging');
+    await expect(getComputedStyle(bar(canvasElement)).transitionProperty).not.toMatch(/translate|all/);
+    await user.pointer({ keys: '[/MouseLeft]', target: grip, coords: { clientX: stage.right - 12, clientY: stage.top + stage.height / 2 } });
+    await expect(bar(canvasElement)).not.toHaveAttribute('data-dragging');
     await waitFor(() => expect(stored()).toMatchObject({ dock: 'right' }));
     const docked = grip.getBoundingClientRect();
     const at = { clientX: docked.left + docked.width / 2, clientY: docked.top + docked.height / 2 };
-    await userEvent.pointer([
+    await user.pointer([
       { keys: '[MouseLeft>]', target: grip, coords: at },
       { target: grip, coords: { clientX: stage.left + stage.width / 2, clientY: at.clientY } },
       { keys: '[/MouseLeft]', target: grip, coords: { clientX: stage.left + stage.width / 2, clientY: at.clientY } },

@@ -90,7 +90,10 @@ const within = (value: number, lo: number, hi: number) => (lo > hi ? (lo + hi) /
  *
  * `ref` goes on the bar, which must be `position: relative` so the grip's
  * offsets are its own; `gripRef` on the grip, and `handleProps` too. The bar
- * is moved with the CSS `translate`, written straight to it.
+ * is moved with the CSS `translate`, written straight to it, and marked
+ * `data-dragging` while dragged and `data-gliding` while it eases somewhere —
+ * for its styles to answer. None of that renders anything: in a drag, only
+ * docking and undocking do.
  */
 export function useFloatingPlacement<T extends HTMLElement, G extends HTMLElement>({
   storageKey,
@@ -103,9 +106,10 @@ export function useFloatingPlacement<T extends HTMLElement, G extends HTMLElemen
   const ref = useRef<T>(null);
   const gripRef = useRef<G>(null);
   const [dock, setDockState] = useState<FloatingDock>(null);
-  const [dragging, setDragging] = useState(false);
-  // Moved by a key, docked or sent home: it eases to its new place instead of being written there.
-  const [gliding, setGliding] = useState(false);
+  // Being dragged, and gliding (moved by a key or sent home: it eases to its new place instead of being written
+  // there), are marks on the bar — `data-dragging`, `data-gliding` — not state: they change while the pointer moves,
+  // and a render of the bar for each would cost more than the move itself.
+  const glideTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const placement = useRef<FloatingPlacement | null>(null);
   const dockRef = useRef<FloatingDock>(null);
   const centre = useRef<{ x: number; y: number } | null>(null);
@@ -117,12 +121,14 @@ export function useFloatingPlacement<T extends HTMLElement, G extends HTMLElemen
     before.current = onBeforeDockChange;
   });
 
-  const glide = useCallback(() => setGliding(true), []);
-  useEffect(() => {
-    if (!gliding) return;
-    const timer = setTimeout(() => setGliding(false), GLIDE_MS);
-    return () => clearTimeout(timer);
-  }, [gliding]);
+  const glide = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.dataset.gliding = '';
+    clearTimeout(glideTimer.current);
+    glideTimer.current = setTimeout(() => delete el.dataset.gliding, GLIDE_MS);
+  }, []);
+  useEffect(() => () => clearTimeout(glideTimer.current), []);
 
   const setDock = useCallback((next: FloatingDock) => {
     if (dockRef.current === next) return;
@@ -217,11 +223,47 @@ export function useFloatingPlacement<T extends HTMLElement, G extends HTMLElemen
     };
   }, [layout]);
 
-  const endDrag = (e: React.PointerEvent<HTMLElement>) => {
+  // The listeners of a drag in progress, taken off when it ends (or the bar goes away mid-drag).
+  const detach = useRef<(() => void) | null>(null);
+  useEffect(() => () => detach.current?.(), []);
+
+  /** One pointer event of a drag: the bar under the pointer, docked or not by where it is. */
+  const dragTo = (e: PointerEvent) => {
+    const d = drag.current;
+    const el = ref.current;
+    if (!d || d.id !== e.pointerId || !el) return;
+    // The pointer is the grip's until it is let go: nothing above needs to hear it move, React's root included.
+    e.stopPropagation();
+    d.px = e.clientX;
+    d.py = e.clientY;
+    if (!d.moved) {
+      if (Math.abs(d.px - d.startX) + Math.abs(d.py - d.startY) < SLOP) return;
+      d.moved = true;
+      el.dataset.dragging = '';
+    }
+    const box = boundsOf(el);
+    const current = dockRef.current;
+    let next = current;
+    const nearLeft = d.px - box.left < DOCK_IN;
+    const nearRight = box.right - d.px < DOCK_IN;
+    if (!nearLeft && !nearRight) d.canDock = true;
+    if (!current && d.canDock) {
+      if (nearLeft && fitsUpright(el, box)) next = 'left';
+      else if (nearRight && fitsUpright(el, box)) next = 'right';
+    } else if ((current === 'left' && d.px - box.left > DOCK_OUT) || (current === 'right' && box.right - d.px > DOCK_OUT)) {
+      next = null;
+    }
+    // Into the edge or out of it, the bar stays under the pointer: easing it there would leave it trailing behind.
+    if (next !== current) setDock(next);
+    layout();
+  };
+
+  const endDrag = (e: PointerEvent) => {
     const d = drag.current;
     if (d?.id !== e.pointerId) return;
+    detach.current?.();
     drag.current = null;
-    setDragging(false);
+    if (ref.current) delete ref.current.dataset.dragging;
     if (d.moved) settle();
     layout();
   };
@@ -232,7 +274,8 @@ export function useFloatingPlacement<T extends HTMLElement, G extends HTMLElemen
       const grip = gripRef.current;
       if (!grip) return;
       e.preventDefault();
-      e.currentTarget.setPointerCapture(e.pointerId);
+      const target = e.currentTarget;
+      target.setPointerCapture(e.pointerId);
       const g = grip.getBoundingClientRect();
       const box = ref.current ? boundsOf(ref.current) : null;
       const inZone = !!box && (e.clientX - box.left < DOCK_IN || box.right - e.clientX < DOCK_IN);
@@ -247,39 +290,18 @@ export function useFloatingPlacement<T extends HTMLElement, G extends HTMLElemen
         moved: false,
         canDock: !inZone,
       };
+      // Native listeners, for the drag only: a move then goes straight to the bar, not through React's events.
+      detach.current?.();
+      target.addEventListener('pointermove', dragTo);
+      target.addEventListener('pointerup', endDrag);
+      target.addEventListener('pointercancel', endDrag);
+      detach.current = () => {
+        target.removeEventListener('pointermove', dragTo);
+        target.removeEventListener('pointerup', endDrag);
+        target.removeEventListener('pointercancel', endDrag);
+        detach.current = null;
+      };
     },
-    onPointerMove(e: React.PointerEvent<HTMLElement>) {
-      const d = drag.current;
-      const el = ref.current;
-      if (!d || d.id !== e.pointerId || !el) return;
-      d.px = e.clientX;
-      d.py = e.clientY;
-      if (!d.moved) {
-        if (Math.abs(d.px - d.startX) + Math.abs(d.py - d.startY) < SLOP) return;
-        d.moved = true;
-        setDragging(true);
-      }
-      const box = boundsOf(el);
-      const current = dockRef.current;
-      let next = current;
-      const nearLeft = d.px - box.left < DOCK_IN;
-      const nearRight = box.right - d.px < DOCK_IN;
-      if (!nearLeft && !nearRight) d.canDock = true;
-      if (!current && d.canDock) {
-        if (nearLeft && fitsUpright(el, box)) next = 'left';
-        else if (nearRight && fitsUpright(el, box)) next = 'right';
-      } else if ((current === 'left' && d.px - box.left > DOCK_OUT) || (current === 'right' && box.right - d.px > DOCK_OUT)) {
-        next = null;
-      }
-      if (next !== current) {
-        // Into the edge or out of it, the bar glides the last of the way: a snap, not a jump.
-        glide();
-        setDock(next);
-      }
-      layout();
-    },
-    onPointerUp: endDrag,
-    onPointerCancel: endDrag,
     onDoubleClick() {
       placement.current = null;
       glide();
@@ -333,5 +355,5 @@ export function useFloatingPlacement<T extends HTMLElement, G extends HTMLElemen
     },
   };
 
-  return { ref, gripRef, dock, dragging, gliding, handleProps };
+  return { ref, gripRef, dock, handleProps };
 }
