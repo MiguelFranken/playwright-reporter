@@ -39,6 +39,15 @@ import { runs } from '@/lib/db/schema';
 import { policyFromForm as artifactPolicyFromForm, retentionStats } from '@/lib/storage/retention';
 import { toRunHeaderData, toRunListItem } from '@/lib/view-models';
 import { requestComparison } from '@/lib/review/diff/compare';
+import { compare, resolvePair } from '@/lib/review/diff/comparison';
+import { AnalysisError, analysesOfPair, analysisView, createAnalysis, decideSuggestion } from '@/lib/review/analysis/jobs';
+import { dispatchAnalysis } from '@/lib/review/analysis/dispatch';
+import { IgnoreRevisionConflict } from '@/lib/review/diff/ignore';
+import { decidePolicy, policyTargetsFor, visualAiSettings } from '@/lib/review/diff/policy';
+import { aiUnavailableReason } from '@/lib/review/analysis/config';
+import { IgnoreRegionsError, parseIgnoreRegions, previewRules } from '@/lib/review/diff/ignore';
+import { diffSettingsFor } from '@/lib/review/diff/lookup';
+import { readCaptureBytes } from '@/lib/review/images';
 import { diffsEnabled, requestCaptureDiff } from '@/lib/review/diff/dispatch';
 import { needsPlanning } from '@/lib/review/diff/store';
 import { REVIEW_DECISIONS } from '@miguelfranken/ui/lib/review';
@@ -260,6 +269,108 @@ export const appRouter = {
      * viewer while it waits: a capture nobody measured yet is planned and
      * queued on the first call, and the viewer asks again until it is done.
      */
+    /**
+     * What rectangles drawn in the editor would do to the open capture's
+     * comparison, measured now on the two images and saved nowhere: the
+     * numbers the editor shows before anyone presses save.
+     */
+    previewIgnore: authed.input(project.extend({ captureId: z.string(), compareCaptureId: z.string().optional(), regions: z.array(z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() })).max(20) })).handler(async ({ input }) => {
+      if (!isUuid(input.captureId) || (input.compareCaptureId && !isUuid(input.compareCaptureId))) throw new ORPCError('NOT_FOUND');
+      const projectId = await readableProjectId(input.team, input.project);
+      const found = await captureInProject(projectId, input.captureId.toLowerCase());
+      if (!found) throw new ORPCError('NOT_FOUND');
+      const { capture } = found;
+      const reference = input.compareCaptureId ? (await captureInProject(projectId, input.compareCaptureId.toLowerCase()))?.capture : (capture.baseline?.capture ?? capture.previous?.capture ?? null);
+      if (!reference) throw new ORPCError('BAD_REQUEST', { message: 'Nothing to compare with.' });
+      let rects;
+      try {
+        rects = parseIgnoreRegions(input.regions);
+      } catch (error) {
+        throw new ORPCError('BAD_REQUEST', { message: (error as Error).message });
+      }
+      const [base, head] = await Promise.all([readCaptureBytes(reference), readCaptureBytes(capture)]);
+      if (!base || !head) throw new ORPCError('CONFLICT', { message: 'An image is not stored.' });
+      const settings = (await diffSettingsFor([projectId])).get(projectId)!;
+      try {
+        return await previewRules(Buffer.from(base.bytes), Buffer.from(head.bytes), rects, settings.threshold);
+      } catch (error) {
+        if (error instanceof IgnoreRegionsError) throw new ORPCError('CONFLICT', { message: error.message });
+        throw error;
+      }
+    }),
+
+    /**
+     * Whether the viewer may ask a model about a capture's comparison, and the
+     * analyses made of it so far, newest first.
+     */
+    analyses: authed.input(project.extend({ captureId: z.string(), baseCaptureId: z.string() })).handler(async ({ input }) => {
+      if (!isUuid(input.captureId) || !isUuid(input.baseCaptureId)) throw new ORPCError('NOT_FOUND');
+      const access = await resolveProject(input.team, input.project);
+      if (!access?.can({ run: ['read'] })) throw new ORPCError('NOT_FOUND');
+      const pair = await resolvePair(access.project.id, input.baseCaptureId.toLowerCase(), input.captureId.toLowerCase());
+      if (!pair) throw new ORPCError('NOT_FOUND');
+      const ai = visualAiSettings(access.project.settings);
+      const target = (await policyTargetsFor([pair.head!])).get(pair.head!.id)!;
+      const policy = decidePolicy(access.project.settings, 'ai', target);
+      const unavailable = aiUnavailableReason();
+      const canDecide = access.can({ review: ['decide'] });
+      return {
+        allowed: policy.allowed && !unavailable && canDecide,
+        reason: unavailable ?? (!policy.allowed ? policy.reason : !canDecide ? 'Only reviewers who may decide about images can ask.' : null),
+        mode: ai.mode,
+        analyses: await analysesOfPair(access.project.id, pair.base!.id, pair.head!.id),
+      };
+    }),
+
+    /** Starts an analysis of a capture against its reference; the viewer polls `analysis`. */
+    analyze: authed.input(project.extend({ captureId: z.string(), baseCaptureId: z.string(), regionIds: z.array(z.string()).max(4).optional() })).handler(async ({ input }) => {
+      if (!isUuid(input.captureId) || !isUuid(input.baseCaptureId)) throw new ORPCError('NOT_FOUND');
+      const access = await resolveProject(input.team, input.project);
+      if (!access?.can({ run: ['read'] })) throw new ORPCError('NOT_FOUND');
+      if (!access.can({ review: ['decide'] })) throw new ORPCError('FORBIDDEN', { message: 'You do not have permission to do that.' });
+      const pair = await resolvePair(access.project.id, input.baseCaptureId.toLowerCase(), input.captureId.toLowerCase());
+      if (!pair) throw new ORPCError('NOT_FOUND');
+      const [c] = await compare([pair], { plan: true });
+      if (!c.comparisonId || !c.revision || c.calculationState !== 'done') throw new ORPCError('CONFLICT', { message: 'The comparison is not measured yet.' });
+      try {
+        const outcome = await createAnalysis({ projectId: access.project.id, teamId: access.team.id, projectSettings: access.project.settings, comparison: c as typeof c & { comparisonId: string; revision: string }, regionIds: input.regionIds, trigger: 'manual', userId: access.user.id });
+        if (outcome.created) await dispatchAnalysis(outcome.job.id);
+        return { analysisId: outcome.job.id, created: outcome.created };
+      } catch (error) {
+        if (error instanceof AnalysisError) throw new ORPCError(error.code === 'BUDGET_EXCEEDED' ? 'PAYMENT_REQUIRED' : error.code === 'POLICY_DENIED' ? 'FORBIDDEN' : 'BAD_REQUEST', { message: error.message });
+        throw error;
+      }
+    }),
+
+    analysis: authed.input(project.extend({ analysisId: z.string() })).handler(async ({ input }) => {
+      if (!isUuid(input.analysisId)) throw new ORPCError('NOT_FOUND');
+      const projectId = await readableProjectId(input.team, input.project);
+      const view = await analysisView(projectId, input.analysisId.toLowerCase());
+      if (!view) throw new ORPCError('NOT_FOUND');
+      return view;
+    }),
+
+    /** A person accepts (as proposed, or edited) or rejects a suggestion. */
+    decideSuggestion: authed.input(project.extend({ suggestionId: z.string(), decision: z.enum(['accepted', 'rejected']), rects: z.array(z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() })).max(5).optional(), expectedRevision: z.number().int().optional() })).handler(async ({ input }) => {
+      if (!isUuid(input.suggestionId)) throw new ORPCError('NOT_FOUND');
+      const access = await resolveProject(input.team, input.project);
+      if (!access?.can({ run: ['read'] })) throw new ORPCError('NOT_FOUND');
+      if (!access.can({ review: ['decide'] })) throw new ORPCError('FORBIDDEN', { message: 'You do not have permission to do that.' });
+      try {
+        const res = await decideSuggestion({ projectId: access.project.id, projectSettings: access.project.settings, suggestionId: input.suggestionId.toLowerCase(), decision: input.decision, rects: input.rects, expectedRevision: input.expectedRevision, userId: access.user.id, source: 'app' });
+        if (input.decision === 'accepted') {
+          const found = await captureInProject(access.project.id, res.headCaptureId);
+          if (found) await requestCaptureDiff(found.capture);
+          revalidatePath(`/teams/${input.team}/projects/${input.project}`, 'layout');
+        }
+        return res;
+      } catch (error) {
+        if (error instanceof IgnoreRevisionConflict) throw new ORPCError('CONFLICT', { message: error.message });
+        if (error instanceof AnalysisError) throw new ORPCError(error.code === 'POLICY_DENIED' ? 'FORBIDDEN' : 'BAD_REQUEST', { message: error.message });
+        throw error;
+      }
+    }),
+
     diff: authed.input(project.extend({ captureId: z.string(), compareCaptureId: z.string().optional() })).handler(async ({ input }) => {
       if (!isUuid(input.captureId) || (input.compareCaptureId && !isUuid(input.compareCaptureId))) throw new ORPCError('NOT_FOUND');
       const projectId = await readableProjectId(input.team, input.project);

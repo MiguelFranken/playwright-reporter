@@ -1,6 +1,6 @@
 'use client';
 
-import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useOptimistic, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import {
@@ -28,8 +28,9 @@ import {
   type StoryboardMode,
 } from '@miguelfranken/ui/lib/review';
 import type { CommentEditInput, NewThreadInput, ReviewThreadView, ThreadReplyInput, ThreadStatusInput } from '@miguelfranken/ui/lib/review-threads';
+import { IGNORE_FILTERS, type IgnoreFilter } from '@miguelfranken/ui/lib/visual-diff';
 import { anchorForMarkup, type DeleteDrawingsInput, type NewDrawingsInput } from '@miguelfranken/ui/lib/review-markup';
-import type { IgnoreRect } from '@miguelfranken/ui/views/review/ignore-regions-editor';
+import type { IgnoreRect, IgnoreRulesChange } from '@miguelfranken/ui/views/review/ignore-regions-editor';
 import { ReviewStoryboard, STORYBOARD_SIZE, type ReviewSelection } from '@miguelfranken/ui/views/review/review-storyboard';
 import { useShallowSearch } from '@/components/filters/url-filters';
 import {
@@ -44,7 +45,9 @@ import {
   setReviewThreadStatus,
 } from '@/app/(app)/teams/[team]/projects/[project]/review/actions';
 import { applyDecision, patchCaptures } from '@/lib/review/patch-flows';
-import { captureDiffQuery, compareTargetsQuery } from '@/lib/rpc/queries';
+import { analysisQuery, captureAnalysesQuery, captureDiffQuery, compareTargetsQuery, ignorePreviewQuery } from '@/lib/rpc/queries';
+import { orpc } from '@/lib/rpc/client';
+import type { Rect } from '@miguelfranken/ui/lib/visual-diff';
 
 /** What changes at once, before the revalidated page confirms it. */
 type Change =
@@ -271,6 +274,7 @@ export function useReviewActions({
   viewerId,
   openThread,
   onOpenThreadChange,
+  canAnalyze = false,
   compareRule,
   onCompareRuleChange,
 }: {
@@ -278,6 +282,8 @@ export function useReviewActions({
   project: string;
   flows: ReviewFlowView[];
   selection: ReviewSelection | null;
+  /** May ask a model about a comparison (the same people who may decide about images). */
+  canAnalyze?: boolean;
   decide?: (input: ReviewDecisionInput) => Promise<{ ok: true; decided: number; resolvedThreads?: number } | { ok: false; message: string }>;
   onCommentsChanged?: () => void;
   canComment: boolean;
@@ -299,10 +305,10 @@ export function useReviewActions({
   const live = useLiveDiffs({ team, project }, compare.flows, selection);
   const withLiveFlows = useMemo(() => withLive(compare.flows, live), [compare.flows, live]);
   const [optimistic, addChange] = useOptimistic(withLiveFlows, applyChange);
-  const onIgnoreRegionsChange = (input: { captureId: string; regions: IgnoreRect[] }) => {
+  const onIgnoreRegionsChange = (input: IgnoreRulesChange) => {
     setIgnorePendingId(input.captureId);
     startTransition(async () => {
-      const res = await saveIgnoreRegions({ team, project }, input);
+      const res = await saveIgnoreRegions({ team, project }, { captureId: input.captureId, regions: input.rules, reason: input.reason, expectedRevision: input.expectedRevision });
       setIgnorePendingId(null);
       if (!res.ok) {
         toast.error(res.message);
@@ -310,9 +316,32 @@ export function useReviewActions({
       }
       // The old measurement no longer applies; the viewer asks for the new one.
       queryClient.removeQueries({ queryKey: captureDiffQuery({ team, project }, input.captureId).queryKey });
-      toast.success(input.regions.length ? 'Areas saved. Measuring again…' : 'Nothing is left out any more. Measuring again…');
+      const active = input.rules.filter((r) => r.active !== false).length;
+      toast.success(active ? `${active} ${active === 1 ? 'area' : 'areas'} saved (revision ${res.revision}). Measuring again…` : 'Nothing is left out any more. Measuring again…');
     });
   };
+  // What the rectangles drawn in the editor would leave out, measured on the server as they change.
+  const [previewRequest, setPreviewRequest] = useState<{ captureId: string; regions: IgnoreRect[] } | null>(null);
+  const previewCapture = previewRequest ? flows.flatMap((f) => f.checkpoints.flatMap((c) => c.captures)).find((c) => c.id === previewRequest.captureId) : null;
+  const previewQuery = useQuery({ ...ignorePreviewQuery({ team, project }, previewRequest?.captureId ?? '', previewRequest?.regions ?? [], previewCapture?.compare?.captureId), enabled: Boolean(previewRequest) });
+  const measured = previewQuery.data;
+  const ignorePreview = previewRequest
+    ? {
+        pending: previewQuery.isFetching,
+        result: measured
+          ? {
+              rawChangedPixels: measured.rawChangedPixels,
+              suppressedPixels: measured.suppressedPixels,
+              remainingPixels: measured.effectiveChangedPixels,
+              remainingRegions: measured.remainingRegions,
+              ignoredAreaPercent: measured.totalPixels ? Math.round((measured.ignoredAreaPixels / measured.totalPixels) * 100_000) / 1000 : 0,
+              sizeChanged: measured.sizeChanged,
+            }
+          : null,
+        error: previewQuery.error ? previewQuery.error.message || 'The preview could not be measured.' : null,
+      }
+    : null;
+  const onIgnorePreview = (input: { captureId: string; regions: IgnoreRect[] }) => setPreviewRequest(input);
 
   const ref = { team, project };
   const onDecide = (input: ReviewDecisionInput) => {
@@ -361,6 +390,59 @@ export function useReviewActions({
     onCreateDrawings: (input: NewDrawingsInput) => commentAction({ type: 'draw', input, authorId: viewerId }, () => createReviewDrawings(ref, input)),
     onDeleteDrawings: (input: DeleteDrawingsInput) => commentAction({ type: 'erase', input }, () => deleteReviewDrawings(ref, input)),
   };
+  // The AI analysis of the open capture against its reference: may one be started, which were made, and the newest while it runs.
+  const openCapture = useMemo(() => {
+    if (!selection?.variant) return null;
+    const cp = flows.flatMap((f) => f.checkpoints).find((c) => c.id === selection.checkpointId);
+    const cap = cp?.captures.find((c) => c.variant === selection.variant);
+    const base = cap?.compare?.captureId ?? cap?.baseline?.captureId ?? cap?.previous?.captureId ?? null;
+    return cap && base ? { captureId: cap.id, baseCaptureId: base } : null;
+  }, [flows, selection]);
+  const analysesQuery = useQuery({ ...captureAnalysesQuery({ team, project }, openCapture?.captureId ?? '', openCapture?.baseCaptureId ?? ''), enabled: Boolean(openCapture && canAnalyze) });
+  const [runningId, setRunningId] = useState<string | null>(null);
+  const running = useQuery({ ...analysisQuery({ team, project }, runningId ?? ''), enabled: Boolean(runningId) });
+  useEffect(() => {
+    if (running.data && running.data.status !== 'queued' && running.data.status !== 'running') {
+      setRunningId(null);
+      void queryClient.invalidateQueries({ queryKey: captureAnalysesQuery({ team, project }, openCapture?.captureId ?? '', openCapture?.baseCaptureId ?? '').queryKey });
+    }
+  }, [running.data, queryClient, team, project, openCapture]);
+  const analyze = useMutation(
+    orpc.review.analyze.mutationOptions({
+      onSuccess: (res) => {
+        setRunningId(res.analysisId);
+        if (!res.created) toast.info('This comparison was analysed already; showing that analysis.');
+      },
+      onError: (error) => toast.error(error.message || 'The analysis could not be started.'),
+    }),
+  );
+  const decideSuggestion = useMutation(
+    orpc.review.decideSuggestion.mutationOptions({
+      onSuccess: (res, input) => {
+        void queryClient.invalidateQueries({ queryKey: captureAnalysesQuery({ team, project }, openCapture?.captureId ?? '', openCapture?.baseCaptureId ?? '').queryKey });
+        if (input.decision === 'accepted') {
+          toast.success(`Rule saved (revision ${res.ruleRevision}). Measuring again…`);
+          queryClient.removeQueries({ queryKey: captureDiffQuery({ team, project }, res.headCaptureId).queryKey });
+          onCommentsChanged?.();
+        }
+      },
+      onError: (error) => toast.error(error.message || 'The decision could not be saved.'),
+    }),
+  );
+  const analysisData = analysesQuery.data;
+  const analyses = analysisData ? (running.data && !analysisData.analyses.some((a) => a.id === running.data!.id) ? [running.data, ...analysisData.analyses] : analysisData.analyses.map((a) => (running.data && a.id === running.data.id ? running.data : a))) : [];
+  const analysis = canAnalyze && openCapture
+    ? {
+        allowed: analysisData?.allowed ?? false,
+        reason: analysisData?.reason ?? null,
+        mode: analysisData?.mode ?? null,
+        analyses,
+        pending: analyze.isPending,
+        decidingId: decideSuggestion.isPending ? (decideSuggestion.variables?.suggestionId ?? null) : null,
+        onAnalyze: (input: { captureId: string; baseCaptureId: string }) => analyze.mutate({ team, project, ...input }),
+        onDecide: (input: { suggestionId: string; decision: 'accepted' | 'rejected'; rects?: Rect[] }) => decideSuggestion.mutate({ team, project, suggestionId: input.suggestionId, decision: input.decision, rects: input.rects }),
+      }
+    : null;
   const compareWith = {
     rule,
     onRuleChange: (next: CompareRule) => {
@@ -370,7 +452,7 @@ export function useReviewActions({
     targets: compare.targets,
     onTargetsWanted: compare.onTargetsWanted,
   };
-  return { flows: optimistic, pendingIds, onDecide, onIgnoreRegionsChange, ignorePendingId, comments, compareWith };
+  return { flows: optimistic, pendingIds, onDecide, onIgnoreRegionsChange, ignorePendingId, onIgnorePreview, ignorePreview, analysis, comments, compareWith };
 }
 
 /**
@@ -441,8 +523,10 @@ export function UrlReviewStoryboard({
   const selection = syncUrl ? urlSelection : local;
   const sortParam = params.get('sort');
   const sort = (REVIEW_SORTS as readonly string[]).includes(sortParam ?? '') ? (sortParam as ReviewSort) : undefined;
+  const ignoreParam = params.get('ignore');
+  const ignoreFilter = (IGNORE_FILTERS as readonly string[]).includes(ignoreParam ?? '') ? (ignoreParam as IgnoreFilter) : null;
   const [localThread, setLocalThread] = useState<number | null>(null);
-  const { flows: optimistic, pendingIds, onDecide, onIgnoreRegionsChange, ignorePendingId, comments, compareWith } = useReviewActions({
+  const { flows: optimistic, pendingIds, onDecide, onIgnoreRegionsChange, ignorePendingId, onIgnorePreview, ignorePreview, analysis, comments, compareWith } = useReviewActions({
     team,
     project,
     flows,
@@ -452,6 +536,7 @@ export function UrlReviewStoryboard({
     canComment,
     canModerate,
     viewerId,
+    canAnalyze: canDecide && mode !== 'library',
     openThread: syncUrl ? Number(params.get('thread')) || null : localThread,
     onOpenThreadChange: (n) => (syncUrl ? set({ thread: n ? String(n) : null }) : setLocalThread(n)),
     // `against=previous`, `against=run:38`: a link keeps what its checkpoint was compared with.
@@ -498,8 +583,13 @@ export function UrlReviewStoryboard({
       mode={mode}
       sort={syncUrl ? sort : undefined}
       onSortChange={syncUrl ? (next) => set({ sort: next === 'sequence' ? null : next }) : undefined}
+      ignoreFilter={syncUrl ? ignoreFilter : undefined}
+      onIgnoreFilterChange={syncUrl ? (next) => set({ ignore: next }) : undefined}
       onIgnoreRegionsChange={canDecide && mode !== 'library' ? onIgnoreRegionsChange : undefined}
       ignorePendingId={ignorePendingId}
+      onIgnorePreview={canDecide && mode !== 'library' ? onIgnorePreview : undefined}
+      ignorePreview={ignorePreview}
+      analysis={analysis}
       comments={comments}
       compareWith={compareWith}
     />

@@ -7,3 +7,4 @@ export * from './access';
 export * from './oauth';
 export * from './test-cases';
 export * from './review';
+export * from './analysis';

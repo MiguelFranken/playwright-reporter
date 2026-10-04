@@ -413,6 +413,10 @@ your assistant.
 | `MCP_RATE_LIMIT_PER_MINUTE` | tool calls per token, `120` |
 | `MCP_ARTIFACT_URL_TTL_SECONDS` | lifetime of the artifact links handed to assistants, `900` |
 | `MCP_INLINE_IMAGE_MAX_BYTES` | largest screenshot returned inline, `1048576` |
+| `AI_GATEWAY_API_KEY` | a Vercel AI Gateway key for the optional AI analysis of visual differences; without it the feature says it cannot run |
+| `VISUAL_AI_MODELS` | the models a project may pick for it, comma-separated; default: every model with a known price |
+| `VISUAL_AI_TEAM_MONTHLY_USD` | the default monthly AI budget per team, enforced by reservation, `10` |
+| `VISUAL_AI_DRIVER` | how a started analysis runs: `after` (once the response is sent), `inline`, `none` |
 | `MCP_ALLOWED_HOSTS` | extra `Host` values behind a reverse proxy; `BASE_URL` and `TRUSTED_ORIGINS` are always allowed |
 | `PAT_DEFAULT_TTL_DAYS`, `PAT_MAX_TTL_DAYS` | token lifetime offered and allowed, `90` and `365` days |
 

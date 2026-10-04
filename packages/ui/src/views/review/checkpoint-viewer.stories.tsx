@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useState } from 'react';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
-import { checkoutCompareTargets, diffStatesFlow, legacyFlow, libraryCompareFlows, longTextFlow, placeOrderFlow, reviewFlows, unavailableFlow } from '../../fixtures/review';
+import { checkoutCompareTargets, diffStatesFlow, legacyFlow, libraryCompareFlows, longTextFlow, placeOrderFlow, reviewFlows, unavailableFlow, visualDiffFlow } from '../../fixtures/review';
 import { libraryFlows, NOW, toVerifyFlow, VIEWER_ID } from '../../fixtures/library-views';
 import { resolveCompare, type CompareRule, type ReviewFlowView } from '../../lib/review';
 import { CheckpointViewer, type ReviewSelection } from './checkpoint-viewer';
@@ -376,10 +376,10 @@ export const LeaveOutAreas: Story = {
     const body = within(document.body);
     await body.findByRole('dialog');
     await expect(body.getByText(/1 area is left out of the comparison/)).toBeInTheDocument();
-    await userEvent.click(body.getByRole('button', { name: 'Leave out areas' }));
+    await userEvent.click(body.getByRole('button', { name: /Leave out areas/ }));
     await userEvent.click(await body.findByRole('button', { name: 'Remove area 1' }));
     await userEvent.click(body.getByRole('button', { name: 'Save and measure again' }));
-    await expect(args.onIgnoreRegionsChange).toHaveBeenCalledWith({ captureId: changed.captures[1].id, regions: [] });
+    await expect(args.onIgnoreRegionsChange).toHaveBeenCalledWith({ captureId: changed.captures[1].id, rules: [], reason: null, expectedRevision: 2 });
   },
 };
 
@@ -537,5 +537,41 @@ export const CompareWithAnotherRun: StoryObj<typeof ComparingHost> = {
     // What to compare with is a choice of the comparison: the plain image does without it.
     await userEvent.click(body.getByRole('button', { name: 'Image' }));
     await expect(body.queryByRole('combobox', { name: 'Compare with' })).toBeNull();
+  },
+};
+
+/**
+ * The regions of a measured change are listed as D1, D2… beside the image; picking one shows it, and the hand-off
+ * menus name the comparison of the two captures — "Investigate" reads only, "Fix cause" may change code.
+ */
+export const RegionsAndAiHandoff: Story = {
+  args: { flows: [visualDiffFlow], initial: { checkpointId: visualDiffFlow.checkpoints[0].id, variant: 'desktop' }, comments: { assistant: { setupHref: '#connect', project: 'acme/web' } } },
+  play: async () => {
+    const body = within(document.body);
+    await body.findByRole('dialog');
+    const list = body.getByRole('list', { name: 'Changed regions' });
+    await userEvent.click(within(list).getByRole('button', { name: /D1/ }));
+    await expect(within(list).getByRole('button', { name: /D1/ })).toHaveAttribute('aria-pressed', 'true');
+    await expect(body.getByText('Change 1 of 1')).toBeInTheDocument();
+    await expect(body.getByRole('button', { name: 'Investigate with AI' })).toBeInTheDocument();
+    await expect(body.getByRole('button', { name: 'Fix cause of D1 with AI' })).toBeInTheDocument();
+  },
+};
+
+/** A screen with a rule: the changes can be shown with the rule applied or raw, and the editor lists the rule with its reason. */
+export const RulesRawAndEffective: Story = {
+  args: { initial: { checkpointId: changed.id, variant: 'mobile' }, onIgnorePreview: fn(), ignorePreview: { pending: false, result: { rawChangedPixels: 15_400, suppressedPixels: 9_600, remainingPixels: 5_800, remainingRegions: 1, ignoredAreaPercent: 2.8, sizeChanged: false } } },
+  play: async ({ args }) => {
+    const body = within(document.body);
+    await body.findByRole('dialog');
+    await expect(body.getByText(/1 area is left out of the comparison/)).toBeInTheDocument();
+    await userEvent.click(body.getByRole('button', { name: 'Raw' }));
+    await expect(body.getByText('2 changes')).toBeInTheDocument();
+    await userEvent.click(body.getByRole('button', { name: 'With rules' }));
+    await expect(body.getByText('1 change')).toBeInTheDocument();
+    await userEvent.click(body.getByRole('button', { name: /Leave out areas/ }));
+    await expect(body.getByLabelText('Reason for area 1')).toHaveValue('The order time is live.');
+    await waitFor(() => expect(args.onIgnorePreview).toHaveBeenCalled());
+    await expect(body.getByText(/5,800 remaining/)).toBeInTheDocument();
   },
 };

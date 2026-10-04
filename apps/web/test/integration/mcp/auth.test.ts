@@ -81,7 +81,7 @@ describe.each(ERAS)('handshake on the %s protocol generation', (era) => {
     expect(client.getNegotiatedProtocolVersion()).toBe(era === 'modern' ? '2026-07-28' : '2025-11-25');
     const { tools } = await client.listTools();
     // A read-only token: the write toolset is not offered at all.
-    expect(tools.map((t) => t.name)).toHaveLength(26);
+    expect(tools.map((t) => t.name)).toHaveLength(32);
     expect(tools.map((t) => t.name)).toEqual(expect.arrayContaining(['whoami', 'list_runs', 'get_failure_context', 'verify_fix', 'get_artifact']));
     for (const tool of tools) {
       expect(tool.annotations?.readOnlyHint).toBe(true);
@@ -98,7 +98,7 @@ describe.each(ERAS)('handshake on the %s protocol generation', (era) => {
     const { token } = await createPat(tenant.adminUser);
     const client = await mcpClient({ token, era, query: '?toolsets=core' });
     const { tools } = await client.listTools();
-    expect(tools).toHaveLength(19);
+    expect(tools).toHaveLength(24);
     expect(tools.every((t) => !['get_failure_context', 'verify_fix'].includes(t.name))).toBe(true);
     await client.close();
   });
@@ -108,8 +108,8 @@ describe.each(ERAS)('handshake on the %s protocol generation', (era) => {
     const client = await mcpClient({ token, era });
     const { tools } = await client.listTools();
     const writers = tools.filter((t) => t.annotations?.readOnlyHint === false).map((t) => t.name).sort();
-    expect(writers).toEqual(['adopt_tests', 'bulk_update_test_cases', 'comment_on_review', 'create_test_case', 'create_test_suite', 'delete_test_suite', 'link_test_case', 'resolve_review_thread', 'review_checkpoint', 'set_library_reference', 'update_test_case']);
-    expect(tools).toHaveLength(37);
+    expect(writers).toEqual(['adopt_tests', 'analyze_visual_diff', 'bulk_update_test_cases', 'comment_on_review', 'create_test_case', 'create_test_suite', 'decide_visual_suggestion', 'delete_test_suite', 'link_test_case', 'resolve_review_thread', 'review_checkpoint', 'set_library_reference', 'set_visual_ignore_rules', 'update_test_case']);
+    expect(tools).toHaveLength(46);
     await client.close();
   });
 });

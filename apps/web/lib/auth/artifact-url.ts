@@ -55,3 +55,30 @@ export function signCaptureImagePath(captureId: string, ttlSeconds = artifactUrl
 export function verifyCaptureImageSignature(captureId: string, exp: string | null, sig: string | null): boolean {
   return verifyArtifactSignature(captureImageSubject(captureId), exp, sig);
 }
+
+/**
+ * A rendered image of a visual comparison (`/api/visual-diffs/{comparison}/render`),
+ * signed over the comparison *and* every rendering parameter, so a link to
+ * one crop cannot be turned into a link to a larger one or to the other image.
+ */
+const renderSubject = (comparisonId: string, params: URLSearchParams) => {
+  const canonical = [...params.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${k}=${v}`).join('&');
+  return `visual-render:${comparisonId}:${canonical}`;
+};
+
+export function signVisualRenderPath(comparisonId: string, params: URLSearchParams, ttlSeconds = artifactUrlTtlSeconds()) {
+  const exp = Math.floor(Date.now() / 1000) + ttlSeconds;
+  const query = new URLSearchParams(params);
+  query.set('exp', String(exp));
+  query.set('sig', sign(renderSubject(comparisonId, params), exp));
+  return { path: `/api/visual-diffs/${comparisonId}/render?${query}`, expiresAt: new Date(exp * 1000) };
+}
+
+export function verifyVisualRenderSignature(comparisonId: string, query: URLSearchParams): boolean {
+  const params = new URLSearchParams(query);
+  const exp = params.get('exp');
+  const sig = params.get('sig');
+  params.delete('exp');
+  params.delete('sig');
+  return verifyArtifactSignature(renderSubject(comparisonId, params), exp, sig);
+}

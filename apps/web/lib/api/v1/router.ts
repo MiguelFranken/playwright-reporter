@@ -43,6 +43,9 @@ import { getReviewCheckpoint, listReviewCheckpoints, reviewCheckpoint } from '@/
 import { commentOnReview, listReviewThreads, resolveReviewThread } from '@/lib/mcp/tools/review-threads';
 import { getLibraryFlows, listLibrary, setLibraryReferenceTool } from '@/lib/mcp/tools/library';
 import { listFeedbackRequests } from '@/lib/mcp/tools/feedback';
+import { getVisualDiff, getVisualDiffImage, listVisualDiffs } from '@/lib/mcp/tools/visual-diffs';
+import { listVisualIgnoreRules, previewVisualIgnoreRules, setVisualIgnoreRules } from '@/lib/mcp/tools/visual-ignore';
+import { analyzeVisualDiff, decideVisualSuggestion, getVisualDiffAnalysis } from '@/lib/mcp/tools/visual-analysis';
 import type { ToolDef } from '@/lib/mcp/registry';
 import { authed } from '../base';
 import { fromTool } from '../from-tool';
@@ -57,6 +60,7 @@ const resultRef = z.string().describe('Result id: one test in one run, as return
 const attachmentRef = z.string().describe('Attachment id, as listed by a result.');
 const captureRef = z.string().describe('Capture id: one variant of one review checkpoint, as returned by `/runs/{run}/review-checkpoints`.');
 const caseRef = z.string().describe('Test case key (`TC-12` or `12`) or id, as returned by `/test-cases`.');
+const comparisonRef = z.string().describe('Comparison id (`vc_…`): one pair of captures, as returned by `/visual-diffs`.');
 
 const projectSchema = z.object({
   ref: z.string().describe('"team/project", the form other endpoints and the MCP server accept.'),
@@ -368,6 +372,84 @@ export const router = {
       description:
         'Every open request for a visual change — comment threads and change requests without a comment — one record each, with the producing test, the checkpoint key, the image now and the one the request was made on, and whether it waits for a fix or changed since (`verify`). The library’s default reference without `branch`, `pullRequest` or `run`. Paged with `cursor`; `counts` cover every page.',
       tags: ['Visual review'],
+    }),
+  },
+  visualDiffs: {
+    list: fromTool(tool(listVisualDiffs), {
+      path: `${P}/visual-diffs`,
+      summary: 'List visual differences between two runs',
+      description:
+        'Which review screens look different between two runs (`headRun` against `baseRun`, the newest earlier run with captures by default) or between two library references (`headBranch`/`headPullRequest` against `baseBranch`/`basePullRequest`), with the changed pixels before and after the checkpoint’s rules left areas out and a comparison id per pair. Pairs nobody measured yet are measured; pending ones say so.',
+      tags: ['Visual review'],
+    }),
+    get: fromTool(tool(getVisualDiff), {
+      path: `${P}/visual-diffs/{comparison}`,
+      summary: 'Get a visual difference',
+      description:
+        'One comparison in detail: both captures and runs, the producing test and checkpoint, how the screen was captured, the raw and effective measurement, the active and suspended rules, and the changed regions (D1, D2…) with stable ids and rectangles in image pixels. Paged with `regionCursor`.',
+      tags: ['Visual review'],
+      params: { comparison: comparisonRef },
+      omit: ['base', 'head'],
+    }),
+    render: fromTool(tool(getVisualDiffImage), {
+      path: `${P}/visual-diffs/{comparison}/render`,
+      summary: 'Render images of a visual difference',
+      description:
+        'A manifest of images for one comparison — the head boxed and numbered, base and head of a region, the painted changes, the mask, the colour difference, the overlay or a crop — each with the rectangle it shows and a short-lived signed link to the binary. The REST API never carries image bytes in JSON.',
+      tags: ['Visual review'],
+      params: { comparison: comparisonRef },
+      fixedArgs: { delivery: 'links' },
+    }),
+  },
+  visualIgnoreRules: {
+    list: fromTool(tool(listVisualIgnoreRules), {
+      path: `${P}/visual-ignore-rules`,
+      summary: 'List the areas left out of comparisons',
+      description: 'The rules that leave areas of review screens out of their pixel comparisons, per checkpoint and variant, with each rule’s rectangle, reason, origin and state; with `capture`, checked against that image and with the set’s history.',
+      tags: ['Visual review'],
+    }),
+    preview: fromTool(tool(previewVisualIgnoreRules), {
+      method: 'POST',
+      readOnlyBody: true,
+      path: `${P}/visual-ignore-rules/preview`,
+      summary: 'Preview rules that leave areas out',
+      description: 'What a set of rectangles would do to one comparison, measured now and saved nowhere: raw changed pixels, how many the rectangles would leave out, how many remain, and which regions they cover. A read: no `write` scope needed.',
+      tags: ['Visual review'],
+    }),
+    set: fromTool(tool(setVisualIgnoreRules), {
+      method: 'PUT',
+      path: `${P}/review-captures/{capture}/ignore-rules`,
+      summary: 'Set the areas left out of a screen’s comparisons',
+      description: 'Replaces the rule set of the capture’s checkpoint and variant under a revision check (`expectedRevision`), with a reason; later runs are measured without those areas. Needs the `write` scope and the review permission; refused where the project’s policy denies it (`POLICY_DENIED`) or the revision moved (`REVISION_CONFLICT`).',
+      tags: ['Visual review'],
+      params: { capture: captureRef },
+    }),
+  },
+  visualAnalyses: {
+    create: fromTool(tool(analyzeVisualDiff), {
+      method: 'POST',
+      successStatus: 202,
+      path: `${P}/visual-diffs/{comparison}/analyses`,
+      summary: 'Ask a model about a visual difference',
+      description: 'Starts one AI analysis of a comparison’s changed regions under the project’s policy and budget, or answers the earlier analysis of the same input. Poll `/visual-diff-analyses/{analysis}`. Needs the `write` scope.',
+      tags: ['Visual review'],
+      params: { comparison: comparisonRef },
+    }),
+    get: fromTool(tool(getVisualDiffAnalysis), {
+      path: `${P}/visual-diff-analyses/{analysis}`,
+      summary: 'Get an AI analysis',
+      description: 'The state and result of an AI analysis: status, summary, and per region the observation, hypothesis, uncertainty, recommendation, proposed rectangles with their measured effect and a person’s decision.',
+      tags: ['Visual review'],
+      params: { analysis: z.string().describe('Analysis id, as returned when it was created.') },
+      omit: ['comparison'],
+    }),
+    decide: fromTool(tool(decideVisualSuggestion), {
+      method: 'POST',
+      path: `${P}/visual-diff-suggestions/{suggestion}/decision`,
+      summary: 'Accept or reject an AI suggestion',
+      description: 'Records a person’s decision about one suggestion; accepting saves its rectangles as rules of the screen under the project’s policy and the rule revision check. Needs the `write` scope.',
+      tags: ['Visual review'],
+      params: { suggestion: z.string().describe('Suggestion id, from the analysis.') },
     }),
   },
   reviewThreads: {

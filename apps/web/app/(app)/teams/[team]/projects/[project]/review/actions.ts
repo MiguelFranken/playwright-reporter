@@ -6,7 +6,8 @@ import type { ReviewDecisionInput } from '@miguelfranken/ui/lib/review';
 import { REVIEW_DECISIONS } from '@miguelfranken/ui/lib/review';
 import { THREAD_STATUSES, type CommentEditInput, type NewThreadInput, type ThreadReplyInput, type ThreadStatusInput } from '@miguelfranken/ui/lib/review-threads';
 import { requestCaptureDiff } from '@/lib/review/diff/dispatch';
-import { IgnoreRegionsError, parseIgnoreRegions, setIgnoreRegions } from '@/lib/review/diff/ignore';
+import { IgnoreRegionsError, IgnoreRevisionConflict, parseRuleInputs, rulesOfCapture, setIgnoreRegions } from '@/lib/review/diff/ignore';
+import { decidePolicy, policyTargetsFor } from '@/lib/review/diff/policy';
 import { captureInProject, decide, ReviewError } from '@/lib/review/queries';
 import { createThread, deleteComment, editComment, replyToThread, setThreadStatus, ThreadError } from '@/lib/review/threads';
 import { createDrawings, deleteDrawings, DrawingError } from '@/lib/review/drawings';
@@ -145,26 +146,40 @@ export async function deleteReviewDrawings(ref: Ref, input: DeleteDrawingsInput)
 }
 
 /**
- * Saves the areas a checkpoint's variant leaves out of its comparisons, then
- * has the capture measured again without them. Deciding about images and
- * leaving parts of them out take the same permission: both change what a
- * reviewer is asked to look at.
+ * Saves the rules (areas left out) of a checkpoint's variant, then has the
+ * capture measured again without them. Deciding about images and leaving
+ * parts of them out take the same permission: both change what a reviewer is
+ * asked to look at. Refused where the project's policy denies it, and when
+ * somebody else saved the rules since they were read (`expectedRevision`).
  */
-export async function saveIgnoreRegions(ref: { team: string; project: string }, input: { captureId: string; regions: unknown }): Promise<{ ok: true } | Denied> {
+export async function saveIgnoreRegions(
+  ref: { team: string; project: string },
+  input: { captureId: string; regions: unknown; expectedRevision?: number | null; reason?: string | null },
+): Promise<{ ok: true; revision: number } | Denied> {
   const access = await projectForAction(ref.team, ref.project, { review: ['decide'] });
   if (denied(access)) return access;
-  let regions;
+  let rules;
   try {
-    regions = parseIgnoreRegions(input.regions);
+    rules = parseRuleInputs(input.regions);
   } catch (error) {
     if (error instanceof IgnoreRegionsError) return actionError(error.message);
     throw error;
   }
   if (!/^[0-9a-f-]{36}$/i.test(input.captureId)) return actionError('Image not found.');
-  const saved = await setIgnoreRegions(access.project.id, input.captureId.toLowerCase(), regions, access.user.id);
-  if (!saved) return actionError('Image not found.');
-  const found = await captureInProject(access.project.id, input.captureId.toLowerCase());
-  if (found) await requestCaptureDiff(found.capture);
-  revalidatePath(`/teams/${ref.team}/projects/${ref.project}`, 'layout');
-  return { ok: true };
+  const found = await rulesOfCapture(access.project.id, input.captureId.toLowerCase());
+  if (!found) return actionError('Image not found.');
+  const target = (await policyTargetsFor([found.capture])).get(found.capture.id)!;
+  const policy = decidePolicy(access.project.settings, 'ignore', target);
+  if (!policy.allowed) return actionError(`Leaving areas out is not allowed for this screen: ${policy.reason}`);
+  try {
+    const saved = await setIgnoreRegions(access.project.id, found.capture.id, rules, access.user.id, { expectedRevision: input.expectedRevision, reason: input.reason, source: 'app' });
+    if (!saved) return actionError('Image not found.');
+    const compared = await captureInProject(access.project.id, found.capture.id);
+    if (compared) await requestCaptureDiff(compared.capture);
+    revalidatePath(`/teams/${ref.team}/projects/${ref.project}`, 'layout');
+    return { ok: true, revision: saved.revision };
+  } catch (error) {
+    if (error instanceof IgnoreRevisionConflict || error instanceof IgnoreRegionsError) return actionError(error.message);
+    throw error;
+  }
 }

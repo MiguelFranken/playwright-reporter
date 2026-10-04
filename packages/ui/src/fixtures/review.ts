@@ -141,13 +141,81 @@ export const placeOrderFlow: ReviewFlowView = {
       1,
       [
         capture('Checkout', 'desktop', 'changed', { diff: checkoutDesktopDiff }, { accent: '#e5484d', tall: true }),
-        capture('Checkout', 'mobile', 'changed', { diff: checkoutMobileDiff, ignoreRegions: [{ x: 40, y: 280, width: 700, height: 120, pixels: 0 }] }, { accent: '#e5484d', tall: true }),
+        capture(
+          'Checkout',
+          'mobile',
+          'changed',
+          {
+            diff: { ...checkoutMobileDiff, raw: { state: 'done', changedPixels: 5800 + 9600, ratio: (5800 + 9600) / (780 * 3800), regions: [...checkoutMobileDiff.regions, { x: 60, y: 300, width: 400, height: 24, pixels: 9600 }], overlayUrl: checkoutMobileDiff.overlayUrl } },
+            ignoreRegions: [{ x: 40, y: 280, width: 700, height: 120, pixels: 0 }],
+            ignore: {
+              active: 1,
+              ever: true,
+              applied: 1,
+              suspended: 0,
+              revision: 2,
+              rawChangedPixels: 5800 + 9600,
+              suppressedPixels: 9600,
+              rules: [
+                {
+                  id: 'rule-order-time',
+                  x: 40,
+                  y: 280,
+                  width: 700,
+                  height: 120,
+                  reason: 'The order time is live.',
+                  category: 'time_dependent',
+                  source: 'manual',
+                  active: true,
+                  createdAt: ago(60 * 24 * 3).toISOString(),
+                  createdBy: 'Ada Lovelace',
+                  geometry: { imageWidth: 780, imageHeight: 3800, originCaptureId: 'cap-mobile-origin', viewportWidth: 390, viewportHeight: 844, deviceScaleFactor: 2 },
+                },
+              ],
+              suspendedRules: [],
+            },
+          },
+          { accent: '#e5484d', tall: true },
+        ),
       ],
       { description: 'Every field complete, just before the order is placed.', stepPath: ['Checkout', 'fill in the checkout form'] },
     ),
     checkpoint('order-confirmation', 'Order confirmation', 2, [
       capture('Thank you!', 'desktop', 'new', { diff: measuredDiff([], { width: 2560, height: 1440 }, { against: 'previous', changedPixels: 0, ratio: 0 }) }),
       capture('Thank you!', 'mobile', 'new', { diff: { ...measuredDiff([], { width: 780, height: 1688 }), state: 'pending', against: 'previous', overlayUrl: null } }),
+    ]),
+  ],
+};
+
+/**
+ * A screen whose captures carry real-looking ids: the viewer builds a
+ * comparison id (`vc_…`) from the baseline's and this capture's, which the
+ * AI hand-off names. The booking name differs between the two runs.
+ */
+export const visualDiffFlow: ReviewFlowView = {
+  resultId: 'res-visual',
+  testId: 'test-visual',
+  title: 'books a workshop',
+  titlePath: ['Workshops', 'books a workshop'],
+  file: 'tests/workshops.spec.ts',
+  line: 12,
+  project: 'chromium',
+  outcome: 'passed',
+  resultHref: '#result-visual',
+  checkpoints: [
+    checkpoint('booking-summary', 'Booking summary', 0, [
+      {
+        ...capture('Booking summary', 'desktop', 'changed', { diff: measuredDiff([{ x: 420, y: 560, width: 360, height: 48, pixels: 5120 }], { width: 2560, height: 1440 }) }, { accent: '#e5484d' }),
+        id: '9f0e1d2c-3b4a-4596-8778-695a4b3c2d1e',
+        baseline: {
+          captureId: '3b1f5e8a-3c4d-4e6f-8a9b-0c1d2e3f4a5b',
+          image: image('Booking summary'),
+          runNumber: 480,
+          same: false,
+          approvedAt: ago(60 * 30).toISOString(),
+          approvedBy: 'Ada Lovelace',
+        },
+      },
     ]),
   ],
 };

@@ -1,7 +1,9 @@
 import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
+import { investigateRunVisualDiffsPrompt } from '@miguelfranken/ui/lib/ai-handoff';
 import { BackLink } from '@miguelfranken/ui/patterns/back-link';
+import { DebugWithAiMenu } from '@miguelfranken/ui/patterns/debug-with-ai-menu';
 import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
 import { ReviewStoryboardSkeleton } from '@miguelfranken/ui/views/review/review-skeleton';
 import { GitBranch, GitPullRequest } from 'lucide-react';
@@ -10,6 +12,7 @@ import { ConnectedRunLibraryActions } from '@/components/library/library-control
 import { PrefetchLink } from '@/components/prefetch-link';
 import { RunReviewStoryboard } from '@/components/review/run-review-storyboard';
 import { requireProject } from '@/lib/auth/access';
+import { baseUrl } from '@/lib/auth/config';
 import { casesOfTests, defaultBranch, getLibraryReference, getRunByNumber, runReview } from '@/lib/page-data';
 import { afterCapturesShown } from '@/lib/review/diff/dispatch';
 import { toRunReviewData } from '@/lib/review/run-flows';
@@ -57,9 +60,13 @@ async function Content({ params }: Props) {
             </>
           }
         >
-          {reference ? (
-            <ConnectedRunLibraryActions team={team} project={access.project.slug} base={base} reference={reference} runNumber={run.number} canManage={access.can({ review: ['decide'] })} />
-          ) : null}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Screens that look different from the run before, both possibly green: an agent reads them through the MCP server. */}
+            <DebugWithAiMenu prompt={investigateRunVisualDiffsPrompt({ runUrl: `${baseUrl()}${hrefs.run(run.number)}` })} setupHref="/account/ai" label="Visual changes with AI" />
+            {reference ? (
+              <ConnectedRunLibraryActions team={team} project={access.project.slug} base={base} reference={reference} runNumber={run.number} canManage={access.can({ review: ['decide'] })} />
+            ) : null}
+          </div>
         </PageHeader>
         {key ? (
           <p className="-mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-body-s text-muted-foreground">

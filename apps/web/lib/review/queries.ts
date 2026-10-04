@@ -13,12 +13,14 @@ import { and, desc, eq, inArray, isNotNull, ne, notInArray, sql, type SQL } from
 import { alias } from 'drizzle-orm/pg-core';
 import type { DecisionSource, ReviewDecision, ReviewStatus } from '@miguelfranken/ui/lib/review';
 import type { CommentSource } from '@miguelfranken/ui/lib/review-threads';
+import { applicableRules, type IgnoreRule, type IgnoreSummary, type RuleValidity } from '@miguelfranken/ui/lib/visual-diff';
 import { db } from '@/lib/db/drizzle';
 import {
   attachments,
   reviewCaptures,
   reviewCheckpoints,
   reviewDecisions,
+  reviewIgnoreRegions,
   reviewThreads,
   runs,
   testAttempts,
@@ -27,7 +29,8 @@ import {
   users,
   type Attachment,
 } from '@/lib/db/schema';
-import { diffSettingsFor, diffsFor, identityKey, ignoreRegionsFor, pairKey, pairOf, type DiffRecord, type Rect } from './diff/lookup';
+import { EMPTY_RULES, rulesFor } from './diff/ignore';
+import { diffSettingsFor, diffsFor, identityKey, pairKey, pairOf, type DiffRecord, type Rect } from './diff/lookup';
 import { withinTolerance } from './diff/settings';
 import { createThread, resolveThreadsOf, threadsForCaptures, type CaptureThread } from './threads';
 import { drawingsForCaptures, type CaptureDrawing } from './drawings';
@@ -77,6 +80,8 @@ export interface DecisionRecord {
   decision: ReviewDecision;
   source: DecisionSource;
   comment: string | null;
+  /** A tolerance approval's measurement; null on a person's decision and on approvals made before it was recorded. */
+  provenance?: { diffId: string; optionsKey: string; ignoreRevision: number } | null;
   createdAt: Date;
   by: string | null;
   runNumber: number | null;
@@ -101,7 +106,14 @@ export interface ComparedCapture extends CaptureRecord {
   diffAgainst: 'baseline' | 'previous' | null;
   /** Measured, against the baseline, and under the project's tolerance. */
   withinTolerance: boolean;
+  /** The active rules that fit this image: what the comparison leaves out. */
   ignoreRegions: Rect[];
+  /** The checkpoint's rules and what they did here. */
+  ignore: IgnoreSummary & { rules: IgnoreRule[]; suspendedRules: { rule: IgnoreRule; validity: RuleValidity }[] };
+  /** The same comparison measured before any rule left areas out, when rules apply and it is measured. */
+  rawDiff: DiffRecord | null;
+  /** A tolerance approval that rested on another rule revision: the image is reviewed again, the decision kept as history. */
+  staleTolerance: DecisionRecord | null;
   /** The comment threads the image shows (see `threads.ts`). */
   threads: CaptureThread[];
   /** The drawings on its pixels, on their own (see `drawings.ts`). */
@@ -211,6 +223,7 @@ async function decisionsFor(captures: readonly CaptureRecord[]): Promise<Map<str
       decision: reviewDecisions.decision,
       source: reviewDecisions.source,
       comment: reviewDecisions.comment,
+      provenance: reviewDecisions.provenance,
       createdAt: reviewDecisions.createdAt,
       by: users.name,
       runNumber: runs.number,
@@ -283,34 +296,76 @@ export async function compareCaptures(
   ]);
   const baselineById = new Map(baselineCaptures.map((c) => [c.id, c]));
 
-  const [settings, ignores] = await Promise.all([diffSettingsFor(captures.map((c) => c.projectId)), ignoreRegionsFor(captures)]);
+  const [settings, ruleSets] = await Promise.all([diffSettingsFor(captures.map((c) => c.projectId)), rulesFor(captures)]);
   const compared = captures.map((c) => {
     const key = identityKey(c);
     const list = decisions.get(key) ?? [];
-    const exact = list.find((d) => (c.sha256 ? d.sha256 === c.sha256 : d.captureId === c.id)) ?? null;
     const approved = baselines.get(key) ?? null;
-    const status: ReviewStatus = exact ? exact.decision : approved ? 'changed' : 'new';
     const lastHuman = list.find((d) => d.source === 'human') ?? null;
     const request = lastHuman?.decision === 'changes_requested' ? lastHuman : null;
     const baseline = approved ? { decision: approved, capture: approved.captureId ? (baselineById.get(approved.captureId) ?? null) : null } : null;
     const prev = previous.get(key) ?? null;
     // As the viewer compares: the approved image while it still exists, else the run before.
     const reference = baseline?.capture ?? prev?.capture ?? null;
-    const ignoreRegions = ignores.get(key) ?? [];
-    const pair = settings.has(c.projectId) ? pairOf(c, reference, settings.get(c.projectId)!, ignoreRegions) : null;
+    const set = ruleSets.get(key) ?? EMPTY_RULES;
+    const { applied, suspended } = applicableRules(
+      set.rules.filter((r) => r.active),
+      { width: c.width, height: c.height },
+    );
+    const ignoreRegions: Rect[] = applied.map(({ x, y, width, height }) => ({ x, y, width, height }));
+    const s = settings.get(c.projectId);
+    const pair = s ? pairOf(c, reference, s, ignoreRegions) : null;
+    const rawPair = s && applied.length ? pairOf(c, reference, s, []) : null;
+    // A tolerance approval rests on a measurement; made under other rules or settings, it no longer applies and the image is looked at again.
+    const matching = list.filter((d) => (c.sha256 ? d.sha256 === c.sha256 : d.captureId === c.id));
+    const applies = (d: DecisionRecord) => d.source !== 'tolerance' || !d.provenance || !pair || d.provenance.optionsKey === pair.optionsKey;
+    const exact = matching.find(applies) ?? null;
+    const staleTolerance = matching.find((d) => !applies(d)) ?? null;
+    const status: ReviewStatus = exact ? exact.decision : approved ? 'changed' : 'new';
+    const ignore: ComparedCapture['ignore'] = {
+      active: set.rules.filter((r) => r.active).length,
+      ever: set.ever,
+      applied: applied.length,
+      suspended: suspended.length,
+      revision: set.revision,
+      rawChangedPixels: null,
+      suppressedPixels: null,
+      rules: set.rules,
+      suspendedRules: suspended,
+    };
     return {
-      compared: { ...c, status, decision: exact, baseline, previous: prev, request, diff: null, diffAgainst: baseline?.capture ? 'baseline' : prev ? 'previous' : null, withinTolerance: false, ignoreRegions, threads: threads.get(c.id) ?? [], drawings: drawings.get(c.id) ?? [] } as ComparedCapture,
+      compared: {
+        ...c,
+        status,
+        decision: exact,
+        baseline,
+        previous: prev,
+        request,
+        diff: null,
+        diffAgainst: baseline?.capture ? 'baseline' : prev ? 'previous' : null,
+        withinTolerance: false,
+        ignoreRegions,
+        ignore,
+        rawDiff: null,
+        staleTolerance,
+        threads: threads.get(c.id) ?? [],
+        drawings: drawings.get(c.id) ?? [],
+      } as ComparedCapture,
       pair,
+      rawPair,
     };
   });
-  const diffs = await diffsFor(compared.flatMap((x) => (x.pair ? [x.pair] : [])));
-  return compared.map(({ compared: c, pair }) => {
+  const diffs = await diffsFor(compared.flatMap((x) => [x.pair, x.rawPair].filter((p): p is NonNullable<typeof p> => Boolean(p))));
+  return compared.map(({ compared: c, pair, rawPair }) => {
     if (!pair) return c;
     const diff = diffs.get(pairKey(pair.projectId, pair.baseSha256, pair.headSha256, pair.optionsKey)) ?? null;
+    const rawDiff = rawPair ? (diffs.get(pairKey(rawPair.projectId, rawPair.baseSha256, rawPair.headSha256, rawPair.optionsKey)) ?? null) : null;
     const done = diff?.status === 'done' && diff.changedPixels !== null && diff.ratio !== null;
     const sizeChanged = done && (diff.baseWidth !== diff.headWidth || diff.baseHeight !== diff.headHeight);
     const tolerated = done && c.diffAgainst === 'baseline' && withinTolerance({ changedPixels: diff.changedPixels!, ratio: diff.ratio!, sizeChanged }, settings.get(c.projectId)!);
-    return { ...c, diff, withinTolerance: tolerated };
+    const rawChanged = rawPair ? (rawDiff?.status === 'done' ? rawDiff.changedPixels : null) : done ? diff.changedPixels : null;
+    const suppressed = rawChanged !== null && done ? Math.max(0, rawChanged - diff.changedPixels!) : rawPair ? null : 0;
+    return { ...c, diff, rawDiff, withinTolerance: tolerated, ignore: { ...c.ignore, rawChangedPixels: rawChanged, suppressedPixels: suppressed } };
   });
 }
 
@@ -346,6 +401,20 @@ export async function selectCheckpoints(where: SQL): Promise<Omit<CheckpointReco
 
 /** Captures by id, without their comparison. */
 export const capturesById = (ids: readonly string[]) => (ids.length ? selectCaptures(inArray(reviewCaptures.id, [...ids])) : Promise.resolve([]));
+
+/** The captures of a run's final attempts, without their comparison: what a run-to-run comparison pairs up. */
+export async function capturesOfRun(runId: string): Promise<(CaptureRecord & { checkpoint: Omit<CheckpointRecord, 'captures'> })[]> {
+  const cps = await selectCheckpoints(eq(reviewCheckpoints.runId, runId));
+  if (cps.length === 0) return [];
+  const byId = new Map(cps.map((c) => [c.id, c]));
+  const raw = await selectCaptures(
+    inArray(
+      reviewCaptures.checkpointId,
+      cps.map((c) => c.id),
+    ),
+  );
+  return raw.flatMap((c) => (byId.has(c.checkpointId) ? [{ ...c, checkpoint: byId.get(c.checkpointId)! }] : []));
+}
 
 /** The checkpoints of some results' final attempts, in order, with their compared captures. */
 export async function checkpointsWhere(where: SQL, context?: { runId: string; runStartedAt: Date }): Promise<CheckpointRecord[]> {
@@ -513,6 +582,9 @@ const statusSql = sql`coalesce(
   (select d.decision::text from ${reviewDecisions} d
     where d.test_id = c.test_id and d.checkpoint_name = c.checkpoint_name and d.variant = c.variant
       and ((c.sha256 is not null and d.sha256 = c.sha256) or (c.sha256 is null and d.capture_id = c.id))
+      -- a tolerance approval made under another rule revision no longer applies
+      and (d.source <> 'tolerance' or d.provenance is null
+        or (d.provenance->>'ignoreRevision')::int = coalesce((select r.revision from ${reviewIgnoreRegions} r where r.test_id = c.test_id and r.checkpoint_name = c.checkpoint_name and r.variant = c.variant), 0))
     order by d.created_at desc, d.id desc limit 1),
   case when exists (
     select 1 from ${reviewDecisions} d

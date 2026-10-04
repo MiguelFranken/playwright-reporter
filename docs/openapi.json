@@ -4241,6 +4241,24 @@
             },
             "allowEmptyValue": true,
             "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "ignore",
+            "schema": {
+              "description": "Only images whose rules (areas left out of the comparison) are: active, ever, applied, suppressed, fully-suppressed or needs-review.",
+              "type": "string",
+              "enum": [
+                "active",
+                "ever",
+                "applied",
+                "suppressed",
+                "fully-suppressed",
+                "needs-review"
+              ]
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
           }
         ],
         "responses": {
@@ -4439,6 +4457,56 @@
                                       "openThreads": {
                                         "description": "Open comment threads on the image: see them pinned with get_review_checkpoint.",
                                         "type": "number"
+                                      },
+                                      "ignore": {
+                                        "description": "The checkpoint’s rules (areas left out) and what they did here; absent when none was ever saved.",
+                                        "type": "object",
+                                        "properties": {
+                                          "active": {
+                                            "type": "number"
+                                          },
+                                          "applied": {
+                                            "type": "number"
+                                          },
+                                          "suspended": {
+                                            "type": "number"
+                                          },
+                                          "rawChangedPixels": {
+                                            "type": [
+                                              "number",
+                                              "null"
+                                            ]
+                                          },
+                                          "suppressedPixels": {
+                                            "type": [
+                                              "number",
+                                              "null"
+                                            ]
+                                          },
+                                          "states": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "string",
+                                              "enum": [
+                                                "active",
+                                                "ever",
+                                                "applied",
+                                                "suppressed",
+                                                "fully-suppressed",
+                                                "needs-review"
+                                              ]
+                                            }
+                                          }
+                                        },
+                                        "required": [
+                                          "active",
+                                          "applied",
+                                          "suspended",
+                                          "rawChangedPixels",
+                                          "suppressedPixels",
+                                          "states"
+                                        ],
+                                        "additionalProperties": false
                                       }
                                     },
                                     "required": [
@@ -11211,6 +11279,20 @@
                         }
                       ]
                     },
+                    "comparisonId": {
+                      "description": "The pair shown (the image compared with → this image) for get_visual_diff and get_visual_diff_image: every region, raw and effective numbers, and images in any mode.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "measuredComparisonId": {
+                      "description": "The pair the diff below was measured against, when it is another one.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "changedRegions": {
                       "type": "array",
                       "items": {
@@ -12932,6 +13014,4001 @@
         }
       }
     },
+    "/projects/{team}/{project}/visual-diffs": {
+      "get": {
+        "operationId": "listVisualDiffs",
+        "summary": "List visual differences between two runs",
+        "description": "Which review screens look different between two runs (`headRun` against `baseRun`, the newest earlier run with captures by default) or between two library references (`headBranch`/`headPullRequest` against `baseBranch`/`basePullRequest`), with the changed pixels before and after the checkpoint’s rules left areas out and a comparison id per pair. Pairs nobody measured yet are measured; pending ones say so.",
+        "tags": [
+          "Visual review"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "team",
+            "schema": {
+              "type": "string",
+              "description": "Team slug, as in the app URL (`/teams/<team>/…`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "project",
+            "schema": {
+              "type": "string",
+              "description": "Project slug, as in the app URL (`…/projects/<project>`)."
+            }
+          },
+          {
+            "in": "query",
+            "name": "headRun",
+            "schema": {
+              "description": "The run looked at (default: the latest run with review captures). Exactly one of the run pair or the library pair.",
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "baseRun",
+            "schema": {
+              "description": "The run compared against (default: the newest earlier run with captures on the head run’s branch).",
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "headBranch",
+            "schema": {
+              "description": "Library mode: the branch looked at, every screen as its newest run shows it.",
+              "type": "string"
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "headPullRequest",
+            "schema": {
+              "description": "Library mode: a pull request looked at.",
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "baseBranch",
+            "schema": {
+              "description": "Library mode: the branch compared against (default: the library’s default reference).",
+              "type": "string"
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "basePullRequest",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "description": "changed (default: changed and not measured yet), all, identical, undetermined, added, not_captured or incompatible.",
+              "type": "string",
+              "enum": [
+                "changed",
+                "all",
+                "identical",
+                "undetermined",
+                "added",
+                "not_captured",
+                "incompatible"
+              ]
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "test",
+            "schema": {
+              "description": "Part of a test title or file.",
+              "type": "string"
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "variant",
+            "schema": {
+              "description": "Only this variant, e.g. \"desktop\".",
+              "type": "string"
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "ignore",
+            "schema": {
+              "description": "Only screens whose rules (areas left out) are: active, ever, applied, suppressed, fully-suppressed or needs-review.",
+              "type": "string",
+              "enum": [
+                "active",
+                "ever",
+                "applied",
+                "suppressed",
+                "fully-suppressed",
+                "needs-review"
+              ]
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "description": "Rows per page (default 50).",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "description": "Opaque cursor from a previous response, for the next page. Keep the other filters unchanged.",
+              "type": "string"
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "project": {
+                      "type": "string"
+                    },
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "runs",
+                        "library"
+                      ]
+                    },
+                    "base": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string"
+                        },
+                        "run": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "reference": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "id": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "run",
+                        "reference",
+                        "id"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "head": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string"
+                        },
+                        "run": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "reference": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "id": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "run",
+                        "reference",
+                        "id"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "counts": {
+                      "type": "object",
+                      "properties": {
+                        "total": {
+                          "type": "number"
+                        },
+                        "changed": {
+                          "type": "number"
+                        },
+                        "identical": {
+                          "type": "number"
+                        },
+                        "undetermined": {
+                          "type": "number"
+                        },
+                        "added": {
+                          "type": "number"
+                        },
+                        "not_captured": {
+                          "type": "number"
+                        },
+                        "incompatible": {
+                          "type": "number"
+                        },
+                        "unavailable": {
+                          "type": "number"
+                        },
+                        "pending": {
+                          "type": "number"
+                        },
+                        "returned": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "total",
+                        "changed",
+                        "identical",
+                        "undetermined",
+                        "added",
+                        "not_captured",
+                        "incompatible",
+                        "unavailable",
+                        "pending",
+                        "returned"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "comparisons": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "comparisonId": {
+                            "description": "Null when one side has no capture (added, not_captured).",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "test": {
+                            "type": "object",
+                            "properties": {
+                              "testId": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "file": {
+                                "type": "string"
+                              },
+                              "line": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "browser": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "testId",
+                              "title",
+                              "file",
+                              "line",
+                              "browser"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "checkpoint": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "order": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "title",
+                              "order"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "variant": {
+                            "type": "string"
+                          },
+                          "base": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "captureId": {
+                                    "type": "string"
+                                  },
+                                  "run": {
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  },
+                                  "carriedForward": {
+                                    "type": "boolean",
+                                    "description": "Library: this capture comes from an older run than the flow’s newest (the newest did not capture the screen)."
+                                  },
+                                  "available": {
+                                    "type": "boolean",
+                                    "description": "The image is stored and can be read."
+                                  }
+                                },
+                                "required": [
+                                  "captureId",
+                                  "run",
+                                  "carriedForward",
+                                  "available"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "head": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "captureId": {
+                                    "type": "string"
+                                  },
+                                  "run": {
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  },
+                                  "carriedForward": {
+                                    "type": "boolean",
+                                    "description": "Library: this capture comes from an older run than the flow’s newest (the newest did not capture the screen)."
+                                  },
+                                  "available": {
+                                    "type": "boolean",
+                                    "description": "The image is stored and can be read."
+                                  }
+                                },
+                                "required": [
+                                  "captureId",
+                                  "run",
+                                  "carriedForward",
+                                  "available"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "comparisonStatus": {
+                            "type": "string",
+                            "enum": [
+                              "identical",
+                              "changed",
+                              "undetermined",
+                              "added",
+                              "not_captured",
+                              "incompatible",
+                              "unavailable"
+                            ]
+                          },
+                          "calculationState": {
+                            "type": "string",
+                            "enum": [
+                              "not_needed",
+                              "pending",
+                              "done",
+                              "failed",
+                              "too_large"
+                            ]
+                          },
+                          "compatibility": {
+                            "type": "string",
+                            "enum": [
+                              "compatible",
+                              "incompatible",
+                              "unknown"
+                            ]
+                          },
+                          "rawChangedPixels": {
+                            "description": "Before any rule left areas out.",
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "effectiveChangedPixels": {
+                            "description": "With the active rules applied: what the review counts.",
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "ignoredChangedPixels": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "rawChangedPercent": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "regions": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "sizeChanged": {
+                            "type": [
+                              "boolean",
+                              "null"
+                            ]
+                          },
+                          "ignore": {
+                            "type": "object",
+                            "properties": {
+                              "active": {
+                                "type": "number"
+                              },
+                              "ever": {
+                                "type": "boolean"
+                              },
+                              "applied": {
+                                "type": "number"
+                              },
+                              "suspended": {
+                                "type": "number",
+                                "description": "Active rules that do not fit this image (another size) and were not applied."
+                              },
+                              "revision": {
+                                "type": "number"
+                              },
+                              "rawChangedPixels": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "suppressedPixels": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "states": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "enum": [
+                                    "active",
+                                    "ever",
+                                    "applied",
+                                    "suppressed",
+                                    "fully-suppressed",
+                                    "needs-review"
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "active",
+                              "ever",
+                              "applied",
+                              "suspended",
+                              "revision",
+                              "rawChangedPixels",
+                              "suppressedPixels",
+                              "states"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "reviewUrl": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "comparisonId",
+                          "test",
+                          "checkpoint",
+                          "variant",
+                          "base",
+                          "head",
+                          "comparisonStatus",
+                          "calculationState",
+                          "compatibility",
+                          "rawChangedPixels",
+                          "effectiveChangedPixels",
+                          "ignoredChangedPixels",
+                          "rawChangedPercent",
+                          "regions",
+                          "sizeChanged",
+                          "ignore",
+                          "reviewUrl"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "nextCursor": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "note": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "project",
+                    "mode",
+                    "base",
+                    "head",
+                    "counts",
+                    "comparisons",
+                    "nextCursor",
+                    "note"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters (`BAD_REQUEST`, `INVALID_ARGUMENT`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked token (`UNAUTHORIZED`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the required scope (`INSUFFICIENT_SCOPE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A test reference matches several tests (`AMBIGUOUS`; candidates in `details`), or an attachment is not available (`ARTIFACT_UNAVAILABLE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (`RATE_LIMITED`); see `Retry-After`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{team}/{project}/visual-diffs/{comparison}": {
+      "get": {
+        "operationId": "getVisualDiff",
+        "summary": "Get a visual difference",
+        "description": "One comparison in detail: both captures and runs, the producing test and checkpoint, how the screen was captured, the raw and effective measurement, the active and suspended rules, and the changed regions (D1, D2…) with stable ids and rectangles in image pixels. Paged with `regionCursor`.",
+        "tags": [
+          "Visual review"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "team",
+            "schema": {
+              "type": "string",
+              "description": "Team slug, as in the app URL (`/teams/<team>/…`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "project",
+            "schema": {
+              "type": "string",
+              "description": "Project slug, as in the app URL (`…/projects/<project>`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "comparison",
+            "schema": {
+              "type": "string",
+              "description": "Comparison id (`vc_…`): one pair of captures, as returned by `/visual-diffs`."
+            }
+          },
+          {
+            "in": "query",
+            "name": "policy",
+            "schema": {
+              "description": "Whose regions to list: raw (default, before any rule left areas out) or effective (with the active rules).",
+              "type": "string",
+              "enum": [
+                "raw",
+                "effective"
+              ]
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "regionCursor",
+            "schema": {
+              "description": "From a previous answer, for the next page of regions.",
+              "type": "string"
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "description": "Regions per page (default 25).",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "project": {
+                      "type": "string"
+                    },
+                    "comparisonId": {
+                      "type": "string"
+                    },
+                    "revision": {
+                      "type": "string",
+                      "description": "The rules and settings the numbers were measured under. Pass it to get_visual_diff_image to be told if it changed."
+                    },
+                    "base": {
+                      "type": "object",
+                      "properties": {
+                        "captureId": {
+                          "type": "string"
+                        },
+                        "run": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "run": {
+                                  "type": "number"
+                                },
+                                "branch": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "commit": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "startedAt": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "run",
+                                "branch",
+                                "commit",
+                                "startedAt"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "available": {
+                          "type": "boolean"
+                        },
+                        "imageUrl": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "width": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "height": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "captureId",
+                        "run",
+                        "available",
+                        "imageUrl",
+                        "width",
+                        "height"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "head": {
+                      "type": "object",
+                      "properties": {
+                        "captureId": {
+                          "type": "string"
+                        },
+                        "run": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "run": {
+                                  "type": "number"
+                                },
+                                "branch": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "commit": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "startedAt": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "run",
+                                "branch",
+                                "commit",
+                                "startedAt"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "available": {
+                          "type": "boolean"
+                        },
+                        "imageUrl": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "width": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "height": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "captureId",
+                        "run",
+                        "available",
+                        "imageUrl",
+                        "width",
+                        "height"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "test": {
+                      "type": "object",
+                      "properties": {
+                        "testId": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "titlePath": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "file": {
+                          "type": "string"
+                        },
+                        "line": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "browser": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "testId",
+                        "title",
+                        "titlePath",
+                        "file",
+                        "line",
+                        "browser"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "checkpoint": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "description": "The key the test passes to its capture helper: search the spec for it."
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "order": {
+                          "type": "number"
+                        },
+                        "stepPath": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "url": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "pageTitle": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "title",
+                        "order",
+                        "stepPath",
+                        "url",
+                        "pageTitle"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "variant": {
+                      "type": "string"
+                    },
+                    "capture": {
+                      "type": "object",
+                      "properties": {
+                        "viewport": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "deviceScaleFactor": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "fullPage": {
+                          "type": [
+                            "boolean",
+                            "null"
+                          ]
+                        },
+                        "isMobile": {
+                          "type": [
+                            "boolean",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "viewport",
+                        "deviceScaleFactor",
+                        "fullPage",
+                        "isMobile"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "compatibility": {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "compatible",
+                            "incompatible",
+                            "unknown"
+                          ]
+                        },
+                        "differences": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "differences"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "comparisonStatus": {
+                      "type": "string",
+                      "enum": [
+                        "identical",
+                        "changed",
+                        "undetermined",
+                        "added",
+                        "not_captured",
+                        "incompatible",
+                        "unavailable"
+                      ]
+                    },
+                    "calculationState": {
+                      "type": "string",
+                      "enum": [
+                        "not_needed",
+                        "pending",
+                        "done",
+                        "failed",
+                        "too_large"
+                      ]
+                    },
+                    "byteIdentical": {
+                      "type": "boolean"
+                    },
+                    "rawChangedPixels": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "ignoredChangedPixels": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "effectiveChangedPixels": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "totalPixels": {
+                      "description": "The area both images cover together: the denominator of the percentages.",
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "rawChangedPercent": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "effectiveChangedPercent": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "ignoredAreaPixels": {
+                      "type": "number",
+                      "description": "The area of the active rules, each pixel once."
+                    },
+                    "sizeChanged": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "contentMoved": {
+                      "type": "boolean"
+                    },
+                    "threshold": {
+                      "type": "number"
+                    },
+                    "ignoreRuleRevision": {
+                      "type": "number"
+                    },
+                    "rules": {
+                      "type": "object",
+                      "properties": {
+                        "applied": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "rect": {
+                                "type": "object",
+                                "properties": {
+                                  "x": {
+                                    "type": "number"
+                                  },
+                                  "y": {
+                                    "type": "number"
+                                  },
+                                  "width": {
+                                    "type": "number"
+                                  },
+                                  "height": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "x",
+                                  "y",
+                                  "width",
+                                  "height"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "reason": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "source": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "rect",
+                              "reason",
+                              "source"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "suspended": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "rect": {
+                                "type": "object",
+                                "properties": {
+                                  "x": {
+                                    "type": "number"
+                                  },
+                                  "y": {
+                                    "type": "number"
+                                  },
+                                  "width": {
+                                    "type": "number"
+                                  },
+                                  "height": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "x",
+                                  "y",
+                                  "width",
+                                  "height"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "why": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "rect",
+                              "why"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "applied",
+                        "suspended"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "regions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "description": "Stable within a revision: pass it to get_visual_diff_image."
+                          },
+                          "label": {
+                            "type": "string",
+                            "description": "D1, D2…: the number drawn on the annotated image. Comment threads keep their own #n numbers."
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "change",
+                              "added-area",
+                              "removed-area"
+                            ]
+                          },
+                          "headRect": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "x": {
+                                    "type": "number"
+                                  },
+                                  "y": {
+                                    "type": "number"
+                                  },
+                                  "width": {
+                                    "type": "number"
+                                  },
+                                  "height": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "x",
+                                  "y",
+                                  "width",
+                                  "height"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "In the head image’s pixels; null for area only the base has."
+                          },
+                          "baseRect": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "x": {
+                                    "type": "number"
+                                  },
+                                  "y": {
+                                    "type": "number"
+                                  },
+                                  "width": {
+                                    "type": "number"
+                                  },
+                                  "height": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "x",
+                                  "y",
+                                  "width",
+                                  "height"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "The same rectangle in the base image, when it lies within it."
+                          },
+                          "rawChangedPixels": {
+                            "type": "number"
+                          },
+                          "ignore": {
+                            "type": "string",
+                            "enum": [
+                              "none",
+                              "partial",
+                              "full"
+                            ],
+                            "description": "How the active rules touch the region."
+                          },
+                          "ignoredBy": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            },
+                            "description": "Rule ids."
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "label",
+                          "kind",
+                          "headRect",
+                          "baseRect",
+                          "rawChangedPixels",
+                          "ignore",
+                          "ignoredBy"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "regionsComplete": {
+                      "description": "False when the measurement kept only the largest regions.",
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "nextRegionCursor": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "retryAfterMs": {
+                      "description": "Set while the measurement runs: ask again after this.",
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "reviewUrl": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "interpretation": {
+                      "type": "null",
+                      "description": "Always null: the measurement states no cause. Analyses are separate."
+                    },
+                    "note": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "project",
+                    "comparisonId",
+                    "revision",
+                    "base",
+                    "head",
+                    "test",
+                    "checkpoint",
+                    "variant",
+                    "capture",
+                    "compatibility",
+                    "comparisonStatus",
+                    "calculationState",
+                    "byteIdentical",
+                    "rawChangedPixels",
+                    "ignoredChangedPixels",
+                    "effectiveChangedPixels",
+                    "totalPixels",
+                    "rawChangedPercent",
+                    "effectiveChangedPercent",
+                    "ignoredAreaPixels",
+                    "sizeChanged",
+                    "contentMoved",
+                    "threshold",
+                    "ignoreRuleRevision",
+                    "rules",
+                    "regions",
+                    "regionsComplete",
+                    "nextRegionCursor",
+                    "retryAfterMs",
+                    "reviewUrl",
+                    "interpretation",
+                    "note"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters (`BAD_REQUEST`, `INVALID_ARGUMENT`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked token (`UNAUTHORIZED`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the required scope (`INSUFFICIENT_SCOPE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A test reference matches several tests (`AMBIGUOUS`; candidates in `details`), or an attachment is not available (`ARTIFACT_UNAVAILABLE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (`RATE_LIMITED`); see `Retry-After`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{team}/{project}/visual-diffs/{comparison}/render": {
+      "get": {
+        "operationId": "getVisualDiffImage",
+        "summary": "Render images of a visual difference",
+        "description": "A manifest of images for one comparison — the head boxed and numbered, base and head of a region, the painted changes, the mask, the colour difference, the overlay or a crop — each with the rectangle it shows and a short-lived signed link to the binary. The REST API never carries image bytes in JSON.",
+        "tags": [
+          "Visual review"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "team",
+            "schema": {
+              "type": "string",
+              "description": "Team slug, as in the app URL (`/teams/<team>/…`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "project",
+            "schema": {
+              "type": "string",
+              "description": "Project slug, as in the app URL (`…/projects/<project>`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "comparison",
+            "schema": {
+              "type": "string",
+              "description": "Comparison id (`vc_…`): one pair of captures, as returned by `/visual-diffs`."
+            }
+          },
+          {
+            "in": "query",
+            "name": "revision",
+            "schema": {
+              "description": "From get_visual_diff: the call fails with REVISION_CONFLICT if the rules or settings changed since.",
+              "type": "string"
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "mode",
+            "schema": {
+              "description": "annotated (default): head with regions boxed D1, D2…; pair: base and head of each region, readable; highlight: changed pixels painted; mask: white where changed; difference: colour difference; onion: head faded over base; base / head: as they are.",
+              "type": "string",
+              "enum": [
+                "annotated",
+                "pair",
+                "highlight",
+                "mask",
+                "difference",
+                "onion",
+                "base",
+                "head"
+              ]
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "scope",
+            "schema": {
+              "description": "overview (whole image, scaled down), regions (each region at full resolution with context; default for pair), crop (one rectangle).",
+              "type": "string",
+              "enum": [
+                "overview",
+                "regions",
+                "crop"
+              ]
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "regionIds",
+            "schema": {
+              "description": "With scope regions: which regions (ids or labels like \"D2\"). Default: the first ones in order.",
+              "maxItems": 50,
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true,
+            "style": "deepObject",
+            "explode": true
+          },
+          {
+            "in": "query",
+            "name": "order",
+            "schema": {
+              "description": "Which regions come first without regionIds: reading order (default) or the most changed pixels.",
+              "type": "string",
+              "enum": [
+                "reading",
+                "largest"
+              ]
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "crop",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "y": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "width": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991
+                },
+                "height": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991
+                },
+                "space": {
+                  "description": "Whose pixels the rectangle is in (default head).",
+                  "type": "string",
+                  "enum": [
+                    "base",
+                    "head"
+                  ]
+                }
+              },
+              "required": [
+                "x",
+                "y",
+                "width",
+                "height"
+              ]
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true,
+            "style": "deepObject",
+            "explode": true
+          },
+          {
+            "in": "query",
+            "name": "policy",
+            "schema": {
+              "description": "raw (default) or effective: whose changed pixels highlight/mask paint and whose regions are boxed.",
+              "type": "string",
+              "enum": [
+                "raw",
+                "effective"
+              ]
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "showIgnored",
+            "schema": {
+              "description": "Hatch the areas left out on annotated images. Default true.",
+              "type": "boolean"
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "contextPadding",
+            "schema": {
+              "description": "Context around a region, in CSS pixels (default 24).",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 400
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "maxImages",
+            "schema": {
+              "description": "At most this many images (default 3). Regions that do not fit are named in nextRegionIds.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 8
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "maxBytes",
+            "schema": {
+              "description": "Per image; the server has its own ceiling.",
+              "type": "integer",
+              "minimum": 16384,
+              "maximum": 9007199254740991
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "project": {
+                      "type": "string"
+                    },
+                    "comparisonId": {
+                      "type": "string"
+                    },
+                    "revision": {
+                      "type": "string"
+                    },
+                    "mode": {
+                      "type": "string"
+                    },
+                    "scope": {
+                      "type": "string"
+                    },
+                    "policy": {
+                      "type": "string"
+                    },
+                    "images": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "index": {
+                            "type": "number",
+                            "description": "Position among the attached images, from 1."
+                          },
+                          "role": {
+                            "type": "string",
+                            "enum": [
+                              "overview",
+                              "region",
+                              "crop"
+                            ]
+                          },
+                          "mode": {
+                            "type": "string"
+                          },
+                          "side": {
+                            "type": "string",
+                            "enum": [
+                              "base",
+                              "head",
+                              "both"
+                            ],
+                            "description": "Which image is shown; both for highlight, mask, difference and onion."
+                          },
+                          "baseCaptureId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "headCaptureId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "regionIds": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "sourceRect": {
+                            "type": "object",
+                            "properties": {
+                              "x": {
+                                "type": "number"
+                              },
+                              "y": {
+                                "type": "number"
+                              },
+                              "width": {
+                                "type": "number"
+                              },
+                              "height": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "x",
+                              "y",
+                              "width",
+                              "height"
+                            ],
+                            "additionalProperties": false,
+                            "description": "What the image shows, in image pixels of `space`."
+                          },
+                          "space": {
+                            "type": "string",
+                            "enum": [
+                              "base",
+                              "head"
+                            ]
+                          },
+                          "coordinateSpace": {
+                            "type": "string",
+                            "const": "image-pixels"
+                          },
+                          "captureScale": {
+                            "description": "Device scale factor of the capture, when known: image pixels ÷ this = CSS pixels.",
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "outputWidth": {
+                            "type": "number"
+                          },
+                          "outputHeight": {
+                            "type": "number"
+                          },
+                          "scale": {
+                            "type": "number",
+                            "description": "Output pixels per source pixel (≤ 1)."
+                          },
+                          "tile": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "n": {
+                                    "type": "number"
+                                  },
+                                  "of": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "n",
+                                  "of"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "maskSource": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "measurement",
+                                  "computed"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "Where the changed pixels came from: the stored measurement, or pixelmatch run on this rectangle now."
+                          },
+                          "bytes": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "mimeType": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "url": {
+                            "description": "With delivery links: a short-lived signed link to this image.",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "expiresAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "index",
+                          "role",
+                          "mode",
+                          "side",
+                          "baseCaptureId",
+                          "headCaptureId",
+                          "regionIds",
+                          "label",
+                          "sourceRect",
+                          "space",
+                          "coordinateSpace",
+                          "captureScale",
+                          "outputWidth",
+                          "outputHeight",
+                          "scale",
+                          "tile",
+                          "maskSource",
+                          "bytes",
+                          "mimeType",
+                          "url",
+                          "expiresAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "omitted": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "nextRegionIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Regions that did not fit maxImages: ask again with them as regionIds."
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "retryAfterMs": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "project",
+                    "comparisonId",
+                    "revision",
+                    "mode",
+                    "scope",
+                    "policy",
+                    "images",
+                    "omitted",
+                    "nextRegionIds",
+                    "warnings",
+                    "retryAfterMs"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters (`BAD_REQUEST`, `INVALID_ARGUMENT`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked token (`UNAUTHORIZED`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the required scope (`INSUFFICIENT_SCOPE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A test reference matches several tests (`AMBIGUOUS`; candidates in `details`), or an attachment is not available (`ARTIFACT_UNAVAILABLE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (`RATE_LIMITED`); see `Retry-After`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{team}/{project}/visual-ignore-rules": {
+      "get": {
+        "operationId": "listVisualIgnoreRules",
+        "summary": "List the areas left out of comparisons",
+        "description": "The rules that leave areas of review screens out of their pixel comparisons, per checkpoint and variant, with each rule’s rectangle, reason, origin and state; with `capture`, checked against that image and with the set’s history.",
+        "tags": [
+          "Visual review"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "team",
+            "schema": {
+              "type": "string",
+              "description": "Team slug, as in the app URL (`/teams/<team>/…`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "project",
+            "schema": {
+              "type": "string",
+              "description": "Project slug, as in the app URL (`…/projects/<project>`)."
+            }
+          },
+          {
+            "in": "query",
+            "name": "capture",
+            "schema": {
+              "description": "One capture: the rules of its checkpoint and variant, each checked against this image, with the history of the set.",
+              "type": "string"
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "test",
+            "schema": {
+              "description": "Part of a test title or file.",
+              "type": "string"
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "description": "active (default): sets with a rule switched on; all: every set ever saved.",
+              "type": "string",
+              "enum": [
+                "active",
+                "all"
+              ]
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "description": "Opaque cursor from a previous response, for the next page. Keep the other filters unchanged.",
+              "type": "string"
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "project": {
+                      "type": "string"
+                    },
+                    "counts": {
+                      "type": "object",
+                      "properties": {
+                        "sets": {
+                          "type": "number"
+                        },
+                        "rules": {
+                          "type": "number"
+                        },
+                        "active": {
+                          "type": "number"
+                        },
+                        "returned": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "sets",
+                        "rules",
+                        "active",
+                        "returned"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "sets": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "test": {
+                            "type": "object",
+                            "properties": {
+                              "testId": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "file": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "testId",
+                              "title",
+                              "file"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "checkpoint": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "title"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "variant": {
+                            "type": "string"
+                          },
+                          "revision": {
+                            "type": "number"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          },
+                          "rules": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "x": {
+                                  "type": "number"
+                                },
+                                "y": {
+                                  "type": "number"
+                                },
+                                "width": {
+                                  "type": "number"
+                                },
+                                "height": {
+                                  "type": "number"
+                                },
+                                "reason": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "category": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "source": {
+                                  "type": "string",
+                                  "enum": [
+                                    "manual",
+                                    "ai_suggestion",
+                                    "legacy"
+                                  ]
+                                },
+                                "active": {
+                                  "type": "boolean"
+                                },
+                                "createdAt": {
+                                  "type": "string"
+                                },
+                                "createdBy": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "drawnOn": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "captureId": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        },
+                                        "imageWidth": {
+                                          "type": "number"
+                                        },
+                                        "imageHeight": {
+                                          "type": "number"
+                                        }
+                                      },
+                                      "required": [
+                                        "captureId",
+                                        "imageWidth",
+                                        "imageHeight"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "description": "The image the rule was drawn on; null for a legacy rule, applied unchecked."
+                                },
+                                "validity": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "valid",
+                                        "legacy",
+                                        "geometry_changed",
+                                        "out_of_bounds",
+                                        "inactive"
+                                      ]
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "description": "On the capture asked about: valid, legacy, geometry_changed (suspended), out_of_bounds (suspended) or inactive."
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "x",
+                                "y",
+                                "width",
+                                "height",
+                                "reason",
+                                "category",
+                                "source",
+                                "active",
+                                "createdAt",
+                                "createdBy",
+                                "drawnOn",
+                                "validity"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "states": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "active",
+                                "ever",
+                                "applied",
+                                "suppressed",
+                                "fully-suppressed",
+                                "needs-review"
+                              ]
+                            }
+                          },
+                          "history": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "revision": {
+                                  "type": "number"
+                                },
+                                "at": {
+                                  "type": "string"
+                                },
+                                "by": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "source": {
+                                  "type": "string"
+                                },
+                                "reason": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "rules": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "revision",
+                                "at",
+                                "by",
+                                "source",
+                                "reason",
+                                "rules"
+                              ],
+                              "additionalProperties": false
+                            }
+                          }
+                        },
+                        "required": [
+                          "test",
+                          "checkpoint",
+                          "variant",
+                          "revision",
+                          "updatedAt",
+                          "rules"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "nextCursor": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "project",
+                    "counts",
+                    "sets",
+                    "nextCursor"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters (`BAD_REQUEST`, `INVALID_ARGUMENT`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked token (`UNAUTHORIZED`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the required scope (`INSUFFICIENT_SCOPE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A test reference matches several tests (`AMBIGUOUS`; candidates in `details`), or an attachment is not available (`ARTIFACT_UNAVAILABLE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (`RATE_LIMITED`); see `Retry-After`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{team}/{project}/visual-ignore-rules/preview": {
+      "post": {
+        "operationId": "previewVisualIgnoreRules",
+        "summary": "Preview rules that leave areas out",
+        "description": "What a set of rectangles would do to one comparison, measured now and saved nowhere: raw changed pixels, how many the rectangles would leave out, how many remain, and which regions they cover. A read: no `write` scope needed.",
+        "tags": [
+          "Visual review"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "team",
+            "schema": {
+              "type": "string",
+              "description": "Team slug, as in the app URL (`/teams/<team>/…`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "project",
+            "schema": {
+              "type": "string",
+              "description": "Project slug, as in the app URL (`…/projects/<project>`)."
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "comparison": {
+                    "type": "string",
+                    "description": "The comparisonId whose two images the rectangles are tried on."
+                  },
+                  "rules": {
+                    "maxItems": 20,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "x": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "y": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "width": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        },
+                        "height": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "x",
+                        "y",
+                        "width",
+                        "height"
+                      ]
+                    },
+                    "description": "The rectangles that would be left out, in the head image’s pixels. Tight: a name, not the row it is in."
+                  }
+                },
+                "required": [
+                  "comparison",
+                  "rules"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "project": {
+                      "type": "string"
+                    },
+                    "comparisonId": {
+                      "type": "string"
+                    },
+                    "revision": {
+                      "type": "string"
+                    },
+                    "rawChangedPixels": {
+                      "type": "number"
+                    },
+                    "suppressedPixels": {
+                      "type": "number",
+                      "description": "Changed pixels the rectangles would leave out."
+                    },
+                    "remainingPixels": {
+                      "type": "number",
+                      "description": "Changed pixels that would still count."
+                    },
+                    "totalPixels": {
+                      "type": "number"
+                    },
+                    "ignoredAreaPixels": {
+                      "type": "number",
+                      "description": "The rectangles’ area, each pixel once."
+                    },
+                    "ignoredAreaPercent": {
+                      "type": "number"
+                    },
+                    "sizeChanged": {
+                      "type": "boolean",
+                      "description": "A size change is never left out by a rule."
+                    },
+                    "regions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "x": {
+                            "type": "number"
+                          },
+                          "y": {
+                            "type": "number"
+                          },
+                          "width": {
+                            "type": "number"
+                          },
+                          "height": {
+                            "type": "number"
+                          },
+                          "pixels": {
+                            "type": "number"
+                          },
+                          "covered": {
+                            "type": "string",
+                            "enum": [
+                              "none",
+                              "partial",
+                              "full"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "x",
+                          "y",
+                          "width",
+                          "height",
+                          "pixels",
+                          "covered"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "remainingRegions": {
+                      "type": "number"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "project",
+                    "comparisonId",
+                    "revision",
+                    "rawChangedPixels",
+                    "suppressedPixels",
+                    "remainingPixels",
+                    "totalPixels",
+                    "ignoredAreaPixels",
+                    "ignoredAreaPercent",
+                    "sizeChanged",
+                    "regions",
+                    "remainingRegions",
+                    "warnings"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters (`BAD_REQUEST`, `INVALID_ARGUMENT`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked token (`UNAUTHORIZED`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the required scope (`INSUFFICIENT_SCOPE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A test reference matches several tests (`AMBIGUOUS`; candidates in `details`), or an attachment is not available (`ARTIFACT_UNAVAILABLE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (`RATE_LIMITED`); see `Retry-After`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{team}/{project}/review-captures/{capture}/ignore-rules": {
+      "put": {
+        "operationId": "setVisualIgnoreRules",
+        "summary": "Set the areas left out of a screen’s comparisons",
+        "description": "Replaces the rule set of the capture’s checkpoint and variant under a revision check (`expectedRevision`), with a reason; later runs are measured without those areas. Needs the `write` scope and the review permission; refused where the project’s policy denies it (`POLICY_DENIED`) or the revision moved (`REVISION_CONFLICT`).",
+        "tags": [
+          "Visual review"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "team",
+            "schema": {
+              "type": "string",
+              "description": "Team slug, as in the app URL (`/teams/<team>/…`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "project",
+            "schema": {
+              "type": "string",
+              "description": "Project slug, as in the app URL (`…/projects/<project>`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "capture",
+            "schema": {
+              "type": "string",
+              "description": "Capture id: one variant of one review checkpoint, as returned by `/runs/{run}/review-checkpoints`."
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "rules": {
+                    "maxItems": 20,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "x": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "y": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "width": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        },
+                        "height": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        },
+                        "id": {
+                          "description": "Keep an existing rule (its id from list_visual_ignore_rules); without it the rectangle is a new rule.",
+                          "type": "string"
+                        },
+                        "reason": {
+                          "description": "Why the area is left out, for the people who review this screen.",
+                          "type": "string",
+                          "maxLength": 500
+                        },
+                        "category": {
+                          "type": "string",
+                          "enum": [
+                            "dynamic_text",
+                            "time_dependent",
+                            "image_content",
+                            "animation",
+                            "third_party",
+                            "other"
+                          ]
+                        },
+                        "active": {
+                          "description": "false keeps the rule but switches it off.",
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "x",
+                        "y",
+                        "width",
+                        "height"
+                      ]
+                    },
+                    "description": "The whole set after the change: rules not listed are removed (kept in the history). An empty list removes every rule."
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991,
+                    "description": "The revision you read (list_visual_ignore_rules or get_visual_diff). Refused when it moved."
+                  },
+                  "reason": {
+                    "description": "Why the set changed, for the history.",
+                    "type": "string",
+                    "maxLength": 500
+                  }
+                },
+                "required": [
+                  "rules",
+                  "expectedRevision"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "project": {
+                      "type": "string"
+                    },
+                    "captureId": {
+                      "type": "string"
+                    },
+                    "revision": {
+                      "type": "number"
+                    },
+                    "rules": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "x": {
+                            "type": "number"
+                          },
+                          "y": {
+                            "type": "number"
+                          },
+                          "width": {
+                            "type": "number"
+                          },
+                          "height": {
+                            "type": "number"
+                          },
+                          "reason": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "category": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "source": {
+                            "type": "string",
+                            "enum": [
+                              "manual",
+                              "ai_suggestion",
+                              "legacy"
+                            ]
+                          },
+                          "active": {
+                            "type": "boolean"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "createdBy": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "drawnOn": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "captureId": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "imageWidth": {
+                                    "type": "number"
+                                  },
+                                  "imageHeight": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "captureId",
+                                  "imageWidth",
+                                  "imageHeight"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "The image the rule was drawn on; null for a legacy rule, applied unchecked."
+                          },
+                          "validity": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "valid",
+                                  "legacy",
+                                  "geometry_changed",
+                                  "out_of_bounds",
+                                  "inactive"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "On the capture asked about: valid, legacy, geometry_changed (suspended), out_of_bounds (suspended) or inactive."
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "x",
+                          "y",
+                          "width",
+                          "height",
+                          "reason",
+                          "category",
+                          "source",
+                          "active",
+                          "createdAt",
+                          "createdBy",
+                          "drawnOn",
+                          "validity"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "remeasured": {
+                      "type": "boolean",
+                      "description": "The capture’s comparison was queued to be measured again under the new rules."
+                    }
+                  },
+                  "required": [
+                    "project",
+                    "captureId",
+                    "revision",
+                    "rules",
+                    "remeasured"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters (`BAD_REQUEST`, `INVALID_ARGUMENT`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked token (`UNAUTHORIZED`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the required scope (`INSUFFICIENT_SCOPE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A test reference matches several tests (`AMBIGUOUS`; candidates in `details`), or an attachment is not available (`ARTIFACT_UNAVAILABLE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (`RATE_LIMITED`); see `Retry-After`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{team}/{project}/visual-diffs/{comparison}/analyses": {
+      "post": {
+        "operationId": "analyzeVisualDiff",
+        "summary": "Ask a model about a visual difference",
+        "description": "Starts one AI analysis of a comparison’s changed regions under the project’s policy and budget, or answers the earlier analysis of the same input. Poll `/visual-diff-analyses/{analysis}`. Needs the `write` scope.",
+        "tags": [
+          "Visual review"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "team",
+            "schema": {
+              "type": "string",
+              "description": "Team slug, as in the app URL (`/teams/<team>/…`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "project",
+            "schema": {
+              "type": "string",
+              "description": "Project slug, as in the app URL (`…/projects/<project>`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "comparison",
+            "schema": {
+              "type": "string",
+              "description": "Comparison id (`vc_…`): one pair of captures, as returned by `/visual-diffs`."
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "regionIds": {
+                    "description": "Up to 4 regions (ids or labels); default: the 4 largest changes.",
+                    "maxItems": 4,
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "purpose": {
+                    "description": "explain: observations and hypotheses only. suggest_ignore (default): also tight areas the model would leave out, for a person to accept.",
+                    "type": "string",
+                    "enum": [
+                      "explain",
+                      "suggest_ignore"
+                    ]
+                  },
+                  "idempotencyKey": {
+                    "description": "Your own key against retries: the same key answers the same job.",
+                    "type": "string",
+                    "maxLength": 120
+                  },
+                  "maxMicroUsd": {
+                    "description": "A cap below the project’s per-analysis limit, in micro-dollars (1,000,000 = $1).",
+                    "type": "integer",
+                    "minimum": 1000,
+                    "maximum": 9007199254740991
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "project": {
+                      "type": "string"
+                    },
+                    "analysisId": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "queued",
+                        "running",
+                        "done",
+                        "failed",
+                        "denied",
+                        "over_budget"
+                      ]
+                    },
+                    "model": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "finishedAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "summary": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "error": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "reservedMicroUsd": {
+                      "type": "number"
+                    },
+                    "actualMicroUsd": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "suggestions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "regionId": {
+                            "type": "string"
+                          },
+                          "regionLabel": {
+                            "type": "string"
+                          },
+                          "observation": {
+                            "type": "string"
+                          },
+                          "hypothesis": {
+                            "type": "string",
+                            "enum": [
+                              "dynamic_text",
+                              "time_dependent",
+                              "image_content",
+                              "layout_shift",
+                              "rendering_noise",
+                              "real_change",
+                              "unknown"
+                            ]
+                          },
+                          "alternatives": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "recommendation": {
+                            "type": "string",
+                            "enum": [
+                              "stabilize_in_repo",
+                              "investigate",
+                              "accept",
+                              "consider_ignore"
+                            ]
+                          },
+                          "uncertainty": {
+                            "type": "string",
+                            "enum": [
+                              "low",
+                              "medium",
+                              "high"
+                            ]
+                          },
+                          "proposedRects": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "x": {
+                                  "type": "number"
+                                },
+                                "y": {
+                                  "type": "number"
+                                },
+                                "width": {
+                                  "type": "number"
+                                },
+                                "height": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "x",
+                                "y",
+                                "width",
+                                "height"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "description": "Tight rectangles the model proposes leaving out, already checked against the region; empty unless it recommends considering a rule."
+                          },
+                          "effect": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "rawChangedPixels": {
+                                    "type": "number"
+                                  },
+                                  "suppressedPixels": {
+                                    "type": "number"
+                                  },
+                                  "remainingPixels": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "rawChangedPixels",
+                                  "suppressedPixels",
+                                  "remainingPixels"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "What the proposal would do, measured on the two images."
+                          },
+                          "decision": {
+                            "type": "string",
+                            "enum": [
+                              "open",
+                              "accepted",
+                              "rejected"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "regionId",
+                          "regionLabel",
+                          "observation",
+                          "hypothesis",
+                          "alternatives",
+                          "recommendation",
+                          "uncertainty",
+                          "proposedRects",
+                          "effect",
+                          "decision"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "retryAfterMs": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "created": {
+                      "description": "analyze_visual_diff: false when the same input was analysed before and that analysis is answered instead.",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "project",
+                    "analysisId",
+                    "status",
+                    "model",
+                    "createdAt",
+                    "finishedAt",
+                    "summary",
+                    "error",
+                    "reservedMicroUsd",
+                    "actualMicroUsd",
+                    "suggestions",
+                    "retryAfterMs"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters (`BAD_REQUEST`, `INVALID_ARGUMENT`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked token (`UNAUTHORIZED`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the required scope (`INSUFFICIENT_SCOPE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A test reference matches several tests (`AMBIGUOUS`; candidates in `details`), or an attachment is not available (`ARTIFACT_UNAVAILABLE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (`RATE_LIMITED`); see `Retry-After`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{team}/{project}/visual-diff-analyses/{analysis}": {
+      "get": {
+        "operationId": "getVisualDiffAnalysis",
+        "summary": "Get an AI analysis",
+        "description": "The state and result of an AI analysis: status, summary, and per region the observation, hypothesis, uncertainty, recommendation, proposed rectangles with their measured effect and a person’s decision.",
+        "tags": [
+          "Visual review"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "team",
+            "schema": {
+              "type": "string",
+              "description": "Team slug, as in the app URL (`/teams/<team>/…`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "project",
+            "schema": {
+              "type": "string",
+              "description": "Project slug, as in the app URL (`…/projects/<project>`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "analysis",
+            "schema": {
+              "type": "string",
+              "description": "Analysis id, as returned when it was created."
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "project": {
+                      "type": "string"
+                    },
+                    "analysisId": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "queued",
+                        "running",
+                        "done",
+                        "failed",
+                        "denied",
+                        "over_budget"
+                      ]
+                    },
+                    "model": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "finishedAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "summary": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "error": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "reservedMicroUsd": {
+                      "type": "number"
+                    },
+                    "actualMicroUsd": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "suggestions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "regionId": {
+                            "type": "string"
+                          },
+                          "regionLabel": {
+                            "type": "string"
+                          },
+                          "observation": {
+                            "type": "string"
+                          },
+                          "hypothesis": {
+                            "type": "string",
+                            "enum": [
+                              "dynamic_text",
+                              "time_dependent",
+                              "image_content",
+                              "layout_shift",
+                              "rendering_noise",
+                              "real_change",
+                              "unknown"
+                            ]
+                          },
+                          "alternatives": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "recommendation": {
+                            "type": "string",
+                            "enum": [
+                              "stabilize_in_repo",
+                              "investigate",
+                              "accept",
+                              "consider_ignore"
+                            ]
+                          },
+                          "uncertainty": {
+                            "type": "string",
+                            "enum": [
+                              "low",
+                              "medium",
+                              "high"
+                            ]
+                          },
+                          "proposedRects": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "x": {
+                                  "type": "number"
+                                },
+                                "y": {
+                                  "type": "number"
+                                },
+                                "width": {
+                                  "type": "number"
+                                },
+                                "height": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "x",
+                                "y",
+                                "width",
+                                "height"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "description": "Tight rectangles the model proposes leaving out, already checked against the region; empty unless it recommends considering a rule."
+                          },
+                          "effect": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "rawChangedPixels": {
+                                    "type": "number"
+                                  },
+                                  "suppressedPixels": {
+                                    "type": "number"
+                                  },
+                                  "remainingPixels": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "rawChangedPixels",
+                                  "suppressedPixels",
+                                  "remainingPixels"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "What the proposal would do, measured on the two images."
+                          },
+                          "decision": {
+                            "type": "string",
+                            "enum": [
+                              "open",
+                              "accepted",
+                              "rejected"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "regionId",
+                          "regionLabel",
+                          "observation",
+                          "hypothesis",
+                          "alternatives",
+                          "recommendation",
+                          "uncertainty",
+                          "proposedRects",
+                          "effect",
+                          "decision"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "retryAfterMs": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "created": {
+                      "description": "analyze_visual_diff: false when the same input was analysed before and that analysis is answered instead.",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "project",
+                    "analysisId",
+                    "status",
+                    "model",
+                    "createdAt",
+                    "finishedAt",
+                    "summary",
+                    "error",
+                    "reservedMicroUsd",
+                    "actualMicroUsd",
+                    "suggestions",
+                    "retryAfterMs"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters (`BAD_REQUEST`, `INVALID_ARGUMENT`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked token (`UNAUTHORIZED`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the required scope (`INSUFFICIENT_SCOPE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A test reference matches several tests (`AMBIGUOUS`; candidates in `details`), or an attachment is not available (`ARTIFACT_UNAVAILABLE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (`RATE_LIMITED`); see `Retry-After`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{team}/{project}/visual-diff-suggestions/{suggestion}/decision": {
+      "post": {
+        "operationId": "decideVisualSuggestion",
+        "summary": "Accept or reject an AI suggestion",
+        "description": "Records a person’s decision about one suggestion; accepting saves its rectangles as rules of the screen under the project’s policy and the rule revision check. Needs the `write` scope.",
+        "tags": [
+          "Visual review"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "required": true,
+            "name": "team",
+            "schema": {
+              "type": "string",
+              "description": "Team slug, as in the app URL (`/teams/<team>/…`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "project",
+            "schema": {
+              "type": "string",
+              "description": "Project slug, as in the app URL (`…/projects/<project>`)."
+            }
+          },
+          {
+            "in": "path",
+            "required": true,
+            "name": "suggestion",
+            "schema": {
+              "type": "string",
+              "description": "Suggestion id, from the analysis."
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "decision": {
+                    "type": "string",
+                    "enum": [
+                      "accepted",
+                      "rejected"
+                    ]
+                  },
+                  "rects": {
+                    "description": "With accepted: the rectangles to save instead of the proposed ones (a person’s edit).",
+                    "maxItems": 5,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "x": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "y": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "width": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        },
+                        "height": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "x",
+                        "y",
+                        "width",
+                        "height"
+                      ]
+                    }
+                  },
+                  "expectedRevision": {
+                    "description": "The rule revision you read; refused when it moved.",
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "decision"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "project": {
+                      "type": "string"
+                    },
+                    "suggestionId": {
+                      "type": "string"
+                    },
+                    "decision": {
+                      "type": "string"
+                    },
+                    "ruleRevision": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "captureId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "project",
+                    "suggestionId",
+                    "decision",
+                    "ruleRevision",
+                    "captureId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters (`BAD_REQUEST`, `INVALID_ARGUMENT`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked token (`UNAUTHORIZED`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the required scope (`INSUFFICIENT_SCOPE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not visible to this token (`NOT_FOUND`) — also when its owner’s role may not make the change. The two are never told apart.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A test reference matches several tests (`AMBIGUOUS`; candidates in `details`), or an attachment is not available (`ARTIFACT_UNAVAILABLE`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (`RATE_LIMITED`); see `Retry-After`.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/projects/{team}/{project}/review-threads": {
       "get": {
         "operationId": "listReviewThreads",
@@ -14160,7 +18237,7 @@
           },
           "code": {
             "type": "string",
-            "description": "Stable machine-readable code: BAD_REQUEST, INVALID_ARGUMENT, PROJECT_REQUIRED, UNAUTHORIZED, INSUFFICIENT_SCOPE, NOT_FOUND, AMBIGUOUS, ARTIFACT_UNAVAILABLE, ARTIFACT_EXPIRED, RATE_LIMITED, INTERNAL_SERVER_ERROR."
+            "description": "Stable machine-readable code: BAD_REQUEST, INVALID_ARGUMENT, PROJECT_REQUIRED, UNAUTHORIZED, INSUFFICIENT_SCOPE, NOT_FOUND, AMBIGUOUS, ARTIFACT_UNAVAILABLE, ARTIFACT_EXPIRED, RATE_LIMITED, INVALID_COMPARISON, INCOMPATIBLE_CAPTURE, SOURCE_UNAVAILABLE, DIFF_TOO_LARGE, REVISION_CONFLICT, POLICY_DENIED, BUDGET_EXCEEDED, ANALYSIS_FAILED, INTERNAL_SERVER_ERROR."
           },
           "detail": {
             "type": "string",

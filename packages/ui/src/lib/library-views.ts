@@ -15,6 +15,7 @@
 import { buildReviewTree, compareVariants, flattenFolders, folderId, folderPathOf, NEEDS_REVIEW, REVIEW_GROUPINGS, type ReviewCaptureView, type ReviewFlowView, type ReviewGrouping } from './review';
 import { CASE_PRIORITIES, CASE_PRIORITY_LABELS, type CasePriority } from './test-cases';
 import type { Tone } from './tone';
+import { IGNORE_FILTER_LABELS, IGNORE_FILTERS, ignoreStates, type IgnoreFilter } from './visual-diff';
 
 // ---------------------------------------------------------------- where a screen stands
 
@@ -120,6 +121,8 @@ export interface LibraryFilters {
   states: LibraryState[];
   /** Flows whose highest linked priority is one of these; empty for every flow. */
   priorities: CasePriority[];
+  /** Flows with a screen whose rules (areas left out) are in any of these states; empty (or absent, in older saved views) for every flow. */
+  ignore?: IgnoreFilter[];
 }
 
 /** What the folders of a view are: the test case suites the flows' tests are linked to, or their spec files. */
@@ -160,9 +163,16 @@ export interface LibraryViewConfig {
   variant: string | null;
 }
 
-export const DEFAULT_LIBRARY_VIEW: LibraryViewConfig = { filters: { states: [], priorities: [] }, folders: 'suite', group: 'folder', sort: 'journey', variant: null };
+export const DEFAULT_LIBRARY_VIEW: LibraryViewConfig = { filters: { states: [], priorities: [], ignore: [] }, folders: 'suite', group: 'folder', sort: 'journey', variant: null };
 
-export const activeFilterCount = (f: LibraryFilters) => (f.states.length ? 1 : 0) + (f.priorities.length ? 1 : 0);
+export const activeFilterCount = (f: LibraryFilters) => (f.states.length ? 1 : 0) + (f.priorities.length ? 1 : 0) + (f.ignore?.length ? 1 : 0);
+
+/** Whether a screen's rules are in any of the wanted states. */
+const matchesIgnore = (cap: Pick<ReviewCaptureView, 'ignore'>, wanted: readonly IgnoreFilter[]) => {
+  if (!wanted.length) return true;
+  const states = ignoreStates(cap.ignore);
+  return wanted.some((w) => states.has(w));
+};
 
 /** Whether a flow passes the filters: every category that has values, any value within it. */
 export function matchesLibraryFilters(flow: ReviewFlowView, filters: LibraryFilters): boolean {
@@ -171,6 +181,8 @@ export function matchesLibraryFilters(flow: ReviewFlowView, filters: LibraryFilt
     const wanted = new Set(filters.states);
     if (!flow.checkpoints.some((c) => c.captures.some((cap) => [...captureStates(cap)].some((s) => wanted.has(s))))) return false;
   }
+  const ignore = filters.ignore ?? [];
+  if (ignore.length && !flow.checkpoints.some((c) => c.captures.some((cap) => matchesIgnore(cap, ignore)))) return false;
   return true;
 }
 
@@ -226,9 +238,14 @@ export function flowsByFolder(flows: readonly ReviewFlowView[], grouping: Review
 
 /** The checkpoints of a flow that show why it passed the state filter: the rest of the journey stays, quieter. */
 export function matchingCheckpointIds(flow: ReviewFlowView, filters: LibraryFilters): Set<string> | null {
-  if (!filters.states.length) return null;
+  if (!filters.states.length && !filters.ignore?.length) return null;
   const wanted = new Set(filters.states);
-  return new Set(flow.checkpoints.filter((c) => c.captures.some((cap) => [...captureStates(cap)].some((s) => wanted.has(s)))).map((c) => c.id));
+  const ignore = filters.ignore ?? [];
+  return new Set(
+    flow.checkpoints
+      .filter((c) => c.captures.some((cap) => (!wanted.size || [...captureStates(cap)].some((s) => wanted.has(s))) && matchesIgnore(cap, ignore)))
+      .map((c) => c.id),
+  );
 }
 
 const URGENCY: Record<Exclude<LibraryState, 'updated'>, number> = { waiting: 0, verify: 1, 'needs-review': 2, approved: 3 };
@@ -296,14 +313,17 @@ export function groupLibraryFlows(flows: readonly ReviewFlowView[], group: Libra
 export function libraryCounts(flows: readonly ReviewFlowView[]) {
   const states = Object.fromEntries(LIBRARY_STATES.map((s) => [s, 0])) as Record<LibraryState, number>;
   const priorities = Object.fromEntries(CASE_PRIORITIES.map((p) => [p, 0])) as Record<CasePriority, number>;
+  const ignore = Object.fromEntries(IGNORE_FILTERS.map((s) => [s, 0])) as Record<IgnoreFilter, number>;
   let comments = 0;
   for (const f of flows) {
     const seen = new Set(f.checkpoints.flatMap((c) => c.captures.flatMap((cap) => [...captureStates(cap)])));
     for (const s of seen) states[s]++;
+    const rules = new Set(f.checkpoints.flatMap((c) => c.captures.flatMap((cap) => [...ignoreStates(cap.ignore)])));
+    for (const s of rules) ignore[s]++;
     priorities[flowPriority(f)]++;
     comments += flowFeedback(f).open;
   }
-  return { states, priorities, comments, flows: flows.length };
+  return { states, priorities, ignore, comments, flows: flows.length };
 }
 
 export type LibraryCounts = ReturnType<typeof libraryCounts>;
@@ -314,7 +334,7 @@ export type LibraryCounts = ReturnType<typeof libraryCounts>;
 const EMPTY = '-';
 
 /** The search params a view is written to; `view` names the saved or built-in view it started from. */
-export const LIBRARY_VIEW_PARAMS = ['view', 'state', 'priority', 'folders', 'group', 'sort', 'variant'] as const;
+export const LIBRARY_VIEW_PARAMS = ['view', 'state', 'priority', 'ignore', 'folders', 'group', 'sort', 'variant'] as const;
 
 const list = <T extends string>(allowed: readonly T[], raw: string | null | undefined): T[] =>
   raw
@@ -342,6 +362,7 @@ export function viewConfigFromParams(get: (name: string) => string | null, base:
     filters: {
       states: has('state') ? list(LIBRARY_STATES, get('state')) : base.filters.states,
       priorities: has('priority') ? list(CASE_PRIORITIES, get('priority')) : base.filters.priorities,
+      ignore: has('ignore') ? list(IGNORE_FILTERS, get('ignore')) : (base.filters.ignore ?? []),
     },
     ...readLayout(get('group'), get('folders'), base),
     sort: oneOf(LIBRARY_SORTS, get('sort'), base.sort),
@@ -360,6 +381,7 @@ export function viewConfigToParams(config: LibraryViewConfig, base: LibraryViewC
     view: null,
     state: same(config.filters.states, base.filters.states) ? null : config.filters.states.join(',') || EMPTY,
     priority: same(config.filters.priorities, base.filters.priorities) ? null : config.filters.priorities.join(',') || EMPTY,
+    ignore: same(config.filters.ignore ?? [], base.filters.ignore ?? []) ? null : (config.filters.ignore ?? []).join(',') || EMPTY,
     folders: config.folders === base.folders ? null : config.folders,
     group: config.group === base.group ? null : config.group,
     sort: config.sort === base.sort ? null : config.sort,
@@ -377,7 +399,7 @@ export function normalizeViewConfig(raw: unknown): LibraryViewConfig {
   const f = (r.filters && typeof r.filters === 'object' ? r.filters : {}) as Record<string, unknown>;
   const strings = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string').join(',') : null);
   return {
-    filters: { states: list(LIBRARY_STATES, strings(f.states)), priorities: list(CASE_PRIORITIES, strings(f.priorities)) },
+    filters: { states: list(LIBRARY_STATES, strings(f.states)), priorities: list(CASE_PRIORITIES, strings(f.priorities)), ignore: list(IGNORE_FILTERS, strings(f.ignore)) },
     ...readLayout(typeof r.group === 'string' ? r.group : null, typeof r.folders === 'string' ? r.folders : null, DEFAULT_LIBRARY_VIEW),
     sort: oneOf(LIBRARY_SORTS, typeof r.sort === 'string' ? r.sort : null, DEFAULT_LIBRARY_VIEW.sort),
     variant: typeof r.variant === 'string' && r.variant.trim() ? r.variant.trim().slice(0, 64) : null,
@@ -424,6 +446,7 @@ export function describeViewConfig(config: LibraryViewConfig): string {
   const parts: string[] = [];
   if (config.filters.states.length) parts.push(config.filters.states.map((s) => LIBRARY_STATE_LABELS[s]).join(' or '));
   if (config.filters.priorities.length) parts.push(`priority ${config.filters.priorities.map((p) => CASE_PRIORITY_LABELS[p]).join(' or ')}`);
+  if (config.filters.ignore?.length) parts.push(config.filters.ignore.map((s) => IGNORE_FILTER_LABELS[s].toLowerCase()).join(' or '));
   if (config.variant) parts.push(config.variant);
   if (config.folders !== DEFAULT_LIBRARY_VIEW.folders) parts.push(`by ${LIBRARY_FOLDER_LABELS[config.folders].toLowerCase()}`);
   if (config.group !== DEFAULT_LIBRARY_VIEW.group) parts.push(`grouped by ${LIBRARY_GROUPING_LABELS[config.group].toLowerCase()}`);
