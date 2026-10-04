@@ -21,7 +21,7 @@ import { readCaptureBytes } from '../images';
 import { runCaptures } from '../diff/store';
 import { BudgetExceeded, reserve, settle, teamMonthlyLimit } from './budget';
 import { costCeiling, gatewayKey, modelFor, PRICE_VERSION } from './config';
-import { analysisAnswer, introText, MAX_CROPS_PER_ANALYSIS, MAX_OUTPUT_TOKENS, MAX_REGIONS_PER_ANALYSIS, PROMPT_TEXT_TOKENS, PROMPT_VERSION, regionText, SCHEMA_VERSION, SYSTEM_PROMPT, validateBoxes, type AnalysisAnswer } from './prompt';
+import { analysisAnswer, introText, modelErrorMessage, MAX_CROPS_PER_ANALYSIS, MAX_OUTPUT_TOKENS, MAX_REGIONS_PER_ANALYSIS, PROMPT_TEXT_TOKENS, PROMPT_VERSION, regionText, SCHEMA_VERSION, SYSTEM_PROMPT, validateBoxes, type AnalysisAnswer } from './prompt';
 
 export class AnalysisError extends Error {
   constructor(
@@ -156,6 +156,8 @@ export const gatewayCall: ModelCall = async ({ model, system, messages, signal }
     messages,
     output: Output.object({ schema: analysisAnswer }),
     maxOutputTokens: MAX_OUTPUT_TOKENS,
+    // Reasoning shares the output limit; a bounded description of crops needs little of it.
+    reasoning: 'low',
     maxRetries: 0,
     abortSignal: signal,
   });
@@ -255,7 +257,7 @@ export async function runAnalysis(jobId: string, opts: { call?: ModelCall } = {}
       answer = await (opts.call ?? gatewayCall)({ model: job.model, system: SYSTEM_PROMPT, messages, signal: controller.signal });
     } catch (error) {
       // The provider may have answered and billed; the reservation stays spent.
-      return fail(`The model call failed: ${(error as Error).message}`, true);
+      return fail(modelErrorMessage(error), true);
     } finally {
       clearTimeout(timer);
     }
