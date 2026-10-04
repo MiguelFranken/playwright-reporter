@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useState } from 'react';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
+import { cn } from '../../lib/cn';
 import type { CommentTool, MarkupColor } from '../../lib/review-markup';
 import { CommentBar } from './markup-toolbar';
 
@@ -58,30 +59,145 @@ export const Interactive: Story = {
 
 const POSITION_KEY = 'story:comment-bar-position';
 
+/** A stage for the bar to move about on: the bar stays inside it, and docks to its sides. */
+function Stage({ children, short = false }: { children: React.ReactNode; short?: boolean }) {
+  return (
+    <div data-float-bounds className={cn('relative flex w-[22rem] items-end justify-center rounded-lg border border-dashed border-border pb-4', short ? 'h-40' : 'h-[46rem]')}>
+      {children}
+    </div>
+  );
+}
+
+/** The bar the way the viewer holds it, on a stage, remembering its place under the story's own key. */
+function Held(args: React.ComponentProps<typeof CommentBar> & { short?: boolean }) {
+  const { short, ...rest } = args;
+  const [commenting, setCommenting] = useState(rest.commenting);
+  const [tool, setTool] = useState<CommentTool>(rest.tool);
+  const [color, setColor] = useState<MarkupColor>(rest.color);
+  return (
+    <Stage short={short}>
+      <CommentBar {...rest} positionKey={POSITION_KEY} commenting={commenting} onCommentingChange={setCommenting} tool={tool} onToolChange={setTool} color={color} onColorChange={setColor} />
+    </Stage>
+  );
+}
+
+const stored = () => JSON.parse(localStorage.getItem(POSITION_KEY) ?? 'null') as { dock: string | null; x: number; y: number } | null;
+const bar = (canvasElement: HTMLElement) => canvasElement.querySelector<HTMLElement>('[data-slot="comment-bar"]')!;
+
+/** Starts each story with nothing remembered, or with the place given, and forgets it afterwards. */
+const remembering = (placement?: { dock: 'left' | 'right' | null; x: number; y: number }) => () => {
+  if (placement) localStorage.setItem(POSITION_KEY, JSON.stringify({ v: 2, ...placement }));
+  else localStorage.removeItem(POSITION_KEY);
+  return () => localStorage.removeItem(POSITION_KEY);
+};
+
 /** Moved off what it covers by its grip, with the keys here; the browser remembers where, and Home puts it back. */
 export const Moved: Story = {
-  args: { positionKey: POSITION_KEY },
-  decorators: [
-    (Story) => (
-      <div data-float-bounds className="flex h-72 w-96 items-end justify-center rounded-lg border border-dashed border-border pb-4">
-        <Story />
-      </div>
-    ),
-  ],
-  beforeEach: () => {
-    localStorage.removeItem(POSITION_KEY);
-    return () => localStorage.removeItem(POSITION_KEY);
+  render: (args) => <Held {...args} />,
+  beforeEach: remembering(),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    canvas.getByRole('button', { name: 'Move the comment bar' }).focus();
+    await userEvent.keyboard('{Shift>}{ArrowUp}{ArrowUp}{/Shift}');
+    await waitFor(() => expect(stored()).toMatchObject({ dock: null }));
+    await expect(stored()!.y).toBeLessThan(0.8);
+    await expect(bar(canvasElement)).not.toHaveAttribute('data-dock');
+    await userEvent.keyboard('{Home}');
+    await expect(stored()).toBeNull();
   },
+};
+
+/**
+ * Against the left edge it docks, and stands upright: the tools run top to
+ * bottom, their tooltips open to the right. → pulls it off the edge again.
+ */
+export const DockWithTheKeyboard: Story = {
+  args: { commenting: true },
+  render: (args) => <Held {...args} />,
+  beforeEach: remembering(),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    canvas.getByRole('button', { name: 'Move the comment bar' }).focus();
+    // Along to the edge, and one more: into it.
+    for (let i = 0; i < 8 && !bar(canvasElement).dataset.dock; i++) await userEvent.keyboard('{Shift>}{ArrowLeft}{/Shift}');
+    await waitFor(() => expect(bar(canvasElement)).toHaveAttribute('data-dock', 'left'));
+    await expect(canvas.getByRole('toolbar', { name: 'Comment tools' })).toHaveAttribute('aria-orientation', 'vertical');
+    await expect(stored()).toMatchObject({ dock: 'left' });
+    // The grip keeps the focus through the turn, so the keys go on working.
+    await expect(canvas.getByRole('button', { name: 'Move the comment bar' })).toHaveFocus();
+    await userEvent.keyboard('{ArrowRight}');
+    await waitFor(() => expect(bar(canvasElement)).not.toHaveAttribute('data-dock'));
+    await expect(canvas.getByRole('toolbar', { name: 'Comment tools' })).toHaveAttribute('aria-orientation', 'horizontal');
+  },
+};
+
+/** Dragged by its grip to the right edge it docks there, upright; dragged back into the middle it lies down. */
+export const DockByDragging: Story = {
+  render: (args) => <Held {...args} />,
+  beforeEach: remembering(),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const grip = canvas.getByRole('button', { name: 'Move the comment bar' });
-    grip.focus();
-    await userEvent.keyboard('{ArrowUp}{ArrowUp}{ArrowLeft}');
-    // The inline value: the computed one is still easing there.
-    await expect(canvasElement.querySelector<HTMLElement>('[data-slot="comment-bar"]')?.style.translate).toBe('-16px -32px');
-    await expect(JSON.parse(localStorage.getItem(POSITION_KEY) ?? 'null')).toEqual({ x: -16, y: -32 });
-    await userEvent.keyboard('{Home}');
-    await expect(localStorage.getItem(POSITION_KEY)).toBeNull();
+    const stage = canvasElement.querySelector<HTMLElement>('[data-float-bounds]')!.getBoundingClientRect();
+    const g = grip.getBoundingClientRect();
+    const start = { clientX: g.left + g.width / 2, clientY: g.top + g.height / 2 };
+    await userEvent.pointer([
+      { keys: '[MouseLeft>]', target: grip, coords: start },
+      { target: grip, coords: { clientX: stage.left + stage.width / 2, clientY: stage.top + stage.height / 2 } },
+      { target: grip, coords: { clientX: stage.right - 12, clientY: stage.top + stage.height / 2 } },
+      { keys: '[/MouseLeft]', target: grip, coords: { clientX: stage.right - 12, clientY: stage.top + stage.height / 2 } },
+    ]);
+    await waitFor(() => expect(bar(canvasElement)).toHaveAttribute('data-dock', 'right'));
+    await waitFor(() => expect(stored()).toMatchObject({ dock: 'right' }));
+    const docked = grip.getBoundingClientRect();
+    const at = { clientX: docked.left + docked.width / 2, clientY: docked.top + docked.height / 2 };
+    await userEvent.pointer([
+      { keys: '[MouseLeft>]', target: grip, coords: at },
+      { target: grip, coords: { clientX: stage.left + stage.width / 2, clientY: at.clientY } },
+      { keys: '[/MouseLeft]', target: grip, coords: { clientX: stage.left + stage.width / 2, clientY: at.clientY } },
+    ]);
+    await waitFor(() => expect(bar(canvasElement)).not.toHaveAttribute('data-dock'));
+    await expect(stored()).toMatchObject({ dock: null });
+  },
+};
+
+/** Remembered docked to the right while drawing: upright, the colours open below the tools. */
+export const DockedDrawing: Story = {
+  args: { commenting: true, tool: 'pen', color: 'blue', canUndo: true },
+  render: (args) => <Held {...args} />,
+  beforeEach: remembering({ dock: 'right', x: 1, y: 0.5 }),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(bar(canvasElement)).toHaveAttribute('data-dock', 'right');
+    await expect(canvas.getByRole('toolbar', { name: 'Comment tools' })).toHaveAttribute('aria-orientation', 'vertical');
+    await expect(canvas.getByRole('button', { name: 'Blue' })).toHaveAttribute('aria-pressed', 'true');
+  },
+};
+
+/** Remembered docked to the left, folded: the icon alone, with the open comments counted on its corner. */
+export const DockedFolded: Story = {
+  args: { openCount: 3 },
+  render: (args) => <Held {...args} />,
+  beforeEach: remembering({ dock: 'left', x: 0, y: 0.4 }),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(bar(canvasElement)).toHaveAttribute('data-dock', 'left');
+    await userEvent.click(canvas.getByRole('button', { name: 'Comment' }));
+    await expect(await canvas.findByRole('toolbar', { name: 'Comment tools' })).toHaveAttribute('aria-orientation', 'vertical');
+  },
+};
+
+/** Where it would not fit upright — a stage lower than the bar is long — it stays on its side at the edge. */
+export const NoRoomToDock: Story = {
+  args: { commenting: true },
+  render: (args) => <Held {...args} short />,
+  beforeEach: remembering(),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    canvas.getByRole('button', { name: 'Move the comment bar' }).focus();
+    for (let i = 0; i < 8; i++) await userEvent.keyboard('{Shift>}{ArrowLeft}{/Shift}');
+    await expect(bar(canvasElement)).not.toHaveAttribute('data-dock');
+    await expect(canvas.getByRole('toolbar', { name: 'Comment tools' })).toHaveAttribute('aria-orientation', 'horizontal');
   },
 };
 
