@@ -10,6 +10,7 @@
  * writes expecting 3 is refused when somebody saved 4 in between.
  */
 import { randomUUID } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import { and, eq, sql } from 'drizzle-orm';
 import { IGNORE_CATEGORIES, unionArea, type IgnoreCategory, type IgnoreGeometry, type IgnoreRule, type IgnoreSource } from '@miguelfranken/ui/lib/visual-diff';
 import { db } from '@/lib/db/drizzle';
@@ -153,7 +154,8 @@ export interface SetRulesInput {
   projectId: string;
   /** The capture the rules are drawn on: its identity gets the rules, its geometry is recorded on new ones. */
   capture: Pick<CaptureRecord, 'id' | 'testId' | 'checkpointName' | 'variant' | 'width' | 'height' | 'viewportWidth' | 'viewportHeight' | 'deviceScaleFactor'>;
-  rules: readonly RuleInput[];
+  /** The whole set after the change, or how to make it from the set as saved (read under the row lock, so a merge cannot lose a concurrent write). */
+  rules: readonly RuleInput[] | ((current: RuleSet) => readonly RuleInput[]);
   /** The revision the caller read; the write is refused when it moved. Omit to overwrite whatever is there. */
   expectedRevision?: number | null;
   reason?: string | null;
@@ -170,7 +172,7 @@ export interface SetRulesInput {
  * Writes the new revision to the history and answers the new set.
  */
 export async function setRules(input: SetRulesInput): Promise<RuleSet> {
-  if (input.rules.length > MAX_IGNORE_REGIONS) throw new IgnoreRegionsError(`At most ${MAX_IGNORE_REGIONS} areas.`);
+  if (typeof input.rules !== 'function' && input.rules.length > MAX_IGNORE_REGIONS) throw new IgnoreRegionsError(`At most ${MAX_IGNORE_REGIONS} areas.`);
   const { capture } = input;
   const [author] = input.userId ? await db.select({ name: users.name }).from(users).where(eq(users.id, input.userId)) : [];
   const geometry: IgnoreGeometry | null =
@@ -185,10 +187,12 @@ export async function setRules(input: SetRulesInput): Promise<RuleSet> {
       .for('update');
     const current = ruleSetOf(existing);
     if (input.expectedRevision != null && input.expectedRevision !== current.revision) throw new IgnoreRevisionConflict(input.expectedRevision, current.revision);
+    const wanted = typeof input.rules === 'function' ? input.rules(current) : input.rules;
+    if (wanted.length > MAX_IGNORE_REGIONS) throw new IgnoreRegionsError(`At most ${MAX_IGNORE_REGIONS} areas.`);
     const byId = new Map(current.rules.map((r) => [r.id, r]));
     const now = new Date().toISOString();
     const source: IgnoreSource = input.source === 'ai_suggestion' ? 'ai_suggestion' : 'manual';
-    const next: IgnoreRule[] = input.rules.map((r) => {
+    const next: IgnoreRule[] = wanted.map((r) => {
       const kept = r.id ? byId.get(r.id) : undefined;
       const sameRect = kept && kept.x === r.x && kept.y === r.y && kept.width === r.width && kept.height === r.height;
       return {
@@ -208,7 +212,8 @@ export async function setRules(input: SetRulesInput): Promise<RuleSet> {
         geometry: kept && sameRect ? kept.geometry : geometry,
       };
     });
-    const unchanged = existing && JSON.stringify(current.rules) === JSON.stringify(next);
+    // Compared as values: jsonb hands the saved rules back with their keys in another order.
+    const unchanged = existing && isDeepStrictEqual(current.rules, next);
     if (unchanged) return current;
     const revision = current.revision + 1;
     const regions = next.filter((r) => r.active).map(({ x, y, width, height }) => ({ x, y, width, height }));
@@ -245,6 +250,29 @@ export async function setIgnoreRegions(projectId: string, captureId: string, rul
   if (!found) return null;
   const set = await setRules({ projectId, capture: found.capture, rules, expectedRevision: opts.expectedRevision, reason: opts.reason, source: opts.source ?? 'app', userId });
   return { capture: found.capture, ...set };
+}
+
+export interface RulePatch {
+  /** New rectangles. One the same as a rule already there is not added twice, so a retried call changes nothing. */
+  add?: readonly RuleInput[];
+  /** Ids of rules to remove (kept in the history). */
+  remove?: readonly string[];
+}
+
+/**
+ * A set with rules added and removed, every other rule as it was — the
+ * change an assistant means by "also leave this name out", without
+ * re-sending (and possibly dropping) the rules it did not touch.
+ */
+export function patchRules(current: RuleSet, patch: RulePatch): RuleInput[] {
+  const remove = new Set(patch.remove ?? []);
+  const unknown = [...remove].filter((id) => !current.rules.some((r) => r.id === id));
+  if (unknown.length) throw new IgnoreRegionsError(`No rule ${unknown.join(', ')} in this set. Read the rules again.`);
+  const kept: RuleInput[] = current.rules.filter((r) => !remove.has(r.id)).map(({ id, x, y, width, height, active }) => ({ id, x, y, width, height, active }));
+  const same = (a: Rect, b: Rect) => a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
+  const added: RuleInput[] = [];
+  for (const r of patch.add ?? []) if (![...kept, ...added].some((k) => k.active !== false && same(k, r))) added.push({ ...r, id: null, active: true });
+  return [...kept, ...added];
 }
 
 /** The history of a checkpoint and variant's rules, newest first. */

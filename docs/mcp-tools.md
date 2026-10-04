@@ -48,6 +48,7 @@ also accepts `project`, `format` (`markdown` | `json`) and `maxChars`. See the R
 | [`list_visual_ignore_rules`](#list_visual_ignore_rules) | core | The rules that leave areas of review screens out of their pixel comparisons (a clock, a generated name), per checkpoint and variant: each rule’s rectangle, reason, who drew it on which image, whether it is switched on, and — for one capture — whether it still fits that image or is suspended, plus the revision history of the set. |
 | [`preview_visual_ignore_rules`](#preview_visual_ignore_rules) | core | What a set of rectangles would do to one comparison, measured now and saved nowhere: the raw changed pixels, how many the rectangles would leave out, how many would remain, and which measured regions they cover wholly or in part. |
 | [`set_visual_ignore_rules`](#set_visual_ignore_rules) | write | Replaces the rules that leave areas of a checkpoint’s variant out of its comparisons, under a revision check, with a reason: tight rectangles in the image’s pixels, each with why. |
+| [`update_visual_ignore_rules`](#update_visual_ignore_rules) | write | Adds and removes rules that leave areas out of comparisons, on many screens in one call: each rule with its reason, every other rule of a set kept — for a generated name or date seen on several checkpoints and variants. |
 | [`analyze_visual_diff`](#analyze_visual_diff) | write | Starts one AI analysis of a comparison’s changed regions, paid for by the reporter under the project’s policy and monthly budget: what each region shows (a random name, a clock, a real change), how sure the model is, and — on request — tight rectangles it would leave out, measured for their effect, waiting for a person to accept. |
 | [`get_visual_diff_analysis`](#get_visual_diff_analysis) | core | The state and result of an AI analysis: its status, the model’s summary, and per region the observation, hypothesis, uncertainty, recommendation, proposed rectangles with their measured effect, and whether a person accepted or rejected each. |
 | [`decide_visual_suggestion`](#decide_visual_suggestion) | write | Records a person’s decision about one suggestion. |
@@ -879,6 +880,22 @@ Replaces the rules that leave areas of a checkpoint’s variant out of its compa
 | `reason` | string |  | Why the set changed, for the history. |
 
 Structured output fields: `project`, `captureId`, `revision`, `rules`, `remeasured`, `truncated`.
+
+## update_visual_ignore_rules
+
+**Add or remove areas left out, on many screens** · toolset `write` · **writes**
+
+Adds and removes rules that leave areas out of comparisons, on many screens in one call: each rule with its reason, every other rule of a set kept — for a generated name or date seen on several checkpoints and variants. Address a screen by the comparisonId its rectangles were measured on, or a capture. A retry adds nothing twice. Each screen answers saved, unchanged or failed with why (POLICY_DENIED, REVISION_CONFLICT…). Only for areas that change by design, never to hide a real change; preview first with preview_visual_ignore_rules.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project as "team/project" (e.g. "acme/web"), a project id, or any app URL inside it. Optional when the connection has a default project. |
+| `format` | `"markdown"` \| `"json"` |  | Text format of the answer: "markdown" (default, compact) or "json" (the structured result as JSON). |
+| `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
+| `changes` | object[] | yes | One entry per screen (checkpoint and variant), at most 50. Each is saved on its own: one refused does not stop the others. |
+| `reason` | string | yes | Why, for the history of every set changed — e.g. "fixture data is randomized per run". |
+
+Structured output fields: `project`, `counts`, `changes`, `truncated`.
 
 ## analyze_visual_diff
 

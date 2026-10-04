@@ -162,6 +162,12 @@ A checkpoint whose image has a part that always differs — a clock, a rotating 
 open it, choose **Leave out areas**, and drag rectangles over the image. They hold for that checkpoint and variant in
 every later run, and the image is measured again without them. (Better still, when you can: `mask` them in the test.)
 
+An AI assistant can do the same over MCP or the REST API: `preview_visual_ignore_rules` measures what rectangles
+would leave out, and `update_visual_ignore_rules` adds or removes rules on many screens in one call — each rule with
+its reason, the other rules kept. A rule is a rectangle on images of one size; on a full-page screen whose height
+changes between runs it is suspended rather than applied in the wrong place, so for such screens make the test data
+stable or `mask` the element.
+
 ### Approved within tolerance
 
 A changed image whose measured change is within the project's **tolerance** is approved automatically, with the

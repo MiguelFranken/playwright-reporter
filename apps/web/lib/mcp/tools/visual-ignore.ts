@@ -13,7 +13,7 @@ import { inArray } from 'drizzle-orm';
 import { db } from '@/lib/db/drizzle';
 import { tests } from '@/lib/db/schema';
 import { compare, contextFor, resolvePair } from '@/lib/review/diff/comparison';
-import { IgnoreRegionsError, IgnoreRevisionConflict, listRuleSets, MAX_IGNORE_REGIONS, previewRules, ruleHistory, rulesOfCapture, setRules } from '@/lib/review/diff/ignore';
+import { IgnoreRegionsError, IgnoreRevisionConflict, listRuleSets, MAX_IGNORE_REGIONS, patchRules, previewRules, ruleHistory, rulesOfCapture, setRules } from '@/lib/review/diff/ignore';
 import { decidePolicy, policyTargetsFor } from '@/lib/review/diff/policy';
 import { requestCaptureDiff } from '@/lib/review/diff/dispatch';
 import { readCaptureBytes } from '@/lib/review/images';
@@ -328,4 +328,132 @@ export const setVisualIgnoreRules = defineTool({
   },
 });
 
-export const VISUAL_IGNORE_TOOLS = [listVisualIgnoreRules, previewVisualIgnoreRules, setVisualIgnoreRules];
+// ---------------------------------------------------------------- update_visual_ignore_rules
+
+export const MAX_RULE_CHANGES = 50;
+
+const changeIn = z.object({
+  comparison: z.string().optional().describe('The comparisonId the rectangles were measured on: they are drawn on its head image. Or pass capture.'),
+  capture: z.string().optional().describe('Instead of comparison: the capture the rectangles are drawn on.'),
+  add: z
+    .array(
+      rectIn.extend({
+        reason: z.string().trim().min(1).max(500).describe('Why this area changes between runs on purpose, e.g. "workshop name gets a random suffix per run".'),
+        category: z.enum(IGNORE_CATEGORIES).optional(),
+      }),
+    )
+    .max(MAX_IGNORE_REGIONS)
+    .optional()
+    .describe('Rectangles to leave out, in the image’s pixels (a region’s headRect from get_visual_diff, or tighter). One that is already a rule is not added twice.'),
+  remove: z.array(z.string()).max(MAX_IGNORE_REGIONS).optional().describe('Ids of rules to remove (from list_visual_ignore_rules); the history keeps them.'),
+  expectedRevision: z.number().int().min(0).optional().describe('Refuse this change if the set moved past the revision you read (ignoreRuleRevision of get_visual_diff). Without it, the change is merged into whatever is saved.'),
+});
+
+const updateInput = z.object({
+  ...commonParams,
+  changes: z.array(changeIn).min(1).max(MAX_RULE_CHANGES).describe(`One entry per screen (checkpoint and variant), at most ${MAX_RULE_CHANGES}. Each is saved on its own: one refused does not stop the others.`),
+  reason: z.string().trim().min(1).max(500).describe('Why, for the history of every set changed — e.g. "fixture data is randomized per run".'),
+});
+
+const changeOut = z.object({
+  index: z.number(),
+  captureId: z.string().nullable(),
+  testId: z.string().nullable(),
+  checkpoint: z.string().nullable(),
+  variant: z.string().nullable(),
+  status: z.enum(['saved', 'unchanged', 'failed']),
+  revision: z.number().nullable(),
+  added: z.array(ruleOut),
+  removed: z.array(z.string()),
+  activeRules: z.number().nullable(),
+  remeasured: z.boolean(),
+  error: z.object({ code: z.string(), message: z.string() }).nullable(),
+});
+
+const updateOutput = output({
+  project: z.string(),
+  counts: z.object({ saved: z.number(), unchanged: z.number(), failed: z.number() }),
+  changes: z.array(changeOut),
+});
+
+export const updateVisualIgnoreRules = defineTool({
+  name: 'update_visual_ignore_rules',
+  title: 'Add or remove areas left out, on many screens',
+  toolset: 'write',
+  description:
+    'Adds and removes rules that leave areas out of comparisons, on many screens in one call: each rule with its reason, every other rule of a set kept — for a generated name or date seen on several checkpoints and variants. Address a screen by the comparisonId its rectangles were measured on, or a capture. A retry adds nothing twice. Each screen answers saved, unchanged or failed with why (POLICY_DENIED, REVISION_CONFLICT…). Only for areas that change by design, never to hide a real change; preview first with preview_visual_ignore_rules.',
+  input: updateInput,
+  output: updateOutput,
+  annotations: WRITE,
+  async handler(args, ctx) {
+    const project = await ctx.project(args.project, { review: ['decide'] });
+    const results: z.infer<typeof changeOut>[] = [];
+    for (const [index, change] of args.changes.entries()) {
+      const result: z.infer<typeof changeOut> = { index, captureId: null, testId: null, checkpoint: null, variant: null, status: 'failed', revision: null, added: [], removed: [], activeRules: null, remeasured: false, error: null };
+      results.push(result);
+      try {
+        if (!change.comparison === !change.capture) throw invalid('Pass either "comparison" or "capture".');
+        if (!change.add?.length && !change.remove?.length) throw invalid('Nothing to change: pass "add" or "remove".');
+        let captureId = change.capture?.trim().toLowerCase();
+        if (change.comparison) {
+          const decoded = decodeComparisonId(change.comparison.trim());
+          if (!decoded) throw new ToolError('INVALID_COMPARISON', `"${change.comparison}" is not a comparison id.`, 'Use the comparisonId from list_visual_diffs.');
+          captureId = decoded.headCaptureId;
+        }
+        if (!captureId || !isUuid(captureId)) throw invalid('"capture" is a capture id.');
+        const found = await rulesOfCapture(project.project.id, captureId);
+        if (!found) throw notFound(`Capture ${captureId} not found in ${project.ref}.`);
+        const c = found.capture;
+        Object.assign(result, { captureId: c.id, testId: c.testId, checkpoint: c.checkpointName, variant: c.variant });
+        const outside = c.width && c.height ? change.add?.find((r) => r.x + r.width > c.width! || r.y + r.height > c.height!) : undefined;
+        if (outside) throw invalid(`The rectangle ${outside.x}, ${outside.y}, ${outside.width}, ${outside.height} reaches outside the ${c.width}×${c.height} image.`, 'Use the head image’s pixels, as get_visual_diff reports them.');
+        const target = (await policyTargetsFor([c])).get(c.id)!;
+        const policy = decidePolicy(project.project.settings, 'ignore', target);
+        if (!policy.allowed) throw new ToolError('POLICY_DENIED', `Leaving areas out is not allowed for this screen: ${policy.reason}`, 'A project admin can change the policy under Settings → Visual comparison.');
+        let before: Set<string> = new Set();
+        const set = await setRules({
+          projectId: project.project.id,
+          capture: c,
+          rules: (current) => {
+            before = new Set(current.rules.map((r) => r.id));
+            return patchRules(current, { add: change.add?.map((r) => ({ ...r, category: r.category ?? null })), remove: change.remove });
+          },
+          expectedRevision: change.expectedRevision,
+          reason: args.reason,
+          source: 'mcp',
+          userId: project.user.id,
+        });
+        const image = { width: c.width, height: c.height };
+        const after = new Set(set.rules.map((r) => r.id));
+        result.revision = set.revision;
+        result.added = set.rules.filter((r) => !before.has(r.id)).map((r) => ruleOutOf(r, image));
+        result.removed = [...before].filter((id) => !after.has(id));
+        result.activeRules = set.rules.filter((r) => r.active).length;
+        result.status = set.revision === found.revision ? 'unchanged' : 'saved';
+        if (result.status === 'saved') {
+          const compared = await captureInProject(project.project.id, c.id);
+          result.remeasured = compared ? await requestCaptureDiff(compared.capture) : false;
+        }
+      } catch (error) {
+        if (error instanceof ToolError) result.error = { code: error.code, message: error.message };
+        else if (error instanceof IgnoreRevisionConflict) result.error = { code: 'REVISION_CONFLICT', message: error.message };
+        else if (error instanceof IgnoreRegionsError) result.error = { code: 'INVALID_ARGUMENT', message: error.message };
+        else throw error;
+      }
+    }
+    const count = (s: z.infer<typeof changeOut>['status']) => results.filter((r) => r.status === s).length;
+    return {
+      data: { project: project.ref, counts: { saved: count('saved'), unchanged: count('unchanged'), failed: count('failed') }, changes: results },
+      render(md, d) {
+        md.line(`${d.counts.saved} screen${d.counts.saved === 1 ? '' : 's'} saved, ${d.counts.unchanged} unchanged, ${d.counts.failed} failed.${d.counts.saved ? ' Saved screens are being measured again.' : ''}`);
+        md.table(
+          ['#', 'Checkpoint', 'Variant', 'Status', 'Revision', 'Added', 'Removed', 'Error'],
+          d.changes.map((r) => [r.index, r.checkpoint, r.variant, r.status, r.revision, r.added.map((a) => `${a.id.slice(0, 8)}: ${a.x}, ${a.y}, ${a.width}, ${a.height}`).join('; '), r.removed.map((id) => id.slice(0, 8)).join(', '), r.error ? `${r.error.code}: ${r.error.message}` : null]),
+        );
+        if (d.counts.saved) md.line('Next: get_visual_diff on the same comparisons shows what remains once measured again.');
+      },
+    };
+  },
+});
+
+export const VISUAL_IGNORE_TOOLS = [listVisualIgnoreRules, previewVisualIgnoreRules, setVisualIgnoreRules, updateVisualIgnoreRules];
