@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.88](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.87...v0.0.88) (2026-10-04)
+
+### Bug Fixes
+
+* **review:** compare only with runs that still have their image, and load them when the list opens ([#90](https://github.com/MiguelFranken/playwright-reporter/issues/90)) ([e01cd03](https://github.com/MiguelFranken/playwright-reporter/commit/e01cd03b2e11da2c4a5b89fbcdecdea5c127fc92))
+
 ## [0.0.87](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.86...v0.0.87) (2026-10-02)
 
 ### Features
