@@ -32,6 +32,7 @@ import { IGNORE_FILTERS, type IgnoreFilter } from '@miguelfranken/ui/lib/visual-
 import { anchorForMarkup, type DeleteDrawingsInput, type NewDrawingsInput } from '@miguelfranken/ui/lib/review-markup';
 import type { IgnoreRect, IgnoreRulesChange } from '@miguelfranken/ui/views/review/ignore-regions-editor';
 import { ReviewStoryboard, STORYBOARD_SIZE, type ReviewSelection } from '@miguelfranken/ui/views/review/review-storyboard';
+import type { RunCompareProps } from '@miguelfranken/ui/views/review/run-compare-picker';
 import { useShallowSearch } from '@/components/filters/url-filters';
 import {
   createReviewDrawings,
@@ -478,11 +479,18 @@ export function UrlReviewStoryboard({
   viewerId = null,
   decide,
   onCommentsChanged,
+  runCompare,
 }: {
   team: string;
   project: string;
   flows: ReviewFlowView[];
   canDecide: boolean;
+  /**
+   * The run review's "Compare with" above the rows: the other runs and
+   * whether the review under the chosen rule is on its way. The rule is the
+   * viewer's (`?against=`); the host reads the review under it.
+   */
+  runCompare?: Omit<RunCompareProps, 'rule' | 'onRuleChange'>;
   toolbar?: boolean;
   /** The folder tree; with the toolbar by default. */
   tree?: boolean;
@@ -592,6 +600,7 @@ export function UrlReviewStoryboard({
       analysis={analysis}
       comments={comments}
       compareWith={compareWith}
+      runCompare={runCompare ? { ...runCompare, rule: compareWith.rule, onRuleChange: compareWith.onRuleChange } : undefined}
     />
   );
 }

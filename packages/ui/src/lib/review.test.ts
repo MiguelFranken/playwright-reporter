@@ -3,6 +3,8 @@ import {
   buildReviewTree,
   captureViewport,
   changeScore,
+  comparedByRule,
+  isRunCompareRule,
   describeDiff,
   diffMagnitude,
   fitZoom,
@@ -189,5 +191,26 @@ describe('compare rules', () => {
     expect(resolveCompare({ id: 'now', baseline: null, previous: null }, 'baseline', targets)).toEqual({ target: null, fellBack: true });
     expect(resolveCompare(capture, 'run:999', targets)).toEqual({ target: null, fellBack: true });
     expect(resolveCompare(capture, 'comments', undefined)).toEqual({ target: null, fellBack: false });
+  });
+
+  it('compares a whole run under the run before or a named run only', () => {
+    expect(isRunCompareRule('previous')).toBe(true);
+    expect(isRunCompareRule('run:38')).toBe(true);
+    expect(isRunCompareRule('auto')).toBe(false);
+    expect(isRunCompareRule('baseline')).toBe(false);
+    expect(isRunCompareRule('comments')).toBe(false);
+  });
+
+  it('keeps what the server compared the whole run with, without saying the rule found nothing', () => {
+    const run999 = { ...capture, compare: { captureId: 'old', image: img, label: 'Run #999', same: false, runNumber: 999 } };
+    expect(comparedByRule(run999, 'run:999')).toBe(true);
+    expect(comparedByRule(run999, 'run:998')).toBe(false);
+    // Run #999 is older than the targets the viewer loaded: the server's pick still holds.
+    expect(resolveCompare(run999, 'run:999', targets)).toEqual({ target: null, fellBack: false });
+    const before = { ...capture, compare: { captureId: 'prev', image: img, label: 'Run #481', same: false, runNumber: 481 } };
+    expect(comparedByRule(before, 'previous')).toBe(true);
+    expect(resolveCompare(before, 'previous', targets)).toEqual({ target: null, fellBack: false });
+    // A library comparison is no run's pick.
+    expect(comparedByRule({ ...capture, compare: { captureId: 'main', image: img, label: 'main', same: false } }, 'previous')).toBe(false);
   });
 });

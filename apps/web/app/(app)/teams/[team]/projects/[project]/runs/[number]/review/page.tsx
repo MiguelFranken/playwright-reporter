@@ -2,6 +2,7 @@ import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { investigateRunVisualDiffsPrompt } from '@miguelfranken/ui/lib/ai-handoff';
+import { parseCompareRule } from '@miguelfranken/ui/lib/review';
 import { BackLink } from '@miguelfranken/ui/patterns/back-link';
 import { DebugWithAiMenu } from '@miguelfranken/ui/patterns/debug-with-ai-menu';
 import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
@@ -15,26 +16,29 @@ import { requireProject } from '@/lib/auth/access';
 import { baseUrl } from '@/lib/auth/config';
 import { casesOfTests, defaultBranch, getLibraryReference, getRunByNumber, runReview } from '@/lib/page-data';
 import { afterCapturesShown } from '@/lib/review/diff/dispatch';
-import { toRunReviewData } from '@/lib/review/run-flows';
+import { compareRunReview, toRunReviewData } from '@/lib/review/run-flows';
 import { makeServerQueryClient } from '@/lib/rpc/prefetch';
 import { runReviewQuery } from '@/lib/rpc/queries';
 import { projectHrefs } from '@/lib/view-models';
 
-type Props = { params: Promise<{ team: string; project: string; number: string }> };
+type Props = {
+  params: Promise<{ team: string; project: string; number: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
 
 /**
  * A run's review checkpoints as a storyboard: what every journey looked like,
  * desktop beside mobile, and which images still need a reviewer's eye.
  */
-export default function RunReviewPage({ params }: Props) {
+export default function RunReviewPage({ params, searchParams }: Props) {
   return (
     <Suspense fallback={<ReviewStoryboardSkeleton />}>
-      <Content params={params} />
+      <Content params={params} searchParams={searchParams} />
     </Suspense>
   );
 }
 
-async function Content({ params }: Props) {
+async function Content({ params, searchParams }: Props) {
   const { team, project: projectSlug, number } = await params;
   const runNumber = Number(number);
   if (!Number.isInteger(runNumber) || runNumber <= 0) notFound();
@@ -56,7 +60,7 @@ async function Content({ params }: Props) {
           description={
             <>
               Every review checkpoint of the run, in the order each test captured it.{commit ? <> Commit <span className="text-code-s">{commit}</span>.</> : null} Open a checkpoint
-              for the full image and the comparison with its approved baseline; <kbd>A</kbd> approves and moves on.
+              for the full image and the comparison with its approved baseline, or compare the whole run with another one; <kbd>A</kbd> approves and moves on.
             </>
           }
         >
@@ -95,6 +99,7 @@ async function Content({ params }: Props) {
           canComment={access.can({ review: ['comment'] })}
           canModerate={access.can({ project: ['delete'] })}
           viewerId={access.user.id}
+          searchParams={searchParams}
         />
       </Suspense>
     </div>
@@ -116,6 +121,7 @@ async function Storyboard({
   canComment,
   canModerate,
   viewerId,
+  searchParams,
 }: {
   team: string;
   project: string;
@@ -126,13 +132,18 @@ async function Storyboard({
   canComment: boolean;
   canModerate: boolean;
   viewerId: string;
+  searchParams: Props['searchParams'];
 }) {
+  // `?against=run:38`: a shared link opens the review compared with what it was compared with.
+  const sp = await searchParams;
+  const against = parseCompareRule(typeof sp.against === 'string' ? sp.against : null);
   const records = await runReview({ id: run.id, startedAt: run.startedAt });
   // Comparisons nobody measured yet (a baseline approved since, a run the watchdog closed) are measured after the page is sent.
   afterCapturesShown(run.id, records.flatMap((r) => r.checkpoints.flatMap((c) => c.captures)));
   const byTest = await casesOfTests(projectId, records.map((r) => r.testId));
   const queries = makeServerQueryClient();
-  queries.setQueryData(runReviewQuery({ team, project, runNumber: run.number }).queryKey, toRunReviewData(records, byTest, base, run.number));
+  const data = await compareRunReview(projectId, records, toRunReviewData(records, byTest, base, run.number), against);
+  queries.setQueryData(runReviewQuery({ team, project, runNumber: run.number }, against).queryKey, data);
   return (
     <HydrationBoundary state={dehydrate(queries)}>
       <RunReviewStoryboard team={team} project={project} runNumber={run.number} canDecide={canDecide} canComment={canComment} canModerate={canModerate} viewerId={viewerId} />

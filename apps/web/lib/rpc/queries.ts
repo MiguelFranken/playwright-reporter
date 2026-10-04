@@ -8,6 +8,7 @@
  */
 import { keepPreviousData } from '@tanstack/react-query';
 import type { FormFields } from '@miguelfranken/ui/hooks/use-form-fields';
+import { isRunCompareRule, type CompareRule } from '@miguelfranken/ui/lib/review';
 import { orpc, type ProjectRef, type RunRef } from './client';
 
 /**
@@ -173,8 +174,24 @@ export type RunNumberRef = ProjectRef & { runNumber: number };
  * A run's images do not change once it has finished, and the page seeds a
  * fresh answer on every visit, so the cache does not refetch on its own.
  */
-export function runReviewQuery(ref: RunNumberRef) {
-  return orpc.review.run.queryOptions({ input: ref, staleTime: 5 * 60_000, gcTime: 30 * 60_000 });
+export function runReviewQuery(ref: RunNumberRef, against: CompareRule = 'auto') {
+  // The default comparison keeps the key it always had; each other one is its own entry.
+  const input = isRunCompareRule(against) ? { ...ref, against } : ref;
+  return orpc.review.run.queryOptions({ input, staleTime: 5 * 60_000, gcTime: 30 * 60_000, placeholderData: keepPreviousData });
+}
+
+/** Every comparison of a run's review in the cache: a decision changes each of them. */
+export function runReviewQueryKey(ref: RunNumberRef) {
+  return orpc.review.run.key({ input: ref });
+}
+
+/**
+ * The runs a run's review can be compared with as a whole, for its "Compare
+ * with". Read when the reviewer reaches for the list; new runs arrive while a
+ * review goes on, so a minute is fresh enough.
+ */
+export function runCompareTargetsQuery(ref: RunNumberRef) {
+  return orpc.review.runCompareTargets.queryOptions({ input: ref, staleTime: 60_000, gcTime: 10 * 60_000, retry: false });
 }
 
 /**
