@@ -15141,12 +15141,23 @@
             "in": "query",
             "name": "status",
             "schema": {
-              "description": "active (default): sets with a rule switched on; all: every set ever saved.",
+              "description": "active (default): sets with a rule switched on; all: every set ever saved; stale: sets with a rule that is unused, suspended or on a screen no longer captured (implies assess).",
               "type": "string",
               "enum": [
                 "active",
-                "all"
+                "all",
+                "stale"
               ]
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "assess",
+            "schema": {
+              "description": "Judge each rule on the screen’s latest 6 captures: does it still fit the image, and did it cover any change? Use it to find rules to remove.",
+              "type": "boolean"
             },
             "allowEmptyValue": true,
             "allowReserved": true
@@ -15358,6 +15369,61 @@
                                     }
                                   ],
                                   "description": "On the capture asked about: valid, legacy, geometry_changed (suspended), out_of_bounds (suspended) or inactive."
+                                },
+                                "check": {
+                                  "description": "With assess: the rule judged on the screen’s latest runs.",
+                                  "type": "object",
+                                  "properties": {
+                                    "assessment": {
+                                      "type": "string",
+                                      "enum": [
+                                        "in_use",
+                                        "unused",
+                                        "suspended",
+                                        "inactive",
+                                        "not_captured",
+                                        "unmeasured"
+                                      ],
+                                      "description": "in_use: covered a change lately; unused: applied in 2+ measured comparisons and covered none — what it guards may have become stable; suspended: does not fit the image as captured now; not_captured: the screen is no longer captured; inactive; unmeasured: too few measurements to tell."
+                                    },
+                                    "validityNow": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "valid",
+                                            "legacy",
+                                            "geometry_changed",
+                                            "out_of_bounds",
+                                            "inactive"
+                                          ]
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ],
+                                      "description": "On the latest capture of the screen."
+                                    },
+                                    "comparisons": {
+                                      "type": "number",
+                                      "description": "Measured comparisons of the latest runs it was applied in."
+                                    },
+                                    "matched": {
+                                      "type": "number",
+                                      "description": "Of those, how many it covered a changed region in."
+                                    },
+                                    "coveredPixels": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "assessment",
+                                    "validityNow",
+                                    "comparisons",
+                                    "matched",
+                                    "coveredPixels"
+                                  ],
+                                  "additionalProperties": false
                                 }
                               },
                               "required": [
@@ -15391,6 +15457,52 @@
                                 "needs-review"
                               ]
                             }
+                          },
+                          "latestCapture": {
+                            "description": "With assess: the newest capture of the screen; null when none is stored any more.",
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "captureId": {
+                                    "type": "string"
+                                  },
+                                  "run": {
+                                    "type": "number"
+                                  },
+                                  "at": {
+                                    "type": "string"
+                                  },
+                                  "width": {
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  },
+                                  "height": {
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "captureId",
+                                  "run",
+                                  "at",
+                                  "width",
+                                  "height"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "comparisonsChecked": {
+                            "description": "With assess: measured comparisons of the latest runs looked at.",
+                            "type": "number"
                           },
                           "history": {
                             "type": "array",
@@ -16026,6 +16138,61 @@
                               }
                             ],
                             "description": "On the capture asked about: valid, legacy, geometry_changed (suspended), out_of_bounds (suspended) or inactive."
+                          },
+                          "check": {
+                            "description": "With assess: the rule judged on the screen’s latest runs.",
+                            "type": "object",
+                            "properties": {
+                              "assessment": {
+                                "type": "string",
+                                "enum": [
+                                  "in_use",
+                                  "unused",
+                                  "suspended",
+                                  "inactive",
+                                  "not_captured",
+                                  "unmeasured"
+                                ],
+                                "description": "in_use: covered a change lately; unused: applied in 2+ measured comparisons and covered none — what it guards may have become stable; suspended: does not fit the image as captured now; not_captured: the screen is no longer captured; inactive; unmeasured: too few measurements to tell."
+                              },
+                              "validityNow": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "valid",
+                                      "legacy",
+                                      "geometry_changed",
+                                      "out_of_bounds",
+                                      "inactive"
+                                    ]
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "description": "On the latest capture of the screen."
+                              },
+                              "comparisons": {
+                                "type": "number",
+                                "description": "Measured comparisons of the latest runs it was applied in."
+                              },
+                              "matched": {
+                                "type": "number",
+                                "description": "Of those, how many it covered a changed region in."
+                              },
+                              "coveredPixels": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "assessment",
+                              "validityNow",
+                              "comparisons",
+                              "matched",
+                              "coveredPixels"
+                            ],
+                            "additionalProperties": false
                           }
                         },
                         "required": [
@@ -16176,6 +16343,27 @@
                           "description": "Instead of comparison: the capture the rectangles are drawn on.",
                           "type": "string"
                         },
+                        "screen": {
+                          "description": "Instead: the screen, as list_visual_ignore_rules names it — for removing or switching rules on a screen with no stored capture. Cannot add.",
+                          "type": "object",
+                          "properties": {
+                            "testId": {
+                              "type": "string"
+                            },
+                            "checkpoint": {
+                              "type": "string",
+                              "description": "The checkpoint name (key), not its title."
+                            },
+                            "variant": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "testId",
+                            "checkpoint",
+                            "variant"
+                          ]
+                        },
                         "add": {
                           "description": "Rectangles to leave out, in the image’s pixels (a region’s headRect from get_visual_diff, or tighter). One that is already a rule is not added twice.",
                           "maxItems": 20,
@@ -16232,6 +16420,22 @@
                         },
                         "remove": {
                           "description": "Ids of rules to remove (from list_visual_ignore_rules); the history keeps them.",
+                          "maxItems": 20,
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "deactivate": {
+                          "description": "Ids of rules to switch off: kept, but no longer applied.",
+                          "maxItems": 20,
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "activate": {
+                          "description": "Ids of rules to switch back on.",
                           "maxItems": 20,
                           "type": "array",
                           "items": {
@@ -16440,6 +16644,61 @@
                                     }
                                   ],
                                   "description": "On the capture asked about: valid, legacy, geometry_changed (suspended), out_of_bounds (suspended) or inactive."
+                                },
+                                "check": {
+                                  "description": "With assess: the rule judged on the screen’s latest runs.",
+                                  "type": "object",
+                                  "properties": {
+                                    "assessment": {
+                                      "type": "string",
+                                      "enum": [
+                                        "in_use",
+                                        "unused",
+                                        "suspended",
+                                        "inactive",
+                                        "not_captured",
+                                        "unmeasured"
+                                      ],
+                                      "description": "in_use: covered a change lately; unused: applied in 2+ measured comparisons and covered none — what it guards may have become stable; suspended: does not fit the image as captured now; not_captured: the screen is no longer captured; inactive; unmeasured: too few measurements to tell."
+                                    },
+                                    "validityNow": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                          "enum": [
+                                            "valid",
+                                            "legacy",
+                                            "geometry_changed",
+                                            "out_of_bounds",
+                                            "inactive"
+                                          ]
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ],
+                                      "description": "On the latest capture of the screen."
+                                    },
+                                    "comparisons": {
+                                      "type": "number",
+                                      "description": "Measured comparisons of the latest runs it was applied in."
+                                    },
+                                    "matched": {
+                                      "type": "number",
+                                      "description": "Of those, how many it covered a changed region in."
+                                    },
+                                    "coveredPixels": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "assessment",
+                                    "validityNow",
+                                    "comparisons",
+                                    "matched",
+                                    "coveredPixels"
+                                  ],
+                                  "additionalProperties": false
                                 }
                               },
                               "required": [

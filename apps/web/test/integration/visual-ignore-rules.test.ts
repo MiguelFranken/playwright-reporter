@@ -282,4 +282,69 @@ describe('through MCP', () => {
     expect(await response.json()).toMatchObject({ counts: { saved: 1 }, changes: [{ status: 'saved', revision: 4, activeRules: 2 }] });
     await writer.close();
   });
+
+  test('judges rules on the latest runs, lists the stale ones and prunes them, also on a screen no longer captured', async ({ db, tenant }) => {
+    const name = (w: number) => page([{ x: 100, y: 60, width: w, height: 12 }]);
+    const first = await runWith(db, tenant, await name(60), t0);
+    const second = await runWith(db, tenant, await name(90), t1);
+    const third = await runWith(db, tenant, await name(70), t2);
+    for (const r of [second, third]) await measureAll(r.run.id);
+    const project = `${tenant.team.slug}/${tenant.project.slug}`;
+    const writer = await mcpClient({ token: (await createPat(tenant.adminUser, { scopes: ['read', 'write'] })).token });
+    const update = async (changes: unknown[]) => {
+      const res = await call(writer, 'update_visual_ignore_rules', { project, changes, reason: 'tidy up' });
+      expect(res.isError, JSON.stringify(res.structuredContent)).toBeFalsy();
+      return res.structuredContent as { changes: { status: string; revision: number; removed: string[]; error: { code: string } | null }[] };
+    };
+    // One rule over the generated name, one over a corner that never changes.
+    const saved = await update([{ capture: third.capture.id, add: [{ x: 95, y: 55, width: 100, height: 22, reason: 'generated name' }, { x: 0, y: 0, width: 40, height: 10, reason: 'old clock' }] }]);
+    expect(saved.changes[0]).toMatchObject({ status: 'saved', revision: 1 });
+    // A screen whose images are gone (a renamed checkpoint) still has its rules.
+    await setRules({ projectId: tenant.project.id, capture: { ...third.capture, checkpointName: 'renamed-away' }, rules: [{ x: 1, y: 1, width: 5, height: 5, reason: 'gone' }], source: 'api', userId: null });
+
+    type Rule = { id: string; reason: string; active: boolean; check: { assessment: string; comparisons: number; matched: number } };
+    type Set = { checkpoint: { name: string }; latestCapture: { captureId: string; run: number } | null; rules: Rule[] };
+    const assessed = (await call(writer, 'list_visual_ignore_rules', { project, assess: true })).structuredContent as { sets: Set[] };
+    const screen = assessed.sets.find((s) => s.checkpoint.name === 'summary')!;
+    expect(screen.latestCapture).toMatchObject({ captureId: third.capture.id, run: third.number });
+    const byReason = Object.fromEntries(screen.rules.map((r) => [r.reason, r]));
+    expect(byReason['generated name'].check).toMatchObject({ assessment: 'in_use', comparisons: 2, matched: 2 });
+    expect(byReason['old clock'].check).toMatchObject({ assessment: 'unused', comparisons: 2, matched: 0 });
+    const gone = assessed.sets.find((s) => s.checkpoint.name === 'renamed-away')!;
+    expect(gone.latestCapture).toBeNull();
+    expect(gone.rules[0].check.assessment).toBe('not_captured');
+
+    // status stale: both screens, each for its stale rule.
+    const stale = (await call(writer, 'list_visual_ignore_rules', { project, status: 'stale' })).structuredContent as { sets: Set[] };
+    expect(stale.sets.map((s) => s.checkpoint.name).sort()).toEqual(['renamed-away', 'summary']);
+
+    // Leaving areas out is denied here now: pruning still works, adding does not.
+    await db.update(projects).set({ settings: { visualPolicies: [{ id: 'p1', scope: { kind: 'file', path: 'tests' }, capability: 'ignore', effect: 'deny' }] } }).where(eq(projects.id, tenant.project.id));
+    const pruned = await update([
+      { capture: third.capture.id, deactivate: [byReason['old clock'].id] },
+      { screen: { testId: third.capture.testId, checkpoint: 'renamed-away', variant: 'desktop' }, remove: [gone.rules[0].id] },
+      { capture: third.capture.id, add: [{ x: 0, y: 20, width: 5, height: 5, reason: 'more' }] },
+      { screen: { testId: third.capture.testId, checkpoint: 'renamed-away', variant: 'desktop' }, add: [{ x: 0, y: 20, width: 5, height: 5, reason: 'more' }] },
+    ]);
+    expect(pruned.changes.map((c) => c.status)).toEqual(['saved', 'saved', 'failed', 'failed']);
+    expect(pruned.changes[1].removed).toEqual([gone.rules[0].id]);
+    expect(pruned.changes[2].error!.code).toBe('POLICY_DENIED');
+    expect(pruned.changes[3].error!.code).toBe('INVALID_ARGUMENT');
+
+    const after = (await call(writer, 'list_visual_ignore_rules', { project, status: 'all', assess: true })).structuredContent as { sets: Set[] };
+    expect(after.sets.find((s) => s.checkpoint.name === 'renamed-away')!.rules).toEqual([]);
+    expect(after.sets.find((s) => s.checkpoint.name === 'summary')!.rules.map((r) => [r.reason, r.active, r.check.assessment])).toEqual([
+      ['generated name', true, 'in_use'],
+      ['old clock', false, 'inactive'],
+    ]);
+    expect(((await call(writer, 'list_visual_ignore_rules', { project, status: 'stale' })).structuredContent as { sets: Set[] }).sets).toEqual([]);
+
+    // A capture of another size: the rule no longer fits.
+    await db.update(projects).set({ settings: {} }).where(eq(projects.id, tenant.project.id));
+    await runWith(db, tenant, await page([], 200, 180), new Date(), { width: 200, height: 180 });
+    const resized = (await call(writer, 'list_visual_ignore_rules', { project, status: 'stale' })).structuredContent as { sets: Set[] };
+    expect(resized.sets[0].rules.find((r) => r.reason === 'generated name')!.check.assessment).toBe('suspended');
+    void first;
+    await writer.close();
+  });
 });

@@ -163,8 +163,11 @@ open it, choose **Leave out areas**, and drag rectangles over the image. They ho
 every later run, and the image is measured again without them. (Better still, when you can: `mask` them in the test.)
 
 An AI assistant can do the same over MCP or the REST API: `preview_visual_ignore_rules` measures what rectangles
-would leave out, and `update_visual_ignore_rules` adds or removes rules on many screens in one call — each rule with
-its reason, the other rules kept. A rule is a rectangle on images of one size; on a full-page screen whose height
+would leave out, and `update_visual_ignore_rules` adds, removes or switches off rules on many screens in one call — each
+new rule with its reason, the other rules kept. To tidy up, `list_visual_ignore_rules` with `status: "stale"` judges
+every rule on the screen's latest runs and lists the ones that no longer earn their place: **unused** (it covered no
+change in several measured comparisons — what it guarded may have become stable), **suspended** (it no longer fits
+the image as captured now) or on a screen that is **no longer captured**. A rule is a rectangle on images of one size; on a full-page screen whose height
 changes between runs it is suspended rather than applied in the wrong place, so for such screens make the test data
 stable or `mask` the element.
 

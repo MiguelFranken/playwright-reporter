@@ -129,6 +129,29 @@ export async function rulesFor(identities: readonly Identity[]): Promise<Map<str
   return out;
 }
 
+/**
+ * A screen's rule set without a capture — for a set whose images are all
+ * gone (retention, a renamed checkpoint): it can still be pruned. Answers
+ * the set with a stand-in capture that has no image, so nothing can be
+ * drawn on it. Null when the project has no rules for the screen.
+ */
+export async function rulesOfIdentity(projectId: string, identity: Identity) {
+  const [row] = await db
+    .select({ regions: reviewIgnoreRegions.regions, rules: reviewIgnoreRegions.rules, revision: reviewIgnoreRegions.revision, updatedAt: reviewIgnoreRegions.updatedAt })
+    .from(reviewIgnoreRegions)
+    .where(
+      and(
+        eq(reviewIgnoreRegions.projectId, projectId),
+        eq(reviewIgnoreRegions.testId, identity.testId),
+        eq(reviewIgnoreRegions.checkpointName, identity.checkpointName),
+        eq(reviewIgnoreRegions.variant, identity.variant),
+      ),
+    );
+  if (!row) return null;
+  const capture = { id: '', ...identity, width: null, height: null, viewportWidth: null, viewportHeight: null, deviceScaleFactor: null };
+  return { capture, ...ruleSetOf(row) };
+}
+
 /** The rule set of one capture's checkpoint and variant, with the capture; null when the capture is not in the project. */
 export async function rulesOfCapture(projectId: string, captureId: string) {
   const [capture] = await db
@@ -257,6 +280,9 @@ export interface RulePatch {
   add?: readonly RuleInput[];
   /** Ids of rules to remove (kept in the history). */
   remove?: readonly string[];
+  /** Ids of rules to switch off (kept, not applied) or back on. */
+  deactivate?: readonly string[];
+  activate?: readonly string[];
 }
 
 /**
@@ -266,9 +292,15 @@ export interface RulePatch {
  */
 export function patchRules(current: RuleSet, patch: RulePatch): RuleInput[] {
   const remove = new Set(patch.remove ?? []);
-  const unknown = [...remove].filter((id) => !current.rules.some((r) => r.id === id));
+  const off = new Set(patch.deactivate ?? []);
+  const on = new Set(patch.activate ?? []);
+  const named = [...remove, ...off, ...on];
+  const unknown = [...new Set(named)].filter((id) => !current.rules.some((r) => r.id === id));
   if (unknown.length) throw new IgnoreRegionsError(`No rule ${unknown.join(', ')} in this set. Read the rules again.`);
-  const kept: RuleInput[] = current.rules.filter((r) => !remove.has(r.id)).map(({ id, x, y, width, height, active }) => ({ id, x, y, width, height, active }));
+  if (new Set(named).size !== named.length) throw new IgnoreRegionsError('Name each rule once: to remove, to switch off or to switch on.');
+  const kept: RuleInput[] = current.rules
+    .filter((r) => !remove.has(r.id))
+    .map(({ id, x, y, width, height, active }) => ({ id, x, y, width, height, active: off.has(id) ? false : on.has(id) ? true : active }));
   const same = (a: Rect, b: Rect) => a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
   const added: RuleInput[] = [];
   for (const r of patch.add ?? []) if (![...kept, ...added].some((k) => k.active !== false && same(k, r))) added.push({ ...r, id: null, active: true });
