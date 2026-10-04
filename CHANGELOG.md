@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.93](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.92...v0.0.93) (2026-10-04)
+
+### Performance Improvements
+
+* **review:** drag the comment bar without rendering or easing behind the pointer ([#95](https://github.com/MiguelFranken/playwright-reporter/issues/95)) ([0732fb1](https://github.com/MiguelFranken/playwright-reporter/commit/0732fb167afb4eab05edd6072eb5b7b3f45333b5))
+
 ## [0.0.92](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.91...v0.0.92) (2026-10-04)
 
 ### Features
