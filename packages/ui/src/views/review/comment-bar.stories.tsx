@@ -305,8 +305,10 @@ export const NoTooltipsWhileItGrows: Story = {
     await pointAt('Area');
     await new Promise((r) => setTimeout(r, 700));
     await expect(tooltip()).toBeNull();
-    // Settled, the reviewer moves the pointer: the tooltips answer again.
+    // Settled, the reviewer moves the pointer: the tooltips answer again. The move turns them back on in a
+    // render of its own; on a slow machine that lands after the next move, so the pointer waits for it first.
     await pointAt('Pen');
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 100))));
     await pointAt('Arrow');
     // A tooltip opens after its delay (600ms without a provider): room for a slow machine on top.
     await waitFor(() => expect(tooltip()).toHaveTextContent('Arrow'), { timeout: 3000 });
