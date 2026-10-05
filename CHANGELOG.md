@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.0.95](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.94...v0.0.95) (2026-10-05)
+
+### Features
+
+* **review:** show the areas left out on the image and every comparison ([#100](https://github.com/MiguelFranken/playwright-reporter/issues/100)) ([67c1748](https://github.com/MiguelFranken/playwright-reporter/commit/67c17484bd7a20ab4b911a5bd94498c8a4ac6a3a))
+
+### Bug Fixes
+
+* **review:** keep the stage to the image while leaving areas out; the rules move to the side panel ([#97](https://github.com/MiguelFranken/playwright-reporter/issues/97)) ([09ff487](https://github.com/MiguelFranken/playwright-reporter/commit/09ff487ece6be4aede8f7b29805c86202fad9de6))
+* **review:** let the measured pixels decide every status, and make comparing two runs read clearly ([#99](https://github.com/MiguelFranken/playwright-reporter/issues/99)) ([7c64a06](https://github.com/MiguelFranken/playwright-reporter/commit/7c64a060b4002ca11d7abdd0747e3a6ac06d7635)), closes [#112](https://github.com/MiguelFranken/playwright-reporter/issues/112) [#98](https://github.com/MiguelFranken/playwright-reporter/issues/98)
+* **review:** the comment bar grows along its run, from its own size ([#98](https://github.com/MiguelFranken/playwright-reporter/issues/98)) ([0e7a70b](https://github.com/MiguelFranken/playwright-reporter/commit/0e7a70ba5435cc2d365634c830f22ab92c1da89f))
+
 ## [0.0.94](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.93...v0.0.94) (2026-10-05)
 
 ### Bug Fixes
