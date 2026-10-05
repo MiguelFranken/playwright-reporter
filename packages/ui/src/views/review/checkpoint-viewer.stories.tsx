@@ -380,7 +380,7 @@ export const SideBySideScrollsTogether: Story = {
   },
 };
 
-/** Leaving out an area: drawn in the viewer, saved through the host. */
+/** Leaving out an area: drawn on the stage, which shows only the image; the areas and the save are in the side panel. */
 export const LeaveOutAreas: Story = {
   args: { initial: { checkpointId: changed.id, variant: 'mobile' } },
   play: async ({ args }) => {
@@ -388,9 +388,32 @@ export const LeaveOutAreas: Story = {
     await body.findByRole('dialog');
     await expect(body.getByText(/1 area is left out of the comparison/)).toBeInTheDocument();
     await userEvent.click(body.getByRole('button', { name: /Leave out areas/ }));
-    await userEvent.click(await body.findByRole('button', { name: 'Remove area 1' }));
+    const stage = body.getByLabelText('Checkpoint screens');
+    const panel = body.getByRole('complementary', { name: 'Review' });
+    await expect(await within(stage).findByRole('region', { name: /areas left out$/ })).toBeInTheDocument();
+    await expect(within(stage).queryByRole('list', { name: 'Areas left out' })).not.toBeInTheDocument();
+    await expect(within(stage).queryByRole('button', { name: 'Save and measure again' })).not.toBeInTheDocument();
+    await expect(within(panel).getByRole('list', { name: 'Areas left out' })).toBeInTheDocument();
+    await expect(within(panel).getByText(/Drag on the image to leave an area out/)).toBeInTheDocument();
+    await userEvent.click(within(panel).getByRole('button', { name: 'Remove area 1' }));
     await userEvent.click(body.getByRole('button', { name: 'Save and measure again' }));
     await expect(args.onIgnoreRegionsChange).toHaveBeenCalledWith({ captureId: changed.captures[1].id, rules: [], reason: null, expectedRevision: 2 });
+  },
+};
+
+/** With the side panel hidden, leaving out areas opens it: the rules and the save live there. */
+export const LeaveOutAreasOpensThePanel: Story = {
+  args: { initial: { checkpointId: changed.id, variant: 'mobile' } },
+  play: async () => {
+    const body = within(document.body);
+    await body.findByRole('dialog');
+    await userEvent.click(body.getByRole('button', { name: 'Hide the side panel' }));
+    await waitFor(() => expect(body.queryByRole('complementary', { name: 'Review' })).toBeNull());
+    await userEvent.click(body.getByRole('button', { name: /Leave out areas/ }));
+    const panel = await body.findByRole('complementary', { name: 'Review' });
+    await expect(within(panel).getByRole('button', { name: 'Save and measure again' })).toBeInTheDocument();
+    await userEvent.click(within(panel).getByRole('button', { name: 'Cancel' }));
+    await expect(await within(panel).findByText(/1 area is left out of the comparison/)).toBeInTheDocument();
   },
 };
 
