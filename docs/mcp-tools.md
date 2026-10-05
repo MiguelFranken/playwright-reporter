@@ -37,7 +37,7 @@ also accepts `project`, `format` (`markdown` | `json`) and `maxChars`. See the R
 | [`adopt_tests`](#adopt_tests) | write | Turn Playwright tests into test cases already linked to them: steps from their test.step() calls, one case per test across browsers. |
 | [`list_feedback_requests`](#list_feedback_requests) | core | Start here to fix a product from visual feedback: every open request for a change on its screenshots — comment threads and "changes requested" without a comment — one record each, with the producing test (id, full title, file, browser), the checkpoint key, the image now and the one the request was made on, the whole conversation, and whether it waits for a fix or changed since (verify). |
 | [`list_review_checkpoints`](#list_review_checkpoints) | core | A run's review checkpoints — the named screenshots its tests capture at their milestones, per variant (desktop, mobile) — in journey order, with each image's status (changed vs its approved baseline, else the run before; unchanged; new: first capture; approved; changes requested), open comment threads and measured pixel change: share, regions, size change, moved content. |
-| [`get_review_checkpoint`](#get_review_checkpoint) | core | One review checkpoint image to look at, beside the image it is compared with — the one a request was made on (against "origin"), the approved baseline, or the run before — with the measured change and close-ups of the largest changed regions. |
+| [`get_review_checkpoint`](#get_review_checkpoint) | core | One review checkpoint image to look at, beside the image it is compared with — the one a request was made on (against "origin"), the approved baseline, the run before, or the same screen in any run (againstRun) — with the measured change and close-ups of the largest changed regions. |
 | [`review_checkpoint`](#review_checkpoint) | write | Approve review checkpoint images, or ask for changes — with a comment, and on one image with pins that mark each change where it is. |
 | [`list_review_threads`](#list_review_threads) | core | The comment threads people (or assistants) pinned on a run’s review images — change requests at a spot or an area of a screenshot — per image, by the number on the pin, with where each points (pixels, percent, CSS pixels) and the conversation. |
 | [`comment_on_review`](#comment_on_review) | write | Pin a comment thread on a review image — at a spot or an area (in percent of the image), or about the whole image — or reply to a thread by its number. |
@@ -647,14 +647,15 @@ A run's review checkpoints — the named screenshots its tests capture at their 
 | `test` | string |  | Part of a test title or file, to narrow the list. |
 | `variant` | string |  | Only this variant, e.g. "desktop" or "mobile". |
 | `ignore` | `"active"` \| `"ever"` \| `"applied"` \| `"suppressed"` \| `"fully-suppressed"` \| `"needs-review"` |  | Only images whose rules (areas left out of the comparison) are: active, ever, applied, suppressed, fully-suppressed or needs-review. |
+| `against` | integer (–9007199254740991) \| string |  | Compare every image with "previous" (the same screen in the run before) or another run (128, "#128", a run id or URL) instead of its approved baseline: status, diff and counts then say what changed since that run — unchanged, changed, or new (not captured there) — whatever was approved. Default: the approved baseline, else the run before. |
 
-Structured output fields: `project`, `run`, `reviewUrl`, `counts`, `tests`, `truncated`.
+Structured output fields: `project`, `run`, `reviewUrl`, `against`, `counts`, `tests`, `truncated`.
 
 ## get_review_checkpoint
 
 **Get a review checkpoint** · toolset `core`
 
-One review checkpoint image to look at, beside the image it is compared with — the one a request was made on (against "origin"), the approved baseline, or the run before — with the measured change and close-ups of the largest changed regions. Open comment threads are drawn as numbered pins, a close-up per pin follows, and the threads are listed by the same numbers. images "focus" with a thread attaches just that spot, then and now: readable on tall pages, and small. Each attached image is described in attachedImages.
+One review checkpoint image to look at, beside the image it is compared with — the one a request was made on (against "origin"), the approved baseline, the run before, or the same screen in any run (againstRun) — with the measured change and close-ups of the largest changed regions. Open comment threads are drawn as numbered pins, a close-up per pin follows, and the threads are listed by the same numbers. images "focus" with a thread attaches just that spot, then and now: readable on tall pages, and small. Each attached image is described in attachedImages.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -664,6 +665,7 @@ One review checkpoint image to look at, beside the image it is compared with —
 | `capture` | string | yes | Capture id, from list_review_checkpoints, list_feedback_requests or list_review_threads. |
 | `against` | `"auto"` \| `"origin"` \| `"baseline"` \| `"previous"` |  | What to compare with. origin: the image the focused thread (or a change request without a comment) was made on — what the request was about. baseline: the approved image. previous: the same checkpoint in the run before. auto (default): origin for a focused thread made on an earlier image, else the baseline, else the previous capture. |
 | `againstCapture` | string |  | Compare with this capture id instead (any capture of the project), e.g. an original from list_feedback_requests. |
+| `againstRun` | integer (–9007199254740991) \| string |  | Compare with the same checkpoint and variant in this run (128, "#128", a run id or URL), whatever was approved: status, diff and close-ups then say what changed since that run. |
 | `compare` | boolean |  | Attach the image compared with. Default true. |
 | `images` | `"all"` \| `"focus"` \| `"none"` |  | all (default): the full images, then close-ups. focus: close-ups only — the focused thread on this image and on the one compared with (or the changed regions) — readable on tall pages and small. none: text only. |
 | `maxImages` | integer (1–12) |  | At most this many images (default 8); the rest are listed as omitted. |

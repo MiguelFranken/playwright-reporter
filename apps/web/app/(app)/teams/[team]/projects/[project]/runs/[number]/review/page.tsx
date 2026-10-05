@@ -1,10 +1,8 @@
 import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
-import { investigateRunVisualDiffsPrompt } from '@miguelfranken/ui/lib/ai-handoff';
 import { parseCompareRule } from '@miguelfranken/ui/lib/review';
 import { BackLink } from '@miguelfranken/ui/patterns/back-link';
-import { DebugWithAiMenu } from '@miguelfranken/ui/patterns/debug-with-ai-menu';
 import { PageHeader } from '@miguelfranken/ui/patterns/page-header';
 import { ReviewStoryboardSkeleton } from '@miguelfranken/ui/views/review/review-skeleton';
 import { GitBranch, GitPullRequest } from 'lucide-react';
@@ -12,6 +10,7 @@ import type { LibraryRefKey } from '@miguelfranken/ui/lib/library';
 import { ConnectedRunLibraryActions } from '@/components/library/library-controls';
 import { PrefetchLink } from '@/components/prefetch-link';
 import { RunReviewStoryboard } from '@/components/review/run-review-storyboard';
+import { RunVisualAiMenu } from '@/components/review/run-visual-ai-menu';
 import { requireProject } from '@/lib/auth/access';
 import { baseUrl } from '@/lib/auth/config';
 import { casesOfTests, defaultBranch, getLibraryReference, getRunByNumber, runReview } from '@/lib/page-data';
@@ -65,8 +64,8 @@ async function Content({ params, searchParams }: Props) {
           }
         >
           <div className="flex flex-wrap items-center gap-2">
-            {/* Screens that look different from the run before, both possibly green: an agent reads them through the MCP server. */}
-            <DebugWithAiMenu prompt={investigateRunVisualDiffsPrompt({ runUrl: `${baseUrl()}${hrefs.run(run.number)}` })} setupHref="/account/ai" label="Visual changes with AI" />
+            {/* Screens that look different from the run compared with (the run before, or `?against=run:38`), both possibly green: an agent reads them through the MCP server. */}
+            <RunVisualAiMenu runUrl={`${baseUrl()}${hrefs.run(run.number)}`} />
             {reference ? (
               <ConnectedRunLibraryActions team={team} project={access.project.slug} base={base} reference={reference} runNumber={run.number} canManage={access.can({ review: ['decide'] })} />
             ) : null}

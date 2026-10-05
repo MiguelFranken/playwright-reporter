@@ -13,7 +13,7 @@
 import type { ImageContent } from '@modelcontextprotocol/server';
 import sharp from 'sharp';
 import { z } from 'zod';
-import { checkpointLabel, describeDiff, emptyReviewCounts, matchesReviewFilter, REVIEW_DECISIONS, REVIEW_FILTERS } from '@miguelfranken/ui/lib/review';
+import { checkpointLabel, describeDiff, emptyReviewCounts, matchesReviewFilter, REVIEW_DECISIONS, REVIEW_FILTERS, statusAgainstRun, type CompareRule, type ReviewDiffView } from '@miguelfranken/ui/lib/review';
 import { MAX_COMMENT_LENGTH, projectAnchor } from '@miguelfranken/ui/lib/review-threads';
 import { MARKUP_COLORS, MARKUP_TOOLS, type MarkupShape } from '@miguelfranken/ui/lib/review-markup';
 import { signCaptureImagePath } from '@/lib/auth/artifact-url';
@@ -25,8 +25,11 @@ import { createThread, ThreadError, type CaptureThread } from '@/lib/review/thre
 import { db } from '@/lib/db/drizzle';
 import { runs } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
-import { captureInProject, capturesById, decide, MAX_DECISION_CAPTURES, ReviewError, runReview, type CaptureRecord, type ComparedCapture } from '@/lib/review/queries';
+import { captureInProject, capturesById, decide, MAX_DECISION_CAPTURES, ReviewError, runCapturesByScreen, runReview, type CaptureRecord, type ComparedCapture } from '@/lib/review/queries';
 import { toDiffView } from '@/lib/review/view-model';
+import { measureEach, type MeasuredReference } from '@/lib/review/diff/compare';
+import { identityKey, type DiffRecord } from '@/lib/review/diff/lookup';
+import { compareRunRecords } from '@/lib/review/run-flows';
 import { artifactUrlTtlSeconds, inlineImageMaxBytes } from '../config';
 import { invalid, notFound } from '../errors';
 import { agentParam, branchParam, commonParams, isUuid, runParam } from '../params';
@@ -150,6 +153,57 @@ export function fromPercent(at: z.infer<typeof percentAnchor>) {
 
 // ---------------------------------------------------------------- list_review_checkpoints
 
+/**
+ * What a whole run's images are compared with, as the app's "Compare with":
+ * the run before or another run, instead of the approved baseline.
+ */
+const againstRunParam = z
+  .union([z.number().int().positive(), z.string()])
+  .optional()
+  .describe(
+    'Compare every image with "previous" (the same screen in the run before) or another run (128, "#128", a run id or URL) instead of its approved baseline: status, diff and counts then say what changed since that run — unchanged, changed, or new (not captured there) — whatever was approved. Default: the approved baseline, else the run before.',
+  );
+
+/** The rule an `against` names: `null` for the default comparison. */
+async function againstRule(project: Parameters<typeof resolveRun>[0], against: number | string | undefined, runNumber: number): Promise<CompareRule | null> {
+  if (against === undefined || against === 'auto' || against === 'baseline') return null;
+  if (against === 'previous') return 'previous';
+  const other = await resolveRun(project, against);
+  if (other.number === runNumber) throw invalid(`"against" names run #${runNumber} itself: pass "previous" or another run.`);
+  return `run:${other.number}`;
+}
+
+/** A measured comparison as the tools report it. */
+function diffDataOf(diff: DiffRecord, against: ReviewDiffView['against'], withinTolerance = false): z.infer<typeof diffOut> {
+  const v = toDiffView(diff, against, withinTolerance);
+  return {
+    against: v.against,
+    state: v.state,
+    changedPixels: v.changedPixels,
+    changedPercent: Math.round(v.ratio * 100_000) / 1000,
+    regions: v.regions.length,
+    sizeChanged: v.sizeChanged,
+    contentMoved: Boolean(v.shift && (v.shift.inserted.length || v.shift.removed.length)),
+    withinTolerance: Boolean(v.withinTolerance),
+    summary: describeDiff(v),
+  };
+}
+
+const PENDING_DIFF: NonNullable<z.infer<typeof diffOut>> = {
+  against: 'compare',
+  state: 'pending',
+  changedPixels: 0,
+  changedPercent: 0,
+  regions: 0,
+  sizeChanged: false,
+  contentMoved: false,
+  withinTolerance: false,
+  summary: 'Measuring the difference…',
+};
+
+/** The diff of a capture measured against the run it is compared with. */
+const measuredData = (m: MeasuredReference | null): z.infer<typeof diffOut> => (m?.diff ? diffDataOf(m.diff, 'compare') : m?.pending ? PENDING_DIFF : null);
+
 const listInput = z.object({
   ...commonParams,
   run: runParam.optional().describe('The run (default "latest"). Scope "latest" with branch.'),
@@ -161,11 +215,12 @@ const listInput = z.object({
   test: z.string().optional().describe('Part of a test title or file, to narrow the list.'),
   variant: z.string().optional().describe('Only this variant, e.g. "desktop" or "mobile".'),
   ignore: z.enum(IGNORE_FILTERS).optional().describe('Only images whose rules (areas left out of the comparison) are: active, ever, applied, suppressed, fully-suppressed or needs-review.'),
+  against: againstRunParam,
 });
 
 const diffOut = z
   .object({
-    against: z.enum(['baseline', 'previous', 'compare']).describe('What the image was measured against: its approved baseline, else the run before.'),
+    against: z.enum(['baseline', 'previous', 'compare']).describe('What the image was measured against: its approved baseline, the run before, or (compare) the image it is compared with — the run or capture asked for.'),
     state: z.enum(['pending', 'done', 'failed', 'too_large']),
     changedPixels: z.number(),
     changedPercent: z.number().describe('Changed pixels as a percentage of the image, anti-aliasing excluded.'),
@@ -185,7 +240,12 @@ const captureOut = z.object({
   baselineRun: z.number().nullable(),
   comment: z.string().nullable(),
   autoApproved: z.boolean().describe('Approved by the project’s diff tolerance, not by a person.'),
-  diff: diffOut.describe('The measured pixel comparison, when there is one.'),
+  diff: diffOut.describe('The measured pixel comparison, when there is one: against the run in comparedWith when "against" was given.'),
+  comparedWith: z
+    .object({ run: z.number(), captureId: z.string(), same: z.boolean().describe('The very same pixels.') })
+    .nullable()
+    .optional()
+    .describe('With "against": the same screen in the run it is compared with; null when that run did not capture it (status new).'),
   openThreads: z.number().optional().describe('Open comment threads on the image: see them pinned with get_review_checkpoint.'),
   ignore: z
     .object({ active: z.number(), applied: z.number(), suspended: z.number(), rawChangedPixels: z.number().nullable(), suppressedPixels: z.number().nullable(), states: z.array(z.enum(IGNORE_FILTERS)) })
@@ -195,24 +255,18 @@ const captureOut = z.object({
 
 function diffData(c: ComparedCapture): z.infer<typeof diffOut> {
   if (!c.diff || !c.diffAgainst) return null;
-  const v = toDiffView(c.diff, c.diffAgainst, c.withinTolerance);
-  return {
-    against: v.against,
-    state: v.state,
-    changedPixels: v.changedPixels,
-    changedPercent: Math.round(v.ratio * 100_000) / 1000,
-    regions: v.regions.length,
-    sizeChanged: v.sizeChanged,
-    contentMoved: Boolean(v.shift && (v.shift.inserted.length || v.shift.removed.length)),
-    withinTolerance: Boolean(v.withinTolerance),
-    summary: describeDiff(v),
-  };
+  return diffDataOf(c.diff, c.diffAgainst, c.withinTolerance);
 }
 
 const listOutput = output({
   project: z.string(),
   run: z.number(),
   reviewUrl: z.string(),
+  against: z
+    .object({ rule: z.string().describe('"previous" or "run:<n>".'), run: z.number().nullable().describe('The run compared with, when one run was named.') })
+    .nullable()
+    .optional()
+    .describe('What every image was compared with, when "against" was given; absent: each image against its approved baseline, else the run before.'),
   counts: z.object({ approved: z.number(), changes_requested: z.number(), changed: z.number(), unchanged: z.number(), new: z.number() }),
   tests: z.array(
     z.object({
@@ -249,6 +303,11 @@ export const listReviewCheckpoints = defineTool({
     const filter = args.status ?? 'needs-review';
     const q = args.test?.toLowerCase();
     const flows = await runReview({ id: run.id, startedAt: run.startedAt });
+    const rule = await againstRule(project, args.against, run.number);
+    const compared = rule ? await compareRunRecords(project.project.id, flows, rule) : null;
+    if (rule && !compared) throw notFound(`Run ${String(args.against)} not found in ${project.ref}.`, 'Pass "previous" or a run number from list_runs.');
+    // Against a chosen run, every image's status and diff are that comparison's: the baseline plays no part.
+    const statusOf = (c: ComparedCapture) => compared?.entries.get(c.id)?.status ?? c.status;
     const counts = emptyReviewCounts();
     const tests = flows
       .filter((f) => !q || f.title.toLowerCase().includes(q) || f.titlePath.join(' ').toLowerCase().includes(q) || f.file.toLowerCase().includes(q))
@@ -260,7 +319,7 @@ export const listReviewCheckpoints = defineTool({
         checkpoints: f.checkpoints
           .map((cp) => {
             const captures = cp.captures.filter((c) => !args.variant || c.variant === args.variant);
-            for (const c of captures) counts[c.status]++;
+            for (const c of captures) counts[statusOf(c)]++;
             return {
               order: cp.sequence + 1,
               name: cp.name,
@@ -269,32 +328,43 @@ export const listReviewCheckpoints = defineTool({
               steps: cp.stepPath,
               url: cp.url,
               captures: captures
-                .filter((c) => matchesReviewFilter(c.status, filter) && matchesIgnoreFilter(c.ignore, args.ignore))
-                .map((c) => ({
+                .filter((c) => matchesReviewFilter(statusOf(c), filter) && matchesIgnoreFilter(c.ignore, args.ignore))
+                .map((c) => {
+                  const e = compared?.entries.get(c.id);
+                  return {
                   captureId: c.id,
                   variant: c.variant,
-                  status: c.status,
+                  status: statusOf(c),
                   sameAsBaseline: c.baseline ? Boolean(c.sha256 && c.baseline.capture?.sha256 === c.sha256) : null,
                   baselineRun: c.baseline?.decision.runNumber ?? null,
                   comment: c.decision?.comment ?? null,
                   autoApproved: c.decision?.source === 'tolerance',
-                  diff: diffData(c),
+                  diff: compared ? measuredData(e?.measured ?? null) : diffData(c),
+                  ...(compared ? { comparedWith: e?.reference ? { run: e.reference.runNumber, captureId: e.reference.capture.id, same: Boolean(c.sha256 && c.sha256 === e.reference.capture.sha256) } : null } : {}),
                   openThreads: c.threads.filter((t) => t.status === 'open').length,
                   ...(c.ignore.ever ? { ignore: { active: c.ignore.active, applied: c.ignore.applied, suspended: c.ignore.suspended, rawChangedPixels: c.ignore.rawChangedPixels, suppressedPixels: c.ignore.suppressedPixels, states: [...ignoreStates(c.ignore)] } } : {}),
-                })),
+                  };
+                }),
             };
           })
           .filter((cp) => cp.captures.length > 0),
       }))
       .filter((t) => t.checkpoints.length > 0);
-    const reviewUrl = `${project.links.run(run.number)}/review`;
+    const reviewUrl = `${project.links.run(run.number)}/review${rule ? `?against=${encodeURIComponent(rule)}` : ''}`;
     return {
-      data: { project: project.ref, run: run.number, reviewUrl, counts, tests },
+      data: { project: project.ref, run: run.number, reviewUrl, ...(rule ? { against: { rule, run: compared?.runNumber ?? null } } : {}), counts, tests },
       render(md, d) {
-        md.heading(`Review checkpoints of run #${d.run}`, 2);
+        md.heading(`Review checkpoints of run #${d.run}${d.against ? ` compared with ${d.against.run ? `run #${d.against.run}` : 'the run before'}` : ''}`, 2);
+        if (d.against) md.line('Statuses say what changed since that run, whatever was approved: unchanged (the same pixels), changed, or new (not captured there).');
         md.line(`${d.counts.changed} changed, ${d.counts.new} new, ${d.counts.unchanged} unchanged, ${d.counts.changes_requested} with changes requested, ${d.counts.approved} approved. ${link('Review in the app', d.reviewUrl)}`);
         if (d.tests.length === 0) {
-          md.line(filter === 'needs-review' ? 'Nothing needs review: every image was decided about, matches an approved one or, with none approved, the run before.' : 'No checkpoints match.');
+          md.line(
+            filter === 'needs-review'
+              ? d.against
+                ? 'Nothing changed since that run, or every change was decided about.'
+                : 'Nothing needs review: every image was decided about, matches an approved one or, with none approved, the run before.'
+              : 'No checkpoints match.',
+          );
           return;
         }
         for (const t of d.tests) {
@@ -329,6 +399,9 @@ const getInput = z.object({
       'What to compare with. origin: the image the focused thread (or a change request without a comment) was made on — what the request was about. baseline: the approved image. previous: the same checkpoint in the run before. auto (default): origin for a focused thread made on an earlier image, else the baseline, else the previous capture.',
     ),
   againstCapture: z.string().optional().describe('Compare with this capture id instead (any capture of the project), e.g. an original from list_feedback_requests.'),
+  againstRun: runParam
+    .optional()
+    .describe('Compare with the same checkpoint and variant in this run (128, "#128", a run id or URL), whatever was approved: status, diff and close-ups then say what changed since that run.'),
   compare: z.boolean().optional().describe('Attach the image compared with. Default true.'),
   images: z
     .enum(['all', 'focus', 'none'])
@@ -352,7 +425,11 @@ const getOutput = output({
   checkpoint: z.string(),
   variant: z.string(),
   run: z.number(),
-  status: z.string(),
+  status: z
+    .string()
+    .describe(
+      'The review status. Compared with the run before, another run, or a capture of the same screen: what changed since that image, whatever was approved — unchanged, changed (unless these pixels were approved), new (no such image), or changes_requested.',
+    ),
   viewport: z.string().nullable(),
   sameAsReference: z.boolean().nullable(),
   reference: z.string().nullable().describe('What the image is compared with, in words.'),
@@ -360,7 +437,7 @@ const getOutput = output({
   referenceUrl: z.string().nullable(),
   comparison: z
     .object({
-      role: z.enum(['origin', 'baseline', 'previous', 'capture']).describe('origin: the image a request was made on; baseline: the approved image; previous: the run before; capture: the one asked for.'),
+      role: z.enum(['origin', 'baseline', 'previous', 'run', 'capture']).describe('origin: the image a request was made on; baseline: the approved image; previous: the run before; run: the same screen in the run asked for; capture: the one asked for.'),
       captureId: z.string().nullable(),
       run: z.number().nullable(),
       reason: z.string().describe('Why this one.'),
@@ -370,7 +447,7 @@ const getOutput = output({
     .nullable()
     .optional()
     .describe('The image compared with — chosen by "against" — kept apart from what the pixel diff was measured against.'),
-  diff: diffOut,
+  diff: diffOut.describe('The measured pixel change against the image compared with (against "compare" when that is not the default reference); changedRegions and the change close-ups are the same measurement.'),
   comparisonId: z.string().nullable().optional().describe('The pair shown (the image compared with → this image) for get_visual_diff and get_visual_diff_image: every region, raw and effective numbers, and images in any mode.'),
   measuredComparisonId: z.string().nullable().optional().describe('The pair the diff below was measured against, when it is another one.'),
   changedRegions: z.array(z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number(), pixels: z.number() })).describe('The changed regions, in the image’s pixels, largest first (up to 10).'),
@@ -461,7 +538,7 @@ async function inlineCapture(capture: CaptureRecord, pins: Parameters<typeof ann
 const runNumberOf = async (runId: string) => (await db.select({ number: runs.number }).from(runs).where(eq(runs.id, runId)))[0]?.number ?? null;
 
 interface Comparison {
-  role: 'origin' | 'baseline' | 'previous' | 'capture';
+  role: 'origin' | 'baseline' | 'previous' | 'run' | 'capture';
   capture: CaptureRecord | null;
   run: number | null;
   reason: string;
@@ -477,8 +554,14 @@ interface Comparison {
 async function comparisonFor(
   capture: ComparedCapture,
   projectId: string,
-  opts: { against: (typeof AGAINST)[number]; againstCapture?: string; focus?: CaptureThread },
+  opts: { against: (typeof AGAINST)[number]; againstCapture?: string; againstRun?: number; focus?: CaptureThread },
 ): Promise<{ comparison: Comparison | null; missing: string | null }> {
+  if (opts.againstRun !== undefined) {
+    const other = await runCapturesByScreen(projectId, opts.againstRun);
+    const c = other?.captures.get(identityKey(capture));
+    if (!c) return { comparison: null, missing: `Run #${opts.againstRun} did not capture this checkpoint and variant (or its image is no longer stored).` };
+    return { comparison: { role: 'run', capture: c, run: opts.againstRun, reason: `the same checkpoint in run #${opts.againstRun}`, label: `run #${opts.againstRun}` }, missing: null };
+  }
   if (opts.againstCapture) {
     if (!isUuid(opts.againstCapture)) throw invalid('"againstCapture" is a capture id.');
     const [c] = await capturesById([opts.againstCapture.toLowerCase()]);
@@ -537,7 +620,7 @@ export const getReviewCheckpoint = defineTool({
   title: 'Get a review checkpoint',
   toolset: 'core',
   description:
-    'One review checkpoint image to look at, beside the image it is compared with — the one a request was made on (against "origin"), the approved baseline, or the run before — with the measured change and close-ups of the largest changed regions. Open comment threads are drawn as numbered pins, a close-up per pin follows, and the threads are listed by the same numbers. images "focus" with a thread attaches just that spot, then and now: readable on tall pages, and small. Each attached image is described in attachedImages.',
+    'One review checkpoint image to look at, beside the image it is compared with — the one a request was made on (against "origin"), the approved baseline, the run before, or the same screen in any run (againstRun) — with the measured change and close-ups of the largest changed regions. Open comment threads are drawn as numbered pins, a close-up per pin follows, and the threads are listed by the same numbers. images "focus" with a thread attaches just that spot, then and now: readable on tall pages, and small. Each attached image is described in attachedImages.',
   input: getInput,
   output: getOutput,
   async handler(args, ctx) {
@@ -555,9 +638,22 @@ export const getReviewCheckpoint = defineTool({
     // Drawings made on these pixels on their own, without a comment: drawn under the pins.
     const drawings = args.pins === false ? [] : capture.drawings.map((d) => d.position);
     const compare = args.compare ?? true;
-    const { comparison, missing } = await comparisonFor(capture, project.project.id, { against: args.against ?? 'auto', againstCapture: args.againstCapture, focus });
+    if (args.againstRun !== undefined && args.againstCapture) throw invalid('Pass "againstRun" or "againstCapture", not both.');
+    const againstRun = args.againstRun !== undefined ? (await resolveRun(project, args.againstRun)).number : undefined;
+    if (againstRun === found.runNumber) throw invalid(`"againstRun" names run #${againstRun}, this image's own run.`);
+    const { comparison, missing } = await comparisonFor(capture, project.project.id, { against: args.against ?? 'auto', againstCapture: args.againstCapture, againstRun, focus });
     const reference = comparison?.capture ?? null;
-    const measuredAgainst = capture.diffAgainst === 'baseline' ? (capture.baseline?.capture ?? null) : capture.diffAgainst === 'previous' ? (capture.previous?.capture ?? null) : null;
+    const defaultMeasured = capture.diffAgainst === 'baseline' ? (capture.baseline?.capture ?? null) : capture.diffAgainst === 'previous' ? (capture.previous?.capture ?? null) : null;
+    // Compared with another image than the default reference: measured against that one, never silently against the baseline.
+    const remeasured = reference && reference.id !== defaultMeasured?.id ? ((await measureEach([capture], () => ({ capture: reference, label: comparison!.label }))).get(capture.id) ?? null) : null;
+    const measuredAgainst = remeasured ? reference : defaultMeasured;
+    const measuredDiff = remeasured ? remeasured.diff : capture.diff;
+    const measuredLabel = remeasured ? comparison!.label : capture.diffAgainst === 'baseline' ? 'the approved image' : 'the run before';
+    const measuredRun = remeasured ? (comparison?.run ?? null) : capture.diffAgainst === 'baseline' ? (capture.baseline?.decision.runNumber ?? null) : (capture.previous?.runNumber ?? null);
+    // Against the run before, another run or a capture of the same screen: did it change since, whatever was approved.
+    const sameScreen = (c: CaptureRecord) => c.testId === capture.testId && c.checkpointName === capture.checkpointName && c.variant === capture.variant;
+    const sinceRun = args.againstRun !== undefined || args.against === 'previous' || (comparison?.role === 'capture' && reference !== null && sameScreen(reference));
+    const status = sinceRun ? statusAgainstRun({ decision: capture.decision?.decision, sha256: capture.sha256, reference }) : capture.status;
 
     // Candidates in the order they matter; the budget keeps the first ones.
     const attached: Attached[] = [];
@@ -607,10 +703,9 @@ export const getReviewCheckpoint = defineTool({
     if (focus && mode !== 'none' && args.pins !== false) await threadCrop(focus, compare);
 
     // The largest measured changes, this image then the one they were measured against.
-    const regions = [...(capture.diff?.regions ?? [])].sort((a, b) => b.pixels - a.pixels).slice(0, MAX_CROPS);
-    if ((args.changes ?? true) && capture.diff?.status === 'done' && regions.length && mode !== 'none' && (mode === 'all' || !focus) && main?.bytes) {
+    const regions = [...(measuredDiff?.regions ?? [])].sort((a, b) => b.pixels - a.pixels).slice(0, MAX_CROPS);
+    if ((args.changes ?? true) && measuredDiff?.status === 'done' && regions.length && mode !== 'none' && (mode === 'all' || !focus) && main?.bytes) {
       const measured = measuredAgainst ? await readCaptureBytes(measuredAgainst) : null;
-      const measuredRun = capture.diffAgainst === 'baseline' ? (capture.baseline?.decision.runNumber ?? null) : (capture.previous?.runNumber ?? null);
       for (const [i, r] of regions.entries()) {
         const h = await cropRect(main.bytes, r).catch(() => null);
         if (h) add({ image: h.image, label: `change ${i + 1}, this image`, meta: { role: 'change-close-up', ...own, thread: null, region: i + 1, source: h.source, width: h.width, height: h.height } });
@@ -618,7 +713,7 @@ export const getReviewCheckpoint = defineTool({
         if (b && measuredAgainst)
           add({
             image: b.image,
-            label: `change ${i + 1}, ${capture.diffAgainst === 'baseline' ? 'the approved image' : 'the run before'}`,
+            label: `change ${i + 1}, ${measuredLabel}`,
             meta: { role: 'compared-change-close-up', captureId: measuredAgainst.id, run: measuredRun, thread: null, region: i + 1, source: b.source, width: b.width, height: b.height },
           });
       }
@@ -639,9 +734,7 @@ export const getReviewCheckpoint = defineTool({
       !main && mode !== 'none' ? 'The image is not available to attach; open the link.' : null,
       compare && missing ? missing : null,
       compare && reference && !refImage && mode !== 'none' ? `${comparison!.label} could not be read to attach.` : null,
-      comparison && comparison.role === 'origin' && measuredAgainst && measuredAgainst.id !== reference?.id
-        ? `The pixel diff below was measured against ${capture.diffAgainst === 'baseline' ? 'the approved image' : 'the run before'}, not against the image compared with.`
-        : null,
+      remeasured?.pending ? `The difference from ${comparison!.label} is being measured: ask again in a moment.` : null,
       focus?.placement === 'outdated' && comparison?.role !== 'origin' ? `Thread #${focus.number} was placed on an earlier image and its pin here is carried over — it may be off: compare against "origin".` : null,
     ].filter(Boolean);
     const threads = shownThreads.map((t) => toThreadOut(t, capture, reviewUrl(project.links, found.runNumber, capture, t.number)));
@@ -654,7 +747,7 @@ export const getReviewCheckpoint = defineTool({
       checkpoint: checkpointLabel(capture.checkpointName, found.checkpointTitle),
       variant: capture.variant,
       run: found.runNumber,
-      status: capture.status,
+      status,
       viewport: capture.viewportWidth ? `${capture.viewportWidth}×${capture.viewportHeight}${capture.deviceScaleFactor ? ` @${capture.deviceScaleFactor}x` : ''}` : null,
       sameAsReference: reference ? Boolean(capture.sha256 && reference.sha256 === capture.sha256) : null,
       reference: comparison ? comparison.label : null,
@@ -670,10 +763,10 @@ export const getReviewCheckpoint = defineTool({
             identical: reference ? Boolean(capture.sha256 && reference.sha256 === capture.sha256) : null,
           }
         : null,
-      diff: diffData(capture),
+      diff: remeasured ? measuredData(remeasured) : diffData(capture),
       comparisonId: reference ? encodeComparisonId(reference.id, capture.id) : null,
       measuredComparisonId: measuredAgainst && measuredAgainst.id !== reference?.id ? encodeComparisonId(measuredAgainst.id, capture.id) : null,
-      changedRegions: [...(capture.diff?.regions ?? [])].sort((a, b) => b.pixels - a.pixels).slice(0, 10),
+      changedRegions: [...(measuredDiff?.regions ?? [])].sort((a, b) => b.pixels - a.pixels).slice(0, 10),
       note: [...notes, hidden > 0 ? `${hidden} resolved thread${hidden === 1 ? '' : 's'} not shown (includeResolved).` : null].filter(Boolean).join(' ') || null,
       image: main?.out
         ? { width: main.out.source.width, height: main.out.source.height, attachedWidth: wantsFull ? main.out.width : null, attachedHeight: wantsFull ? main.out.height : null }
@@ -700,7 +793,7 @@ export const getReviewCheckpoint = defineTool({
           ['Viewport', d.viewport],
           ['Image', d.image ? `${d.image.width}×${d.image.height} px${d.image.attachedWidth && d.image.attachedWidth !== d.image.width ? `, attached at ${d.image.attachedWidth}×${d.image.attachedHeight}` : ''}` : null],
           ['Compared with', d.comparison ? `${d.reference} (${d.comparison.reason}): ${d.comparison.identical ? 'identical' : 'different'}` : null],
-          ['Measured change', d.diff ? `${d.diff.summary} (against the ${d.diff.against === 'baseline' ? 'approved baseline' : 'run before'})${d.diff.withinTolerance ? ', within the tolerance' : ''}` : null],
+          ['Measured change', d.diff ? `${d.diff.summary} (against ${d.diff.against === 'baseline' ? 'the approved baseline' : d.diff.against === 'previous' ? 'the run before' : (d.reference ?? 'the image compared with')})${d.diff.withinTolerance ? ', within the tolerance' : ''}` : null],
           ['Change request', d.request ? `${d.request.by ?? 'Someone'} asked for changes without a comment (run #${d.request.run ?? '?'})${d.request.onThisImage ? ' on this image' : ' on an earlier image — this one changed since'}` : null],
           ['In the app', d.reviewUrl ?? null],
           ['Image link', d.imageUrl],

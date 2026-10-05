@@ -71,4 +71,46 @@ describe('review checkpoint tools', () => {
     expect(denied.isError).toBe(true);
     await client.close();
   });
+
+  test('compared with the run before or another run, status and diff are that comparison, never the baseline', async ({ db, tenant }) => {
+    const project = `${tenant.team.slug}/${tenant.project.slug}`;
+    const first = await reviewRun(tenant, 'a'.repeat(64));
+    await db.update(attachments).set({ status: 'uploaded' });
+    const writer = await mcpClient({ token: (await createPat(tenant.adminUser, { scopes: ['read', 'write'] })).token });
+    type Listed = { against?: { rule: string; run: number | null }; counts: Record<string, number>; tests: { checkpoints: { captures: { captureId: string; status: string; comparedWith?: { run: number; same: boolean } | null; diff: { against: string } | null }[] }[] }[] };
+    const capturesOf = (l: Listed) => l.tests.flatMap((t) => t.checkpoints.flatMap((c) => c.captures));
+    const firstId = capturesOf((await call(writer, 'list_review_checkpoints', { project, run: first })).structuredContent as Listed)[0].captureId;
+    await call(writer, 'review_checkpoint', { project, captures: [firstId], decision: 'approved' });
+    const second = await reviewRun(tenant, 'b'.repeat(64));
+    const third = await reviewRun(tenant, 'b'.repeat(64));
+    await db.update(attachments).set({ status: 'uploaded' });
+
+    // By default: against the approved baseline, the third run's image is changed.
+    const byDefault = (await call(writer, 'list_review_checkpoints', { project, run: third, status: 'all' })).structuredContent as Listed;
+    expect(byDefault.against).toBeUndefined();
+    expect(capturesOf(byDefault)[0]).toMatchObject({ status: 'changed' });
+
+    // Against the run before: the very same pixels — unchanged, nothing to review, no baseline diff.
+    const sincePrevious = (await call(writer, 'list_review_checkpoints', { project, run: third, against: 'previous', status: 'all' })).structuredContent as Listed;
+    expect(sincePrevious.against).toEqual({ rule: 'previous', run: null });
+    expect(sincePrevious.counts).toMatchObject({ unchanged: 1, changed: 0, new: 0 });
+    const [unchanged] = capturesOf(sincePrevious);
+    expect(unchanged).toMatchObject({ status: 'unchanged', comparedWith: { run: second, same: true }, diff: null });
+    expect(((await call(writer, 'list_review_checkpoints', { project, run: third, against: 'previous' })).structuredContent as Listed).tests).toEqual([]);
+
+    // Against an explicit run: changed since run #first, compared with that run's image.
+    const sinceFirst = (await call(writer, 'list_review_checkpoints', { project, run: third, against: first, status: 'all' })).structuredContent as Listed;
+    expect(sinceFirst.against).toEqual({ rule: `run:${first}`, run: first });
+    expect(capturesOf(sinceFirst)[0]).toMatchObject({ status: 'changed', comparedWith: { run: first, same: false } });
+    expect((await call(writer, 'list_review_checkpoints', { project, run: third, against: third })).isError).toBe(true);
+
+    // One image: the comparison asked for decides the status and what the diff is measured against.
+    const shownPrevious = await call(writer, 'get_review_checkpoint', { project, capture: unchanged.captureId, against: 'previous', images: 'none' });
+    expect(shownPrevious.structuredContent).toMatchObject({ status: 'unchanged', comparison: { role: 'previous', run: second, identical: true }, diff: null, changedRegions: [] });
+    const shownRun = await call(writer, 'get_review_checkpoint', { project, capture: unchanged.captureId, againstRun: `#${first}`, images: 'none' });
+    expect(shownRun.structuredContent).toMatchObject({ status: 'changed', comparison: { role: 'run', run: first, identical: false } });
+    const shownDefault = await call(writer, 'get_review_checkpoint', { project, capture: unchanged.captureId, images: 'none' });
+    expect(shownDefault.structuredContent).toMatchObject({ status: 'changed', comparison: { role: 'baseline', run: first } });
+    await writer.close();
+  });
 });

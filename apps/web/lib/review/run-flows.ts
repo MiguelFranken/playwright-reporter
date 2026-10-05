@@ -3,12 +3,12 @@
  * server into the query the storyboard reads (`runReviewQuery`), and the RPC
  * procedure answers the same query when the browser asks again.
  */
-import { compareRuleRun, isRunCompareRule, statusAgainstRun, type CompareRule, type ReviewFlowView } from '@miguelfranken/ui/lib/review';
+import { compareRuleRun, isRunCompareRule, statusAgainstRun, type CompareRule, type ReviewFlowView, type ReviewStatus } from '@miguelfranken/ui/lib/review';
 import { projectHrefs } from '@/lib/view-models';
-import { compareEachWith } from './diff/compare';
+import { measureEach, type MeasuredReference } from './diff/compare';
 import { identityKey } from './diff/lookup';
-import { runCapturesByScreen, type CaptureRecord, type ComparedCapture, type ReviewFlowRecord } from './queries';
-import { caseHref, toFlowViews, type CaseLinks } from './view-model';
+import { runCapturesByScreen, type CaptureRecord, type ReviewFlowRecord } from './queries';
+import { caseHref, pendingDiff, toDiffView, toFlowViews, toReviewImage, type CaseLinks } from './view-model';
 
 export interface RunReviewData {
   flows: ReviewFlowView[];
@@ -17,6 +17,48 @@ export interface RunReviewData {
 export function toRunReviewData(records: readonly ReviewFlowRecord[], byTest: CaseLinks['byTest'], base: string, runNumber: number): RunReviewData {
   const hrefs = projectHrefs(base);
   return { flows: toFlowViews(records, (resultId) => hrefs.result(runNumber, resultId), { byTest, href: caseHref(hrefs) }) };
+}
+
+/** One image of a run compared with the run a reviewer (or an agent) chose. */
+export interface RunComparisonEntry {
+  /** The same screen in the chosen run; `null` when that run did not capture it. */
+  reference: { capture: CaptureRecord; runNumber: number } | null;
+  /** Did the screen change since that run (`statusAgainstRun`): the approved baseline plays no part. */
+  status: ReviewStatus;
+  /** Measured against the reference, when it differs and the comparison is known. */
+  measured: MeasuredReference | null;
+}
+
+/**
+ * A run's images compared with the run before (`previous`: per screen, the
+ * newest earlier run that captured it) or with run n (`run:<n>`): the
+ * reference, the status against it and the measured difference, per capture
+ * id. `null` for any other rule, or a run that does not exist. The storyboard
+ * (`compareRunReview`), the MCP tools and the REST API read this one answer.
+ */
+export async function compareRunRecords(projectId: string, records: readonly ReviewFlowRecord[], rule: CompareRule): Promise<{ runNumber: number | null; entries: Map<string, RunComparisonEntry> } | null> {
+  if (!isRunCompareRule(rule)) return null;
+  const run = compareRuleRun(rule);
+  const other = run !== null ? await runCapturesByScreen(projectId, run) : null;
+  if (run !== null && !other) return null;
+  const mine = records.flatMap((r) => r.checkpoints.flatMap((cp) => cp.captures));
+  const references = new Map<string, RunComparisonEntry['reference']>();
+  for (const c of mine) {
+    if (other) {
+      const capture = other.captures.get(identityKey(c));
+      references.set(c.id, capture && capture.runId !== c.runId ? { capture, runNumber: other.runNumber } : null);
+    } else references.set(c.id, c.previous ? { capture: c.previous.capture, runNumber: c.previous.runNumber } : null);
+  }
+  const measured = await measureEach(mine, (c) => {
+    const picked = references.get(c.id);
+    return picked ? { capture: picked.capture, runNumber: picked.runNumber, label: `Run #${picked.runNumber}` } : null;
+  });
+  const entries = new Map<string, RunComparisonEntry>();
+  for (const c of mine) {
+    const reference = references.get(c.id) ?? null;
+    entries.set(c.id, { reference, status: statusAgainstRun({ decision: c.decision?.decision, sha256: c.sha256, reference: reference?.capture }), measured: measured.get(c.id) ?? null });
+  }
+  return { runNumber: other?.runNumber ?? null, entries };
 }
 
 /**
@@ -31,41 +73,29 @@ export function toRunReviewData(records: readonly ReviewFlowRecord[], byTest: Ca
  * that run? The approved baseline plays no part (see `statusAgainstRun`).
  */
 export async function compareRunReview(projectId: string, records: readonly ReviewFlowRecord[], data: RunReviewData, rule: CompareRule): Promise<RunReviewData> {
-  if (!isRunCompareRule(rule)) return data;
-  const run = compareRuleRun(rule);
-  const other = run !== null ? await runCapturesByScreen(projectId, run) : null;
-  if (run !== null && !other) return data;
-  const references = new Map<string, { capture: CaptureRecord; runNumber: number } | null>();
-  for (const r of records)
-    for (const cp of r.checkpoints)
-      for (const mine of cp.captures) {
-        if (other) {
-          const capture = other.captures.get(identityKey(mine));
-          references.set(mine.id, capture && capture.runId !== mine.runId ? { capture, runNumber: other.runNumber } : null);
-        } else references.set(mine.id, mine.previous ? { capture: mine.previous.capture, runNumber: mine.previous.runNumber } : null);
-      }
-  const flows = await compareEachWith(data.flows, records, (mine) => {
-    const picked = references.get(mine.id);
-    if (!picked) return null;
-    return { capture: picked.capture, runNumber: picked.runNumber, label: `Run #${picked.runNumber}` };
-  });
-  return { flows: restatus(flows, records, references) };
-}
-
-/** Each image's status against the run the review is compared with. */
-function restatus(flows: ReviewFlowView[], records: readonly ReviewFlowRecord[], references: ReadonlyMap<string, { capture: CaptureRecord } | null>): ReviewFlowView[] {
-  const mine = new Map<string, ComparedCapture>();
-  for (const r of records) for (const cp of r.checkpoints) for (const c of cp.captures) mine.set(c.id, c);
-  return flows.map((f) => ({
-    ...f,
-    checkpoints: f.checkpoints.map((cp) => ({
-      ...cp,
-      captures: cp.captures.map((view) => {
-        const c = mine.get(view.id);
-        if (!c || !references.has(view.id)) return view;
-        const status = statusAgainstRun({ decision: c.decision?.decision, sha256: c.sha256, reference: references.get(view.id)?.capture });
-        return status === view.status ? view : { ...view, status };
-      }),
+  const compared = await compareRunRecords(projectId, records, rule);
+  if (!compared) return data;
+  return {
+    flows: data.flows.map((f) => ({
+      ...f,
+      checkpoints: f.checkpoints.map((cp) => ({
+        ...cp,
+        captures: cp.captures.map((view) => {
+          const e = compared.entries.get(view.id);
+          if (!e) return view;
+          const m = e.measured;
+          return {
+            ...view,
+            status: e.status,
+            ...(m
+              ? {
+                  compare: { captureId: m.capture.id, image: toReviewImage(m.capture), label: m.label, same: m.same, ...(m.runNumber ? { runNumber: m.runNumber } : {}) },
+                  diff: m.diff ? toDiffView(m.diff, 'compare') : m.pending ? pendingDiff('compare') : null,
+                }
+              : {}),
+          };
+        }),
+      })),
     })),
-  }));
+  };
 }
