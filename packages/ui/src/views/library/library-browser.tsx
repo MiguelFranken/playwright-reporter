@@ -132,6 +132,16 @@ function needsReviewApproval(flows: readonly ReviewFlowView[]) {
   return { captureIds: perFlow.flat(), flows: perFlow.filter((ids) => ids.length > 0).length };
 }
 
+/** Whether anyone left open feedback on a flow: an open comment or changes asked for, on any of its screens. */
+function hasOpenFeedback(flow: ReviewFlowView): boolean {
+  return flow.checkpoints.some((c) =>
+    c.captures.some((cap) => {
+      const states = captureStates(cap);
+      return states.has('waiting') || states.has('verify');
+    }),
+  );
+}
+
 /**
  * The library: every flow a branch shows, screen by screen, and where each
  * stands in the review loop. On the left, the views (built in, and the
@@ -319,7 +329,14 @@ export function LibraryBrowser({
     const below = matched.filter((f) => inFolder(f, treeGrouping, target.id));
     const open = attention.get(target.id ?? '') ?? 0;
     return [
-      ...(onDecide ? [approveFolderAction(target, needsReviewApproval(below), (ids) => onDecide({ captureIds: ids, decision: 'approved' }), pending)] : []),
+      ...(onDecide
+        ? [
+            approveFolderAction(target, needsReviewApproval(below), (ids) => onDecide({ captureIds: ids, decision: 'approved' }), pending),
+            approveFolderAction(target, needsReviewApproval(below.filter((f) => !hasOpenFeedback(f))), (ids) => onDecide({ captureIds: ids, decision: 'approved' }), pending, {
+              withoutFeedback: true,
+            }),
+          ]
+        : []),
       {
         key: 'needs-review',
         label: 'Show what needs review',

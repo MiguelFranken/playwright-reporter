@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, ChevronRight, ChevronsDownUp, ChevronsUpDown, FileCode2, Filter, Folder, FolderOpen, Layers, MessageSquare, type LucideIcon } from 'lucide-react';
+import { Check, CheckCheck, ChevronRight, ChevronsDownUp, ChevronsUpDown, FileCode2, Filter, Folder, FolderOpen, Layers, MessageSquare, type LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '../../components/button';
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '../../components/context-menu';
@@ -52,20 +52,32 @@ export interface FolderApproval {
  * Approving what in a folder still needs review, asked first; disabled while
  * any of it is being decided. Counted in flows, as the tree counts: the
  * screens and variants inside them are the detail, not the size of the task.
+ * With `withoutFeedback` it covers only the flows nobody left open feedback on
+ * (no open comment, no changes asked for): the batch that clears everything
+ * that does not wait for a thread.
  */
-export function approveFolderAction(target: FolderMenuTarget, approval: FolderApproval, onApprove: (ids: string[]) => void, pending: ReadonlySet<string>): FolderAction {
+export function approveFolderAction(
+  target: FolderMenuTarget,
+  approval: FolderApproval,
+  onApprove: (ids: string[]) => void,
+  pending: ReadonlySet<string>,
+  { withoutFeedback = false }: { withoutFeedback?: boolean } = {},
+): FolderAction {
   const n = approval.captureIds.length ? Math.max(1, approval.flows) : 0;
   const flows = `${n} ${n === 1 ? 'flow' : 'flows'}`;
+  const what = withoutFeedback ? `${flows} without feedback` : flows;
   return {
-    key: 'approve',
-    label: n ? `Approve ${flows}` : 'Nothing to approve',
-    icon: Check,
+    key: withoutFeedback ? 'approve-without-feedback' : 'approve',
+    label: n ? `Approve ${what}` : withoutFeedback ? 'No flows without feedback to approve' : 'Nothing to approve',
+    icon: withoutFeedback ? CheckCheck : Check,
     disabled: n === 0 || approval.captureIds.some((id) => pending.has(id)),
     onSelect: () => onApprove([...approval.captureIds]),
     confirm: {
-      title: `Approve ${flows}?`,
-      description: `Every screen that still needs review in ${target.id === null ? `the ${flows} shown` : `the ${flows} in “${target.name}”`} becomes the approved baseline, as it is now.`,
-      action: `Approve ${flows}`,
+      title: `Approve ${what}?`,
+      description: withoutFeedback
+        ? `Every screen that still needs review in ${target.id === null ? `the ${flows} shown` : `the ${flows} in “${target.name}”`} with no open feedback becomes the approved baseline, as it is now. Flows with open comments or requested changes stay as they are.`
+        : `Every screen that still needs review in ${target.id === null ? `the ${flows} shown` : `the ${flows} in “${target.name}”`} becomes the approved baseline, as it is now.`,
+      action: `Approve ${what}`,
     },
   };
 }

@@ -3,7 +3,7 @@ import { startTransition, useState } from 'react';
 import { expect, fn, spyOn, userEvent, waitFor, within } from 'storybook/test';
 import { allViews, libraryFlows, manyLibraryFlows, NOW, savedViews, VIEWER_ID, waitingFlow } from '../../fixtures/library-views';
 import type { FeedbackScope } from '../../lib/feedback-queue';
-import { BUILT_IN_VIEWS, DEFAULT_LIBRARY_VIEW } from '../../lib/library-views';
+import { BUILT_IN_VIEWS, captureStates, DEFAULT_LIBRARY_VIEW } from '../../lib/library-views';
 import type { ReviewSelection } from '../review/checkpoint-viewer';
 import { LibraryBrowser } from './library-browser';
 
@@ -325,6 +325,25 @@ export const FolderMenu: Story = {
     const dialog = await body.findByRole('dialog', { name: /^Approve/ });
     await userEvent.click(within(dialog).getByRole('button', { name: /^Approve/ }));
     await waitFor(() => expect(args.onDecide).toHaveBeenCalledWith(expect.objectContaining({ decision: 'approved' })));
+
+    await userEvent.pointer({ keys: '[MouseRight]', target: canvas.getByRole('button', { name: /All suites/ }) });
+    await userEvent.click(await body.findByRole('menuitem', { name: /^Approve \d+ flows? without feedback$/ }));
+    const batch = await body.findByRole('dialog', { name: /without feedback\?$/ });
+    await userEvent.click(within(batch).getByRole('button', { name: /^Approve/ }));
+    // A flow someone left open feedback on keeps every screen as it is.
+    const hasFeedback = (cap: (typeof libraryFlows)[number]['checkpoints'][number]['captures'][number]) => {
+      const states = captureStates(cap);
+      return states.has('waiting') || states.has('verify');
+    };
+    const withFeedback = new Set(
+      libraryFlows
+        .filter((f) => f.checkpoints.some((c) => c.captures.some(hasFeedback)))
+        .flatMap((f) => f.checkpoints.flatMap((c) => c.captures.map((cap) => cap.id))),
+    );
+    await waitFor(() => expect(args.onDecide).toHaveBeenCalledTimes(2));
+    const [{ captureIds }] = (args.onDecide as ReturnType<typeof fn>).mock.calls[1];
+    await expect(captureIds.length).toBeGreaterThan(0);
+    await expect(captureIds.filter((id: string) => withFeedback.has(id))).toEqual([]);
 
     await userEvent.pointer({ keys: '[MouseRight]', target: canvas.getByRole('button', { name: /All suites/ }) });
     await userEvent.click(await body.findByRole('menuitem', { name: 'Show 2 open comments' }));
