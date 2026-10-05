@@ -8,13 +8,14 @@ import { access } from 'node:fs/promises';
 import path from 'node:path';
 import { eq } from 'drizzle-orm';
 import sharp from 'sharp';
+import { vi } from 'vitest';
 import { GET as imageRoute } from '@/app/api/artifacts/[attachmentId]/image/route';
 import { variantKey } from '@/lib/artifacts/image-variants';
 import { attachments, type Attachment } from '@/lib/db/schema';
 import { getAttachmentForProject, storeUpload } from '@/lib/ingest/service';
 import { saveRetentionPolicy, sweepExpiredArtifacts } from '@/lib/storage/retention';
 import { attachmentRef, playRun } from './factories';
-import { describe, expect, test, vi, type Db, type Tenant } from './fixtures';
+import { describe, expect, test, type Db, type Tenant } from './fixtures';
 
 // The copy is stored in `after()`, which needs a request scope; run it here and let the request wait for it.
 const pending = vi.hoisted(() => [] as Promise<unknown>[]);
