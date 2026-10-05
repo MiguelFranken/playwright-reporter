@@ -132,7 +132,7 @@ export function DiffMarks({
 }) {
   if (!width || !coverHeight) return null;
   return (
-    <div aria-hidden={!onSelect} className="pointer-events-none absolute inset-0">
+    <div aria-hidden={!onSelect} data-slot={kind === 'ignore' ? 'left-out-areas' : undefined} className="pointer-events-none absolute inset-0">
       {regions.map((r, i) => {
         if (r.y >= coverHeight) return null;
         const style = {

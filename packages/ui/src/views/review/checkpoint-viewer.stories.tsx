@@ -133,7 +133,8 @@ export const FillTheStage: Story = {
     const stage = body.getByLabelText('Checkpoint screens');
     const screen = body.getByRole('region', { name: /desktop screen/ });
     await waitFor(() => expect(Math.abs(screen.getBoundingClientRect().width - stage.clientWidth)).toBeLessThanOrEqual(1));
-    await expect(Math.abs(screen.getBoundingClientRect().height - stage.clientHeight)).toBeLessThanOrEqual(1);
+    // The toolbar changes with the view; the stage's height follows it a frame later.
+    await waitFor(() => expect(Math.abs(screen.getBoundingClientRect().height - stage.clientHeight)).toBeLessThanOrEqual(1));
     await expect(stage.scrollHeight).toBeLessThanOrEqual(stage.clientHeight);
     await expect(body.getByRole('button', { name: /Fill/ })).toHaveAttribute('aria-pressed', 'true');
     await expect(body.getByRole('combobox', { name: 'Zoom' })).toBeDisabled();
@@ -414,6 +415,37 @@ export const LeaveOutAreasOpensThePanel: Story = {
     await expect(within(panel).getByRole('button', { name: 'Save and measure again' })).toBeInTheDocument();
     await userEvent.click(within(panel).getByRole('button', { name: 'Cancel' }));
     await expect(await within(panel).findByText(/1 area is left out of the comparison/)).toBeInTheDocument();
+  },
+};
+
+/** The areas left out can be seen on any view: the changes mark them, the image and the comparisons on request. */
+export const SeeTheAreasLeftOut: Story = {
+  args: { initial: { checkpointId: changed.id, variant: 'mobile' } },
+  play: async () => {
+    const body = within(document.body);
+    await body.findByRole('dialog');
+    const stage = body.getByLabelText('Checkpoint screens');
+    const marks = () => stage.querySelectorAll('[data-slot="left-out-areas"]').length;
+    // The changes always mark them.
+    await waitFor(() => expect(marks()).toBe(1));
+    await expect(body.queryByRole('button', { name: /Show areas left out/ })).not.toBeInTheDocument();
+
+    await userEvent.click(body.getByRole('button', { name: 'Image' }));
+    await waitFor(() => expect(marks()).toBe(0));
+    const toggle = body.getByRole('button', { name: 'Show areas left out (1)' });
+    await userEvent.click(toggle);
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    await waitFor(() => expect(marks()).toBe(1));
+
+    // Side by side, on both screens; the note in the side panel hides them again.
+    await userEvent.click(body.getByRole('button', { name: 'Compare' }));
+    await userEvent.click(body.getByRole('button', { name: 'Side by side' }));
+    await waitFor(() => expect(marks()).toBe(2));
+    const panel = body.getByRole('complementary', { name: 'Review' });
+    await userEvent.click(within(panel).getByRole('button', { name: 'Hide them' }));
+    await waitFor(() => expect(marks()).toBe(0));
+    await userEvent.keyboard('x');
+    await waitFor(() => expect(marks()).toBe(2));
   },
 };
 

@@ -44,6 +44,7 @@ export function ImageCompare({
   referenceLabel = 'Baseline',
   alt,
   scaled,
+  overlay,
 }: {
   current: ReviewImage;
   reference: ReviewImage;
@@ -53,6 +54,8 @@ export function ImageCompare({
   alt: string;
   /** Lays the images out at `width` CSS pixels and scales them by `zoom`, so a zoom changing lays nothing out: see `ScaledLayer`. */
   scaled?: { width: number; zoom: string };
+  /** Drawn over the images where they lie one on the other (marks in this run's pixels): slider, onion, difference. */
+  overlay?: ReactNode;
 }) {
   const [opacity, setOpacity] = useState(50);
   const layer = scaledLayer(scaled, reference.width && reference.height ? reference : current);
@@ -84,7 +87,7 @@ export function ImageCompare({
     );
   }
 
-  if (mode === 'slider') return <SplitCompare current={current} reference={reference} currentLabel={currentLabel} referenceLabel={referenceLabel} alt={alt} layer={layer} />;
+  if (mode === 'slider') return <SplitCompare current={current} reference={reference} currentLabel={currentLabel} referenceLabel={referenceLabel} alt={alt} layer={layer} overlay={overlay} />;
 
   const control =
     mode === 'onion' ? (
@@ -110,6 +113,7 @@ export function ImageCompare({
             >
               <Picture image={current} alt={`${alt} — ${currentLabel}`} />
             </div>
+            {overlay}
           </>,
         )}
       </div>
@@ -140,7 +144,7 @@ const clampSplit = (v: number) => Math.min(100, Math.max(0, v));
  * that writes a CSS variable, so dragging renders nothing; the handle's value
  * is rendered once the split comes to rest.
  */
-function SplitCompare({ current, reference, currentLabel, referenceLabel, alt, layer }: { current: ReviewImage; reference: ReviewImage; currentLabel: string; referenceLabel: string; alt: string; layer: (children: ReactNode) => ReactNode }) {
+function SplitCompare({ current, reference, currentLabel, referenceLabel, alt, layer, overlay }: { current: ReviewImage; reference: ReviewImage; currentLabel: string; referenceLabel: string; alt: string; layer: (children: ReactNode) => ReactNode; overlay?: ReactNode }) {
   const root = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
   // The split at rest, for the handle's value; the CSS variable carries it while it moves.
@@ -211,6 +215,7 @@ function SplitCompare({ current, reference, currentLabel, referenceLabel, alt, l
           <div className="absolute inset-0 [clip-path:inset(0_0_0_var(--split))]">
             <Picture image={current} alt={`${alt} — ${currentLabel}`} />
           </div>
+          {overlay}
         </>,
       )}
       <div aria-hidden className="pointer-events-none absolute inset-y-0 left-(--split) w-0.5 -translate-x-1/2 bg-accent-solid shadow-e2" />
