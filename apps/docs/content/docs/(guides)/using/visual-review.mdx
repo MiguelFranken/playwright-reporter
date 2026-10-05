@@ -9,7 +9,7 @@ lays those checkpoints out as a storyboard: one row per test, the milestones lef
 happened, desktop beside mobile.
 
 An approval holds for the exact pixels. When the next run captures the same image, it is already approved; only images
-that changed, and checkpoints nobody approved yet, wait for a reviewer. A run where nothing changed asks for nothing.
+that changed, and screens captured for the first time, wait for a reviewer. A run where nothing changed asks for nothing.
 Every changed image is also **measured** against the approved one, pixel by pixel: how much changed and where, so the
 viewer takes you straight to the change — and noise nobody can see is approved for you.
 
@@ -90,8 +90,16 @@ records.
 ## Reviewing
 
 A run with checkpoints has a **Visual review** button on its page, with how many images still need review. The
-storyboard opens on those: **Changed** images differ from the approved one, **New** ones were never approved. Filter by
-status or variant, or search for a test, a test case key or a checkpoint.
+storyboard opens on those: **Changed** images differ from the approved one — or, while nobody approved the screen yet,
+from the run before — and **New** ones are screens no earlier run captured. **Unchanged** images have the very pixels of
+the run before and nobody decided about them yet: nothing to look at again, so they carry no status dot and need no
+review. Filter by status or variant, or search for a test, a test case key or a checkpoint.
+
+**Compare with** above the storyboard compares the whole run with **the run before** or any other run, instead of the
+approved baselines (`?against=previous`, `?against=run:38`). Then every status answers one question — did this screen
+change since that run? — whatever was approved: **Unchanged** for the same pixels, **Changed** for a difference (until
+someone approves these pixels), **New** when that run did not capture the screen. Every screen names the run it is
+compared with, and the differences are measured against that run's images.
 
 The folders on the left organize the flows the way [test cases](/docs/using/test-cases) do: under **Test Cases**, a test
 linked to a case sits in that case's suite, and tests no case covers are in **Not in a test case**, by spec file.
@@ -331,8 +339,11 @@ partial run skipped — with the test that produces the image (id, full title, f
 search the spec for, the image now and the one the request was made on, and whether it still waits for a fix or changed
 since (to verify). Its `producers` are the tests a narrow re-run selects, no more; `get_rerun_command` gives anchored
 selectors and a `--list` preview to check the selection before running it. `get_review_checkpoint` compares with what
-you choose — `against: "origin"` (the image a request was made on), `"baseline"` or `"previous"` — and says which one
-it attached; with `images: "focus"` and a thread it sends only that spot, then and now, which stays readable on a tall
+you choose — `against: "origin"` (the image a request was made on), `"baseline"` or `"previous"`, or `againstRun` for
+the same screen in any run — and says which one it attached; its status, diff and close-ups are measured against that
+image, never silently against the baseline. `list_review_checkpoints` with `against: "previous"` or a run number lists
+a whole run as **Compare with** shows it: what changed since that run, which run each image was compared with, and
+the counts; with `images: "focus"` and a thread it sends only that spot, then and now, which stays readable on a tall
 page. `maxImages` bounds the images of one answer, and `attachedImages` says what each one shows. A passed test or a
 changed image is evidence, not approval: resolving and approving stay with you.
 

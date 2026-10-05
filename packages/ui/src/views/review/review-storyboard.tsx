@@ -237,7 +237,7 @@ export function ReviewStoryboard({
     [visible, grouping, sort, library],
   );
   const counts = useMemo(() => countStatuses(flows, variant), [flows, variant]);
-  const total = counts.approved + counts.changes_requested + counts.changed + counts.new;
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
   const flowsToReview = useMemo(() => searched.filter((f) => needsReviewIds([f]).length > 0).length, [searched]);
   const pending = useMemo(() => new Set(pendingIds), [pendingIds]);
   const ordered = useMemo(() => sections.flatMap((s) => s.flows), [sections]);
@@ -294,7 +294,7 @@ export function ReviewStoryboard({
       <EmptyState
         icon={Check}
         title={effectiveFilter === 'needs-review' && !query && !folder ? 'Nothing needs review' : 'No checkpoints match'}
-        description={effectiveFilter === 'needs-review' && !query && !folder ? 'Every image matches an approved one or was decided about.' : 'Try another filter, folder or search.'}
+        description={effectiveFilter === 'needs-review' && !query && !folder ? 'Every image was decided about, matches an approved one or, with none approved, the run it is compared with.' : 'Try another filter, folder or search.'}
       >
         {effectiveFilter !== 'all' ? (
           <Button variant="outline" size="sm" onClick={() => setFilter('all')}>

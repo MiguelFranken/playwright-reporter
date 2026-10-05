@@ -144,5 +144,9 @@ describe('visual diff prompts', () => {
     expect(prompt).toContain('list_visual_diffs');
     expect(prompt.match(/https?:\/\/\S+/g)).toEqual([RUN_URL]);
     expect(investigateRunVisualDiffsPrompt({ runUrl: RUN_URL })).toContain('against the run before it');
+    // The statuses an agent reads follow the same comparison, never the approved baseline.
+    expect(prompt).toContain('list_review_checkpoints with against 127');
+    expect(prompt).toContain('get_review_checkpoint with againstRun 127');
+    expect(investigateRunVisualDiffsPrompt({ runUrl: RUN_URL })).toContain('list_review_checkpoints with against "previous"');
   });
 });

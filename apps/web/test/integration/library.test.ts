@@ -57,7 +57,7 @@ describe('references', () => {
       ['pull_request', true, true],
       ['branch', false, false],
     ]);
-    expect(after[0]).toMatchObject({ title: 'New checkout', prTitle: 'Checkout redesign', headBranch: 'feat/checkout', latestCounts: { new: 1 } });
+    expect(after[0]).toMatchObject({ title: 'New checkout', prTitle: 'Checkout redesign', headBranch: 'feat/checkout', latestCounts: { new: 0, unchanged: 1 } });
 
     // A second default replaces the first.
     await setLibraryReference({ projectId: tenant.project.id, key: main, patch: { isDefault: true }, userId: null });

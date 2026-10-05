@@ -1,4 +1,4 @@
-import { CheckCircle2, Diff, MessageSquareWarning, Sparkles } from 'lucide-react';
+import { CheckCircle2, Diff, Equal, MessageSquareWarning, Sparkles } from 'lucide-react';
 import { Badge } from '../components/badge';
 import { cn } from '../lib/cn';
 import { REVIEW_STATUS_LABELS, REVIEW_STATUS_TONES, type ReviewStatus } from '../lib/review';
@@ -8,6 +8,7 @@ const ICONS: Record<ReviewStatus, React.ComponentType<{ className?: string }>> =
   approved: CheckCircle2,
   changes_requested: MessageSquareWarning,
   changed: Diff,
+  unchanged: Equal,
   new: Sparkles,
 };
 

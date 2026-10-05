@@ -1203,7 +1203,8 @@ export function CheckpointViewer({
               >
                 {captures.map((c) => (
                   <ToggleGroupItem key={c.variant} value={c.variant} className="gap-1.5 capitalize">
-                    {library ? null : <ReviewStatusDot status={c.status} />}
+                    {/* A dot asks for a look; an image with the very pixels it is compared with does not. */}
+                    {library || c.status === 'unchanged' ? null : <ReviewStatusDot status={c.status} />}
                     {c.variant}
                   </ToggleGroupItem>
                 ))}
@@ -1898,7 +1899,7 @@ function IgnoreNote({ capture }: { capture: ReviewCaptureView }) {
 }
 
 function statusWord(c: ReviewCaptureView) {
-  return { approved: 'approved', changes_requested: 'changes requested', changed: 'changed', new: 'new' }[c.status];
+  return { approved: 'approved', changes_requested: 'changes requested', changed: 'changed', unchanged: 'unchanged', new: 'new' }[c.status];
 }
 
 function DecisionNote({ capture }: { capture: ReviewCaptureView }) {

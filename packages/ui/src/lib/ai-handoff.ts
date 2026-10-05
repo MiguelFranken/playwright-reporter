@@ -116,6 +116,7 @@ export function investigateRunVisualDiffsPrompt({ runUrl, baseRun }: { runUrl: s
   return (
     `Use the ${MCP_SERVER_NAME} MCP server to investigate the visual differences of this run${baseRun ? ` against run #${baseRun}` : ' against the run before it'}: ${runUrl}\n\n` +
     `Call list_visual_diffs with headRun set to this run${baseRun ? ` and baseRun ${baseRun}` : ' (baseRun defaults to the newest earlier run with captures on its branch)'}. ` +
+    `For each image's review status since that run (unchanged, changed or new, whatever was approved), call list_review_checkpoints with against ${baseRun ? baseRun : '"previous"'}, and get_review_checkpoint with ${baseRun ? `againstRun ${baseRun}` : 'against "previous"'}. ` +
     'For each changed screen call get_visual_diff with its comparisonId, then get_visual_diff_image with mode "annotated" and scope "overview", and mode "pair" with regionIds to read what changed. ' +
     'Both runs may be green: a changed screen is evidence, not a defect. Search this repository for each checkpoint key and follow the test into its fixtures and the UI code. ' +
     'Group the screens by cause (random test data, time, a real change, rendering noise), say what the code proves and what stays a hypothesis, and change nothing yet.'

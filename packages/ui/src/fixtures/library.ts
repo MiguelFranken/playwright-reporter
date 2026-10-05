@@ -20,7 +20,7 @@ export const mainReference: LibraryReferenceView = {
   description: null,
   pinnedRun: null,
   latestRun: mainRuns[0],
-  latestCounts: { approved: 45, changed: 0, new: 0, changes_requested: 0 },
+  latestCounts: { approved: 45, changed: 0, new: 0, changes_requested: 0, unchanged: 0 },
 };
 
 export const releaseReference: LibraryReferenceView = {
@@ -31,7 +31,7 @@ export const releaseReference: LibraryReferenceView = {
   description: 'What customers see today: the release deployed to production.',
   pinnedRun: run(470, 60 * 50, 'Release 2.4'),
   latestRun: run(474, 60 * 40, 'Fix the footer links'),
-  latestCounts: { approved: 44, changed: 1, new: 0, changes_requested: 0 },
+  latestCounts: { approved: 44, changed: 1, new: 0, changes_requested: 0, unchanged: 0 },
 };
 
 /** A long-lived pull request kept as documentation while it is open. */
@@ -46,7 +46,7 @@ export const redesignReference: LibraryReferenceView = {
   headBranch: 'feat/checkout-redesign',
   pinnedRun: null,
   latestRun: run(483, 12, 'Redesign the checkout summary'),
-  latestCounts: { approved: 38, changed: 4, new: 3, changes_requested: 0 },
+  latestCounts: { approved: 38, changed: 4, new: 3, changes_requested: 0, unchanged: 0 },
 };
 
 /** A pull request nobody kept: browsable, not listed. */
@@ -60,7 +60,7 @@ export const unkeptReference: LibraryReferenceView = {
   headBranch: 'fix/coupon-rounding',
   pinnedRun: null,
   latestRun: run(482, 95, 'Round fixed-value coupons to cents', 'failed'),
-  latestCounts: { approved: 40, changed: 0, new: 2, changes_requested: 1 },
+  latestCounts: { approved: 40, changed: 0, new: 2, changes_requested: 1, unchanged: 0 },
 };
 
 export const libraryReferences: LibraryReferenceView[] = [mainReference, releaseReference, redesignReference];

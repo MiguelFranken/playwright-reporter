@@ -10,7 +10,7 @@ import type { ReviewFlowView } from '@miguelfranken/ui/lib/review';
 import type { CaptureRecord, ComparedCapture, ReviewFlowRecord } from '../queries';
 import { toDiffView, pendingDiff, toReviewImage } from '../view-model';
 import { diffsEnabled, dispatchPairs } from './dispatch';
-import { diffSettingsFor, diffsFor, identityKey, pairKey, pairOf } from './lookup';
+import { diffSettingsFor, diffsFor, identityKey, pairKey, pairOf, type DiffRecord } from './lookup';
 import { planPairs, type PlannedPair } from './store';
 
 const capturesOf = (records: readonly ReviewFlowRecord[]) => records.flatMap((r) => r.checkpoints.flatMap((c) => c.captures));
@@ -31,14 +31,21 @@ export interface PickedReference {
   runNumber?: number;
 }
 
+/** A capture measured against the reference picked for it: the diff when it is known, `pending` while it is being measured. */
+export interface MeasuredReference extends PickedReference {
+  /** Same pixels: nothing to measure. */
+  same: boolean;
+  diff: DiffRecord | null;
+  /** A comparison that is planned or wanted and not measured yet. */
+  pending: boolean;
+}
+
 /**
- * Every capture shown compared with the reference `pick` chooses for it (none:
- * left as it is), with the measured difference where it is known. Comparisons
- * nobody measured yet are planned and measured after the response; the
- * screens show them as pending meanwhile.
+ * Every capture measured against the reference `pick` chooses for it (none:
+ * left out), with the diff where it is known. Comparisons nobody measured yet
+ * are planned and measured after the response.
  */
-export async function compareEachWith(views: ReviewFlowView[], shown: readonly ReviewFlowRecord[], pick: (mine: ComparedCapture) => PickedReference | null): Promise<ReviewFlowView[]> {
-  const ours = capturesOf(shown);
+export async function measureEach(ours: readonly ComparedCapture[], pick: (mine: ComparedCapture) => PickedReference | null): Promise<Map<string, MeasuredReference>> {
   const settings = await diffSettingsFor(ours.map((c) => c.projectId));
   const matched = new Map<string, { mine: ComparedCapture; theirs: PickedReference; pair: PlannedPair['pair'] | null }>();
   for (const mine of ours) {
@@ -47,30 +54,20 @@ export async function compareEachWith(views: ReviewFlowView[], shown: readonly R
     const s = settings.get(mine.projectId);
     matched.set(mine.id, { mine, theirs: other, pair: s ? pairOf(mine, other.capture, s, mine.ignoreRegions) : null });
   }
-  if (matched.size === 0) return views;
+  const out = new Map<string, MeasuredReference>();
+  if (matched.size === 0) return out;
   const diffs = await diffsFor([...matched.values()].flatMap((m) => (m.pair ? [m.pair] : [])));
-
   const toPlan: PlannedPair[] = [];
-  const out = views.map((f) => ({
-    ...f,
-    checkpoints: f.checkpoints.map((cp) => ({
-      ...cp,
-      captures: cp.captures.map((view) => {
-        const m = matched.get(view.id);
-        if (!m) return view;
-        const { capture: theirs, label, runNumber } = m.theirs;
-        const same = Boolean(m.mine.sha256 && m.mine.sha256 === theirs.sha256);
-        const diff = m.pair ? (diffs.get(pairKey(m.pair.projectId, m.pair.baseSha256, m.pair.headSha256, m.pair.optionsKey)) ?? null) : null;
-        if (m.pair && (!diff || diff.status === 'pending')) toPlan.push({ pair: m.pair, head: m.mine.attachment, base: theirs.attachment });
-        return {
-          ...view,
-          compare: { captureId: theirs.id, image: toReviewImage(theirs), label, same, ...(runNumber ? { runNumber } : {}) },
-          diff: diff ? toDiffView(diff, 'compare') : m.pair && diffsEnabled() ? pendingDiff('compare') : null,
-        };
-      }),
-    })),
-  }));
-
+  for (const [id, m] of matched) {
+    const diff = m.pair ? (diffs.get(pairKey(m.pair.projectId, m.pair.baseSha256, m.pair.headSha256, m.pair.optionsKey)) ?? null) : null;
+    if (m.pair && (!diff || diff.status === 'pending')) toPlan.push({ pair: m.pair, head: m.mine.attachment, base: m.theirs.capture.attachment });
+    out.set(id, {
+      ...m.theirs,
+      same: Boolean(m.mine.sha256 && m.mine.sha256 === m.theirs.capture.sha256),
+      diff,
+      pending: Boolean(m.pair && diffsEnabled() && (!diff || diff.status === 'pending')),
+    });
+  }
   if (toPlan.length && diffsEnabled()) {
     const runId = ours[0]?.runId;
     after(async () => {
@@ -83,6 +80,33 @@ export async function compareEachWith(views: ReviewFlowView[], shown: readonly R
     });
   }
   return out;
+}
+
+/**
+ * Every capture shown compared with the reference `pick` chooses for it (none:
+ * left as it is), with the measured difference where it is known. Comparisons
+ * nobody measured yet are planned and measured after the response; the
+ * screens show them as pending meanwhile.
+ */
+export async function compareEachWith(views: ReviewFlowView[], shown: readonly ReviewFlowRecord[], pick: (mine: ComparedCapture) => PickedReference | null): Promise<ReviewFlowView[]> {
+  const measured = await measureEach(capturesOf(shown), pick);
+  if (measured.size === 0) return views;
+  return views.map((f) => ({
+    ...f,
+    checkpoints: f.checkpoints.map((cp) => ({
+      ...cp,
+      captures: cp.captures.map((view) => {
+        const m = measured.get(view.id);
+        if (!m) return view;
+        const { capture: theirs, label, runNumber } = m;
+        return {
+          ...view,
+          compare: { captureId: theirs.id, image: toReviewImage(theirs), label, same: m.same, ...(runNumber ? { runNumber } : {}) },
+          diff: m.diff ? toDiffView(m.diff, 'compare') : m.pending ? pendingDiff('compare') : null,
+        };
+      }),
+    })),
+  }));
 }
 
 /**

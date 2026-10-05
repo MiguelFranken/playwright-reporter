@@ -65,7 +65,18 @@ export const ApproveWithKeyboard: Story = {
 export const AllVariants: Story = { args: { initial: { checkpointId: changed.id, variant: null } } };
 
 /** The first capture of a checkpoint: nothing to compare with. */
-export const NewCheckpoint: Story = { args: { initial: { checkpointId: placeOrderFlow.checkpoints[2].id, variant: 'mobile' } } };
+export const NewCheckpoint: Story = { args: { initial: { checkpointId: placeOrderFlow.checkpoints[2].id, variant: 'desktop' } } };
+
+/** Nothing approved yet, and the very pixels of the run before: nothing to look at again, so no status dot. */
+export const UnchangedSinceTheRunBefore: Story = {
+  args: { initial: { checkpointId: placeOrderFlow.checkpoints[2].id, variant: 'mobile' } },
+  play: async () => {
+    const body = within(await within(document.body).findByRole('dialog'));
+    const variants = body.getByRole('group', { name: 'Variant' });
+    await expect(within(variants).getByRole('img', { name: 'New' })).toBeInTheDocument();
+    await expect(within(variants).queryByRole('img', { name: 'Unchanged' })).toBeNull();
+  },
+};
 
 export const ReadOnly: Story = { args: { canDecide: false } };
 

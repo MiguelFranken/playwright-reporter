@@ -4,14 +4,16 @@
  *
  * An image's status comes from `review_decisions`: the newest decision about
  * its exact pixels (same checkpoint, variant and hash) if there is one;
- * otherwise `changed` when the checkpoint has an approved baseline, `new` when
- * nobody approved it yet. Only a result's final attempt is reviewed — a retry
+ * otherwise `changed` when the checkpoint has an approved baseline; with
+ * nothing approved, how it compares with the run before — `unchanged` for the
+ * same pixels, `changed` for others, `new` when no earlier run captured the
+ * screen (`reviewStatusOf`). Only a result's final attempt is reviewed — a retry
  * captures the journey again, and the last capture is the one that counts.
  */
 import { randomUUID } from 'node:crypto';
 import { and, desc, eq, inArray, isNotNull, ne, notInArray, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
-import type { DecisionSource, ReviewDecision, ReviewStatus } from '@miguelfranken/ui/lib/review';
+import { emptyReviewCounts, reviewStatusOf, type DecisionSource, type ReviewDecision, type ReviewStatus } from '@miguelfranken/ui/lib/review';
 import type { CommentSource } from '@miguelfranken/ui/lib/review-threads';
 import { applicableRules, type IgnoreRule, type IgnoreSummary, type RuleValidity } from '@miguelfranken/ui/lib/visual-diff';
 import { db } from '@/lib/db/drizzle';
@@ -321,7 +323,7 @@ export async function compareCaptures(
     const applies = (d: DecisionRecord) => d.source !== 'tolerance' || !d.provenance || !pair || d.provenance.optionsKey === pair.optionsKey;
     const exact = matching.find(applies) ?? null;
     const staleTolerance = matching.find((d) => !applies(d)) ?? null;
-    const status: ReviewStatus = exact ? exact.decision : approved ? 'changed' : 'new';
+    const status = reviewStatusOf({ decision: exact?.decision, approved: Boolean(approved), sha256: c.sha256, reference: prev?.capture });
     const ignore: ComparedCapture['ignore'] = {
       active: set.rules.filter((r) => r.active).length,
       ever: set.ever,
@@ -571,7 +573,7 @@ export async function runReviewCounts(runIds: readonly string[]): Promise<Record
     group by 1, 2
   `);
   for (const r of rows) {
-    const counts = (out[r.run_id] ??= { approved: 0, changes_requested: 0, changed: 0, new: 0 });
+    const counts = (out[r.run_id] ??= emptyReviewCounts());
     counts[r.status] = Number(r.n);
   }
   return out;
@@ -589,7 +591,22 @@ const statusSql = sql`coalesce(
   case when exists (
     select 1 from ${reviewDecisions} d
     where d.test_id = c.test_id and d.checkpoint_name = c.checkpoint_name and d.variant = c.variant and d.decision = 'approved' and d.source = 'human'
-  ) then 'changed' else 'new' end
+  ) then 'changed' end,
+  -- nothing approved: the same screen in the run before, as previousCaptures finds it
+  (select case when c.sha256 is not null and p.sha256 = c.sha256 then 'unchanged' else 'changed' end
+    from ${reviewCaptures} p
+    join ${runs} pr on pr.id = p.run_id
+    join ${attachments} pa on pa.id = p.attachment_id
+    join ${reviewCheckpoints} pcp on pcp.id = p.checkpoint_id
+    join ${testAttempts} pta on pta.id = pcp.attempt_id
+    where p.test_id = c.test_id and p.checkpoint_name = c.checkpoint_name and p.variant = c.variant
+      and p.run_id <> c.run_id
+      and pr.started_at < (select cr.started_at from ${runs} cr where cr.id = c.run_id)
+      and pta.retry = (select max(pta2.retry) from ${testAttempts} pta2 where pta2.test_result_id = pta.test_result_id)
+      and pa.status not in ('expired', 'failed')
+    order by pr.started_at desc
+    limit 1),
+  'new'
 )`;
 
 // ---------------------------------------------------------------- the project
@@ -636,7 +653,7 @@ export async function reviewQueue(projectId: string, { limit = 200, branch }: { 
     .orderBy(desc(runs.startedAt))
     .limit(limit);
   const counts = await runReviewCounts(recent.map((r) => r.runId));
-  return recent.map((r) => ({ ...r, counts: counts[r.runId] ?? { approved: 0, changes_requested: 0, changed: 0, new: 0 } }));
+  return recent.map((r) => ({ ...r, counts: counts[r.runId] ?? emptyReviewCounts() }));
 }
 
 /** The captures of one checkpoint and variant across runs, newest first. */

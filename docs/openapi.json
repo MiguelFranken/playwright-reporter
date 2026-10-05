@@ -4162,7 +4162,7 @@
       "get": {
         "operationId": "listReviewCheckpoints",
         "summary": "List a run’s review checkpoints",
-        "description": "The named review screenshots the run’s tests captured, per variant, in journey order, with each image’s review status against its approved baseline. `status` defaults to `needs-review` (changed and new).",
+        "description": "The named review screenshots the run’s tests captured, per variant, in journey order, with each image’s review status: against its approved baseline, else the run before (`unchanged` when it has that run’s very pixels, `new` when no earlier run captured it). `status` defaults to `needs-review` (changed and new).",
         "tags": [
           "Visual review"
         ],
@@ -4208,13 +4208,14 @@
             "in": "query",
             "name": "status",
             "schema": {
-              "description": "needs-review (default: changed and new images), all, changed, new, changes_requested or approved.",
+              "description": "needs-review (default: changed and new images), all, changed, new, unchanged, changes_requested or approved.",
               "type": "string",
               "enum": [
                 "needs-review",
                 "all",
                 "changed",
                 "new",
+                "unchanged",
                 "changes_requested",
                 "approved"
               ]
@@ -4259,6 +4260,25 @@
             },
             "allowEmptyValue": true,
             "allowReserved": true
+          },
+          {
+            "in": "query",
+            "name": "against",
+            "schema": {
+              "description": "Compare every image with \"previous\" (the same screen in the run before) or another run (128, \"#128\", a run id or URL) instead of its approved baseline: status, diff and counts then say what changed since that run — unchanged, changed, or new (not captured there) — whatever was approved. Default: the approved baseline, else the run before.",
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
           }
         ],
         "responses": {
@@ -4278,6 +4298,35 @@
                     "reviewUrl": {
                       "type": "string"
                     },
+                    "against": {
+                      "description": "What every image was compared with, when \"against\" was given; absent: each image against its approved baseline, else the run before.",
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "rule": {
+                              "type": "string",
+                              "description": "\"previous\" or \"run:<n>\"."
+                            },
+                            "run": {
+                              "description": "The run compared with, when one run was named.",
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "rule",
+                            "run"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "counts": {
                       "type": "object",
                       "properties": {
@@ -4290,6 +4339,9 @@
                         "changed": {
                           "type": "number"
                         },
+                        "unchanged": {
+                          "type": "number"
+                        },
                         "new": {
                           "type": "number"
                         }
@@ -4298,6 +4350,7 @@
                         "approved",
                         "changes_requested",
                         "changed",
+                        "unchanged",
                         "new"
                       ],
                       "additionalProperties": false
@@ -4399,7 +4452,7 @@
                                                   "previous",
                                                   "compare"
                                                 ],
-                                                "description": "What the image was measured against: its approved baseline, else the run before."
+                                                "description": "What the image was measured against: its approved baseline, the run before, or (compare) the image it is compared with — the run or capture asked for."
                                               },
                                               "state": {
                                                 "type": "string",
@@ -4452,7 +4505,36 @@
                                             "type": "null"
                                           }
                                         ],
-                                        "description": "The measured pixel comparison, when there is one."
+                                        "description": "The measured pixel comparison, when there is one: against the run in comparedWith when \"against\" was given."
+                                      },
+                                      "comparedWith": {
+                                        "description": "With \"against\": the same screen in the run it is compared with; null when that run did not capture it (status new).",
+                                        "anyOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "run": {
+                                                "type": "number"
+                                              },
+                                              "captureId": {
+                                                "type": "string"
+                                              },
+                                              "same": {
+                                                "type": "boolean",
+                                                "description": "The very same pixels."
+                                              }
+                                            },
+                                            "required": [
+                                              "run",
+                                              "captureId",
+                                              "same"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ]
                                       },
                                       "openThreads": {
                                         "description": "Open comment threads on the image: see them pinned with get_review_checkpoint.",
@@ -11066,6 +11148,25 @@
           },
           {
             "in": "query",
+            "name": "againstRun",
+            "schema": {
+              "description": "Compare with the same checkpoint and variant in this run (128, \"#128\", a run id or URL), whatever was approved: status, diff and close-ups then say what changed since that run.",
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "allowEmptyValue": true,
+            "allowReserved": true
+          },
+          {
+            "in": "query",
             "name": "changes",
             "schema": {
               "description": "Attach close-ups of the measured changed regions (up to 3), this image’s crop then the reference’s. Default true.",
@@ -11124,7 +11225,8 @@
                       "type": "number"
                     },
                     "status": {
-                      "type": "string"
+                      "type": "string",
+                      "description": "The review status. Compared with the run before, another run, or a capture of the same screen: what changed since that image, whatever was approved — unchanged, changed (unless these pixels were approved), new (no such image), or changes_requested."
                     },
                     "viewport": {
                       "type": [
@@ -11168,7 +11270,7 @@
                                 "previous",
                                 "capture"
                               ],
-                              "description": "origin: the image a request was made on; baseline: the approved image; previous: the run before; capture: the one asked for."
+                              "description": "origin: the image a request was made on; baseline: the approved image; previous: the run before; capture: the one asked for (againstCapture, or the same screen in againstRun)."
                             },
                             "captureId": {
                               "type": [
@@ -11225,7 +11327,7 @@
                                 "previous",
                                 "compare"
                               ],
-                              "description": "What the image was measured against: its approved baseline, else the run before."
+                              "description": "What the image was measured against: its approved baseline, the run before, or (compare) the image it is compared with — the run or capture asked for."
                             },
                             "state": {
                               "type": "string",
@@ -11277,7 +11379,8 @@
                         {
                           "type": "null"
                         }
-                      ]
+                      ],
+                      "description": "The measured pixel change against the image compared with (against \"compare\" when that is not the default reference); changedRegions and the change close-ups are the same measurement."
                     },
                     "comparisonId": {
                       "description": "The pair shown (the image compared with → this image) for get_visual_diff and get_visual_diff_image: every region, raw and effective numbers, and images in any mode.",

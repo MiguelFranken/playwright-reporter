@@ -29,7 +29,7 @@ export const Default: Story = {
 export const ApproveEverythingShown: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: /Approve 8 shown/ }));
+    await userEvent.click(canvas.getByRole('button', { name: /Approve 7 shown/ }));
     await expect(args.onDecide).toHaveBeenCalledWith(expect.objectContaining({ decision: 'approved' }));
   },
 };
@@ -145,6 +145,14 @@ export const ComparedWithARun: Story = {
     await expect(canvas.getByRole('combobox', { name: 'Compare the run with' })).toHaveTextContent('vs. Run #479');
     await expect(canvas.getAllByText('same as Run #479').length).toBeGreaterThan(0);
     await expect(canvas.getByLabelText('0.51% changed')).toBeInTheDocument();
+    // Did the screen change since run #479, yes or no: the same pixels count as unchanged and carry no dot, whatever was approved.
+    await expect(canvas.getByRole('button', { name: /^Unchanged\s?[1-9]\d*$/ })).toBeInTheDocument();
+    await expect(canvas.queryAllByRole('img', { name: 'Unchanged' })).toHaveLength(0);
+    await expect(canvas.getAllByRole('img', { name: 'Changed' }).length).toBeGreaterThan(0);
+    // Did the screen change since run #479, yes or no: the same pixels count as unchanged and carry no dot, whatever was approved.
+    await expect(canvas.getByRole('button', { name: /^Unchanged\s?[1-9]\d*$/ })).toBeInTheDocument();
+    await expect(canvas.queryAllByRole('img', { name: 'Unchanged' })).toHaveLength(0);
+    await expect(canvas.getAllByRole('img', { name: 'Changed' }).length).toBeGreaterThan(0);
   },
 };
 
