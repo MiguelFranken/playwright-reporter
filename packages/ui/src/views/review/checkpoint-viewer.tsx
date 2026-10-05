@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, ChevronLeft, ChevronRight, Eye, EyeOff, History, Link2, Link2Off, MessageSquareWarning, PanelRightClose, PanelRightOpen, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Eye, EyeOff, History, Link2, Link2Off, MessageSquareWarning, PanelRightClose, PanelRightOpen, ScanEye, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useSyncedScroll } from '../../hooks/use-synced-scroll';
 import { Button } from '../../components/button';
@@ -47,6 +47,7 @@ import { comparisonIdOf, DiffRegionList, VisualDiffAiActions } from './diff-regi
 import { DiffSummary } from './diff-summary';
 import { COMPARE_MODE_LABELS, COMPARE_MODES, ImageCompare, type CompareMode } from './image-compare';
 import { CompareTargetPicker, type CompareWithProps } from './compare-target-picker';
+import { DiffMarks } from './diff-summary';
 import { IgnoreRegionsCanvas, IgnoreRegionsPanel, useIgnoreDrafts, type IgnoreRect, type IgnoreRulesChange } from './ignore-regions-editor';
 import { regionId, type AiMode, type AnalysisView, type IgnorePreviewView, type MaskPolicy, type Rect } from '../../lib/visual-diff';
 import { FrameToolbar } from './frame-toolbar';
@@ -344,6 +345,8 @@ export function CheckpointViewer({
   const [threadFilter, setThreadFilter] = useState<ThreadFilter>('open');
   const [composing, setComposing] = useState(false);
   const [pinsHidden, setPinsHidden] = useState(false);
+  // The areas left out drawn over the image and the comparisons too (the changes always show them): kept from screen to screen.
+  const [leftOutShown, setLeftOutShown] = useState(false);
   // Side by side, the two screens scroll together unless the reviewer unlinks them.
   const [syncScroll, setSyncScroll] = useState(true);
   const [focus, setFocus] = useState<PinFocusRequest | null>(null);
@@ -467,6 +470,9 @@ export function CheckpointViewer({
           ? stage
           : 'image';
   const comparing = effectiveStage !== 'image' && effectiveStage !== 'ignore';
+  // The areas left out of the screens on show: the changes always mark them, any other view on request.
+  const leftOutCount = shown.reduce((n, c) => n + (c.ignoreRegions?.length ?? 0), 0);
+  const leftOutToggle = leftOutCount > 0 && !verifying && effectiveStage !== 'changes' && effectiveStage !== 'ignore';
   // What "Compare" opens: the comparison last picked, or side by side where nothing was measured to mark.
   const compareStage: CompareStage = compareMode === 'changes' && !anyChanges ? 'side-by-side' : compareMode;
   const compareModes: CompareStage[] = [...(anyChanges ? (['changes'] as const) : []), ...COMPARE_MODES];
@@ -913,6 +919,7 @@ export function CheckpointViewer({
         setComposing(true);
       }
       else if (key === 'l' && effectiveStage === 'side-by-side') setSyncScroll((on) => !on);
+      else if (key === 'x' && leftOutToggle) setLeftOutShown((on) => !on);
       else if (key === 'a' && deciding && !busy) approve();
       else return;
       e.preventDefault();
@@ -1006,6 +1013,22 @@ export function CheckpointViewer({
   ) : null;
 
   /** The pins of one capture on its frame; `on` draws only some of its threads (the rest are on the image beside it). */
+  // The areas left out of `capture`'s comparison, over `image` (its own, or the one it is compared with when that has its size).
+  const leftOutLayer = (capture: ReviewCaptureView, image: ReviewImage = capture.image) => {
+    const { width, height } = capture.image;
+    if (!leftOutShown || !capture.ignoreRegions?.length || !width || !height || image.width !== width || image.height !== height) return null;
+    return <DiffMarks regions={capture.ignoreRegions} width={width} height={height} kind="ignore" />;
+  };
+  // A screen's overlay: the areas left out under the pins.
+  const overlayOf = (leftOut: React.ReactNode, pins: React.ReactNode) =>
+    leftOut || pins
+      ? () => (
+          <>
+            {leftOut}
+            {pins}
+          </>
+        )
+      : undefined;
   const pinLayer = (capture: ReviewCaptureView, name: string, on?: { threads: readonly ReviewThreadView[]; ghosts?: readonly ReviewThreadView[]; origin?: boolean }) =>
     pinsOn && (canComment || capture.threads?.length || capture.drawings?.length) ? (
       <PinLayer
@@ -1065,7 +1088,7 @@ export function CheckpointViewer({
           </>
         }
       >
-        <ScreenFrame image={c.image} frame={at[0]} zoom={zoom} live room={tall} alt={`${label} — ${c.variant}`} label={`${name} screen`} overlay={pinLayer(c, name) ? () => pinLayer(c, name) : undefined} />
+        <ScreenFrame image={c.image} frame={at[0]} zoom={zoom} live room={tall} alt={`${label} — ${c.variant}`} label={`${name} screen`} overlay={overlayOf(leftOutLayer(c), pinLayer(c, name))} />
       </StagePane>
     );
     if (!x.reference) return plain('Nothing to compare with yet');
@@ -1115,9 +1138,10 @@ export function CheckpointViewer({
           note: split.here.length ? `${split.here.length} ${split.here.length === 1 ? 'comment' : 'comments'} made here` : null,
           image: x.reference.image,
           frame: at[0],
+          leftOut: leftOutLayer(c, x.reference.image),
           overlay: split.here.length ? pinLayer(c, `${name}, ${x.reference.label}`, { threads: split.here, origin: true }) : null,
         },
-        { key: 'current', title: currentTitle, note: null, image: c.image, frame: at[1] ?? at[0], overlay: pinLayer(c, `${name}, ${currentTitle}`, { threads: split.rest, ghosts: split.ghosts }) },
+        { key: 'current', title: currentTitle, note: null, image: c.image, frame: at[1] ?? at[0], leftOut: leftOutLayer(c), overlay: pinLayer(c, `${name}, ${currentTitle}`, { threads: split.rest, ghosts: split.ghosts }) },
       ];
       return (
         <SyncedPanes key={c.id} fill={fill} enabled={syncScroll}>
@@ -1137,7 +1161,7 @@ export function CheckpointViewer({
                 </>
               }
             >
-              <ScreenFrame image={side.image} frame={side.frame} zoom={zoom} live room={tall} alt={`${label} — ${multi ? `${c.variant}, ` : ''}${side.title}`} overlay={side.overlay ? () => side.overlay : undefined} />
+              <ScreenFrame image={side.image} frame={side.frame} zoom={zoom} live room={tall} alt={`${label} — ${multi ? `${c.variant}, ` : ''}${side.title}`} overlay={overlayOf(side.leftOut, side.overlay)} />
             </StagePane>
           ))}
         </SyncedPanes>
@@ -1175,6 +1199,7 @@ export function CheckpointViewer({
             currentLabel={currentTitle}
             alt={name}
             scaled={{ width: at[0].width, zoom: `var(${SCREEN_ZOOM_VAR}, ${zoom})` }}
+            overlay={leftOutLayer(c, x.reference.image)}
           />
         </div>
       </StagePane>
@@ -1367,6 +1392,11 @@ export function CheckpointViewer({
                         <EyeOff /> Leave out areas{current?.ignore?.active ? ` (${current.ignore.active})` : ''}
                       </Button>
                     ) : null}
+                    {leftOutToggle ? (
+                      <Button variant={leftOutShown ? 'secondary' : 'ghost'} size="xs" aria-pressed={leftOutShown} title="Show the areas left out of the comparison on the screens (X)" onClick={() => setLeftOutShown((on) => !on)}>
+                        <ScanEye /> Show areas left out ({leftOutCount})
+                      </Button>
+                    ) : null}
                     {effectiveStage === 'side-by-side' ? (
                       <Button variant={syncScroll ? 'secondary' : 'ghost'} size="xs" aria-pressed={syncScroll} title="Scroll both screens together (L)" onClick={() => setSyncScroll((on) => !on)}>
                         {syncScroll ? <Link2 /> : <Link2Off />} Scroll together
@@ -1536,7 +1566,7 @@ export function CheckpointViewer({
                             room={tall}
                             alt={`${label} — ${c.variant}`}
                             label={`${label}, ${c.variant} screen`}
-                            overlay={pinLayer(c, `${label}, ${c.variant}`) ? () => pinLayer(c, `${label}, ${c.variant}`) : undefined}
+                            overlay={overlayOf(leftOutLayer(c), pinLayer(c, `${label}, ${c.variant}`))}
                           />
                         </StagePane>
                       ))}
@@ -1741,7 +1771,7 @@ export function CheckpointViewer({
                         ) : current ? (
                           <p className="text-xs text-muted-foreground">Nothing to compare with yet: this is the first capture of this checkpoint.</p>
                         ) : null}
-                        {current?.ignore?.ever ? <IgnoreNote capture={current} /> : null}
+                        {current?.ignore?.ever ? <IgnoreNote capture={current} shown={leftOutToggle && current.ignoreRegions?.length ? leftOutShown : null} onShownChange={setLeftOutShown} /> : null}
                         {current?.staleTolerance ? (
                           <p role="note" className="flex items-start gap-1.5 rounded-md border border-info-border bg-info-subtle p-2 text-xs text-info-text">
                             <History aria-hidden className="mt-px size-3.5 shrink-0" />
@@ -1880,6 +1910,7 @@ const SHORTCUTS: [string[], string][] = [
   [['H'], 'Hide or show the pins'],
   [['O'], 'Compare the comment with the version it was made on, or show the screen'],
   [['L'], 'Side by side: scroll both screens together, or apart'],
+  [['X'], 'Show or hide the areas left out of the comparison'],
   [['I'], 'Show or hide the side panel'],
   [['D'], 'Details: step, URL, video, trace'],
   [['Esc'], 'Leave comment mode, then close'],
@@ -1887,7 +1918,7 @@ const SHORTCUTS: [string[], string][] = [
 
 
 /** The checkpoint's rules and what they did to this comparison, in a line. */
-function IgnoreNote({ capture }: { capture: ReviewCaptureView }) {
+function IgnoreNote({ capture, shown, onShownChange }: { capture: ReviewCaptureView; shown: boolean | null; onShownChange: (on: boolean) => void }) {
   const g = capture.ignore!;
   const parts = [
     g.active ? `${g.active} ${g.active === 1 ? 'area is' : 'areas are'} left out of the comparison` : 'Areas were left out once; none is switched on now',
@@ -1897,7 +1928,17 @@ function IgnoreNote({ capture }: { capture: ReviewCaptureView }) {
   return (
     <p className={cn('flex items-start gap-1.5 text-xs', g.suspended ? 'text-warning-text' : 'text-muted-foreground')}>
       <EyeOff aria-hidden className="mt-px size-3.5 shrink-0" />
-      <span>{parts.join(' · ')}.</span>
+      <span>
+        {parts.join(' · ')}.
+        {shown !== null ? (
+          <>
+            {' '}
+            <button type="button" className="font-medium text-accent-text underline-offset-2 hover:underline" aria-pressed={shown} onClick={() => onShownChange(!shown)}>
+              {shown ? 'Hide them' : 'Show them'}
+            </button>
+          </>
+        ) : null}
+      </span>
     </p>
   );
 }

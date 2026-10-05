@@ -417,6 +417,37 @@ export const LeaveOutAreasOpensThePanel: Story = {
   },
 };
 
+/** The areas left out can be seen on any view: the changes mark them, the image and the comparisons on request. */
+export const SeeTheAreasLeftOut: Story = {
+  args: { initial: { checkpointId: changed.id, variant: 'mobile' } },
+  play: async () => {
+    const body = within(document.body);
+    await body.findByRole('dialog');
+    const stage = body.getByLabelText('Checkpoint screens');
+    const marks = () => stage.querySelectorAll('[data-slot="left-out-areas"]').length;
+    // The changes always mark them.
+    await waitFor(() => expect(marks()).toBe(1));
+    await expect(body.queryByRole('button', { name: /Show areas left out/ })).not.toBeInTheDocument();
+
+    await userEvent.click(body.getByRole('button', { name: 'Image' }));
+    await waitFor(() => expect(marks()).toBe(0));
+    const toggle = body.getByRole('button', { name: 'Show areas left out (1)' });
+    await userEvent.click(toggle);
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    await waitFor(() => expect(marks()).toBe(1));
+
+    // Side by side, on both screens; the note in the side panel hides them again.
+    await userEvent.click(body.getByRole('button', { name: 'Compare' }));
+    await userEvent.click(body.getByRole('button', { name: 'Side by side' }));
+    await waitFor(() => expect(marks()).toBe(2));
+    const panel = body.getByRole('complementary', { name: 'Review' });
+    await userEvent.click(within(panel).getByRole('button', { name: 'Hide them' }));
+    await waitFor(() => expect(marks()).toBe(0));
+    await userEvent.keyboard('x');
+    await waitFor(() => expect(marks()).toBe(2));
+  },
+};
+
 /** Approved by the project's tolerance: the note says so, and why. */
 export const AutoApproved: Story = {
   args: { flows: [diffStatesFlow], initial: { checkpointId: diffStatesFlow.checkpoints[0].id, variant: 'desktop' } },
