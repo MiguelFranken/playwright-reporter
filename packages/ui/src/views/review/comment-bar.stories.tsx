@@ -283,12 +283,9 @@ export const Drawing: Story = {
  * of them flashes its tooltip on the way. The tooltips are back once the pointer itself moves again.
  */
 export const NoTooltipsWhileItGrows: Story = {
-  render: (args) => {
-    const [commenting, setCommenting] = useState(false);
-    const [tool, setTool] = useState<CommentTool>('pin');
-    const [color, setColor] = useState<MarkupColor>('red');
-    return <CommentBar {...args} commenting={commenting} onCommentingChange={setCommenting} tool={tool} onToolChange={setTool} color={color} onColorChange={setColor} />;
-  },
+  // On a stage, as the viewer holds it: bare, the bar stands above the canvas's top edge, where no pointer reaches it.
+  render: (args) => <Held {...args} />,
+  beforeEach: remembering(),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const tooltip = () => document.body.querySelector('[data-slot="tooltip-content"]');
@@ -305,10 +302,8 @@ export const NoTooltipsWhileItGrows: Story = {
     await pointAt('Area');
     await new Promise((r) => setTimeout(r, 700));
     await expect(tooltip()).toBeNull();
-    // Settled, the reviewer moves the pointer: the tooltips answer again. The move turns them back on in a
-    // render of its own; on a slow machine that lands after the next move, so the pointer waits for it first.
+    // Settled, the reviewer moves the pointer: the tooltips answer again.
     await pointAt('Pen');
-    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 100))));
     await pointAt('Arrow');
     // A tooltip opens after its delay (600ms without a provider): room for a slow machine on top.
     await waitFor(() => expect(tooltip()).toHaveTextContent('Arrow'), { timeout: 3000 });
