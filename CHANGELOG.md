@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.94](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.93...v0.0.94) (2026-10-05)
+
+### Bug Fixes
+
+* **review:** tell new screens from changed and unchanged ones, and follow the run a review is compared with ([#96](https://github.com/MiguelFranken/playwright-reporter/issues/96)) ([27c9bb2](https://github.com/MiguelFranken/playwright-reporter/commit/27c9bb2408c71520d6bd14f7e35fa0aa32e5ad46))
+
 ## [0.0.93](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.92...v0.0.93) (2026-10-04)
 
 ### Performance Improvements
