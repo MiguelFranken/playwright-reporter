@@ -177,9 +177,9 @@ describe('statuses', () => {
 
     // The counts in SQL follow the same rule.
     const counts = await runReviewCounts([third.run.id, second.run.id, first.run.id]);
-    expect(counts[third.run.id]).toEqual({ approved: 0, changes_requested: 0, changed: 1, unchanged: 1, new: 0 });
-    expect(counts[second.run.id]).toEqual({ approved: 1, changes_requested: 0, changed: 1, unchanged: 0, new: 0 });
-    expect(counts[first.run.id]).toEqual({ approved: 1, changes_requested: 1, changed: 0, unchanged: 0, new: 0 });
+    expect(counts[third.run.id]).toEqual({ approved: 0, changes_requested: 0, changed: 1, measuring: 0, unchanged: 1, new: 0 });
+    expect(counts[second.run.id]).toEqual({ approved: 1, changes_requested: 0, changed: 1, measuring: 0, unchanged: 0, new: 0 });
+    expect(counts[first.run.id]).toEqual({ approved: 1, changes_requested: 1, changed: 0, measuring: 0, unchanged: 0, new: 0 });
     const queue = await reviewQueue(tenant.project.id);
     expect(queue.map((q) => q.number)).toEqual([third.run.number, second.run.number, first.run.number]);
 

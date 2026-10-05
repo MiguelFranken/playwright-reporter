@@ -20,25 +20,29 @@ export type ReviewDecision = (typeof REVIEW_DECISIONS)[number];
 /**
  * An image's status:
  * - `approved` / `changes_requested`: a reviewer decided about these exact pixels.
- * - `changed`: it differs from the image it is compared with — the approved
- *   baseline, else (nothing approved yet) the same screen in the run before.
- * - `unchanged`: nobody decided about these pixels, but they are the very
- *   pixels of the image it is compared with: nothing to look at again.
+ * - `changed`: the measured comparison with the image it is compared with — the
+ *   approved baseline, else (nothing approved yet) the same screen in the run
+ *   before, or the run a reviewer compares the whole run with — found a visible change.
+ * - `measuring`: the comparison is being measured; it ends as `changed` or `unchanged`.
+ * - `unchanged`: nobody decided about these pixels, and they look the same as
+ *   that image: the very same file, or measured without one changed pixel.
  * - `new`: the screen has no earlier image to compare with: captured for the first time.
  *
- * See `reviewStatusOf`, the one rule the server, the counts and the run
- * comparison apply.
+ * The pixel comparison decides, never the file's bytes: the same bytes only
+ * spare the measurement. See `reviewStatusOf`, the one rule the server, the
+ * counts, the tools and the run comparison apply.
  */
-export const REVIEW_STATUSES = ['changed', 'new', 'changes_requested', 'unchanged', 'approved'] as const;
+export const REVIEW_STATUSES = ['changed', 'new', 'measuring', 'changes_requested', 'unchanged', 'approved'] as const;
 export type ReviewStatus = (typeof REVIEW_STATUSES)[number];
 
-/** The statuses that still ask for a reviewer. */
-export const NEEDS_REVIEW: readonly ReviewStatus[] = ['changed', 'new'];
+/** The statuses that still ask for a reviewer: a comparison being measured may well be a change. */
+export const NEEDS_REVIEW: readonly ReviewStatus[] = ['changed', 'new', 'measuring'];
 
 export const REVIEW_STATUS_LABELS: Record<ReviewStatus, string> = {
   approved: 'Approved',
   changes_requested: 'Changes requested',
   changed: 'Changed',
+  measuring: 'Measuring',
   unchanged: 'Unchanged',
   new: 'New',
 };
@@ -47,12 +51,13 @@ export const REVIEW_STATUS_TONES: Record<ReviewStatus, Tone> = {
   approved: 'success',
   changes_requested: 'danger',
   changed: 'warning',
+  measuring: 'neutral',
   unchanged: 'neutral',
   new: 'info',
 };
 
-/** The storyboard's status filter; `needs-review` is `changed` and `new`. */
-export const REVIEW_FILTERS = ['needs-review', 'all', 'changed', 'new', 'unchanged', 'changes_requested', 'approved'] as const;
+/** The storyboard's status filter; `needs-review` is `changed`, `new` and `measuring`. */
+export const REVIEW_FILTERS = ['needs-review', 'all', 'changed', 'new', 'measuring', 'unchanged', 'changes_requested', 'approved'] as const;
 export type ReviewFilter = (typeof REVIEW_FILTERS)[number];
 
 export const REVIEW_FILTER_LABELS: Record<ReviewFilter, string> = {
@@ -60,6 +65,7 @@ export const REVIEW_FILTER_LABELS: Record<ReviewFilter, string> = {
   all: 'All',
   changed: 'Changed',
   new: 'New',
+  measuring: 'Measuring',
   unchanged: 'Unchanged',
   changes_requested: 'Changes requested',
   approved: 'Approved',
@@ -67,23 +73,37 @@ export const REVIEW_FILTER_LABELS: Record<ReviewFilter, string> = {
 
 /**
  * An image's status from what is known about it: the decision about its exact
- * pixels, else how it compares with its reference — the approved baseline
- * while there is one, else the run before (or, comparing a whole run, the run
- * chosen). `reference` is the reference's content hash, `null` when it has
- * none; `undefined` means there is no reference at all.
+ * pixels, else the measured comparison with its reference — the approved
+ * baseline while there is one, else the run before (or, comparing a whole
+ * run, the run chosen). `reference` is `null` or `undefined` when there is no
+ * earlier image at all; its hash may be unknown. The same bytes need no
+ * measurement; other bytes are what the pixels say — a PNG encoded anew is
+ * not a change.
  */
 export function reviewStatusOf(input: {
   decision: ReviewDecision | null | undefined;
-  /** The checkpoint and variant have an approved baseline (these pixels differ from it, or `decision` would say so). */
-  approved: boolean;
   sha256: string | null | undefined;
   reference: { sha256: string | null | undefined } | null | undefined;
+  /** The comparison with `reference`, when one was measured or is being measured. */
+  measured?: MeasuredChange | null;
 }): ReviewStatus {
   if (input.decision) return input.decision;
-  if (input.approved) return 'changed';
   if (!input.reference) return 'new';
-  return input.sha256 && input.sha256 === input.reference.sha256 ? 'unchanged' : 'changed';
+  if (input.sha256 && input.sha256 === input.reference.sha256) return 'unchanged';
+  const m = input.measured;
+  if (m?.state === 'pending') return 'measuring';
+  return noVisibleChange(m) ? 'unchanged' : 'changed';
 }
+
+/** What a status needs to know of a measured comparison. */
+export interface MeasuredChange {
+  state: DiffState;
+  changedPixels: number | null;
+  sizeChanged: boolean;
+}
+
+/** Measured, and not one pixel changed nor the size: other bytes, the same picture. */
+export const noVisibleChange = (m: MeasuredChange | null | undefined): boolean => Boolean(m && m.state === 'done' && m.changedPixels === 0 && !m.sizeChanged);
 
 export function parseReviewFilter(value: string | undefined | null): ReviewFilter {
   return (REVIEW_FILTERS as readonly string[]).includes(value ?? '') ? (value as ReviewFilter) : 'needs-review';
@@ -117,16 +137,21 @@ export function checkpointLabel(name: string, title?: string | null): string {
 /**
  * An image's status when a reviewer compares the whole run with another one
  * (`?against=previous`, `run:<n>`): did the screen change since that run?
- * Whatever was approved before plays no part — `unchanged` when it has that
- * run's very pixels, `changed` when it differs, `new` when that run did not
+ * Whatever was approved before plays no part — `unchanged` when it looks the
+ * same as that run's image (`reviewStatusOf`), `changed` when it differs, `new` when that run did not
  * capture the screen. A decision about these exact pixels still answers for
  * a changed image (it was looked at), and a change request always shows: it
  * waits for a fix.
  */
-export function statusAgainstRun(input: { decision: ReviewDecision | null | undefined; sha256: string | null | undefined; reference: { sha256: string | null | undefined } | null | undefined }): ReviewStatus {
+export function statusAgainstRun(input: {
+  decision: ReviewDecision | null | undefined;
+  sha256: string | null | undefined;
+  reference: { sha256: string | null | undefined } | null | undefined;
+  measured?: MeasuredChange | null;
+}): ReviewStatus {
   if (input.decision === 'changes_requested') return input.decision;
-  const status = reviewStatusOf({ decision: null, approved: false, sha256: input.sha256, reference: input.reference });
-  return status === 'changed' && input.decision ? input.decision : status;
+  const status = reviewStatusOf({ decision: null, sha256: input.sha256, reference: input.reference, measured: input.measured });
+  return (status === 'changed' || status === 'measuring') && input.decision ? input.decision : status;
 }
 
 /** Worst first: a checkpoint's status is its most urgent image's. */
@@ -278,7 +303,7 @@ export const REVIEW_SORT_LABELS: Record<ReviewSort, string> = { sequence: 'Journ
 /** A capture's changed share for sorting: unmeasured images sort after measured changes, before unchanged ones. */
 export function changeScore(capture: Pick<ReviewCaptureView, 'diff' | 'status'>): number {
   const d = capture.diff;
-  if (!d || d.state !== 'done') return capture.status === 'changed' || capture.status === 'new' ? 0.000001 : 0;
+  if (!d || d.state !== 'done') return NEEDS_REVIEW.includes(capture.status) ? 0.000001 : 0;
   return d.sizeChanged ? Math.max(d.ratio, 0.01) + 1 : d.ratio;
 }
 
@@ -510,12 +535,37 @@ export interface ReviewDecisionInput {
 /** Counts per status over a set of images. */
 export type ReviewCounts = Record<ReviewStatus, number>;
 
-export const emptyReviewCounts = (): ReviewCounts => ({ approved: 0, changes_requested: 0, changed: 0, unchanged: 0, new: 0 });
+export const emptyReviewCounts = (): ReviewCounts => ({ approved: 0, changes_requested: 0, changed: 0, measuring: 0, unchanged: 0, new: 0 });
 
 export function countStatuses(flows: readonly ReviewFlowView[], variant?: string | null): ReviewCounts {
   const counts = emptyReviewCounts();
   for (const f of flows) for (const c of f.checkpoints) for (const cap of c.captures) if (!variant || cap.variant === variant) counts[cap.status]++;
   return counts;
+}
+
+/** How many images a filter keeps. */
+export const filterCount = (counts: ReviewCounts, filter: ReviewFilter): number =>
+  filter === 'all' ? Object.values(counts).reduce((a, b) => a + b, 0) : filter === 'needs-review' ? NEEDS_REVIEW.reduce((n, s) => n + counts[s], 0) : counts[filter];
+
+/**
+ * The status filters worth a button: every image (`all`), what needs review,
+ * and each status some image has — a filter that would show nothing is left
+ * out, and so is the one status that makes up all of "needs review" (the two
+ * would show the same images). The active filter always stays.
+ */
+export function visibleReviewFilters(counts: ReviewCounts, active: ReviewFilter): ReviewFilter[] {
+  const waiting = NEEDS_REVIEW.filter((s) => counts[s] > 0);
+  return REVIEW_FILTERS.filter((f) => {
+    if (f === active || f === 'all' || f === 'needs-review') return true;
+    if (counts[f] === 0) return false;
+    return !(waiting.length === 1 && waiting[0] === f);
+  });
+}
+
+/** "2 changed, 1 new, 168 unchanged": the statuses some image has, in the filters' order. */
+export function describeCounts(counts: ReviewCounts): string {
+  const parts = REVIEW_FILTERS.flatMap((f) => (f === 'all' || f === 'needs-review' || counts[f] === 0 ? [] : [`${counts[f]} ${REVIEW_STATUS_LABELS[f].toLowerCase()}`]));
+  return parts.join(', ');
 }
 
 /** Every variant name in the flows, in display order. */

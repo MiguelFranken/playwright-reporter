@@ -6,8 +6,8 @@
  * its exact pixels (same checkpoint, variant and hash) if there is one;
  * otherwise `changed` when the checkpoint has an approved baseline; with
  * nothing approved, how it compares with the run before — `unchanged` for the
- * same pixels, `changed` for others, `new` when no earlier run captured the
- * screen (`reviewStatusOf`). Only a result's final attempt is reviewed — a retry
+ * same bytes or a measured comparison with no visible change, `changed` for
+ * others, `new` when no earlier run captured the screen (`reviewStatusOf`). Only a result's final attempt is reviewed — a retry
  * captures the journey again, and the last capture is the one that counts.
  */
 import { randomUUID } from 'node:crypto';
@@ -19,6 +19,7 @@ import { applicableRules, type IgnoreRule, type IgnoreSummary, type RuleValidity
 import { db } from '@/lib/db/drizzle';
 import {
   attachments,
+  imageDiffs,
   reviewCaptures,
   reviewCheckpoints,
   reviewDecisions,
@@ -32,7 +33,7 @@ import {
   type Attachment,
 } from '@/lib/db/schema';
 import { EMPTY_RULES, rulesFor } from './diff/ignore';
-import { diffSettingsFor, diffsFor, identityKey, pairKey, pairOf, type DiffRecord, type Rect } from './diff/lookup';
+import { diffSettingsFor, diffsFor, identityKey, measuredChangeOf, pairKey, pairOf, type DiffRecord, type Rect } from './diff/lookup';
 import { withinTolerance } from './diff/settings';
 import { createThread, resolveThreadsOf, threadsForCaptures, type CaptureThread } from './threads';
 import { drawingsForCaptures, type CaptureDrawing } from './drawings';
@@ -323,7 +324,8 @@ export async function compareCaptures(
     const applies = (d: DecisionRecord) => d.source !== 'tolerance' || !d.provenance || !pair || d.provenance.optionsKey === pair.optionsKey;
     const exact = matching.find(applies) ?? null;
     const staleTolerance = matching.find((d) => !applies(d)) ?? null;
-    const status = reviewStatusOf({ decision: exact?.decision, approved: Boolean(approved), sha256: c.sha256, reference: prev?.capture });
+    // Before the measurement is read: the decision, a new screen, or the same file.
+    const status = reviewStatusOf({ decision: exact?.decision, sha256: c.sha256, reference: approved ?? prev?.capture });
     const ignore: ComparedCapture['ignore'] = {
       active: set.rules.filter((r) => r.active).length,
       ever: set.ever,
@@ -359,6 +361,7 @@ export async function compareCaptures(
   });
   const diffs = await diffsFor(compared.flatMap((x) => [x.pair, x.rawPair].filter((p): p is NonNullable<typeof p> => Boolean(p))));
   return compared.map(({ compared: c, pair, rawPair }) => {
+    // Nothing to measure (the same file, no reference, or images without a hash): the status stands as it is.
     if (!pair) return c;
     const diff = diffs.get(pairKey(pair.projectId, pair.baseSha256, pair.headSha256, pair.optionsKey)) ?? null;
     const rawDiff = rawPair ? (diffs.get(pairKey(rawPair.projectId, rawPair.baseSha256, rawPair.headSha256, rawPair.optionsKey)) ?? null) : null;
@@ -367,7 +370,11 @@ export async function compareCaptures(
     const tolerated = done && c.diffAgainst === 'baseline' && withinTolerance({ changedPixels: diff.changedPixels!, ratio: diff.ratio!, sizeChanged }, settings.get(c.projectId)!);
     const rawChanged = rawPair ? (rawDiff?.status === 'done' ? rawDiff.changedPixels : null) : done ? diff.changedPixels : null;
     const suppressed = rawChanged !== null && done ? Math.max(0, rawChanged - diff.changedPixels!) : rawPair ? null : 0;
-    return { ...c, diff, rawDiff, withinTolerance: tolerated, ignore: { ...c.ignore, rawChangedPixels: rawChanged, suppressedPixels: suppressed } };
+    // The pixels decide: measured against the reference the status is about — the approved image, else the run before.
+    const aboutBaseline = Boolean(c.baseline);
+    const measured = (aboutBaseline ? c.diffAgainst === 'baseline' : c.diffAgainst === 'previous') ? measuredChangeOf(diff) : null;
+    const status = reviewStatusOf({ decision: c.decision?.decision, sha256: c.sha256, reference: c.baseline?.decision ?? c.previous?.capture, measured });
+    return { ...c, status, diff, rawDiff, withinTolerance: tolerated, ignore: { ...c.ignore, rawChangedPixels: rawChanged, suppressedPixels: suppressed } };
   });
 }
 
@@ -579,7 +586,13 @@ export async function runReviewCounts(runIds: readonly string[]): Promise<Record
   return out;
 }
 
-/** An image's status in SQL, over a capture aliased `c`: the same rule as `compareCaptures`. */
+/**
+ * An image's status in SQL, over a capture aliased `c`: the same rule as
+ * `compareCaptures` (`reviewStatusOf`). The decision about its exact pixels;
+ * else its reference — the newest approval a person made, else the same
+ * screen in the run before, as `previousCaptures` finds it — and the newest
+ * measurement of the pair: being measured, no changed pixel, or a change.
+ */
 const statusSql = sql`coalesce(
   (select d.decision::text from ${reviewDecisions} d
     where d.test_id = c.test_id and d.checkpoint_name = c.checkpoint_name and d.variant = c.variant
@@ -588,24 +601,43 @@ const statusSql = sql`coalesce(
       and (d.source <> 'tolerance' or d.provenance is null
         or (d.provenance->>'ignoreRevision')::int = coalesce((select r.revision from ${reviewIgnoreRegions} r where r.test_id = c.test_id and r.checkpoint_name = c.checkpoint_name and r.variant = c.variant), 0))
     order by d.created_at desc, d.id desc limit 1),
-  case when exists (
-    select 1 from ${reviewDecisions} d
-    where d.test_id = c.test_id and d.checkpoint_name = c.checkpoint_name and d.variant = c.variant and d.decision = 'approved' and d.source = 'human'
-  ) then 'changed' end,
-  -- nothing approved: the same screen in the run before, as previousCaptures finds it
-  (select case when c.sha256 is not null and p.sha256 = c.sha256 then 'unchanged' else 'changed' end
-    from ${reviewCaptures} p
-    join ${runs} pr on pr.id = p.run_id
-    join ${attachments} pa on pa.id = p.attachment_id
-    join ${reviewCheckpoints} pcp on pcp.id = p.checkpoint_id
-    join ${testAttempts} pta on pta.id = pcp.attempt_id
-    where p.test_id = c.test_id and p.checkpoint_name = c.checkpoint_name and p.variant = c.variant
-      and p.run_id <> c.run_id
-      and pr.started_at < (select cr.started_at from ${runs} cr where cr.id = c.run_id)
-      and pta.retry = (select max(pta2.retry) from ${testAttempts} pta2 where pta2.test_result_id = pta.test_result_id)
-      and pa.status not in ('expired', 'failed')
-    order by pr.started_at desc
-    limit 1),
+  (select case
+      when not ref.found then 'new'
+      when c.sha256 is not null and ref.sha256 = c.sha256 then 'unchanged'
+      else coalesce(
+        (select case
+            when m.status = 'pending' then 'measuring'
+            when m.status = 'done' and m.changed_pixels = 0 and m.base_width = m.head_width and m.base_height = m.head_height then 'unchanged'
+            else 'changed' end
+          from ${imageDiffs} m
+          where m.project_id = c.project_id and m.base_sha256 = ref.sha256 and m.head_sha256 = c.sha256
+          order by m.created_at desc limit 1),
+        'changed')
+      end
+    from (
+      select
+        coalesce(b.found, p.found, false) as found,
+        case when b.found then b.sha256 else p.sha256 end as sha256
+      from (
+        select true as found, d.sha256 from ${reviewDecisions} d
+        where d.test_id = c.test_id and d.checkpoint_name = c.checkpoint_name and d.variant = c.variant and d.decision = 'approved' and d.source = 'human'
+        order by d.created_at desc, d.id desc limit 1
+      ) b
+      full join (
+        select true as found, pc.sha256 from ${reviewCaptures} pc
+        join ${runs} pr on pr.id = pc.run_id
+        join ${attachments} pa on pa.id = pc.attachment_id
+        join ${reviewCheckpoints} pcp on pcp.id = pc.checkpoint_id
+        join ${testAttempts} pta on pta.id = pcp.attempt_id
+        where pc.test_id = c.test_id and pc.checkpoint_name = c.checkpoint_name and pc.variant = c.variant
+          and pc.run_id <> c.run_id
+          and pr.started_at < (select cr.started_at from ${runs} cr where cr.id = c.run_id)
+          and pta.retry = (select max(pta2.retry) from ${testAttempts} pta2 where pta2.test_result_id = pta.test_result_id)
+          and pa.status not in ('expired', 'failed')
+        order by pr.started_at desc
+        limit 1
+      ) p on true
+    ) ref),
   'new'
 )`;
 

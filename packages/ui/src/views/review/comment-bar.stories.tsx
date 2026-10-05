@@ -283,12 +283,9 @@ export const Drawing: Story = {
  * of them flashes its tooltip on the way. The tooltips are back once the pointer itself moves again.
  */
 export const NoTooltipsWhileItGrows: Story = {
-  render: (args) => {
-    const [commenting, setCommenting] = useState(false);
-    const [tool, setTool] = useState<CommentTool>('pin');
-    const [color, setColor] = useState<MarkupColor>('red');
-    return <CommentBar {...args} commenting={commenting} onCommentingChange={setCommenting} tool={tool} onToolChange={setTool} color={color} onColorChange={setColor} />;
-  },
+  // On a stage, as the viewer holds it: bare, the bar stands above the canvas's top edge, where no pointer reaches it.
+  render: (args) => <Held {...args} />,
+  beforeEach: remembering(),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const tooltip = () => document.body.querySelector('[data-slot="tooltip-content"]');

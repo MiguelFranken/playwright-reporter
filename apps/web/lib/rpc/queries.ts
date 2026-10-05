@@ -172,12 +172,20 @@ export type RunNumberRef = ProjectRef & { runNumber: number };
  * reviewer moves between the storyboard and a result, and decisions change
  * it in place (`decideReviewMutation`) instead of rendering the page again.
  * A run's images do not change once it has finished, and the page seeds a
- * fresh answer on every visit, so the cache does not refetch on its own.
+ * fresh answer on every visit, so the cache does not refetch on its own —
+ * except while comparisons are being measured: then every few seconds, until
+ * each screen says whether it changed.
  */
 export function runReviewQuery(ref: RunNumberRef, against: CompareRule = 'auto') {
   // The default comparison keeps the key it always had; each other one is its own entry.
   const input = isRunCompareRule(against) ? { ...ref, against } : ref;
-  return orpc.review.run.queryOptions({ input, staleTime: 5 * 60_000, gcTime: 30 * 60_000, placeholderData: keepPreviousData });
+  return orpc.review.run.queryOptions({
+    input,
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
+    placeholderData: keepPreviousData,
+    refetchInterval: (query) => (query.state.data?.flows.some((f) => f.checkpoints.some((c) => c.captures.some((cap) => cap.status === 'measuring'))) ? 3000 : false),
+  });
 }
 
 /** Every comparison of a run's review in the cache: a decision changes each of them. */

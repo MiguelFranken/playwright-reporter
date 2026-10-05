@@ -4208,13 +4208,14 @@
             "in": "query",
             "name": "status",
             "schema": {
-              "description": "needs-review (default: changed and new images), all, changed, new, unchanged, changes_requested or approved.",
+              "description": "needs-review (default: changed, new and still measured images), all, changed, new, measuring, unchanged, changes_requested or approved.",
               "type": "string",
               "enum": [
                 "needs-review",
                 "all",
                 "changed",
                 "new",
+                "measuring",
                 "unchanged",
                 "changes_requested",
                 "approved"
@@ -4339,6 +4340,9 @@
                         "changed": {
                           "type": "number"
                         },
+                        "measuring": {
+                          "type": "number"
+                        },
                         "unchanged": {
                           "type": "number"
                         },
@@ -4350,6 +4354,7 @@
                         "approved",
                         "changes_requested",
                         "changed",
+                        "measuring",
                         "unchanged",
                         "new"
                       ],

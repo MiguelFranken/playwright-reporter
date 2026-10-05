@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
-import { approvedFlows, diffStatesFlow, failedFlow, libraryCompareFlows, legacyFlow, NOW, runCompareFlows, runCompareTargets, longTextFlow, manyFlows, placeOrderFlow, reviewFlows, unavailableFlow } from '../../fixtures/review';
+import { approvedFlows, diffStatesFlow, failedFlow, libraryCompareFlows, legacyFlow, measuringFlows, NOW, runCompareFlows, runCompareTargets, longTextFlow, manyFlows, placeOrderFlow, reviewFlows, unavailableFlow } from '../../fixtures/review';
 import { ReviewStoryboard } from './review-storyboard';
 
 const meta = {
@@ -146,13 +146,37 @@ export const ComparedWithARun: Story = {
     await expect(canvas.getAllByText('same as Run #479').length).toBeGreaterThan(0);
     await expect(canvas.getByLabelText('0.51% changed')).toBeInTheDocument();
     // Did the screen change since run #479, yes or no: the same pixels count as unchanged and carry no dot, whatever was approved.
+    await expect(canvas.getByRole('button', { name: /^Differences\s?\d+$/ })).toBeInTheDocument();
+    await expect(canvas.getByRole('status')).toHaveTextContent(/^Compared with run #479, pixel for pixel: .*unchanged\.$/);
+    // Filters that would show nothing are not offered.
+    await expect(canvas.queryByRole('button', { name: /^New\s?0$/ })).toBeNull();
     await expect(canvas.getByRole('button', { name: /^Unchanged\s?[1-9]\d*$/ })).toBeInTheDocument();
     await expect(canvas.queryAllByRole('img', { name: 'Unchanged' })).toHaveLength(0);
     await expect(canvas.getAllByRole('img', { name: 'Changed' }).length).toBeGreaterThan(0);
     // Did the screen change since run #479, yes or no: the same pixels count as unchanged and carry no dot, whatever was approved.
+    await expect(canvas.getByRole('button', { name: /^Differences\s?\d+$/ })).toBeInTheDocument();
+    await expect(canvas.getByRole('status')).toHaveTextContent(/^Compared with run #479, pixel for pixel: .*unchanged\.$/);
+    // Filters that would show nothing are not offered.
+    await expect(canvas.queryByRole('button', { name: /^New\s?0$/ })).toBeNull();
     await expect(canvas.getByRole('button', { name: /^Unchanged\s?[1-9]\d*$/ })).toBeInTheDocument();
     await expect(canvas.queryAllByRole('img', { name: 'Unchanged' })).toHaveLength(0);
     await expect(canvas.getAllByRole('img', { name: 'Changed' }).length).toBeGreaterThan(0);
+  },
+};
+
+/**
+ * Compared with the run before while its comparisons are still measured:
+ * those screens say so instead of claiming a change, and the counts say they will move.
+ */
+export const MeasuringComparisons: Story = {
+  args: { flows: measuringFlows, filter: 'all', runCompare: { rule: 'previous', onRuleChange: fn(), targets: runCompareTargets, now: NOW } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('status')).toHaveTextContent(/Compared with the run before, pixel for pixel/);
+    await expect(canvas.getByRole('status')).toHaveTextContent(/still being measured; the counts follow/);
+    await expect(canvas.getByRole('button', { name: /^Measuring\s?[1-9]\d*$/ })).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: /^Changed\s?[1-9]\d*$/ })).toBeInTheDocument();
+    await expect(canvas.getAllByRole('img', { name: 'Measuring' }).length).toBeGreaterThan(0);
   },
 };
 

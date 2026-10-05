@@ -6,7 +6,7 @@
 import { compareRuleRun, isRunCompareRule, statusAgainstRun, type CompareRule, type ReviewFlowView, type ReviewStatus } from '@miguelfranken/ui/lib/review';
 import { projectHrefs } from '@/lib/view-models';
 import { measureEach, type MeasuredReference } from './diff/compare';
-import { identityKey } from './diff/lookup';
+import { identityKey, measuredChangeOf } from './diff/lookup';
 import { runCapturesByScreen, type CaptureRecord, type ReviewFlowRecord } from './queries';
 import { caseHref, pendingDiff, toDiffView, toFlowViews, toReviewImage, type CaseLinks } from './view-model';
 
@@ -56,7 +56,10 @@ export async function compareRunRecords(projectId: string, records: readonly Rev
   const entries = new Map<string, RunComparisonEntry>();
   for (const c of mine) {
     const reference = references.get(c.id) ?? null;
-    entries.set(c.id, { reference, status: statusAgainstRun({ decision: c.decision?.decision, sha256: c.sha256, reference: reference?.capture }), measured: measured.get(c.id) ?? null });
+    const m = measured.get(c.id) ?? null;
+    // The pixels decide: a comparison on its way is `measuring`, one without a changed pixel `unchanged`.
+    const change = m?.pending ? { state: 'pending' as const, changedPixels: null, sizeChanged: false } : measuredChangeOf(m?.diff);
+    entries.set(c.id, { reference, status: statusAgainstRun({ decision: c.decision?.decision, sha256: c.sha256, reference: reference?.capture, measured: change }), measured: m });
   }
   return { runNumber: other?.runNumber ?? null, entries };
 }

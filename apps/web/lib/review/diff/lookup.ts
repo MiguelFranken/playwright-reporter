@@ -32,6 +32,16 @@ export interface DiffRecord {
   createdAt: Date;
 }
 
+/** What a review status needs of a measured comparison (`reviewStatusOf`). */
+export const measuredChangeOf = (diff: DiffRecord | null | undefined) =>
+  diff
+    ? {
+        state: diff.status,
+        changedPixels: diff.changedPixels,
+        sizeChanged: Boolean(diff.baseWidth && diff.headWidth && (diff.baseWidth !== diff.headWidth || diff.baseHeight !== diff.headHeight)),
+      }
+    : null;
+
 export interface Identity {
   testId: string;
   checkpointName: string;

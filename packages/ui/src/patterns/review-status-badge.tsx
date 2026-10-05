@@ -1,4 +1,4 @@
-import { CheckCircle2, Diff, Equal, MessageSquareWarning, Sparkles } from 'lucide-react';
+import { CheckCircle2, Diff, Equal, Loader2, MessageSquareWarning, Sparkles } from 'lucide-react';
 import { Badge } from '../components/badge';
 import { cn } from '../lib/cn';
 import { REVIEW_STATUS_LABELS, REVIEW_STATUS_TONES, type ReviewStatus } from '../lib/review';
@@ -8,6 +8,7 @@ const ICONS: Record<ReviewStatus, React.ComponentType<{ className?: string }>> =
   approved: CheckCircle2,
   changes_requested: MessageSquareWarning,
   changed: Diff,
+  measuring: Loader2,
   unchanged: Equal,
   new: Sparkles,
 };
@@ -21,7 +22,7 @@ export function ReviewStatusBadge({ status, className, label }: { status: Review
   const Icon = ICONS[status];
   return (
     <Badge variant="outline" className={cn('gap-1 font-medium', toneBadge[REVIEW_STATUS_TONES[status]], 'border-transparent', className)}>
-      <Icon className="size-3" />
+      <Icon className={cn('size-3', status === 'measuring' && 'motion-safe:animate-spin')} />
       {label ?? REVIEW_STATUS_LABELS[status]}
     </Badge>
   );

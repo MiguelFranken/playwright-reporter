@@ -1903,7 +1903,7 @@ function IgnoreNote({ capture }: { capture: ReviewCaptureView }) {
 }
 
 function statusWord(c: ReviewCaptureView) {
-  return { approved: 'approved', changes_requested: 'changes requested', changed: 'changed', unchanged: 'unchanged', new: 'new' }[c.status];
+  return { approved: 'approved', changes_requested: 'changes requested', changed: 'changed', measuring: 'measuring', unchanged: 'unchanged', new: 'new' }[c.status];
 }
 
 function DecisionNote({ capture }: { capture: ReviewCaptureView }) {
