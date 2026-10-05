@@ -1,20 +1,14 @@
 'use client';
 
 import { ArrowUp, Loader2, Mic, Square } from 'lucide-react';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Button } from '../components/button';
 import { Kbd } from '../components/kbd';
 import { cn } from '../lib/cn';
+import { beginDictation, dropLive, editDraft, moveCaret, showTranscript, type DictatedDraft } from '../lib/dictated-draft';
 import { useDictation, type DictationRecording } from '../provider';
 
 type DictationState = { kind: 'idle' } | { kind: 'starting' } | { kind: 'recording' } | { kind: 'transcribing' } | { kind: 'failed'; message: string };
-
-/** What was said, after what is already written: on the same line, a space apart. */
-function appendDictated(draft: string, spoken: string, maxLength: number) {
-  if (!spoken) return draft;
-  const head = draft.replace(/\s+$/, '');
-  return (head ? `${head} ${spoken}` : spoken).slice(0, maxLength);
-}
 
 /**
  * Where a comment is written: a growing text box that posts on Enter (Shift
@@ -23,7 +17,9 @@ function appendDictated(draft: string, spoken: string, maxLength: number) {
  *
  * When the host offers dictation (`DictationProvider`), a microphone records
  * what is said and adds its transcript to the draft, to be read before posting
- * — word by word while it is said, where the host transcribes live.
+ * — word by word while it is said, where the host transcribes live. The box
+ * stays editable meanwhile: a misheard word can be deleted or retyped while
+ * the dictation goes on, and the words heard next follow the edit.
  */
 export function CommentComposer({
   onSubmit,
@@ -63,9 +59,28 @@ export function CommentComposer({
   const recording = useRef<DictationRecording | null>(null);
   // Bumped whenever a dictation is given up, so a microphone that opens late is closed again.
   const attempt = useRef(0);
-  // The draft as it was when the dictation started: live words are shown after it, and a cancel restores it.
-  const before = useRef('');
+  // Where the dictation writes in the draft while it runs (see `DictatedDraft`).
+  const draft = useRef<DictatedDraft | null>(null);
+  // Where the caret goes once the dictation has written, so new words do not move it out from under the person.
+  const caret = useRef<[number, number] | null>(null);
   const busy = dictating.kind === 'starting' || dictating.kind === 'recording' || dictating.kind === 'transcribing';
+
+  useLayoutEffect(() => {
+    const box = ref.current;
+    if (box && caret.current) box.setSelectionRange(...caret.current);
+    caret.current = null;
+  }, [value]);
+
+  /** Writes what the dictation heard, keeping a focused box's caret where it belongs. */
+  const write = (next: DictatedDraft) => {
+    const box = ref.current;
+    const previous = draft.current;
+    if (box && previous && box.ownerDocument.activeElement === box) {
+      caret.current = [moveCaret(previous, next, box.selectionStart), moveCaret(previous, next, box.selectionEnd)];
+    }
+    draft.current = next;
+    setValue(next.value);
+  };
 
   // A composer that closes mid-sentence lets go of the microphone.
   useEffect(
@@ -79,12 +94,12 @@ export function CommentComposer({
   const startDictating = async () => {
     if (!dictation) return;
     const mine = ++attempt.current;
-    before.current = value;
+    draft.current = beginDictation(value, maxLength);
     setDictating({ kind: 'starting' });
     try {
       const started = await dictation.start({
         onTranscript: (text) => {
-          if (attempt.current === mine && recording.current !== null) setValue(appendDictated(before.current, text.trim(), maxLength));
+          if (attempt.current === mine && recording.current !== null && draft.current) write(showTranscript(draft.current, text));
         },
       });
       if (attempt.current !== mine) return started.cancel();
@@ -92,6 +107,7 @@ export function CommentComposer({
       setDictating({ kind: 'recording' });
     } catch (error) {
       if (attempt.current !== mine) return;
+      draft.current = null;
       setDictating({ kind: 'failed', message: error instanceof Error ? error.message : 'The microphone could not be opened.' });
     }
   };
@@ -105,13 +121,17 @@ export function CommentComposer({
       // Escape while it was being transcribed threw the recording away.
       if (recording.current !== current) return;
       recording.current = null;
-      setValue(spoken ? appendDictated(before.current, spoken, maxLength) : before.current);
-      setDictating(spoken ? { kind: 'idle' } : { kind: 'failed', message: 'Nothing was heard. Try again.' });
+      const heard = draft.current;
+      if (heard) write(showTranscript(heard, spoken));
+      draft.current = null;
+      // Words the person already kept were heard, even when the final transcript comes back empty.
+      setDictating(spoken || heard?.heard ? { kind: 'idle' } : { kind: 'failed', message: 'Nothing was heard. Try again.' });
       ref.current?.focus();
     } catch (error) {
       if (recording.current !== current) return;
       // Words shown live stay: they are what was heard, even if the last of it was lost.
       recording.current = null;
+      draft.current = null;
       setDictating({ kind: 'failed', message: error instanceof Error ? error.message : 'That could not be transcribed.' });
     }
   };
@@ -120,7 +140,9 @@ export function CommentComposer({
     attempt.current++;
     recording.current?.cancel();
     recording.current = null;
-    setValue(before.current);
+    // The words still live go; what the person typed, or kept, stays.
+    if (draft.current) setValue(dropLive(draft.current));
+    draft.current = null;
     setDictating({ kind: 'idle' });
   };
 
@@ -165,7 +187,10 @@ export function CommentComposer({
           id={id}
           ref={ref}
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => {
+            if (draft.current) draft.current = editDraft(draft.current, e.target.value);
+            setValue(e.target.value);
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault();
@@ -184,8 +209,6 @@ export function CommentComposer({
           }}
           placeholder={placeholder}
           maxLength={maxLength}
-          // The dictation writes here while it runs; typing would be overwritten.
-          readOnly={busy}
           aria-busy={busy || undefined}
           rows={1}
           // eslint-disable-next-line jsx-a11y/no-autofocus

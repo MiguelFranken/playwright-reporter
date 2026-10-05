@@ -90,10 +90,7 @@ export const Dictate: Story = {
   },
 };
 
-/**
- * Live dictation: the words appear in the box while they are spoken, after
- * the draft, and the box cannot be typed in until the recording stops.
- */
+/** Live dictation: the words appear in the box while they are spoken, after the draft. */
 export const LiveDictation: Story = {
   args: { initialValue: 'Header:' },
   decorators: [withDictation(liveDictation(['make', 'the', 'button', 'larger'], 'Make the button larger.'))],
@@ -102,10 +99,78 @@ export const LiveDictation: Story = {
     const box = canvas.getByRole('textbox', { name: 'Comment' });
     await userEvent.click(canvas.getByRole('button', { name: 'Dictate' }));
     await waitFor(() => expect(box).toHaveValue('Header: make the button larger'));
-    await expect(box).toHaveAttribute('readonly');
     await userEvent.click(canvas.getByRole('button', { name: 'Stop dictating' }));
     await waitFor(() => expect(box).toHaveValue('Header: Make the button larger.'));
-    await expect(box).not.toHaveAttribute('readonly');
+  },
+};
+
+/** A host whose live transcript the story speaks, one `say` at a time. */
+function scriptedDictation(final: (said: string) => string = (said) => said) {
+  let heard: ((text: string) => void) | undefined;
+  let said = '';
+  const dictation: Dictation = {
+    start: async ({ onTranscript } = {}) => {
+      heard = onTranscript;
+      said = '';
+      return { stop: async () => final(said), cancel: () => {} };
+    },
+  };
+  const say = (text: string) => {
+    said = text;
+    heard?.(text);
+  };
+  return { dictation, say };
+}
+
+const misspoken = scriptedDictation((said) => `${said[0]?.toUpperCase()}${said.slice(1)}.`);
+
+/**
+ * The box stays editable while it listens: a word said twice is deleted with
+ * the keyboard, the caret stays put, and the words said next follow the edit.
+ */
+export const EditWhileDictating: Story = {
+  args: { initialValue: 'Header:' },
+  decorators: [withDictation(misspoken.dictation)],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const box = canvas.getByRole<HTMLTextAreaElement>('textbox', { name: 'Comment' });
+    await userEvent.click(canvas.getByRole('button', { name: 'Dictate' }));
+    await expect(canvas.getByRole('button', { name: 'Stop dictating' })).toBeVisible();
+    misspoken.say('make the the');
+    await waitFor(() => expect(box).toHaveValue('Header: make the the'));
+    await userEvent.click(box);
+    box.setSelectionRange(box.value.length, box.value.length);
+    await userEvent.keyboard('{Backspace}{Backspace}{Backspace}{Backspace}');
+    await expect(box).toHaveValue('Header: make the');
+    misspoken.say('make the the button larger');
+    await waitFor(() => expect(box).toHaveValue('Header: make the button larger'));
+    await expect(box.selectionStart).toBe(box.value.length);
+    await userEvent.click(canvas.getByRole('button', { name: 'Stop dictating' }));
+    // Only the words still live take the final revision; the ones edited stay as they were left.
+    await waitFor(() => expect(box).toHaveValue('Header: make the button larger.'));
+  },
+};
+
+const fixedEarlier = scriptedDictation();
+
+/** Typing before the live words leaves them live: they keep being revised, after the edit. */
+export const EditBeforeLiveWords: Story = {
+  args: { initialValue: 'Haeder:' },
+  decorators: [withDictation(fixedEarlier.dictation)],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const box = canvas.getByRole<HTMLTextAreaElement>('textbox', { name: 'Comment' });
+    await userEvent.click(canvas.getByRole('button', { name: 'Dictate' }));
+    await expect(canvas.getByRole('button', { name: 'Stop dictating' })).toBeVisible();
+    fixedEarlier.say('make it');
+    await waitFor(() => expect(box).toHaveValue('Haeder: make it'));
+    await userEvent.click(box);
+    box.setSelectionRange(1, 3);
+    await userEvent.keyboard('ea');
+    await expect(box).toHaveValue('Header: make it');
+    fixedEarlier.say('Make it bigger');
+    await waitFor(() => expect(box).toHaveValue('Header: Make it bigger'));
+    await expect(box.selectionStart).toBe(3);
   },
 };
 
