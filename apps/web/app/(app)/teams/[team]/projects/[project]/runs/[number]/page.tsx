@@ -173,7 +173,7 @@ async function Body({ params, searchParams }: Props) {
             ? {
                 href: `${base}/runs/${found.number}/review`,
                 toReview: review.changed + review.new,
-                total: review.approved + review.changes_requested + review.changed + review.new,
+                total: Object.values(review).reduce((a, b) => a + b, 0),
               }
             : undefined
         }

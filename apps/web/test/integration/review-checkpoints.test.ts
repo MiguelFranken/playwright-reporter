@@ -146,7 +146,7 @@ describe('migration', () => {
 });
 
 describe('statuses', () => {
-  test('new, then approved; an identical image inherits the approval, a different one is changed', async ({ db, tenant }) => {
+  test('new, then approved; an identical image inherits the approval, a different one is changed, an unapproved one is compared with the run before', async ({ db, tenant }) => {
     const t0 = new Date(Date.now() - 3 * 60_000);
     const first = await runWithCheckpoints(tenant, { hashes: [sha('a'), sha('b')], startedAt: t0 });
     expect(await statuses(first.run.id, t0)).toEqual({ desktop: 'new', mobile: 'new' });
@@ -165,18 +165,21 @@ describe('statuses', () => {
     expect(desktop.status).toBe('approved');
     expect(desktop.baseline?.capture?.id).toBe(desktopCapture.id);
     expect(desktop.previous?.capture.id).toBe(desktopCapture.id);
-    // The mobile image changed and was never approved: new, compared with the run before.
-    expect(mobile.status).toBe('new');
+    // The mobile image was never approved: compared with the run before, it changed.
+    expect(mobile.status).toBe('changed');
     expect(mobile.previous?.capture.sha256).toBe(sha('b'));
     expect(flow.video).not.toBeNull();
 
-    // A different desktop image after an approval is `changed`.
+    // A different desktop image after an approval is `changed`; the run before's very mobile pixels, never approved, are `unchanged`.
     const t2 = new Date(Date.now() - 60_000);
     const third = await runWithCheckpoints(tenant, { hashes: [sha('d'), sha('c')], startedAt: t2 });
-    expect(await statuses(third.run.id, t2)).toEqual({ desktop: 'changed', mobile: 'new' });
+    expect(await statuses(third.run.id, t2)).toEqual({ desktop: 'changed', mobile: 'unchanged' });
 
-    const counts = await runReviewCounts([third.run.id]);
-    expect(counts[third.run.id]).toEqual({ approved: 0, changes_requested: 0, changed: 1, new: 1 });
+    // The counts in SQL follow the same rule.
+    const counts = await runReviewCounts([third.run.id, second.run.id, first.run.id]);
+    expect(counts[third.run.id]).toEqual({ approved: 0, changes_requested: 0, changed: 1, unchanged: 1, new: 0 });
+    expect(counts[second.run.id]).toEqual({ approved: 1, changes_requested: 0, changed: 1, unchanged: 0, new: 0 });
+    expect(counts[first.run.id]).toEqual({ approved: 1, changes_requested: 1, changed: 0, unchanged: 0, new: 0 });
     const queue = await reviewQueue(tenant.project.id);
     expect(queue.map((q) => q.number)).toEqual([third.run.number, second.run.number, first.run.number]);
 
@@ -215,22 +218,34 @@ describe('comparing a whole run', () => {
 
     const records = await runReview({ id: third.run.id, startedAt: t2 });
     const data = toRunReviewData(records, {}, '/teams/t/projects/p', third.run.number);
-    const compared = (rule: Parameters<typeof compareRunReview>[3]) =>
-      compareRunReview(tenant.project.id, records, data, rule).then((d) => Object.fromEntries(d.flows[0].checkpoints[0].captures.map((c) => [c.variant, c.compare ?? null])));
+    const comparedWith = (rule: Parameters<typeof compareRunReview>[3], recs = records, d = data) =>
+      compareRunReview(tenant.project.id, recs, d, rule).then((r) => Object.fromEntries(r.flows[0].checkpoints[0].captures.map((c) => [c.variant, { compare: c.compare ?? null, status: c.status }])));
+    const compared = (rule: Parameters<typeof compareRunReview>[3]) => comparedWith(rule).then((r) => ({ desktop: r.desktop.compare, mobile: r.mobile.compare }));
 
-    // Against run #first: desktop's pick is its approved baseline, the default — left as it is; mobile is compared with it.
-    const withFirst = await compared(`run:${first.run.number}`);
-    expect(withFirst.desktop).toBeNull();
-    expect(withFirst.mobile).toMatchObject({ label: `Run #${first.run.number}`, runNumber: first.run.number, same: false });
-    // The run before: desktop (default: the baseline) is compared with run #second; mobile's default is the run before already.
+    // Against run #first: every screen names the run it is compared with, also desktop, whose approved baseline it is anyway.
+    const withFirst = await comparedWith(`run:${first.run.number}`);
+    expect(withFirst.desktop).toMatchObject({ compare: { label: `Run #${first.run.number}`, runNumber: first.run.number, same: false }, status: 'changed' });
+    expect(withFirst.mobile).toMatchObject({ compare: { label: `Run #${first.run.number}`, runNumber: first.run.number, same: false }, status: 'changed' });
+    // The run before: both screens are compared with run #second.
     const withBefore = await compared('previous');
     expect(withBefore.desktop).toMatchObject({ label: `Run #${second.run.number}`, runNumber: second.run.number });
-    expect(withBefore.mobile).toBeNull();
+    expect(withBefore.mobile).toMatchObject({ label: `Run #${second.run.number}`, runNumber: second.run.number });
     // The default, and the rules the viewer picks per image, change nothing.
     expect(await compared('auto')).toEqual({ desktop: null, mobile: null });
     expect(await compared('comments')).toEqual({ desktop: null, mobile: null });
     // A run that does not exist leaves the review as it is.
     expect(await compared('run:9999')).toEqual({ desktop: null, mobile: null });
+
+    // Compared with the run before, the baseline plays no part: the desktop screen differs from the approved one
+    // (`changed` by default) but has the run before's very pixels, so it is `unchanged`; a screen that run did not capture is `new`.
+    const t3 = new Date(Date.now() - 30_000);
+    const fourth = await runWithCheckpoints(tenant, { hashes: [sha('d'), sha('f')], startedAt: t3 });
+    const fourthRecords = await runReview({ id: fourth.run.id, startedAt: t3 });
+    const fourthData = toRunReviewData(fourthRecords, {}, '/teams/t/projects/p', fourth.run.number);
+    expect(Object.fromEntries(fourthData.flows[0].checkpoints[0].captures.map((c) => [c.variant, c.status]))).toEqual({ desktop: 'changed', mobile: 'changed' });
+    const fourthBefore = await comparedWith('previous', fourthRecords, fourthData);
+    expect(fourthBefore.desktop).toMatchObject({ compare: { runNumber: third.run.number, same: true }, status: 'unchanged' });
+    expect(fourthBefore.mobile).toMatchObject({ compare: { runNumber: third.run.number, same: false }, status: 'changed' });
   });
 });
 

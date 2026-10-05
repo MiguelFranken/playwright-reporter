@@ -390,7 +390,7 @@ function CheckpointColumn({
                 />
               </div>
               <span className="flex flex-wrap items-center gap-1.5 text-label-xs text-muted-foreground">
-                {library ? null : <ReviewStatusDot status={c.status} />}
+                {library || c.status === 'unchanged' ? null : <ReviewStatusDot status={c.status} />}
                 <span className="capitalize">{c.variant}</span>
                 {library && !c.compare ? null : c.compare?.same ? (
                   <span>same as {c.compare.label}</span>

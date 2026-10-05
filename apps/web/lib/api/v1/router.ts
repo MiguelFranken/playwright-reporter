@@ -168,7 +168,7 @@ export const router = {
       path: `${P}/runs/{run}/review-checkpoints`,
       summary: 'List a run’s review checkpoints',
       description:
-        'The named review screenshots the run’s tests captured, per variant, in journey order, with each image’s review status against its approved baseline. `status` defaults to `needs-review` (changed and new).',
+        'The named review screenshots the run’s tests captured, per variant, in journey order, with each image’s review status: against its approved baseline, else the run before (`unchanged` when it has that run’s very pixels, `new` when no earlier run captured it). `status` defaults to `needs-review` (changed and new).',
       tags: ['Visual review'],
       params: { run: runRef },
     }),

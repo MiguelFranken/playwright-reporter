@@ -36,7 +36,7 @@ also accepts `project`, `format` (`markdown` | `json`) and `maxChars`. See the R
 | [`link_test_case`](#link_test_case) | write | Link Playwright tests (by test id from find_tests) to a test case, or unlink them. |
 | [`adopt_tests`](#adopt_tests) | write | Turn Playwright tests into test cases already linked to them: steps from their test.step() calls, one case per test across browsers. |
 | [`list_feedback_requests`](#list_feedback_requests) | core | Start here to fix a product from visual feedback: every open request for a change on its screenshots — comment threads and "changes requested" without a comment — one record each, with the producing test (id, full title, file, browser), the checkpoint key, the image now and the one the request was made on, the whole conversation, and whether it waits for a fix or changed since (verify). |
-| [`list_review_checkpoints`](#list_review_checkpoints) | core | A run's review checkpoints — the named screenshots its tests capture at their milestones, per variant (desktop, mobile) — in journey order, with each image's review status (changed against its approved baseline, new, approved or changes requested) its open comment threads, and its measured pixel change: how much of the image changed, in how many regions, whether the page changed size or its content moved. |
+| [`list_review_checkpoints`](#list_review_checkpoints) | core | A run's review checkpoints — the named screenshots its tests capture at their milestones, per variant (desktop, mobile) — in journey order, with each image's status (changed vs its approved baseline, else the run before; unchanged; new: first capture; approved; changes requested), open comment threads and measured pixel change: share, regions, size change, moved content. |
 | [`get_review_checkpoint`](#get_review_checkpoint) | core | One review checkpoint image to look at, beside the image it is compared with — the one a request was made on (against "origin"), the approved baseline, or the run before — with the measured change and close-ups of the largest changed regions. |
 | [`review_checkpoint`](#review_checkpoint) | write | Approve review checkpoint images, or ask for changes — with a comment, and on one image with pins that mark each change where it is. |
 | [`list_review_threads`](#list_review_threads) | core | The comment threads people (or assistants) pinned on a run’s review images — change requests at a spot or an area of a screenshot — per image, by the number on the pin, with where each points (pixels, percent, CSS pixels) and the conversation. |
@@ -634,7 +634,7 @@ Structured output fields: `project`, `scope`, `pinnedRun`, `latestRun`, `counts`
 
 **List review checkpoints** · toolset `core`
 
-A run's review checkpoints — the named screenshots its tests capture at their milestones, per variant (desktop, mobile) — in journey order, with each image's review status (changed against its approved baseline, new, approved or changes requested) its open comment threads, and its measured pixel change: how much of the image changed, in how many regions, whether the page changed size or its content moved. Changes within the project's tolerance are approved automatically (autoApproved). Defaults to what needs review. Look at one with get_review_checkpoint.
+A run's review checkpoints — the named screenshots its tests capture at their milestones, per variant (desktop, mobile) — in journey order, with each image's status (changed vs its approved baseline, else the run before; unchanged; new: first capture; approved; changes requested), open comment threads and measured pixel change: share, regions, size change, moved content. Changes within the project's tolerance are approved automatically (autoApproved). Defaults to what needs review. Look at one with get_review_checkpoint.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -643,7 +643,7 @@ A run's review checkpoints — the named screenshots its tests capture at their 
 | `maxChars` | integer (1000–100000) |  | Character budget for this answer (default 20000). |
 | `run` | integer (–9007199254740991) \| string |  | The run (default "latest"). Scope "latest" with branch. |
 | `branch` | string |  | Git branch name, e.g. "main". |
-| `status` | `"needs-review"` \| `"all"` \| `"changed"` \| `"new"` \| `"changes_requested"` \| `"approved"` |  | needs-review (default: changed and new images), all, changed, new, changes_requested or approved. |
+| `status` | `"needs-review"` \| `"all"` \| `"changed"` \| `"new"` \| `"unchanged"` \| `"changes_requested"` \| `"approved"` |  | needs-review (default: changed and new images), all, changed, new, unchanged, changes_requested or approved. |
 | `test` | string |  | Part of a test title or file, to narrow the list. |
 | `variant` | string |  | Only this variant, e.g. "desktop" or "mobile". |
 | `ignore` | `"active"` \| `"ever"` \| `"applied"` \| `"suppressed"` \| `"fully-suppressed"` \| `"needs-review"` |  | Only images whose rules (areas left out of the comparison) are: active, ever, applied, suppressed, fully-suppressed or needs-review. |

@@ -1,4 +1,4 @@
-import type { CompareTargetView, DiffRegion, RunCompareTargetView, ReviewCaptureView, ReviewCheckpointView, ReviewDiffView, ReviewFlowView, ReviewImage } from '../lib/review';
+import { statusAgainstRun, type CompareTargetView, type DiffRegion, type RunCompareTargetView, type ReviewCaptureView, type ReviewCheckpointView, type ReviewDiffView, type ReviewFlowView, type ReviewImage } from '../lib/review';
 import type { ReviewQueueRow } from '../views/review/review-queue';
 import { ago, NOW } from './now';
 
@@ -76,10 +76,13 @@ function capture(label: string, variant: 'desktop' | 'mobile', status: ReviewCap
     viewport: mobile ? { width: 390, height: 844 } : { width: 1280, height: 720 },
     deviceScaleFactor: 2,
     fullPage: true,
+    // A new screen has no earlier image; an unchanged one has the run before's very pixels.
     previous:
-      status === 'changed' || status === 'new'
-        ? { captureId: id('prev'), image: image(label, { mobile, tall: opts.tall }), runNumber: 481, same: false }
-        : { captureId: id('prev'), image: image(label, { mobile, ...opts }), runNumber: 481, same: true },
+      status === 'new'
+        ? null
+        : status === 'changed'
+          ? { captureId: id('prev'), image: image(label, { mobile, tall: opts.tall }), runNumber: 481, same: false }
+          : { captureId: id('prev'), image: image(label, { mobile, ...opts }), runNumber: 481, same: true },
     baseline:
       status === 'changed' || status === 'approved'
         ? {
@@ -181,8 +184,9 @@ export const placeOrderFlow: ReviewFlowView = {
       { description: 'Every field complete, just before the order is placed.', stepPath: ['Checkout', 'fill in the checkout form'] },
     ),
     checkpoint('order-confirmation', 'Order confirmation', 2, [
-      capture('Thank you!', 'desktop', 'new', { diff: measuredDiff([], { width: 2560, height: 1440 }, { against: 'previous', changedPixels: 0, ratio: 0 }) }),
-      capture('Thank you!', 'mobile', 'new', { diff: { ...measuredDiff([], { width: 780, height: 1688 }), state: 'pending', against: 'previous', overlayUrl: null } }),
+      // Nothing approved yet: the desktop screen was captured for the first time, the mobile one has the run before's very pixels.
+      capture('Thank you!', 'desktop', 'new'),
+      capture('Thank you!', 'mobile', 'unchanged'),
     ]),
   ],
 };
@@ -328,10 +332,10 @@ export const approvedFlows: ReviewFlowView[] = [
 ];
 
 export const reviewQueueRows: ReviewQueueRow[] = [
-  { number: 483, status: 'passed', branch: 'feat/checkout-redesign', commit: '9f2c1ab', commitMessage: 'Redesign the checkout summary', prNumber: 212, prTitle: 'Checkout redesign', startedAt: ago(12).toISOString(), counts: { changed: 4, new: 3, changes_requested: 0, approved: 38 }, reviewHref: '#run-483/review', changeHref: '#pr:212', libraryHref: '#library-pr:212' },
-  { number: 482, status: 'failed', branch: 'fix/coupon-rounding', commit: '51de0c3', commitMessage: 'Round fixed-value coupons to cents', prNumber: 209, prTitle: 'Round coupons to cents', startedAt: ago(95).toISOString(), counts: { changed: 0, new: 2, changes_requested: 1, approved: 40 }, reviewHref: '#run-482/review', changeHref: '#pr:209', libraryHref: '#library-pr:209' },
-  { number: 480, status: 'passed', branch: 'feat/checkout-redesign', commit: '77aa010', commitMessage: 'Move the summary into a sidebar', prNumber: 212, prTitle: 'Checkout redesign', startedAt: ago(200).toISOString(), counts: { changed: 6, new: 3, changes_requested: 0, approved: 36 }, reviewHref: '#run-480/review', changeHref: '#pr:212', libraryHref: '#library-pr:212' },
-  { number: 481, status: 'passed', branch: 'main', commit: 'a0b1c2d', commitMessage: 'Merge pull request #207', prNumber: null, startedAt: ago(60 * 5).toISOString(), counts: { changed: 0, new: 0, changes_requested: 0, approved: 45 }, reviewHref: '#run-481/review', changeHref: '#branch:main', libraryHref: '#library-branch:main' },
+  { number: 483, status: 'passed', branch: 'feat/checkout-redesign', commit: '9f2c1ab', commitMessage: 'Redesign the checkout summary', prNumber: 212, prTitle: 'Checkout redesign', startedAt: ago(12).toISOString(), counts: { changed: 4, new: 3, changes_requested: 0, unchanged: 12, approved: 38 }, reviewHref: '#run-483/review', changeHref: '#pr:212', libraryHref: '#library-pr:212' },
+  { number: 482, status: 'failed', branch: 'fix/coupon-rounding', commit: '51de0c3', commitMessage: 'Round fixed-value coupons to cents', prNumber: 209, prTitle: 'Round coupons to cents', startedAt: ago(95).toISOString(), counts: { changed: 0, new: 2, changes_requested: 1, unchanged: 0, approved: 40 }, reviewHref: '#run-482/review', changeHref: '#pr:209', libraryHref: '#library-pr:209' },
+  { number: 480, status: 'passed', branch: 'feat/checkout-redesign', commit: '77aa010', commitMessage: 'Move the summary into a sidebar', prNumber: 212, prTitle: 'Checkout redesign', startedAt: ago(200).toISOString(), counts: { changed: 6, new: 3, changes_requested: 0, unchanged: 0, approved: 36 }, reviewHref: '#run-480/review', changeHref: '#pr:212', libraryHref: '#library-pr:212' },
+  { number: 481, status: 'passed', branch: 'main', commit: 'a0b1c2d', commitMessage: 'Merge pull request #207', prNumber: null, startedAt: ago(60 * 5).toISOString(), counts: { changed: 0, new: 0, changes_requested: 0, unchanged: 0, approved: 45 }, reviewHref: '#run-481/review', changeHref: '#branch:main', libraryHref: '#library-branch:main' },
 ];
 
 export { NOW };
@@ -446,6 +450,8 @@ export const runCompareFlows: ReviewFlowView[] = [
         const changed = cp.name === 'checkout-ready';
         return {
           ...c,
+          // Statuses against run #479, as the server sets them: the baseline plays no part.
+          status: statusAgainstRun({ decision: c.decision?.decision, sha256: 'this', reference: { sha256: changed ? 'other' : 'this' } }),
           compare: { captureId: `run-479-${c.id}`, image: c.baseline?.image ?? c.image, label: 'Run #479', same: !changed, runNumber: 479 },
           diff: changed && c.diff ? { ...c.diff, against: 'compare' as const } : null,
         };

@@ -183,8 +183,9 @@ function withLive(flows: ReviewFlowView[], live: ReadonlyMap<string, LiveCapture
   return patchCaptures(flows, (cap) => {
     const l = live.get(cap.id);
     if (!l) return undefined;
-    // A library comparison carries no review status of its own.
-    return cap.compare ? { ...cap, diff: l.diff ?? cap.diff } : { ...cap, diff: l.diff ?? cap.diff, status: l.status, decision: l.decision ?? cap.decision };
+    // A library comparison carries no review status of its own. A measurement changes a status only by
+    // deciding (a tolerance approval); otherwise the page's own stays, which may be against a chosen run.
+    return cap.compare ? { ...cap, diff: l.diff ?? cap.diff } : { ...cap, diff: l.diff ?? cap.diff, status: l.decision ? l.status : cap.status, decision: l.decision ?? cap.decision };
   });
 }
 

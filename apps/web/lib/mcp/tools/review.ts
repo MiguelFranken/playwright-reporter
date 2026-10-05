@@ -13,7 +13,7 @@
 import type { ImageContent } from '@modelcontextprotocol/server';
 import sharp from 'sharp';
 import { z } from 'zod';
-import { checkpointLabel, describeDiff, matchesReviewFilter, REVIEW_DECISIONS, REVIEW_FILTERS } from '@miguelfranken/ui/lib/review';
+import { checkpointLabel, describeDiff, emptyReviewCounts, matchesReviewFilter, REVIEW_DECISIONS, REVIEW_FILTERS } from '@miguelfranken/ui/lib/review';
 import { MAX_COMMENT_LENGTH, projectAnchor } from '@miguelfranken/ui/lib/review-threads';
 import { MARKUP_COLORS, MARKUP_TOOLS, type MarkupShape } from '@miguelfranken/ui/lib/review-markup';
 import { signCaptureImagePath } from '@/lib/auth/artifact-url';
@@ -157,7 +157,7 @@ const listInput = z.object({
   status: z
     .enum(REVIEW_FILTERS)
     .optional()
-    .describe('needs-review (default: changed and new images), all, changed, new, changes_requested or approved.'),
+    .describe('needs-review (default: changed and new images), all, changed, new, unchanged, changes_requested or approved.'),
   test: z.string().optional().describe('Part of a test title or file, to narrow the list.'),
   variant: z.string().optional().describe('Only this variant, e.g. "desktop" or "mobile".'),
   ignore: z.enum(IGNORE_FILTERS).optional().describe('Only images whose rules (areas left out of the comparison) are: active, ever, applied, suppressed, fully-suppressed or needs-review.'),
@@ -213,7 +213,7 @@ const listOutput = output({
   project: z.string(),
   run: z.number(),
   reviewUrl: z.string(),
-  counts: z.object({ approved: z.number(), changes_requested: z.number(), changed: z.number(), new: z.number() }),
+  counts: z.object({ approved: z.number(), changes_requested: z.number(), changed: z.number(), unchanged: z.number(), new: z.number() }),
   tests: z.array(
     z.object({
       title: z.string(),
@@ -240,7 +240,7 @@ export const listReviewCheckpoints = defineTool({
   title: 'List review checkpoints',
   toolset: 'core',
   description:
-    "A run's review checkpoints — the named screenshots its tests capture at their milestones, per variant (desktop, mobile) — in journey order, with each image's review status (changed against its approved baseline, new, approved or changes requested) its open comment threads, and its measured pixel change: how much of the image changed, in how many regions, whether the page changed size or its content moved. Changes within the project's tolerance are approved automatically (autoApproved). Defaults to what needs review. Look at one with get_review_checkpoint.",
+    "A run's review checkpoints — the named screenshots its tests capture at their milestones, per variant (desktop, mobile) — in journey order, with each image's status (changed vs its approved baseline, else the run before; unchanged; new: first capture; approved; changes requested), open comment threads and measured pixel change: share, regions, size change, moved content. Changes within the project's tolerance are approved automatically (autoApproved). Defaults to what needs review. Look at one with get_review_checkpoint.",
   input: listInput,
   output: listOutput,
   async handler(args, ctx) {
@@ -249,7 +249,7 @@ export const listReviewCheckpoints = defineTool({
     const filter = args.status ?? 'needs-review';
     const q = args.test?.toLowerCase();
     const flows = await runReview({ id: run.id, startedAt: run.startedAt });
-    const counts = { approved: 0, changes_requested: 0, changed: 0, new: 0 };
+    const counts = emptyReviewCounts();
     const tests = flows
       .filter((f) => !q || f.title.toLowerCase().includes(q) || f.titlePath.join(' ').toLowerCase().includes(q) || f.file.toLowerCase().includes(q))
       .map((f) => ({
@@ -292,9 +292,9 @@ export const listReviewCheckpoints = defineTool({
       data: { project: project.ref, run: run.number, reviewUrl, counts, tests },
       render(md, d) {
         md.heading(`Review checkpoints of run #${d.run}`, 2);
-        md.line(`${d.counts.changed} changed, ${d.counts.new} new, ${d.counts.changes_requested} with changes requested, ${d.counts.approved} approved. ${link('Review in the app', d.reviewUrl)}`);
+        md.line(`${d.counts.changed} changed, ${d.counts.new} new, ${d.counts.unchanged} unchanged, ${d.counts.changes_requested} with changes requested, ${d.counts.approved} approved. ${link('Review in the app', d.reviewUrl)}`);
         if (d.tests.length === 0) {
-          md.line(filter === 'needs-review' ? 'Nothing needs review: every image matches an approved one or was decided about.' : 'No checkpoints match.');
+          md.line(filter === 'needs-review' ? 'Nothing needs review: every image was decided about, matches an approved one or, with none approved, the run before.' : 'No checkpoints match.');
           return;
         }
         for (const t of d.tests) {

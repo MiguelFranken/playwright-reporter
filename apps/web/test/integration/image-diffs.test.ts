@@ -109,8 +109,8 @@ describe('planning and measuring', () => {
     expect(caps.desktop.diff).toMatchObject({ status: 'done', changedPixels: 40, totalPixels: 120 * 90, regions: [{ x: 20, y: 30, width: 10, height: 4, pixels: 40 }] });
     expect(caps.desktop.diff!.overlayKey).toBeTruthy();
     expect(await getStorage().head(caps.desktop.diff!.overlayKey!)).toMatchObject({ contentType: 'image/png' });
-    // Nobody approved mobile: measured against the run before.
-    expect(caps.mobile).toMatchObject({ status: 'new', diffAgainst: 'previous' });
+    // Nobody approved mobile: measured against the run before, and changed since.
+    expect(caps.mobile).toMatchObject({ status: 'changed', diffAgainst: 'previous' });
     expect(caps.mobile.diff!.changedPixels).toBe(25 + 36);
     expect(needsPlanning(Object.values(caps))).toBe(false);
   });
@@ -191,8 +191,8 @@ describe('tolerance', () => {
     expect(caps.desktop.decision!.comment).toMatch(/no visible change/);
     // The baseline stays the reviewer's image.
     expect(caps.desktop.baseline!.capture!.id).toBe(firstCaps.desktop.id);
-    // Mobile has no approved baseline: nothing to be tolerant about.
-    expect(caps.mobile.status).toBe('new');
+    // Mobile has no approved baseline: nothing to be tolerant about, and other bytes than the run before.
+    expect(caps.mobile.status).toBe('changed');
     // Idempotent.
     expect(await approveWithinTolerance(second.run.id)).toBe(0);
   });

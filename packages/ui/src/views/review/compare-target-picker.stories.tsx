@@ -6,7 +6,7 @@ import { resolveCompare, type CompareRule } from '../../lib/review';
 import { CompareTargetPicker } from './compare-target-picker';
 
 const capture = placeOrderFlow.checkpoints[1].captures[0];
-const firstCapture = placeOrderFlow.checkpoints[2].captures[1];
+const firstCapture = placeOrderFlow.checkpoints[2].captures[0];
 
 /** Controlled like the viewer controls it: the rule picks the reference, whose label the trigger shows. */
 function Hosted(props: Omit<React.ComponentProps<typeof CompareTargetPicker>, 'rule' | 'onRuleChange' | 'referenceLabel'> & { initial?: CompareRule; onRuleChange?: (next: CompareRule) => void }) {

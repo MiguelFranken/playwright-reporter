@@ -18,6 +18,10 @@ import {
   inFolder,
   parseCompareRule,
   resolveCompare,
+  reviewStatusOf,
+  statusAgainstRun,
+  NEEDS_REVIEW,
+  worstStatus,
   type CompareTargetView,
   sizeChange,
   type ReviewDiffView,
@@ -212,5 +216,47 @@ describe('compare rules', () => {
     expect(resolveCompare(before, 'previous', targets)).toEqual({ target: null, fellBack: false });
     // A library comparison is no run's pick.
     expect(comparedByRule({ ...capture, compare: { captureId: 'main', image: img, label: 'main', same: false } }, 'previous')).toBe(false);
+  });
+});
+
+describe('reviewStatusOf', () => {
+  const base = { decision: null, approved: false, sha256: 'a' };
+  it('keeps a decision about the exact pixels', () => {
+    expect(reviewStatusOf({ ...base, decision: 'approved', reference: { sha256: 'b' } })).toBe('approved');
+    expect(reviewStatusOf({ ...base, decision: 'changes_requested', approved: true, reference: null })).toBe('changes_requested');
+  });
+  it('is changed against an approved baseline', () => {
+    expect(reviewStatusOf({ ...base, approved: true, reference: { sha256: 'a' } })).toBe('changed');
+  });
+  it('compares with the run before while nothing is approved', () => {
+    expect(reviewStatusOf({ ...base, reference: { sha256: 'a' } })).toBe('unchanged');
+    expect(reviewStatusOf({ ...base, reference: { sha256: 'b' } })).toBe('changed');
+    expect(reviewStatusOf({ ...base, sha256: null, reference: { sha256: null } })).toBe('changed');
+  });
+  it('is new only without any earlier image', () => {
+    expect(reviewStatusOf({ ...base, reference: null })).toBe('new');
+    expect(reviewStatusOf({ ...base, reference: undefined })).toBe('new');
+  });
+  it('asks for no review of unchanged pixels, and ranks them below a request', () => {
+    expect(NEEDS_REVIEW).not.toContain('unchanged');
+    expect(worstStatus(['approved', 'unchanged'])).toBe('unchanged');
+    expect(worstStatus(['unchanged', 'changes_requested'])).toBe('changes_requested');
+  });
+});
+
+describe('statusAgainstRun', () => {
+  it('says whether the screen changed since the chosen run, whatever was approved before', () => {
+    expect(statusAgainstRun({ decision: null, sha256: 'a', reference: { sha256: 'a' } })).toBe('unchanged');
+    expect(statusAgainstRun({ decision: null, sha256: 'a', reference: { sha256: 'b' } })).toBe('changed');
+    expect(statusAgainstRun({ decision: null, sha256: 'a', reference: null })).toBe('new');
+  });
+  it('shows the same pixels as unchanged even when they were approved', () => {
+    expect(statusAgainstRun({ decision: 'approved', sha256: 'a', reference: { sha256: 'a' } })).toBe('unchanged');
+  });
+  it('keeps an approval of changed pixels, so a decision does not bounce back', () => {
+    expect(statusAgainstRun({ decision: 'approved', sha256: 'a', reference: { sha256: 'b' } })).toBe('approved');
+  });
+  it('always shows a change request', () => {
+    expect(statusAgainstRun({ decision: 'changes_requested', sha256: 'a', reference: { sha256: 'a' } })).toBe('changes_requested');
   });
 });
