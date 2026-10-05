@@ -11268,10 +11268,9 @@
                                 "origin",
                                 "baseline",
                                 "previous",
-                                "run",
                                 "capture"
                               ],
-                              "description": "origin: the image a request was made on; baseline: the approved image; previous: the run before; run: the same screen in the run asked for; capture: the one asked for."
+                              "description": "origin: the image a request was made on; baseline: the approved image; previous: the run before; capture: the one asked for (againstCapture, or the same screen in againstRun)."
                             },
                             "captureId": {
                               "type": [

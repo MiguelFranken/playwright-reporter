@@ -108,7 +108,7 @@ describe('review checkpoint tools', () => {
     const shownPrevious = await call(writer, 'get_review_checkpoint', { project, capture: unchanged.captureId, against: 'previous', images: 'none' });
     expect(shownPrevious.structuredContent).toMatchObject({ status: 'unchanged', comparison: { role: 'previous', run: second, identical: true }, diff: null, changedRegions: [] });
     const shownRun = await call(writer, 'get_review_checkpoint', { project, capture: unchanged.captureId, againstRun: `#${first}`, images: 'none' });
-    expect(shownRun.structuredContent).toMatchObject({ status: 'changed', comparison: { role: 'run', run: first, identical: false } });
+    expect(shownRun.structuredContent).toMatchObject({ status: 'changed', comparison: { role: 'capture', run: first, reason: `the same checkpoint in run #${first}`, identical: false } });
     const shownDefault = await call(writer, 'get_review_checkpoint', { project, capture: unchanged.captureId, images: 'none' });
     expect(shownDefault.structuredContent).toMatchObject({ status: 'changed', comparison: { role: 'baseline', run: first } });
     await writer.close();

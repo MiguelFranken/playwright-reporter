@@ -437,7 +437,7 @@ const getOutput = output({
   referenceUrl: z.string().nullable(),
   comparison: z
     .object({
-      role: z.enum(['origin', 'baseline', 'previous', 'run', 'capture']).describe('origin: the image a request was made on; baseline: the approved image; previous: the run before; run: the same screen in the run asked for; capture: the one asked for.'),
+      role: z.enum(['origin', 'baseline', 'previous', 'capture']).describe('origin: the image a request was made on; baseline: the approved image; previous: the run before; capture: the one asked for (againstCapture, or the same screen in againstRun).'),
       captureId: z.string().nullable(),
       run: z.number().nullable(),
       reason: z.string().describe('Why this one.'),
@@ -538,7 +538,7 @@ async function inlineCapture(capture: CaptureRecord, pins: Parameters<typeof ann
 const runNumberOf = async (runId: string) => (await db.select({ number: runs.number }).from(runs).where(eq(runs.id, runId)))[0]?.number ?? null;
 
 interface Comparison {
-  role: 'origin' | 'baseline' | 'previous' | 'run' | 'capture';
+  role: 'origin' | 'baseline' | 'previous' | 'capture';
   capture: CaptureRecord | null;
   run: number | null;
   reason: string;
@@ -560,7 +560,7 @@ async function comparisonFor(
     const other = await runCapturesByScreen(projectId, opts.againstRun);
     const c = other?.captures.get(identityKey(capture));
     if (!c) return { comparison: null, missing: `Run #${opts.againstRun} did not capture this checkpoint and variant (or its image is no longer stored).` };
-    return { comparison: { role: 'run', capture: c, run: opts.againstRun, reason: `the same checkpoint in run #${opts.againstRun}`, label: `run #${opts.againstRun}` }, missing: null };
+    return { comparison: { role: 'capture', capture: c, run: opts.againstRun, reason: `the same checkpoint in run #${opts.againstRun}`, label: `run #${opts.againstRun}` }, missing: null };
   }
   if (opts.againstCapture) {
     if (!isUuid(opts.againstCapture)) throw invalid('"againstCapture" is a capture id.');
