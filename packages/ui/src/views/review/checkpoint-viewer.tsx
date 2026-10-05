@@ -47,7 +47,7 @@ import { comparisonIdOf, DiffRegionList, VisualDiffAiActions } from './diff-regi
 import { DiffSummary } from './diff-summary';
 import { COMPARE_MODE_LABELS, COMPARE_MODES, ImageCompare, type CompareMode } from './image-compare';
 import { CompareTargetPicker, type CompareWithProps } from './compare-target-picker';
-import { IgnoreRegionsEditor, type IgnoreRect, type IgnoreRulesChange } from './ignore-regions-editor';
+import { IgnoreRegionsCanvas, IgnoreRegionsPanel, useIgnoreDrafts, type IgnoreRect, type IgnoreRulesChange } from './ignore-regions-editor';
 import { regionId, type AiMode, type AnalysisView, type IgnorePreviewView, type MaskPolicy, type Rect } from '../../lib/visual-diff';
 import { FrameToolbar } from './frame-toolbar';
 import { PinLayer, type PinFocusRequest, type ThreadDraft } from './pin-layer';
@@ -540,14 +540,14 @@ export function CheckpointViewer({
   const gap = fill ? 1 : 24;
   // A screen's caption: a bar across its top when the screens fill the stage, a line above its frame otherwise.
   const caption = fill ? PANE_BAR : 28;
-  // What sits around the screens inside the stage: captions above them (leaving areas out, the help and the list below),
+  // What sits around the screens inside the stage: captions above them (leaving areas out, nothing: the rules are in the side panel),
   // the comparison's controls, the changes' minimap beside them. Feedback being verified has only captions: what it
   // says is in the side panel.
   const verifyingPanes = threadComparing || Boolean(requestCapture);
   const around = verifyingPanes
     ? { above: caption, beside: 0 }
     : effectiveStage === 'ignore'
-        ? { above: 180, beside: 0 }
+        ? { above: 0, beside: 0 }
         : effectiveStage === 'changes'
           ? { above: multi ? caption : 0, beside: 20 * compared.filter((x) => x.changes).length }
           : effectiveStage === 'onion' || effectiveStage === 'difference'
@@ -585,6 +585,20 @@ export function CheckpointViewer({
   const heightFit = `tan(atan2(var(${SCREEN_ROOM_VAR}), ${Math.max(1, ...frames.map((f) => f.height))}px))`;
   const zoomCss = fill ? `max(0.1, ${widthFit})` : frameSettings.zoom === 'fit' ? `max(0.1, min(1, ${widthFit}, ${heightFit}))` : `max(0.1, min(${frameSettings.zoom}, ${widthFit}))`;
   const tall = fill || verifyingPanes;
+  // Leaving areas out: the stage shows only the image to draw on, the side panel what each area is for and the save.
+  const leavingOut = Boolean(current && effectiveStage === 'ignore' && onIgnoreRegionsChange);
+  const ignoreDrafts = useIgnoreDrafts({
+    open: leavingOut,
+    rules: current?.ignore?.rules ?? [],
+    prefill,
+    onPreview: onIgnorePreview && reference && current ? (regions) => onIgnorePreview({ captureId: current.id, regions }) : undefined,
+  });
+  const leaveOut = (on: boolean) => {
+    if (!on) setPrefill(null);
+    // The rules are edited in the side panel: it opens with them.
+    if (on && !panel.open) setPanel({ open: true });
+    showStage(on ? 'ignore' : 'changes');
+  };
   const pending = new Set(pendingIds);
   const busy = shown.some((c) => pending.has(c.id));
 
@@ -1305,7 +1319,7 @@ export function CheckpointViewer({
               style={overlaid ? { gridTemplateColumns: panelColumns(panel.open ? panel.width : null) } : undefined}
             >
               {/* The container the screens take their size from (see `zoomCss`): its height too, beside the panel. */}
-              <section data-float-bounds className="relative flex min-h-0 flex-col bg-surface [container-type:inline-size] lg:[container-type:size]" aria-label="Checkpoint image">
+              <section className="relative flex min-h-0 flex-col bg-surface [container-type:inline-size] lg:[container-type:size]" aria-label="Checkpoint image">
                 <div
                   ref={setToolbarEl}
                   className="z-20 flex flex-wrap items-center justify-between gap-2 border-b border-border bg-surface/85 px-4 py-2 backdrop-blur-sm lg:absolute lg:inset-x-0"
@@ -1349,7 +1363,7 @@ export function CheckpointViewer({
                       </ToggleGroup>
                     ) : null}
                     {canIgnore ? (
-                      <Button variant={effectiveStage === 'ignore' ? 'secondary' : 'ghost'} size="sm" aria-pressed={effectiveStage === 'ignore'} onClick={() => setStage(effectiveStage === 'ignore' ? 'changes' : 'ignore')}>
+                      <Button variant={effectiveStage === 'ignore' ? 'secondary' : 'ghost'} size="sm" aria-pressed={effectiveStage === 'ignore'} onClick={() => leaveOut(effectiveStage !== 'ignore')}>
                         <EyeOff /> Leave out areas{current?.ignore?.active ? ` (${current.ignore.active})` : ''}
                       </Button>
                     ) : null}
@@ -1376,9 +1390,8 @@ export function CheckpointViewer({
                   className={cn(
                     // Its focus ring is drawn by the frame after it, around the part the bars leave clear.
                     'peer min-h-0 flex-1 outline-none',
-                    // The screens fit; only a comparison while verifying, the summary after resolving and the editor's list below
-                    // the screen can run longer.
-                    verifying || (resolving && ended) || effectiveStage === 'ignore' ? 'overflow-auto' : 'overflow-hidden',
+                    // The screens fit; only a comparison while verifying and the summary after resolving can run longer.
+                    verifying || (resolving && ended) ? 'overflow-auto' : 'overflow-hidden',
                     // Filling, the screens lose their frame and run to the stage's edges.
                     fill
                       ? 'p-0 [&_[data-slot=diff-highlight]]:rounded-none [&_[data-slot=diff-highlight]]:shadow-none [&_[data-slot=diff-highlight]]:ring-0 [&_[data-slot=screen-frame]]:rounded-none [&_[data-slot=screen-frame]]:shadow-none [&_[data-slot=screen-frame]]:ring-0'
@@ -1395,7 +1408,7 @@ export function CheckpointViewer({
                         ? {
                             '--stage-top': `${inset.top}px`,
                             '--stage-bottom': `${inset.bottom}px`,
-                            // Whatever the stage itself scrolls (a comparison while verifying, the areas left out) starts below the bars too.
+                            // Whatever the stage itself scrolls (a comparison while verifying) starts below the bars too.
                             paddingTop: bleed ? 0 : inset.top + (fill ? 0 : 24),
                             paddingBottom: bleed ? 0 : inset.bottom + (fill ? 0 : 24),
                             scrollPaddingTop: inset.top,
@@ -1493,32 +1506,8 @@ export function CheckpointViewer({
                         ) : null
                       }
                     />
-                  ) : current && effectiveStage === 'ignore' && onIgnoreRegionsChange ? (
-                    <IgnoreRegionsEditor
-                      captureId={current.id}
-                      image={current.image}
-                      imageSize={(measuredSize ?? ownSize)!}
-                      frame={frames[0]}
-                      zoom={zoom}
-                      live
-                      room={tall}
-                      alt={label}
-                      rules={current.ignore?.rules ?? []}
-                      revision={current.ignore?.revision ?? 0}
-                      prefill={prefill}
-                      pending={ignorePendingId === current.id}
-                      onPreview={onIgnorePreview && reference ? (regions) => onIgnorePreview({ captureId: current.id, regions }) : undefined}
-                      preview={onIgnorePreview && reference ? ignorePreview : null}
-                      onSave={(change) => {
-                        onIgnoreRegionsChange(change);
-                        setPrefill(null);
-                        showStage('changes');
-                      }}
-                      onCancel={() => {
-                        setPrefill(null);
-                        showStage('changes');
-                      }}
-                    />
+                  ) : current && leavingOut ? (
+                    <IgnoreRegionsCanvas drafts={ignoreDrafts} image={current.image} imageSize={(measuredSize ?? ownSize)!} frame={frames[0]} zoom={zoom} live room={tall} alt={label} />
                   ) : comparing ? (
                     <div className={cn(paneRow(fill), fill && 'mx-auto')}>{compared.map((x, i) => comparison(x, paneFrames[i]))}</div>
                   ) : (
@@ -1561,8 +1550,9 @@ export function CheckpointViewer({
                 />
                 {canComment && pinsOn && !verifying && !(resolving && ended) ? (
                   // Over the bottom of the screens, the way a drawing tool's bar floats: always at hand, never in the layout.
-                  // Its grip moves it off whatever it covers, and the browser remembers where.
-                  <div className="pointer-events-none absolute inset-x-0 z-40 flex justify-center px-4" style={{ bottom: overlaid ? stripHeight : 16 }}>
+                  // Its grip moves it off whatever it covers, and the browser remembers where. It moves within the screens
+                  // between the bars over them — under the toolbar, above the strip of checkpoints — not over either.
+                  <div data-float-bounds className="pointer-events-none absolute inset-x-0 z-40 flex items-end justify-center px-4" style={{ top: inset.top, bottom: overlaid ? stripHeight : 16 }}>
                     <CommentBar
                       className="pointer-events-auto"
                       positionKey="review:comment-bar-position"
@@ -1669,6 +1659,20 @@ export function CheckpointViewer({
                         {/* Verifying the comments of one screen, deciding about it stays at hand. */}
                         {resolving ? null : decisionSection}
                       </FeedbackPanel>
+                    ) : leavingOut && current ? (
+                      <IgnoreRegionsPanel
+                        drafts={ignoreDrafts}
+                        captureId={current.id}
+                        imageSize={(measuredSize ?? ownSize)!}
+                        revision={current.ignore?.revision ?? 0}
+                        pending={ignorePendingId === current.id}
+                        preview={onIgnorePreview && reference ? ignorePreview : null}
+                        onSave={(change) => {
+                          onIgnoreRegionsChange!(change);
+                          leaveOut(false);
+                        }}
+                        onCancel={() => leaveOut(false)}
+                      />
                     ) : (
                       <>
                       <section className="flex flex-col gap-2">
@@ -1763,7 +1767,7 @@ export function CheckpointViewer({
                             }}
                             onEditRects={canIgnore ? (rects) => {
                               setPrefill(rects);
-                              setStage('ignore');
+                              leaveOut(true);
                             } : undefined}
                           />
                         ) : null}
