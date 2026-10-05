@@ -308,6 +308,7 @@ export const NoTooltipsWhileItGrows: Story = {
     // Settled, the reviewer moves the pointer: the tooltips answer again.
     await pointAt('Pen');
     await pointAt('Arrow');
-    await waitFor(() => expect(tooltip()).toHaveTextContent('Arrow'));
+    // A tooltip opens after its delay (600ms without a provider): room for a slow machine on top.
+    await waitFor(() => expect(tooltip()).toHaveTextContent('Arrow'), { timeout: 3000 });
   },
 };
