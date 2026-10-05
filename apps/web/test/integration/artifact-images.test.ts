@@ -14,7 +14,15 @@ import { attachments, type Attachment } from '@/lib/db/schema';
 import { getAttachmentForProject, storeUpload } from '@/lib/ingest/service';
 import { saveRetentionPolicy, sweepExpiredArtifacts } from '@/lib/storage/retention';
 import { attachmentRef, playRun } from './factories';
-import { describe, expect, test, type Db, type Tenant } from './fixtures';
+import { describe, expect, test, vi, type Db, type Tenant } from './fixtures';
+
+// The copy is stored in `after()`, which needs a request scope; run it here and let the request wait for it.
+const pending = vi.hoisted(() => [] as Promise<unknown>[]);
+vi.mock('next/server', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/server')>()),
+  connection: async () => undefined,
+  after: (task: () => unknown) => void pending.push(Promise.resolve().then(task)),
+}));
 
 const DAY = 86_400_000;
 
@@ -32,7 +40,11 @@ async function screenshot(db: Db, tenant: Tenant, size = { width: 1200, height: 
   return aged;
 }
 
-const fetchImage = (id: string, query: string) => imageRoute(new Request(`http://test.local/api/artifacts/${id}/image?${query}`), { params: Promise.resolve({ attachmentId: id }) });
+async function fetchImage(id: string, query: string) {
+  const response = await imageRoute(new Request(`http://test.local/api/artifacts/${id}/image?${query}`), { params: Promise.resolve({ attachmentId: id }) });
+  await Promise.all(pending.splice(0));
+  return response;
+}
 const exists = (root: string, key: string) =>
   access(path.join(root, key)).then(
     () => true,

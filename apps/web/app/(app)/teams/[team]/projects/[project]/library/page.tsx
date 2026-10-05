@@ -6,7 +6,7 @@ import { ReviewStoryboardSkeleton } from '@miguelfranken/ui/views/review/review-
 import { AddToLibraryButton, ConnectedReferenceBar } from '@/components/library/library-controls';
 import { UrlLibraryBrowser } from '@/components/library/url-library-browser';
 import { requireProject } from '@/lib/auth/access';
-import { casesOfTests, defaultBranch, defaultLibraryRef, getLibraryReference, libraryCandidates, libraryFlows, listLibraryReferences, listLibraryViews, referenceRuns, renderedAt } from '@/lib/page-data';
+import { casesOfTests, defaultBranch, getLibraryReference, libraryCandidates, libraryFlows, listLibraryReferences, listLibraryViews, markedDefaultLibraryRef, referenceRuns, renderedAt } from '@/lib/page-data';
 import { compareFlowViews } from '@/lib/review/diff/compare';
 import { toRunView } from '@/lib/review/library';
 import { caseHref, flowViewsAcrossRuns } from '@/lib/review/view-model';
@@ -50,9 +50,11 @@ async function scope({ params, searchParams }: Pick<Props, 'params'> & Partial<P
   const [{ team, project: projectSlug }, sp] = await Promise.all([params, searchParams ?? Promise.resolve({} as Record<string, string | string[] | undefined>)]);
   const access = await requireProject(team, projectSlug);
   const { project } = access;
-  const branch = await defaultBranch(project.id, project.settings);
   const raw = Array.isArray(sp.ref) ? sp.ref[0] : sp.ref;
-  const key = parseLibraryRef(raw) ?? (await defaultLibraryRef(project.id, branch));
+  const parsed = parseLibraryRef(raw);
+  // The default branch and the reference marked default are independent reads: one round trip, not two.
+  const [branch, marked] = await Promise.all([defaultBranch(project.id, project.settings), parsed ? null : markedDefaultLibraryRef(project.id)]);
+  const key = parsed ?? marked ?? { kind: 'branch' as const, branch };
   const rawCompare = Array.isArray(sp.compare) ? sp.compare[0] : sp.compare;
   const parsedCompare = parseLibraryRef(rawCompare);
   const compare = parsedCompare && !sameLibraryRef(parsedCompare, key) ? parsedCompare : null;

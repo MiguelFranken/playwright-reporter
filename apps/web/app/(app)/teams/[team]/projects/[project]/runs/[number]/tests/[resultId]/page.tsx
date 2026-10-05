@@ -59,28 +59,12 @@ async function readText(storageKey: string, size: number | null) {
   }
 }
 
-async function ResultContent({ params }: Props) {
-  const { team, project: projectSlug, number, resultId } = await params;
-  const runNumber = Number(number);
-  if (!Number.isInteger(runNumber)) notFound();
-  const access = await requireProject(team, projectSlug);
-  const { project } = access;
-  const detail = await getResultDetail(project.id, runNumber, resultId);
-  if (!detail) notFound();
-  const { result, test, run, attempts, position } = detail;
-  const [history, { policy }, review] = await Promise.all([
-    testHistory(test.id, { limit: 15 }),
-    getRetentionPolicy(),
-    runReview({ id: run.id, startedAt: new Date(run.startedAt).toISOString() }, { resultId: result.id }),
-  ]);
-  const base = `/teams/${team}/projects/${project.slug}`;
-  const reviewFlows = toFlowViews(review, (id) => `${base}/runs/${run.number}/tests/${id}`, {
-    byTest: await casesOfTests(project.id, [test.id]),
-    href: caseHref(projectHrefs(base)),
-  });
-  const origin = baseUrl();
+type Attempt = NonNullable<Awaited<ReturnType<typeof getResultDetail>>>['attempts'][number];
+type RetentionPolicy = Awaited<ReturnType<typeof getRetentionPolicy>>['policy'];
 
-  const views: AttemptView[] = await Promise.all(
+/** The attempts as the view takes them, with small text attachments read inline. */
+function attemptViews(attempts: Attempt[], policy: RetentionPolicy): Promise<AttemptView[]> {
+  return Promise.all(
     attempts.map(async (a) => ({
       id: a.id,
       retry: a.retry,
@@ -114,6 +98,29 @@ async function ResultContent({ params }: Props) {
       ),
     })),
   );
+}
+
+async function ResultContent({ params }: Props) {
+  const { team, project: projectSlug, number, resultId } = await params;
+  const runNumber = Number(number);
+  if (!Number.isInteger(runNumber)) notFound();
+  const access = await requireProject(team, projectSlug);
+  const { project } = access;
+  const [detail, { policy }] = await Promise.all([getResultDetail(project.id, runNumber, resultId), getRetentionPolicy()]);
+  if (!detail) notFound();
+  const { result, test, run, attempts, position } = detail;
+  const [history, review, byTest, views] = await Promise.all([
+    testHistory(test.id, { limit: 15 }),
+    runReview({ id: run.id, startedAt: new Date(run.startedAt).toISOString() }, { resultId: result.id }),
+    casesOfTests(project.id, [test.id]),
+    attemptViews(attempts, policy),
+  ]);
+  const base = `/teams/${team}/projects/${project.slug}`;
+  const reviewFlows = toFlowViews(review, (id) => `${base}/runs/${run.number}/tests/${id}`, {
+    byTest,
+    href: caseHref(projectHrefs(base)),
+  });
+  const origin = baseUrl();
 
   const comparison = compareAttempts(attempts);
   const runHref = `${base}/runs/${run.number}`;

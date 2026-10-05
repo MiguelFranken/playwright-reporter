@@ -5,6 +5,7 @@
  * above the original's sends the original, lossless (see `image-variants`).
  */
 import { eq } from 'drizzle-orm';
+import { after } from 'next/server';
 import sharp from 'sharp';
 import { gone, readableArtifact } from '@/lib/artifacts/access';
 import { RESIZABLE_KINDS, snapWidth, VARIANT_QUALITY, variantKey } from '@/lib/artifacts/image-variants';
@@ -33,12 +34,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ atta
   if (!RESIZABLE_KINDS.has(attachment.kind) || !(attachment.contentType ?? '').startsWith('image/') || attachment.status !== 'uploaded') return original();
 
   const width = snapWidth(Number(url.searchParams.get('w')));
-  const [capture] = await db.select({ width: reviewCaptures.width }).from(reviewCaptures).where(eq(reviewCaptures.attachmentId, attachment.id)).limit(1);
-  if (capture?.width && width >= capture.width) return original();
-
   const storage = getStorage();
   const key = variantKey(attachment.storageKey, width);
-  const stored = await storage.head(key).catch(() => null);
+  // The capture's width and the stored copy, in one round trip.
+  const [[capture], stored] = await Promise.all([
+    db.select({ width: reviewCaptures.width }).from(reviewCaptures).where(eq(reviewCaptures.attachmentId, attachment.id)).limit(1),
+    storage.head(key).catch(() => null),
+  ]);
+  if (capture?.width && width >= capture.width) return original();
+
   if (stored) {
     if (storage.readUrl) return new Response(null, { status: 302, headers: { location: await storage.readUrl(key), 'cache-control': 'private, max-age=600' } });
     const obj = await storage.get(key);
@@ -67,8 +71,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ atta
     console.error('[image] resizing failed', attachment.id, error);
     return original();
   }
-  // Kept for the next request; a store that refuses the write only costs the next one a resize.
-  await storage.put(key, bytes, { contentType: type }).catch((error: unknown) => console.error('[image] storing a copy failed', key, error));
+  // Kept for the next request, written once the response is out; a store that refuses the write only costs the next one a resize.
+  after(() => storage.put(key, bytes, { contentType: type }).catch((error: unknown) => console.error('[image] storing a copy failed', key, error)));
   return new Response(new Uint8Array(bytes), { status: 200, headers: imageHeaders(bytes.byteLength, type) });
 }
 

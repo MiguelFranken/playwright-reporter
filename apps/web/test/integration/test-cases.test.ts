@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { auditLogs, projects, testCaseLinks, testCases, tests } from '@/lib/db/schema';
 import {
+  caseNeighbours,
   getCaseDetail,
   getCoverage,
   getSuiteTree,
@@ -179,6 +180,42 @@ describe('cases', () => {
     expect((await listCases(tenant.project.id, { suite: suite.id })).rows[0].suitePath).toEqual(['Checkout']);
   });
 
+  test('neighbours follow the list order, with and without health filters', async ({ db, tenant }) => {
+    const ctx = ctxOf(tenant);
+    const suite = await createSuite(ctx, { name: 'Checkout' });
+    await createCase(ctx, { title: 'Pay by card', suiteId: suite.id, priority: 'high' });
+    const b = await createCase(ctx, { title: 'Apply coupon', suiteId: suite.id, priority: 'critical', automation: 'automated' });
+    await createCase(ctx, { title: 'Unassigned', priority: 'low', automation: 'automated' });
+    await createCase(ctx, { title: 'Old flow', status: 'deprecated' });
+    await reorderCase(ctx, b.id, 'up');
+
+    const filters: Parameters<typeof listCases>[1][] = [
+      {},
+      { sort: 'title' },
+      { sort: 'priority', dir: 'desc' },
+      { sort: 'number', dir: 'desc' },
+      { sort: 'updated' },
+      { suite: suite.id },
+      { status: ['active'] },
+      { unverified: true },
+      { attention: true, sort: 'title' },
+      { verdict: ['none'] },
+    ];
+    for (const f of filters) {
+      const order = (await listCases(tenant.project.id, { ...f, pageSize: 1000 })).rows.map((r) => r.number);
+      for (const [i, n] of order.entries()) {
+        await expect(caseNeighbours(tenant.project.id, n, f)).resolves.toEqual({
+          previous: order[i - 1] ?? null,
+          next: order[i + 1] ?? null,
+          index: i + 1,
+          total: order.length,
+        });
+      }
+      await expect(caseNeighbours(tenant.project.id, 999, f)).resolves.toEqual({ previous: null, next: null, index: null, total: order.length });
+    }
+    expect((await caseNeighbours(tenant.project.id, 1, {}))).toEqual({ previous: 2, next: 3, index: 2, total: 4 });
+  });
+
   test('bulk edits add and remove tags, move, and cap the selection', async ({ db, tenant }) => {
     const ctx = ctxOf(tenant);
     const suite = await createSuite(ctx, { name: 'Moved' });
@@ -308,6 +345,8 @@ describe('coverage', () => {
       byAutomation: { manual: 1, planned: 1, automated: 2 },
       unverified: 1,
       failing: 1,
+      flaky: 0,
+      stale: 0,
       uncoveredTests: 1,
     });
     expect((await listCases(tenant.project.id, { unverified: true })).rows.map((r) => r.title)).toEqual(['claims automation']);

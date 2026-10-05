@@ -151,11 +151,16 @@ export async function getLibraryReference(projectId: string, key: LibraryRefKey,
 
 /** The reference the library opens on: the one marked default, else the default branch. */
 export async function defaultLibraryRef(projectId: string, defaultBranch: string): Promise<LibraryRefKey> {
+  return (await markedDefaultLibraryRef(projectId)) ?? { kind: 'branch', branch: defaultBranch };
+}
+
+/** The reference marked default, if any: `defaultLibraryRef` without the fallback, so it can be read alongside the default branch. */
+export async function markedDefaultLibraryRef(projectId: string): Promise<LibraryRefKey | null> {
   const [row] = await db
     .select()
     .from(libraryReferences)
     .where(and(eq(libraryReferences.projectId, projectId), eq(libraryReferences.isDefault, true)));
-  return row ? keyOf(row) : { kind: 'branch', branch: defaultBranch };
+  return row ? keyOf(row) : null;
 }
 
 /**
@@ -252,10 +257,19 @@ export async function libraryCheckpoints(projectId: string, key: LibraryRefKey, 
   if (shown.length === 0) return [];
 
   const previousRows = shown.flatMap((r) => previousOf.get(identity(r)) ?? []);
-  const [metadata, raw, previous] = await Promise.all([
+  // Every (test, run) a shown capture comes from: a superset of the runs that end up ordering a test, whose extra rows the order below never reads.
+  const pairKeys = new Map(shown.map((r) => [`${r.testId}\u0000${r.runId}`, r]));
+  const pairs = [...pairKeys.values()].map((r) => sql`(${r.testId}::uuid, ${r.runId}::uuid)`);
+  const [metadata, raw, previous, sequences] = await Promise.all([
     selectCheckpoints(inArray(reviewCheckpoints.id, [...new Set(shown.map((r) => r.checkpointId))])),
     capturesById(shown.map((r) => r.captureId)),
     capturesById(previousRows.map((r) => r.captureId)),
+    db
+      .select({ testId: reviewCheckpoints.testId, runId: reviewCheckpoints.runId, name: reviewCheckpoints.name, sequence: reviewCheckpoints.sequence })
+      .from(reviewCheckpoints)
+      .innerJoin(testAttempts, eq(testAttempts.id, reviewCheckpoints.attemptId))
+      .where(and(sql`(${reviewCheckpoints.testId}, ${reviewCheckpoints.runId}) in (${sql.join(pairs, sql`, `)})`, isFinalAttempt))
+      .orderBy(reviewCheckpoints.sequence),
   ]);
   const compared = await compareCaptures(raw);
   const previousById = new Map(previous.map((c) => [c.id, c]));
@@ -286,13 +300,6 @@ export async function libraryCheckpoints(projectId: string, key: LibraryRefKey, 
   // Each test's checkpoints in the order its runs took them, newest run first.
   const runsOfTest = new Map<string, Map<string, Ranked>>();
   for (const { at } of byName.values()) (runsOfTest.get(at.testId) ?? runsOfTest.set(at.testId, new Map()).get(at.testId)!).set(at.runId, at);
-  const pairs = [...runsOfTest].flatMap(([testId, byRun]) => [...byRun.keys()].map((runId) => sql`(${testId}::uuid, ${runId}::uuid)`));
-  const sequences = await db
-    .select({ testId: reviewCheckpoints.testId, runId: reviewCheckpoints.runId, name: reviewCheckpoints.name, sequence: reviewCheckpoints.sequence })
-    .from(reviewCheckpoints)
-    .innerJoin(testAttempts, eq(testAttempts.id, reviewCheckpoints.attemptId))
-    .where(and(sql`(${reviewCheckpoints.testId}, ${reviewCheckpoints.runId}) in (${sql.join(pairs, sql`, `)})`, isFinalAttempt))
-    .orderBy(reviewCheckpoints.sequence);
 
   const out: CheckpointRecord[] = [];
   for (const [testId, byRun] of runsOfTest) {

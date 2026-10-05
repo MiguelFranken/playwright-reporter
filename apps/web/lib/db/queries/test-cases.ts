@@ -226,14 +226,8 @@ function searchSql(q: string): SQL {
     or ('tc-' || ${testCases.number}::text) = lower(${q.trim()}))`;
 }
 
-/**
- * Cases matching the filters, with the verdict of their linked tests. The
- * verdict is computed per case, so filtering and sorting happen after it —
- * which is fine at the size a project's case library has (thousands, not
- * millions).
- */
-export async function listCases(projectId: string, f: CaseFilters = {}, now = new Date()) {
-  const suites = await listSuites(projectId);
+/** The SQL conditions of the filters that the cases table answers by itself. */
+function caseWhere(projectId: string, f: CaseFilters, suites: readonly TestSuite[]): SQL[] {
   const where: SQL[] = [eq(testCases.projectId, projectId)];
   if (f.suite === 'unassigned') where.push(sql`${testCases.suiteId} is null`);
   else if (f.suite) where.push(inArray(testCases.suiteId, subtreeIds(suites, f.suite)));
@@ -245,27 +239,26 @@ export async function listCases(projectId: string, f: CaseFilters = {}, now = ne
   if (list(f.automation)) where.push(inArray(testCases.automation, f.automation!));
   if (list(f.tags)) where.push(sql`${testCases.tags} && array[${sql.join(f.tags!.map((t) => sql`${t}`), sql`, `)}]::text[]`);
   if (f.muted !== undefined) where.push(eq(testCases.muted, f.muted));
+  return where;
+}
 
-  const rows = await db
-    .select()
-    .from(testCases)
-    .where(and(...where))
-    .orderBy(asc(testCases.position), asc(testCases.number));
-  const health = groupBy(await linkHealth(rows.map((r) => r.id)), (h) => h.caseId);
-  const paths = suitePaths(suites);
-  const suiteOrder = suiteOrderIndex(suites);
+/** Whether a filter needs the linked tests' health (verdict, link count) to decide. */
+function needsHealth(f: CaseFilters): boolean {
+  return !!list(f.verdict) || !!f.unverified || !!f.attention;
+}
 
-  let out = rows.map((r) => toRow(r, health.get(r.id) ?? [], paths, now));
-  if (list(f.verdict)) out = out.filter((r) => f.verdict!.includes(r.verdict));
-  if (f.unverified) out = out.filter((r) => r.automation === 'automated' && r.linkCount === 0);
-  if (f.attention) {
-    out = out.filter((r) => r.status !== 'deprecated' && (r.verdict === 'flaky' || r.verdict === 'stale' || (r.automation === 'automated' && r.linkCount === 0)));
-  }
+type SortableCase = Pick<CaseRow, 'id' | 'number' | 'title' | 'priority' | 'updatedAt' | 'suiteId'>;
 
+/** The list's order: the chosen sort, then the case number. */
+function caseComparator(
+  f: Pick<CaseFilters, 'sort' | 'dir'>,
+  suites: readonly TestSuite[],
+  positionOf: ReadonlyMap<string, number>,
+): (a: SortableCase, b: SortableCase) => number {
   const dir = f.dir === 'desc' ? -1 : 1;
   const sort = f.sort ?? 'position';
-  const byPosition = new Map(rows.map((r) => [r.id, r.position]));
-  out.sort((a, b) => {
+  const suiteOrder = suiteOrderIndex(suites);
+  return (a, b) => {
     let d = 0;
     if (sort === 'number') d = a.number - b.number;
     else if (sort === 'title') d = a.title.localeCompare(b.title);
@@ -274,10 +267,36 @@ export async function listCases(projectId: string, f: CaseFilters = {}, now = ne
     else {
       // Unassigned cases come last, as the bucket does below the tree.
       d = (suiteOrder.get(a.suiteId ?? '') ?? Infinity) - (suiteOrder.get(b.suiteId ?? '') ?? Infinity) || 0;
-      if (d === 0) d = byPosition.get(a.id)! - byPosition.get(b.id)!;
+      if (d === 0) d = positionOf.get(a.id)! - positionOf.get(b.id)!;
     }
     return d * dir || a.number - b.number;
-  });
+  };
+}
+
+/**
+ * Cases matching the filters, with the verdict of their linked tests. The
+ * verdict is computed per case, so filtering and sorting happen after it —
+ * which is fine at the size a project's case library has (thousands, not
+ * millions).
+ */
+export async function listCases(projectId: string, f: CaseFilters = {}, now = new Date()) {
+  const suites = await listSuites(projectId);
+  const rows = await db
+    .select()
+    .from(testCases)
+    .where(and(...caseWhere(projectId, f, suites)))
+    .orderBy(asc(testCases.position), asc(testCases.number));
+  const health = groupBy(await linkHealth(rows.map((r) => r.id)), (h) => h.caseId);
+  const paths = suitePaths(suites);
+
+  let out = rows.map((r) => toRow(r, health.get(r.id) ?? [], paths, now));
+  if (list(f.verdict)) out = out.filter((r) => f.verdict!.includes(r.verdict));
+  if (f.unverified) out = out.filter((r) => r.automation === 'automated' && r.linkCount === 0);
+  if (f.attention) {
+    out = out.filter((r) => r.status !== 'deprecated' && (r.verdict === 'flaky' || r.verdict === 'stale' || (r.automation === 'automated' && r.linkCount === 0)));
+  }
+
+  out.sort(caseComparator(f, suites, new Map(rows.map((r) => [r.id, r.position]))));
 
   const pageSize = f.pageSize ?? 100;
   const page = Math.max(1, f.page ?? 1);
@@ -389,10 +408,34 @@ async function peopleNames(ids: readonly (string | null)[]): Promise<Map<string,
 
 /** The case numbers before and after this one in the order of the list it was opened from. */
 export async function caseNeighbours(projectId: string, number: number, f: CaseFilters = {}) {
-  const { rows } = await listCases(projectId, { ...f, page: 1, pageSize: 100_000 });
-  const i = rows.findIndex((r) => r.number === number);
-  if (i < 0) return { previous: null, next: null, index: null, total: rows.length };
-  return { previous: rows[i - 1]?.number ?? null, next: rows[i + 1]?.number ?? null, index: i + 1, total: rows.length };
+  const ordered = needsHealth(f) ? (await listCases(projectId, { ...f, page: 1, pageSize: NEIGHBOUR_LIMIT })).rows : await orderedCases(projectId, f);
+  const i = ordered.findIndex((r) => r.number === number);
+  if (i < 0) return { previous: null, next: null, index: null, total: ordered.length };
+  return { previous: ordered[i - 1]?.number ?? null, next: ordered[i + 1]?.number ?? null, index: i + 1, total: ordered.length };
+}
+
+const NEIGHBOUR_LIMIT = 100_000;
+
+/**
+ * The list's order without the linked tests' health: only the columns the
+ * filters and the sort read. Valid only when no filter needs the health.
+ */
+async function orderedCases(projectId: string, f: CaseFilters): Promise<SortableCase[]> {
+  const suites = await listSuites(projectId);
+  const rows = await db
+    .select({
+      id: testCases.id,
+      number: testCases.number,
+      title: testCases.title,
+      priority: testCases.priority,
+      updatedAt: testCases.updatedAt,
+      suiteId: testCases.suiteId,
+      position: testCases.position,
+    })
+    .from(testCases)
+    .where(and(...caseWhere(projectId, f, suites)))
+    .orderBy(asc(testCases.position), asc(testCases.number));
+  return rows.sort(caseComparator(f, suites, new Map(rows.map((r) => [r.id, r.position])))).slice(0, NEIGHBOUR_LIMIT);
 }
 
 // ---------------------------------------------------------------- history
@@ -443,8 +486,8 @@ export function snapshotView(s: Partial<CaseSnapshot>, paths: Map<string, string
 // ---------------------------------------------------------------- coverage
 
 export async function getCoverage(projectId: string, now = new Date()): Promise<CoverageSummary> {
-  const [{ rows }, [uncovered]] = await Promise.all([
-    listCases(projectId, { pageSize: 100_000 }, now),
+  const [rows, [uncovered]] = await Promise.all([
+    coverageRows(projectId, now),
     db.execute<{ n: number }>(sql`
       select count(*)::int as n from ${tests} t
       where t.project_id = ${projectId} and t.last_seen_at >= ${sinceDate(HEALTH_WINDOW_DAYS)}
@@ -466,6 +509,19 @@ export async function getCoverage(projectId: string, now = new Date()): Promise<
     if (r.verdict === 'stale') stale++;
   }
   return { total: rows.length, byStatus, byAutomation, unverified, failing, flaky, stale, uncoveredTests: num(uncovered?.n) };
+}
+
+/** What the coverage summary counts per case: its status, automation, link count and verdict. */
+async function coverageRows(projectId: string, now: Date) {
+  const rows = await db
+    .select({ id: testCases.id, status: testCases.status, automation: testCases.automation })
+    .from(testCases)
+    .where(eq(testCases.projectId, projectId));
+  const health = groupBy(await linkHealth(rows.map((r) => r.id)), (h) => h.caseId);
+  return rows.map((r) => {
+    const links = health.get(r.id) ?? [];
+    return { status: r.status, automation: r.automation, linkCount: links.length, verdict: caseVerdict(links, now) };
+  });
 }
 
 // ---------------------------------------------------------------- automated tests

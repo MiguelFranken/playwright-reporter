@@ -308,6 +308,12 @@ export async function defaultLibraryRef(...args: Parameters<typeof library.defau
   return library.defaultLibraryRef(...args);
 }
 
+export async function markedDefaultLibraryRef(...args: Parameters<typeof library.markedDefaultLibraryRef>) {
+  'use cache: private';
+  cacheLife(PAGE_DATA);
+  return library.markedDefaultLibraryRef(...args);
+}
+
 export async function libraryFlows(...args: Parameters<typeof library.libraryFlows>) {
   'use cache: private';
   cacheLife(PAGE_DATA);

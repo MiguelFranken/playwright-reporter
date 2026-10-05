@@ -281,25 +281,30 @@ export async function compareCaptures(
   captures: readonly CaptureRecord[],
   context?: { runId: string; runStartedAt: Date },
 ): Promise<ComparedCapture[]> {
-  const decisions = await decisionsFor(captures);
-  const baselineIds = new Set<string>();
+  // Everything but the baseline images reads from the captures alone: one round trip, with the baselines chained onto the decisions.
   const baselines = new Map<string, DecisionRecord>();
-  for (const [key, list] of decisions) {
-    const approved = list.find((d) => d.decision === 'approved' && d.source === 'human');
-    if (approved) {
-      baselines.set(key, approved);
-      if (approved.captureId) baselineIds.add(approved.captureId);
+  const decisionsAndBaselines = decisionsFor(captures).then(async (decisions) => {
+    const baselineIds = new Set<string>();
+    for (const [key, list] of decisions) {
+      const approved = list.find((d) => d.decision === 'approved' && d.source === 'human');
+      if (approved) {
+        baselines.set(key, approved);
+        if (approved.captureId) baselineIds.add(approved.captureId);
+      }
     }
-  }
-  const [baselineCaptures, previous, threads, drawings] = await Promise.all([
-    baselineIds.size ? selectCaptures(inArray(reviewCaptures.id, [...baselineIds])) : Promise.resolve([]),
+    const baselineCaptures = baselineIds.size ? await selectCaptures(inArray(reviewCaptures.id, [...baselineIds])) : [];
+    return { decisions, baselineCaptures };
+  });
+  const [{ decisions, baselineCaptures }, previous, threads, drawings, settings, ruleSets] = await Promise.all([
+    decisionsAndBaselines,
     context ? previousCaptures(captures, context.runId, context.runStartedAt) : Promise.resolve(new Map<string, { capture: CaptureRecord; runNumber: number }>()),
     threadsForCaptures(captures),
     drawingsForCaptures(captures),
+    diffSettingsFor(captures.map((c) => c.projectId)),
+    rulesFor(captures),
   ]);
   const baselineById = new Map(baselineCaptures.map((c) => [c.id, c]));
 
-  const [settings, ruleSets] = await Promise.all([diffSettingsFor(captures.map((c) => c.projectId)), rulesFor(captures)]);
   const compared = captures.map((c) => {
     const key = identityKey(c);
     const list = decisions.get(key) ?? [];
