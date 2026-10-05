@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.0.96](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.95...v0.0.96) (2026-10-05)
+
+### Features
+
+* **review:** approve every flow without open feedback in one go from a folder's menu ([5723a99](https://github.com/MiguelFranken/playwright-reporter/commit/5723a99457a2a0369f67ee556316763fe8dbb870))
+* **review:** keep the comment box editable while dictating ([#102](https://github.com/MiguelFranken/playwright-reporter/issues/102)) ([482c86e](https://github.com/MiguelFranken/playwright-reporter/commit/482c86ecfb24d131fc4b8b64dbc20e477c4dfe74))
+
+### Performance Improvements
+
+* **web:** cut sequential database and storage round trips on the slowest production routes ([#101](https://github.com/MiguelFranken/playwright-reporter/issues/101)) ([fff94f3](https://github.com/MiguelFranken/playwright-reporter/commit/fff94f3687d8478f3996f743c9eb6ed6f15c7b4d))
+
 ## [0.0.95](https://github.com/MiguelFranken/playwright-reporter/compare/v0.0.94...v0.0.95) (2026-10-05)
 
 ### Features
