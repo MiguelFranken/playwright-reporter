@@ -11,7 +11,7 @@ import sharp from 'sharp';
 import type { Checkpoint } from '@miguelfranken/protocol';
 import { getRunForProject, ingestEvents, startRun, storeUpload } from '@/lib/ingest/service';
 import { attachments, imageDiffs, projects, reviewCaptures, reviewDecisions, reviewIgnoreRegions } from '@/lib/db/schema';
-import { captureInProject, decide, runReview } from '@/lib/review/queries';
+import { captureInProject, decide, runReview, runReviewCounts } from '@/lib/review/queries';
 import { approveWithinTolerance, measureDiff, needsPlanning, planPairs, planRun, sweepDiffs } from '@/lib/review/diff/store';
 import { diffSettingsFor, pairOf } from '@/lib/review/diff/lookup';
 import { compareRunRecords } from '@/lib/review/run-flows';
@@ -183,8 +183,14 @@ describe('tolerance', () => {
 
     const second = await runWith(tenant, { desktop: reencoded, mobile: reencoded }, t1);
     await uploadAll(db, second, { desktop: reencoded, mobile: reencoded });
-    await measurePlan(second.run.id);
-    expect((await captures(second.run.id, t1)).desktop).toMatchObject({ status: 'changed', withinTolerance: true });
+    // Planned, not measured yet: neither a change nor the same until the pixels say so — in the storyboard and in the counts.
+    const plan = await planRun(second.run.id);
+    expect(await captures(second.run.id, t1)).toMatchObject({ desktop: { status: 'measuring' }, mobile: { status: 'measuring' } });
+    expect((await runReviewCounts([second.run.id]))[second.run.id]).toMatchObject({ measuring: 2, changed: 0 });
+    for (const id of plan.ids) expect(await measureDiff(id)).toBe('done');
+    // Measured: other bytes, not one changed pixel — unchanged, against the approved image and against the run before alike.
+    expect(await captures(second.run.id, t1)).toMatchObject({ desktop: { status: 'unchanged', withinTolerance: true }, mobile: { status: 'unchanged' } });
+    expect((await runReviewCounts([second.run.id]))[second.run.id]).toMatchObject({ unchanged: 2, changed: 0, measuring: 0 });
 
     expect(await approveWithinTolerance(second.run.id)).toBe(1);
     const caps = await captures(second.run.id, t1);
@@ -193,8 +199,8 @@ describe('tolerance', () => {
     expect(caps.desktop.decision!.comment).toMatch(/no visible change/);
     // The baseline stays the reviewer's image.
     expect(caps.desktop.baseline!.capture!.id).toBe(firstCaps.desktop.id);
-    // Mobile has no approved baseline: nothing to be tolerant about, and other bytes than the run before.
-    expect(caps.mobile.status).toBe('changed');
+    // Mobile has no approved baseline: nothing to be tolerant about, and nothing changed since the run before.
+    expect(caps.mobile.status).toBe('unchanged');
     // Idempotent.
     expect(await approveWithinTolerance(second.run.id)).toBe(0);
   });
@@ -270,7 +276,9 @@ describe('comparing a run with another run', () => {
     const r2 = await runWith(tenant, second, t1);
     await uploadAll(db, r2, second);
     const t2 = new Date(Date.now() - 600_000);
-    const third = { desktop: await page([a, b]), mobile: first.mobile };
+    // Mobile: the same picture, encoded anew — other bytes, as a run on another machine produces them.
+    const third = { desktop: await page([a, b]), mobile: await page([], { compression: 1 }) };
+    expect(sha(third.mobile)).not.toBe(sha(first.mobile));
     const r3 = await runWith(tenant, third, t2);
     await uploadAll(db, r3, third);
 
@@ -280,10 +288,11 @@ describe('comparing a run with another run', () => {
     // By default the desktop image is compared with the approved one: both boxes.
     expect(desktop).toMatchObject({ status: 'changed', diffAgainst: 'baseline' });
 
-    // Measure the pair the run comparison asks for (the diff driver is off in tests).
+    // Plan the pairs the run comparison asks for (the diff driver is off in tests): until they are measured, they are measuring.
     const settings = (await diffSettingsFor([tenant.project.id])).get(tenant.project.id)!;
-    const pair = pairOf(desktop, desktop.previous!.capture, settings, desktop.ignoreRegions)!;
-    const plan = await planPairs([{ pair, head: desktop.attachment, base: desktop.previous!.capture.attachment }]);
+    const plan = await planPairs(mine.map((c) => ({ pair: pairOf(c, c.previous!.capture, settings, c.ignoreRegions)!, head: c.attachment, base: c.previous!.capture.attachment })));
+    const before = (await compareRunRecords(tenant.project.id, records, 'previous'))!;
+    expect(mine.map((c) => before.entries.get(c.id)!.status)).toEqual(['measuring', 'measuring']);
     for (const id of plan.ids) expect(await measureDiff(id)).toBe('done');
 
     const compared = (await compareRunRecords(tenant.project.id, records, 'previous'))!;
@@ -291,8 +300,9 @@ describe('comparing a run with another run', () => {
     // Since the run before only the second box appeared.
     expect(byVariant.desktop).toMatchObject({ status: 'changed', reference: { runNumber: r2.run.number }, measured: { same: false, pending: false } });
     expect(byVariant.desktop.measured!.diff).toMatchObject({ status: 'done', changedPixels: 25, regions: [{ ...b, pixels: 25 }] });
-    // Mobile never changed: the run before's very pixels.
-    expect(byVariant.mobile).toMatchObject({ status: 'unchanged', reference: { runNumber: r2.run.number }, measured: { same: true, diff: null } });
+    // Mobile: other bytes, measured without one changed pixel — unchanged, not a change.
+    expect(byVariant.mobile).toMatchObject({ status: 'unchanged', reference: { runNumber: r2.run.number }, measured: { same: false, pending: false } });
+    expect(byVariant.mobile.measured!.diff).toMatchObject({ status: 'done', changedPixels: 0 });
 
     // Against run #first, by number: both boxes, as the approved image happens to be that run's.
     const sinceFirst = (await compareRunRecords(tenant.project.id, records, `run:${r1.run.number}`))!;

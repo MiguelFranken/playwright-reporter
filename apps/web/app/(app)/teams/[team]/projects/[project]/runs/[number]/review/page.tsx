@@ -58,8 +58,8 @@ async function Content({ params, searchParams }: Props) {
           title={`Visual review · Run #${run.number}`}
           description={
             <>
-              Every review checkpoint of the run, in the order each test captured it.{commit ? <> Commit <span className="text-code-s">{commit}</span>.</> : null} Open a checkpoint
-              for the full image and the comparison with its approved baseline, or compare the whole run with another one; <kbd>A</kbd> approves and moves on.
+              Every review checkpoint of the run, in the order each test captured it.{commit ? <> Commit <span className="text-code-s">{commit}</span>.</> : null} Each screen is
+              compared pixel for pixel with its approved image, or with the run before or any run you choose. Open a checkpoint to see both; <kbd>A</kbd> approves and moves on.
             </>
           }
         >

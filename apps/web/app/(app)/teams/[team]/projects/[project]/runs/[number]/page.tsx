@@ -6,6 +6,7 @@ import { RunHeaderSkeleton } from '@miguelfranken/ui/views/run/run-header';
 import { RunTabsSkeleton } from '@miguelfranken/ui/views/run/run-skeleton';
 import { triagePrompt } from '@miguelfranken/ui/lib/ai-handoff';
 import { hasResultFacets, parseResultFacets } from '@miguelfranken/ui/lib/result-filter';
+import { filterCount } from '@miguelfranken/ui/lib/review';
 import { parseRunTab } from '@/components/run/run-tab';
 import { RunBody } from '@/components/run/run-body';
 import type { SummaryHead } from '@/components/run/url-run-summary';
@@ -172,8 +173,8 @@ async function Body({ params, searchParams }: Props) {
           review
             ? {
                 href: `${base}/runs/${found.number}/review`,
-                toReview: review.changed + review.new,
-                total: Object.values(review).reduce((a, b) => a + b, 0),
+                toReview: filterCount(review, 'needs-review'),
+                total: filterCount(review, 'all'),
               }
             : undefined
         }

@@ -28,7 +28,7 @@ import { eq } from 'drizzle-orm';
 import { captureInProject, capturesById, decide, MAX_DECISION_CAPTURES, ReviewError, runCapturesByScreen, runReview, type CaptureRecord, type ComparedCapture } from '@/lib/review/queries';
 import { toDiffView } from '@/lib/review/view-model';
 import { measureEach, type MeasuredReference } from '@/lib/review/diff/compare';
-import { identityKey, type DiffRecord } from '@/lib/review/diff/lookup';
+import { identityKey, measuredChangeOf, type DiffRecord } from '@/lib/review/diff/lookup';
 import { compareRunRecords } from '@/lib/review/run-flows';
 import { artifactUrlTtlSeconds, inlineImageMaxBytes } from '../config';
 import { invalid, notFound } from '../errors';
@@ -211,7 +211,7 @@ const listInput = z.object({
   status: z
     .enum(REVIEW_FILTERS)
     .optional()
-    .describe('needs-review (default: changed and new images), all, changed, new, unchanged, changes_requested or approved.'),
+    .describe('needs-review (default: changed, new and still measured images), all, changed, new, measuring, unchanged, changes_requested or approved.'),
   test: z.string().optional().describe('Part of a test title or file, to narrow the list.'),
   variant: z.string().optional().describe('Only this variant, e.g. "desktop" or "mobile".'),
   ignore: z.enum(IGNORE_FILTERS).optional().describe('Only images whose rules (areas left out of the comparison) are: active, ever, applied, suppressed, fully-suppressed or needs-review.'),
@@ -267,7 +267,7 @@ const listOutput = output({
     .nullable()
     .optional()
     .describe('What every image was compared with, when "against" was given; absent: each image against its approved baseline, else the run before.'),
-  counts: z.object({ approved: z.number(), changes_requested: z.number(), changed: z.number(), unchanged: z.number(), new: z.number() }),
+  counts: z.object({ approved: z.number(), changes_requested: z.number(), changed: z.number(), measuring: z.number(), unchanged: z.number(), new: z.number() }),
   tests: z.array(
     z.object({
       title: z.string(),
@@ -294,7 +294,7 @@ export const listReviewCheckpoints = defineTool({
   title: 'List review checkpoints',
   toolset: 'core',
   description:
-    "A run's review checkpoints — the named screenshots its tests capture at their milestones, per variant (desktop, mobile) — in journey order, with each image's status (changed vs its approved baseline, else the run before; unchanged; new: first capture; approved; changes requested), open comment threads and measured pixel change: share, regions, size change, moved content. Changes within the project's tolerance are approved automatically (autoApproved). Defaults to what needs review. Look at one with get_review_checkpoint.",
+    "A run's review checkpoints — the named screenshots its tests capture at their milestones, per variant (desktop, mobile) — in journey order, with each image's status from the measured pixels (changed vs its approved baseline, else the run before; measuring; unchanged: no changed pixel; new: first capture; approved; changes requested), open comment threads and measured pixel change: share, regions, size change, moved content. Changes within the project's tolerance are approved automatically (autoApproved). Defaults to what needs review. Look at one with get_review_checkpoint.",
   input: listInput,
   output: listOutput,
   async handler(args, ctx) {
@@ -355,8 +355,8 @@ export const listReviewCheckpoints = defineTool({
       data: { project: project.ref, run: run.number, reviewUrl, ...(rule ? { against: { rule, run: compared?.runNumber ?? null } } : {}), counts, tests },
       render(md, d) {
         md.heading(`Review checkpoints of run #${d.run}${d.against ? ` compared with ${d.against.run ? `run #${d.against.run}` : 'the run before'}` : ''}`, 2);
-        if (d.against) md.line('Statuses say what changed since that run, whatever was approved: unchanged (the same pixels), changed, or new (not captured there).');
-        md.line(`${d.counts.changed} changed, ${d.counts.new} new, ${d.counts.unchanged} unchanged, ${d.counts.changes_requested} with changes requested, ${d.counts.approved} approved. ${link('Review in the app', d.reviewUrl)}`);
+        if (d.against) md.line('Statuses say what changed since that run, measured pixel for pixel, whatever was approved: unchanged (no changed pixel), changed, measuring (ask again shortly), or new (not captured there).');
+        md.line(`${d.counts.changed} changed, ${d.counts.new} new, ${d.counts.measuring} still being measured, ${d.counts.unchanged} unchanged, ${d.counts.changes_requested} with changes requested, ${d.counts.approved} approved. ${link('Review in the app', d.reviewUrl)}`);
         if (d.tests.length === 0) {
           md.line(
             filter === 'needs-review'
@@ -653,7 +653,8 @@ export const getReviewCheckpoint = defineTool({
     // Against the run before, another run or a capture of the same screen: did it change since, whatever was approved.
     const sameScreen = (c: CaptureRecord) => c.testId === capture.testId && c.checkpointName === capture.checkpointName && c.variant === capture.variant;
     const sinceRun = args.againstRun !== undefined || args.against === 'previous' || (comparison?.role === 'capture' && reference !== null && sameScreen(reference));
-    const status = sinceRun ? statusAgainstRun({ decision: capture.decision?.decision, sha256: capture.sha256, reference }) : capture.status;
+    const change = remeasured?.pending ? { state: 'pending' as const, changedPixels: null, sizeChanged: false } : measuredChangeOf(measuredDiff);
+    const status = sinceRun ? statusAgainstRun({ decision: capture.decision?.decision, sha256: capture.sha256, reference, measured: change }) : capture.status;
 
     // Candidates in the order they matter; the budget keeps the first ones.
     const attached: Attached[] = [];

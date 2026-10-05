@@ -8,6 +8,7 @@ import { ReviewStatusBadge } from '../../patterns/review-status-badge';
 import { Link } from '../../provider';
 import { formatDateTime, formatRelative } from '../../lib/format';
 import { libraryRefShort, type LibraryReferenceView } from '../../lib/library';
+import { filterCount } from '../../lib/review';
 
 /**
  * A branch's or pull request's screens, from its own page: what its newest
@@ -37,7 +38,7 @@ export function LibraryCard({
 }) {
   const run = reference.latestRun;
   const counts = reference.latestCounts;
-  const waiting = counts ? counts.changed + counts.new : 0;
+  const waiting = counts ? filterCount(counts, 'needs-review') : 0;
   const what = reference.key.kind === 'branch' ? 'branch' : 'pull request';
   const inLibrary = reference.kept || reference.isDefault;
 

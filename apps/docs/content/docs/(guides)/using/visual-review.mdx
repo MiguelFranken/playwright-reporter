@@ -90,16 +90,19 @@ records.
 ## Reviewing
 
 A run with checkpoints has a **Visual review** button on its page, with how many images still need review. The
-storyboard opens on those: **Changed** images differ from the approved one — or, while nobody approved the screen yet,
-from the run before — and **New** ones are screens no earlier run captured. **Unchanged** images have the very pixels of
-the run before and nobody decided about them yet: nothing to look at again, so they carry no status dot and need no
-review. Filter by status or variant, or search for a test, a test case key or a checkpoint.
+storyboard opens on those. The pixels decide every status, never the file: each image is measured against the
+approved one — or, while nobody approved the screen yet, the same screen in the run before. **Changed** means the
+measurement found changed pixels; **Unchanged** means not one pixel changed (the same file, or the same picture encoded
+anew on another machine) — nothing to look at again, so no status dot and no review. **Measuring** stands for the few
+seconds until a comparison is measured; the page updates on its own. **New** screens were never captured before.
+Filter by status or variant, or search for a test, a test case key or a checkpoint. Only filters that would show
+something are offered, and a sentence under them says what the images are compared with and how many of each there are.
 
 **Compare with** above the storyboard compares the whole run with **the run before** or any other run, instead of the
-approved baselines (`?against=previous`, `?against=run:38`). Then every status answers one question — did this screen
-change since that run? — whatever was approved: **Unchanged** for the same pixels, **Changed** for a difference (until
-someone approves these pixels), **New** when that run did not capture the screen. Every screen names the run it is
-compared with, and the differences are measured against that run's images.
+approved images (`?against=previous`, `?against=run:38`). Then every status answers one question — did this screen
+change since that run, pixel for pixel? — whatever was approved: **Unchanged**, **Changed** (until someone approves
+these pixels), **Measuring**, or **New** when that run did not capture the screen. **Differences** shows the changed
+and new ones. Every screen names the run it is compared with.
 
 The folders on the left organize the flows the way [test cases](/docs/using/test-cases) do: under **Test Cases**, a test
 linked to a case sits in that case's suite, and tests no case covers are in **Not in a test case**, by spec file.

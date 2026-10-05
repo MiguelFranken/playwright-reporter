@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowDownWideNarrow, Check, EyeOff, Images, Search } from 'lucide-react';
+import { ArrowDownWideNarrow, Check, EyeOff, Images, Loader2, Search } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '../../components/button';
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '../../components/dropdown-menu';
@@ -17,13 +17,18 @@ import {
   inFolder,
   matchesReviewFilter,
   NEEDS_REVIEW,
+  compareRuleRun,
+  describeCounts,
+  filterCount,
+  isRunCompareRule,
   REVIEW_FILTER_LABELS,
-  REVIEW_FILTERS,
   REVIEW_STATUS_TONES,
+  visibleReviewFilters,
   variantsOf,
   type FrameSettings,
   type ReviewPanelSettings,
   type ReviewCheckpointView,
+  type ReviewCounts,
   type ReviewDecisionInput,
   type ReviewFilter,
   type ReviewFlowView,
@@ -237,7 +242,9 @@ export function ReviewStoryboard({
     [visible, grouping, sort, library],
   );
   const counts = useMemo(() => countStatuses(flows, variant), [flows, variant]);
-  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  const total = filterCount(counts, 'all');
+  // The whole run compared with another one: the statuses say what changed since that run.
+  const comparedWith = runCompare && !library && isRunCompareRule(runCompare.rule) ? (compareRuleRun(runCompare.rule) !== null ? `run #${compareRuleRun(runCompare.rule)}` : 'the run before') : null;
   const flowsToReview = useMemo(() => searched.filter((f) => needsReviewIds([f]).length > 0).length, [searched]);
   const pending = useMemo(() => new Set(pendingIds), [pendingIds]);
   const ordered = useMemo(() => sections.flatMap((s) => s.flows), [sections]);
@@ -293,8 +300,14 @@ export function ReviewStoryboard({
     visible.length === 0 ? (
       <EmptyState
         icon={Check}
-        title={effectiveFilter === 'needs-review' && !query && !folder ? 'Nothing needs review' : 'No checkpoints match'}
-        description={effectiveFilter === 'needs-review' && !query && !folder ? 'Every image was decided about, matches an approved one or, with none approved, the run it is compared with.' : 'Try another filter, folder or search.'}
+        title={effectiveFilter === 'needs-review' && !query && !folder ? (comparedWith ? `Nothing changed since ${comparedWith}` : 'Nothing needs review') : 'No checkpoints match'}
+        description={
+          effectiveFilter === 'needs-review' && !query && !folder
+            ? comparedWith
+              ? 'Every screen looks the same as there, pixel for pixel, or its change was decided about.'
+              : 'Every image was decided about, or looks the same as the approved one (or, with none approved, the run before).'
+            : 'Try another filter, folder or search.'
+        }
       >
         {effectiveFilter !== 'all' ? (
           <Button variant="outline" size="sm" onClick={() => setFilter('all')}>
@@ -323,8 +336,8 @@ export function ReviewStoryboard({
         <div className={cn('flex flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between', library && 'items-end 2xl:justify-end')}>
           {library ? null : (
           <div className="flex flex-wrap items-center gap-1 rounded-xl border border-border bg-surface-sunken p-1" role="group" aria-label="Filter by review status">
-            {REVIEW_FILTERS.map((f) => {
-              const n = f === 'all' ? total : f === 'needs-review' ? counts.changed + counts.new : counts[f];
+            {visibleReviewFilters(counts, filter).map((f) => {
+              const n = filterCount(counts, f);
               const active = f === filter;
               return (
                 <button
@@ -338,7 +351,7 @@ export function ReviewStoryboard({
                   )}
                 >
                   {f !== 'all' && f !== 'needs-review' ? <span aria-hidden className={cn('size-1.5 rounded-full', toneSolid[REVIEW_STATUS_TONES[f]])} /> : null}
-                  {REVIEW_FILTER_LABELS[f]}
+                  {f === 'needs-review' && comparedWith ? 'Differences' : REVIEW_FILTER_LABELS[f]}
                   <span className="tabular-nums text-muted-foreground">{n}</span>
                 </button>
               );
@@ -395,6 +408,7 @@ export function ReviewStoryboard({
           </div>
         </div>
       ) : null}
+      {toolbar && !library ? <ReviewSummary counts={counts} comparedWith={comparedWith} /> : null}
 
       {tree ? (
         <div className="grid gap-6 lg:grid-cols-[15rem_minmax(0,1fr)]">
@@ -445,5 +459,29 @@ export function ReviewStoryboard({
         compareWith={compareWith}
       />
     </div>
+  );
+}
+
+/**
+ * What the counts mean, in a sentence: what the images are compared with, how
+ * many of each status, and — while comparisons are measured — that the
+ * numbers still move.
+ */
+function ReviewSummary({ counts, comparedWith }: { counts: ReviewCounts; comparedWith: string | null }) {
+  const described = describeCounts(counts);
+  if (!described) return null;
+  return (
+    <p className="-mt-2 flex flex-wrap items-center gap-x-2 text-body-s text-muted-foreground" role="status">
+      <span>
+        {comparedWith ? <>Compared with {comparedWith}, pixel for pixel: </> : <>Compared with the approved images, else the run before, pixel for pixel: </>}
+        <span className="tabular-nums">{described}</span>.
+      </span>
+      {counts.measuring ? (
+        <span className="inline-flex items-center gap-1">
+          <Loader2 aria-hidden className="size-3.5 motion-safe:animate-spin" />
+          {counts.measuring === 1 ? 'One comparison is' : `${counts.measuring} comparisons are`} still being measured; the counts follow.
+        </span>
+      ) : null}
+    </p>
   );
 }

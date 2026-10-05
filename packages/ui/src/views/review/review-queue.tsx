@@ -12,7 +12,7 @@ import { StatusBadge } from '../../patterns/status-badge';
 import { Link } from '../../provider';
 import { formatDateTime, formatRelative } from '../../lib/format';
 import { libraryRefParam, type LibraryRefKey } from '../../lib/library';
-import type { ReviewCounts } from '../../lib/review';
+import { filterCount, type ReviewCounts } from '../../lib/review';
 
 export interface ReviewQueueRow {
   number: number;
@@ -58,7 +58,7 @@ export function groupReviewQueue(rows: readonly ReviewQueueRow[]): ReviewChange[
   return out;
 }
 
-const needsOf = (c: ReviewCounts) => c.changed + c.new;
+const needsOf = (c: ReviewCounts) => filterCount(c, 'needs-review');
 
 /**
  * What waits for a reviewer, one row per pull request or branch: its newest

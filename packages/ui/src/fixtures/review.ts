@@ -332,10 +332,10 @@ export const approvedFlows: ReviewFlowView[] = [
 ];
 
 export const reviewQueueRows: ReviewQueueRow[] = [
-  { number: 483, status: 'passed', branch: 'feat/checkout-redesign', commit: '9f2c1ab', commitMessage: 'Redesign the checkout summary', prNumber: 212, prTitle: 'Checkout redesign', startedAt: ago(12).toISOString(), counts: { changed: 4, new: 3, changes_requested: 0, unchanged: 12, approved: 38 }, reviewHref: '#run-483/review', changeHref: '#pr:212', libraryHref: '#library-pr:212' },
-  { number: 482, status: 'failed', branch: 'fix/coupon-rounding', commit: '51de0c3', commitMessage: 'Round fixed-value coupons to cents', prNumber: 209, prTitle: 'Round coupons to cents', startedAt: ago(95).toISOString(), counts: { changed: 0, new: 2, changes_requested: 1, unchanged: 0, approved: 40 }, reviewHref: '#run-482/review', changeHref: '#pr:209', libraryHref: '#library-pr:209' },
-  { number: 480, status: 'passed', branch: 'feat/checkout-redesign', commit: '77aa010', commitMessage: 'Move the summary into a sidebar', prNumber: 212, prTitle: 'Checkout redesign', startedAt: ago(200).toISOString(), counts: { changed: 6, new: 3, changes_requested: 0, unchanged: 0, approved: 36 }, reviewHref: '#run-480/review', changeHref: '#pr:212', libraryHref: '#library-pr:212' },
-  { number: 481, status: 'passed', branch: 'main', commit: 'a0b1c2d', commitMessage: 'Merge pull request #207', prNumber: null, startedAt: ago(60 * 5).toISOString(), counts: { changed: 0, new: 0, changes_requested: 0, unchanged: 0, approved: 45 }, reviewHref: '#run-481/review', changeHref: '#branch:main', libraryHref: '#library-branch:main' },
+  { number: 483, status: 'passed', branch: 'feat/checkout-redesign', commit: '9f2c1ab', commitMessage: 'Redesign the checkout summary', prNumber: 212, prTitle: 'Checkout redesign', startedAt: ago(12).toISOString(), counts: { changed: 4, new: 3, changes_requested: 0, unchanged: 12, measuring: 0, approved: 38 }, reviewHref: '#run-483/review', changeHref: '#pr:212', libraryHref: '#library-pr:212' },
+  { number: 482, status: 'failed', branch: 'fix/coupon-rounding', commit: '51de0c3', commitMessage: 'Round fixed-value coupons to cents', prNumber: 209, prTitle: 'Round coupons to cents', startedAt: ago(95).toISOString(), counts: { changed: 0, new: 2, changes_requested: 1, unchanged: 0, measuring: 0, approved: 40 }, reviewHref: '#run-482/review', changeHref: '#pr:209', libraryHref: '#library-pr:209' },
+  { number: 480, status: 'passed', branch: 'feat/checkout-redesign', commit: '77aa010', commitMessage: 'Move the summary into a sidebar', prNumber: 212, prTitle: 'Checkout redesign', startedAt: ago(200).toISOString(), counts: { changed: 6, new: 3, changes_requested: 0, unchanged: 0, measuring: 0, approved: 36 }, reviewHref: '#run-480/review', changeHref: '#pr:212', libraryHref: '#library-pr:212' },
+  { number: 481, status: 'passed', branch: 'main', commit: 'a0b1c2d', commitMessage: 'Merge pull request #207', prNumber: null, startedAt: ago(60 * 5).toISOString(), counts: { changed: 0, new: 0, changes_requested: 0, unchanged: 0, measuring: 0, approved: 45 }, reviewHref: '#run-481/review', changeHref: '#branch:main', libraryHref: '#library-branch:main' },
 ];
 
 export { NOW };
@@ -459,6 +459,19 @@ export const runCompareFlows: ReviewFlowView[] = [
     })),
   },
 ];
+
+/** The run compared with the run before while some comparisons are still measured. */
+export const measuringFlows: ReviewFlowView[] = runCompareFlows.map((f) => ({
+  ...f,
+  checkpoints: f.checkpoints.map((cp, i) => ({
+    ...cp,
+    captures: cp.captures.map((c) =>
+      i === 1 && c.variant === 'desktop' && !c.decision
+        ? { ...c, status: 'measuring' as const, compare: c.compare ? { ...c.compare, label: 'Run #482', same: false, runNumber: 482 } : c.compare, diff: { ...measuredDiff([], { width: 2560, height: 1440 }), state: 'pending' as const, against: 'compare' as const, overlayUrl: null } }
+        : c,
+    ),
+  })),
+}));
 
 /**
  * A run the size of a real suite: 240 tests in twelve spec files, each a copy

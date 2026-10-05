@@ -9,7 +9,8 @@
  *   pending ones;
  * - measuring claims a pending row before reading anything, and a claim
  *   left by a worker that died expires;
- * - approving only touches images that are still `changed`.
+ * - approving only touches images nobody decided about yet (`changed`, or
+ *   `unchanged`: measured without a changed pixel).
  */
 import { randomUUID } from 'node:crypto';
 import { and, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
@@ -238,7 +239,8 @@ export async function measureDiff(diffId: string): Promise<MeasureOutcome> {
 export async function approveWithinTolerance(runId: string, captures?: readonly ComparedCapture[]): Promise<number> {
   const list = captures ?? (await runCaptures(runId));
   const settings = await diffSettingsFor(list.map((c) => c.projectId));
-  const due = list.filter((c) => c.status === 'changed' && c.withinTolerance && c.sha256 && c.diff && settings.get(c.projectId)?.autoApprove);
+  // Unchanged too: an image measured without a changed pixel against the approved one is recorded as approved, with its measurement.
+  const due = list.filter((c) => (c.status === 'changed' || c.status === 'unchanged') && c.withinTolerance && c.sha256 && c.diff && settings.get(c.projectId)?.autoApprove);
   if (due.length === 0) return 0;
   // The same pixels may be due twice in a run (two results of one test); one decision each.
   const unique = new Map(due.map((c) => [`${c.testId}\u0000${c.checkpointName}\u0000${c.variant}\u0000${c.sha256}`, c]));

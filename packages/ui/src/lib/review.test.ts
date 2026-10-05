@@ -19,6 +19,9 @@ import {
   parseCompareRule,
   resolveCompare,
   reviewStatusOf,
+  visibleReviewFilters,
+  describeCounts,
+  emptyReviewCounts,
   statusAgainstRun,
   NEEDS_REVIEW,
   worstStatus,
@@ -220,26 +223,32 @@ describe('compare rules', () => {
 });
 
 describe('reviewStatusOf', () => {
-  const base = { decision: null, approved: false, sha256: 'a' };
+  const base = { decision: null, sha256: 'a' };
+  const done = (changedPixels: number, sizeChanged = false) => ({ state: 'done' as const, changedPixels, sizeChanged });
   it('keeps a decision about the exact pixels', () => {
     expect(reviewStatusOf({ ...base, decision: 'approved', reference: { sha256: 'b' } })).toBe('approved');
-    expect(reviewStatusOf({ ...base, decision: 'changes_requested', approved: true, reference: null })).toBe('changes_requested');
-  });
-  it('is changed against an approved baseline', () => {
-    expect(reviewStatusOf({ ...base, approved: true, reference: { sha256: 'a' } })).toBe('changed');
-  });
-  it('compares with the run before while nothing is approved', () => {
-    expect(reviewStatusOf({ ...base, reference: { sha256: 'a' } })).toBe('unchanged');
-    expect(reviewStatusOf({ ...base, reference: { sha256: 'b' } })).toBe('changed');
-    expect(reviewStatusOf({ ...base, sha256: null, reference: { sha256: null } })).toBe('changed');
+    expect(reviewStatusOf({ ...base, decision: 'changes_requested', reference: null })).toBe('changes_requested');
   });
   it('is new only without any earlier image', () => {
     expect(reviewStatusOf({ ...base, reference: null })).toBe('new');
     expect(reviewStatusOf({ ...base, reference: undefined })).toBe('new');
   });
-  it('asks for no review of unchanged pixels, and ranks them below a request', () => {
-    expect(NEEDS_REVIEW).not.toContain('unchanged');
+  it('lets the pixels decide, never the bytes', () => {
+    // The same file needs no measurement.
+    expect(reviewStatusOf({ ...base, reference: { sha256: 'a' } })).toBe('unchanged');
+    // Another file: what the measurement says — a PNG encoded anew is not a change.
+    expect(reviewStatusOf({ ...base, reference: { sha256: 'b' }, measured: done(0) })).toBe('unchanged');
+    expect(reviewStatusOf({ ...base, reference: { sha256: 'b' }, measured: done(12) })).toBe('changed');
+    expect(reviewStatusOf({ ...base, reference: { sha256: 'b' }, measured: done(0, true) })).toBe('changed');
+    expect(reviewStatusOf({ ...base, reference: { sha256: 'b' }, measured: { state: 'pending', changedPixels: null, sizeChanged: false } })).toBe('measuring');
+    // Nothing measured, or it could not be: a change, to be looked at.
+    expect(reviewStatusOf({ ...base, reference: { sha256: 'b' } })).toBe('changed');
+    expect(reviewStatusOf({ ...base, reference: { sha256: 'b' }, measured: { state: 'too_large', changedPixels: null, sizeChanged: false } })).toBe('changed');
+  });
+  it('asks for review of what changed or may have, not of unchanged pixels', () => {
+    expect(NEEDS_REVIEW).toEqual(['changed', 'new', 'measuring']);
     expect(worstStatus(['approved', 'unchanged'])).toBe('unchanged');
+    expect(worstStatus(['unchanged', 'measuring'])).toBe('measuring');
     expect(worstStatus(['unchanged', 'changes_requested'])).toBe('changes_requested');
   });
 });
@@ -253,10 +262,31 @@ describe('statusAgainstRun', () => {
   it('shows the same pixels as unchanged even when they were approved', () => {
     expect(statusAgainstRun({ decision: 'approved', sha256: 'a', reference: { sha256: 'a' } })).toBe('unchanged');
   });
+  it('measures other bytes against that run', () => {
+    expect(statusAgainstRun({ decision: null, sha256: 'a', reference: { sha256: 'b' }, measured: { state: 'done', changedPixels: 0, sizeChanged: false } })).toBe('unchanged');
+    expect(statusAgainstRun({ decision: null, sha256: 'a', reference: { sha256: 'b' }, measured: { state: 'pending', changedPixels: null, sizeChanged: false } })).toBe('measuring');
+    expect(statusAgainstRun({ decision: 'approved', sha256: 'a', reference: { sha256: 'b' }, measured: { state: 'pending', changedPixels: null, sizeChanged: false } })).toBe('approved');
+  });
   it('keeps an approval of changed pixels, so a decision does not bounce back', () => {
     expect(statusAgainstRun({ decision: 'approved', sha256: 'a', reference: { sha256: 'b' } })).toBe('approved');
   });
   it('always shows a change request', () => {
     expect(statusAgainstRun({ decision: 'changes_requested', sha256: 'a', reference: { sha256: 'a' } })).toBe('changes_requested');
+  });
+});
+
+describe('status filters', () => {
+  const counts = (c: Partial<ReturnType<typeof emptyReviewCounts>>) => ({ ...emptyReviewCounts(), ...c });
+  it('offers only filters that show something, and never two that show the same images', () => {
+    // Run #112 against the run before: one kind of change only — "Changed" would repeat "Needs review".
+    expect(visibleReviewFilters(counts({ changed: 4, unchanged: 168 }), 'needs-review')).toEqual(['needs-review', 'all', 'unchanged']);
+    expect(visibleReviewFilters(counts({ changed: 2, new: 1, unchanged: 168, approved: 3 }), 'needs-review')).toEqual(['needs-review', 'all', 'changed', 'new', 'unchanged', 'approved']);
+    expect(visibleReviewFilters(counts({ measuring: 5, changed: 1 }), 'needs-review')).toEqual(['needs-review', 'all', 'changed', 'measuring']);
+    // The active filter stays, even when it shows nothing now.
+    expect(visibleReviewFilters(counts({ unchanged: 3 }), 'approved')).toEqual(['needs-review', 'all', 'unchanged', 'approved']);
+  });
+  it('describes the counts in words', () => {
+    expect(describeCounts(counts({ changed: 2, new: 1, unchanged: 168 }))).toBe('2 changed, 1 new, 168 unchanged');
+    expect(describeCounts(counts({}))).toBe('');
   });
 });
