@@ -65,15 +65,20 @@ function boundsOf(el: HTMLElement): DOMRect {
   return right > left && bottom > top ? new DOMRect(left, top, right - left, bottom - top) : view;
 }
 
-/** Where the layout puts the element, from offsets: a bounding rect would include the translate, mid-ease while it glides. */
-function naturalOf(el: HTMLElement): DOMRect {
+/** Where the layout puts a point — the 0×0 anchor — from offsets: a bounding rect would include the translate, mid-ease while it glides. */
+function pointOf(el: HTMLElement): { x: number; y: number } {
   const parent = el.offsetParent as HTMLElement | null;
   const p = parent?.getBoundingClientRect() ?? new DOMRect();
-  return new DOMRect(p.left + (parent?.clientLeft ?? 0) + el.offsetLeft, p.top + (parent?.clientTop ?? 0) + el.offsetTop, el.offsetWidth, el.offsetHeight);
+  return { x: p.left + (parent?.clientLeft ?? 0) + el.offsetLeft, y: p.top + (parent?.clientTop ?? 0) + el.offsetTop };
 }
 
 /** `value` kept within `[lo, hi]`; the middle of the two when they cross (bounds smaller than the bar). */
 const within = (value: number, lo: number, hi: number) => (lo > hi ? (lo + hi) / 2 : Math.min(hi, Math.max(lo, value)));
+
+interface Size {
+  width: number;
+  height: number;
+}
 
 /**
  * The place of a bar floating over a canvas, the way a design tool's is: it
@@ -84,18 +89,23 @@ const within = (value: number, lo: number, hi: number) => (lo > hi ? (lo + hi) /
  * or pull it off one); Home or a double-click sends it back. With a
  * `storageKey` the browser remembers where it was left.
  *
- * It keeps its middle where it was put while its size changes, so it grows
- * the same way to both sides; while dragged, the grip stays under the pointer
- * however the bar changes shape around it.
+ * The layout places a 0×0 anchor, not the bar: `anchorRef` goes on it, and the
+ * bar (`barRef`) is absolutely positioned on it and centred on it by its own
+ * CSS — on its bottom edge at home (`translate: -50% -100%`), on its middle
+ * once placed (`-50% -50%`, while the anchor is marked `data-placed`). So the
+ * bar grows and shrinks around the right point with no script at all: the
+ * anchor moves (by `translate`, written straight to it) only when the bar is
+ * dragged or nudged, when its bounds change, or when the size it is heading
+ * for would no longer fit where it is. While dragged, the grip stays under the
+ * pointer however the bar changes shape around it.
  *
- * `ref` goes on the bar, which must be `position: relative` so the grip's
- * offsets are its own; `gripRef` on the grip, and `handleProps` too. The bar
- * is moved with the CSS `translate`, written straight to it, and marked
- * `data-dragging` while dragged and `data-gliding` while it eases somewhere —
- * for its styles to answer. None of that renders anything: in a drag, only
- * docking and undocking do.
+ * `contentRef` holds what the bar shows: its size is the size the bar is
+ * heading for, which is what it is fitted by. `gripRef` and `handleProps` go
+ * on the grip. The anchor is marked `data-dragging` while dragged and
+ * `data-gliding` while it eases somewhere, for styles to answer; none of that
+ * renders anything — in a drag, only docking and undocking do.
  */
-export function useFloatingPlacement<T extends HTMLElement, G extends HTMLElement>({
+export function useFloatingPlacement<A extends HTMLElement, B extends HTMLElement, C extends HTMLElement, G extends HTMLElement>({
   storageKey,
   onBeforeDockChange,
 }: {
@@ -103,16 +113,17 @@ export function useFloatingPlacement<T extends HTMLElement, G extends HTMLElemen
   /** Called just before the bar turns upright or back, while the old layout can still be measured. */
   onBeforeDockChange?: () => void;
 } = {}) {
-  const ref = useRef<T>(null);
+  const anchorRef = useRef<A>(null);
+  const barRef = useRef<B>(null);
+  const contentRef = useRef<C>(null);
   const gripRef = useRef<G>(null);
   const [dock, setDockState] = useState<FloatingDock>(null);
-  // Being dragged, and gliding (moved by a key or sent home: it eases to its new place instead of being written
-  // there), are marks on the bar — `data-dragging`, `data-gliding` — not state: they change while the pointer moves,
-  // and a render of the bar for each would cost more than the move itself.
   const glideTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const placement = useRef<FloatingPlacement | null>(null);
   const dockRef = useRef<FloatingDock>(null);
   const centre = useRef<{ x: number; y: number } | null>(null);
+  // The size the bar was last heading for: when that changes, it moves in (or back) as it grows, in step with it.
+  const lastTarget = useRef<Size | null>(null);
   // `canDock`: a drag that starts at an edge must leave it before it can dock there, or a bar resting against the
   // edge would stand up the moment it is picked up.
   const drag = useRef<{ id: number; grabX: number; grabY: number; px: number; py: number; startX: number; startY: number; moved: boolean; canDock: boolean } | null>(null);
@@ -121,8 +132,9 @@ export function useFloatingPlacement<T extends HTMLElement, G extends HTMLElemen
     before.current = onBeforeDockChange;
   });
 
+  /** Eases the anchor to wherever it is sent next, instead of writing it there. */
   const glide = useCallback(() => {
-    const el = ref.current;
+    const el = anchorRef.current;
     if (!el) return;
     el.dataset.gliding = '';
     clearTimeout(glideTimer.current);
@@ -137,58 +149,88 @@ export function useFloatingPlacement<T extends HTMLElement, G extends HTMLElemen
     setDockState(next);
   }, []);
 
-  /** Whether the bar fits upright: its length lying down, against the height it would stand in. */
-  const fitsUpright = useCallback((el: HTMLElement, box: DOMRect) => {
-    const length = dockRef.current ? el.scrollHeight : el.scrollWidth;
-    return length <= box.height - 2 * MARGIN;
+  /** The size the bar is heading for: its content's, and its own border. Mid-ease, its own size is still on the way. */
+  const targetSize = useCallback((): Size | null => {
+    const bar = barRef.current;
+    const content = contentRef.current;
+    if (!bar || !content) return null;
+    return { width: content.offsetWidth + bar.offsetWidth - bar.clientWidth, height: content.offsetHeight + bar.offsetHeight - bar.clientHeight };
   }, []);
 
-  /** Puts the bar where it belongs now: under the pointer, at its placement, or where the layout has it. */
+  /** Whether the bar fits upright: its length, against the height it would stand in. */
+  const fitsUpright = useCallback(
+    (box: DOMRect) => {
+      const size = targetSize();
+      if (!size) return false;
+      // Lying down, its length is its width; upright, its height.
+      const length = dockRef.current ? size.height : size.width;
+      return length <= box.height - 2 * MARGIN;
+    },
+    [targetSize],
+  );
+
+  /** Puts the anchor where the bar belongs now: under the pointer, at its placement, or where the layout has it. */
   const layout = useCallback(() => {
-    const el = ref.current;
-    if (!el) return;
-    const box = boundsOf(el);
+    const anchor = anchorRef.current;
+    const bar = barRef.current;
+    if (!anchor || !bar) return;
+    const box = boundsOf(anchor);
     // Grown too tall to stand along the edge (the colours opened, the window shrank): it lies down where it is.
-    if (dockRef.current && !drag.current && !fitsUpright(el, box)) {
+    if (dockRef.current && !drag.current && !fitsUpright(box)) {
       const c = centre.current;
       placement.current = { dock: null, x: c ? clamp01((c.x - box.left) / box.width) : 0.5, y: c ? clamp01((c.y - box.top) / box.height) : 1 };
       setDock(null);
       return;
     }
-    const n = naturalOf(el);
+    const a = pointOf(anchor);
     const d = drag.current;
     const p = placement.current;
+    // Dragged, the bar is fitted by the size it has this frame, so the grip stays under the pointer as it turns;
+    // otherwise by the size it is heading for, so it does not run into an edge on its way there.
+    // (A drag reads no more than it needs: the target is for a bar at rest.)
+    const target = d ? null : targetSize();
+    const size = target ?? { width: bar.offsetWidth, height: bar.offsetHeight };
+    // Folded, unfolded, turned or the colours opening: the bar eases to its new size, and so does its place.
+    if (target) {
+      const was = lastTarget.current;
+      lastTarget.current = target;
+      if (was && (Math.abs(was.width - target.width) > 0.5 || Math.abs(was.height - target.height) > 0.5)) glide();
+    }
     let cx: number;
     let cy: number;
     if (d) {
       const grip = gripRef.current;
-      const gx = grip ? grip.offsetLeft + grip.offsetWidth / 2 : 0;
-      const gy = grip ? grip.offsetTop + grip.offsetHeight / 2 : n.height / 2;
-      cx = d.px - d.grabX - gx + n.width / 2;
-      cy = d.py - d.grabY - gy + n.height / 2;
+      const gx = grip ? bar.clientLeft + grip.offsetLeft + grip.offsetWidth / 2 : size.width / 2;
+      const gy = grip ? bar.clientTop + grip.offsetTop + grip.offsetHeight / 2 : size.height / 2;
+      cx = d.px - d.grabX - gx + size.width / 2;
+      cy = d.py - d.grabY - gy + size.height / 2;
     } else if (p) {
       cx = box.left + p.x * box.width;
       cy = box.top + p.y * box.height;
     } else {
-      el.style.translate = '';
-      centre.current = { x: n.left + n.width / 2, y: n.top + n.height / 2 };
+      // At home the layout has it, standing on the anchor; nothing to write.
+      delete anchor.dataset.placed;
+      if (anchor.style.translate) anchor.style.translate = '';
+      centre.current = { x: a.x, y: a.y - size.height / 2 };
       return;
     }
-    const half = { w: n.width / 2, h: n.height / 2 };
-    const lo = { x: box.left + MARGIN + half.w, y: box.top + MARGIN + half.h };
-    const hi = { x: box.right - MARGIN - half.w, y: box.bottom - MARGIN - half.h };
+    const lo = { x: box.left + MARGIN + size.width / 2, y: box.top + MARGIN + size.height / 2 };
+    const hi = { x: box.right - MARGIN - size.width / 2, y: box.bottom - MARGIN - size.height / 2 };
     cx = dockRef.current === 'left' ? lo.x : dockRef.current === 'right' ? hi.x : within(cx, lo.x, hi.x);
     cy = within(cy, lo.y, hi.y);
     centre.current = { x: cx, y: cy };
-    el.style.translate = `${cx - half.w - n.left}px ${cy - half.h - n.top}px`;
-  }, [fitsUpright, setDock]);
+    anchor.dataset.placed = '';
+    const next = `${Math.round((cx - a.x) * 100) / 100}px ${Math.round((cy - a.y) * 100) / 100}px`;
+    // Only a real move is written: most calls (the bar easing its size around its middle) change nothing.
+    if (anchor.style.translate !== next) anchor.style.translate = next;
+  }, [fitsUpright, setDock, targetSize, glide]);
 
   /** Keeps where the bar is now as its placement, and remembers it. */
   const settle = useCallback(() => {
-    const el = ref.current;
+    const anchor = anchorRef.current;
     const c = centre.current;
-    if (!el || !c) return;
-    const box = boundsOf(el);
+    if (!anchor || !c) return;
+    const box = boundsOf(anchor);
     placement.current = { dock: dockRef.current, x: clamp01((c.x - box.left) / box.width), y: clamp01((c.y - box.top) / box.height) };
     write(storageKey, placement.current);
   }, [storageKey]);
@@ -203,18 +245,21 @@ export function useFloatingPlacement<T extends HTMLElement, G extends HTMLElemen
     layout();
   }, [storageKey, layout]);
 
-  // Every render can change the bar's shape (upright or not, folded or not): put it in place again before paint.
+  // Every render can change what the bar holds (upright or not, folded or not): fit it again before paint.
   useLayoutEffect(() => {
     layout();
   });
 
-  // …and so can its own size easing, its bounds or the window changing.
+  // …and so can its content easing (the colours), its own size while dragged, its bounds or the window.
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const bounds = el.closest<HTMLElement>('[data-float-bounds]');
+    const anchor = anchorRef.current;
+    const bar = barRef.current;
+    const content = contentRef.current;
+    if (!anchor || !bar || !content) return;
+    const bounds = anchor.closest<HTMLElement>('[data-float-bounds]');
     const observer = new ResizeObserver(layout);
-    observer.observe(el);
+    observer.observe(bar);
+    observer.observe(content);
     if (bounds) observer.observe(bounds);
     window.addEventListener('resize', layout);
     return () => {
@@ -230,8 +275,8 @@ export function useFloatingPlacement<T extends HTMLElement, G extends HTMLElemen
   /** One pointer event of a drag: the bar under the pointer, docked or not by where it is. */
   const dragTo = (e: PointerEvent) => {
     const d = drag.current;
-    const el = ref.current;
-    if (!d || d.id !== e.pointerId || !el) return;
+    const anchor = anchorRef.current;
+    if (!d || d.id !== e.pointerId || !anchor) return;
     // The pointer is the grip's until it is let go: nothing above needs to hear it move, React's root included.
     e.stopPropagation();
     d.px = e.clientX;
@@ -239,17 +284,17 @@ export function useFloatingPlacement<T extends HTMLElement, G extends HTMLElemen
     if (!d.moved) {
       if (Math.abs(d.px - d.startX) + Math.abs(d.py - d.startY) < SLOP) return;
       d.moved = true;
-      el.dataset.dragging = '';
+      anchor.dataset.dragging = '';
     }
-    const box = boundsOf(el);
+    const box = boundsOf(anchor);
     const current = dockRef.current;
     let next = current;
     const nearLeft = d.px - box.left < DOCK_IN;
     const nearRight = box.right - d.px < DOCK_IN;
     if (!nearLeft && !nearRight) d.canDock = true;
     if (!current && d.canDock) {
-      if (nearLeft && fitsUpright(el, box)) next = 'left';
-      else if (nearRight && fitsUpright(el, box)) next = 'right';
+      if (nearLeft && fitsUpright(box)) next = 'left';
+      else if (nearRight && fitsUpright(box)) next = 'right';
     } else if ((current === 'left' && d.px - box.left > DOCK_OUT) || (current === 'right' && box.right - d.px > DOCK_OUT)) {
       next = null;
     }
@@ -263,8 +308,16 @@ export function useFloatingPlacement<T extends HTMLElement, G extends HTMLElemen
     if (d?.id !== e.pointerId) return;
     detach.current?.();
     drag.current = null;
-    if (ref.current) delete ref.current.dataset.dragging;
+    if (anchorRef.current) delete anchorRef.current.dataset.dragging;
     if (d.moved) settle();
+    layout();
+  };
+
+  const goHome = () => {
+    placement.current = null;
+    glide();
+    setDock(null);
+    write(storageKey, null);
     layout();
   };
 
@@ -272,13 +325,14 @@ export function useFloatingPlacement<T extends HTMLElement, G extends HTMLElemen
     onPointerDown(e: React.PointerEvent<HTMLElement>) {
       if (e.button !== 0) return;
       const grip = gripRef.current;
-      if (!grip) return;
+      const anchor = anchorRef.current;
+      if (!grip || !anchor) return;
       e.preventDefault();
       const target = e.currentTarget;
       target.setPointerCapture(e.pointerId);
       const g = grip.getBoundingClientRect();
-      const box = ref.current ? boundsOf(ref.current) : null;
-      const inZone = !!box && (e.clientX - box.left < DOCK_IN || box.right - e.clientX < DOCK_IN);
+      const box = boundsOf(anchor);
+      const inZone = e.clientX - box.left < DOCK_IN || box.right - e.clientX < DOCK_IN;
       drag.current = {
         id: e.pointerId,
         grabX: e.clientX - (g.left + g.width / 2),
@@ -302,45 +356,36 @@ export function useFloatingPlacement<T extends HTMLElement, G extends HTMLElemen
         detach.current = null;
       };
     },
-    onDoubleClick() {
-      placement.current = null;
-      glide();
-      setDock(null);
-      write(storageKey, null);
-      layout();
-    },
+    onDoubleClick: goHome,
     onKeyDown(e: React.KeyboardEvent<HTMLElement>) {
-      const el = ref.current;
+      const anchor = anchorRef.current;
       const c = centre.current;
-      if (!el || !c) return;
+      if (!anchor || !c) return;
+      if (e.key === 'Home') {
+        e.preventDefault();
+        e.stopPropagation();
+        goHome();
+        return;
+      }
       const step = e.shiftKey ? STEP.shift : STEP.key;
-      const box = boundsOf(el);
-      const n = naturalOf(el);
+      const box = boundsOf(anchor);
+      const size = targetSize();
       const current = dockRef.current;
       let x = c.x;
       let y = c.y;
       let next = current;
-      if (e.key === 'Home') {
-        e.preventDefault();
-        e.stopPropagation();
-        placement.current = null;
-        glide();
-        setDock(null);
-        write(storageKey, null);
-        layout();
-        return;
-      }
       if (e.key === 'ArrowUp') y -= step;
       else if (e.key === 'ArrowDown') y += step;
       else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
         const towards = e.key === 'ArrowLeft' ? 'left' : 'right';
+        const half = (size?.width ?? 0) / 2;
         if (current && current !== towards) {
           // Off the edge it stood along: lying down again, just clear of it.
           next = null;
           x = towards === 'right' ? box.left + MARGIN + step : box.right - MARGIN - step;
         } else if (!current) {
-          const atEdge = towards === 'left' ? c.x - n.width / 2 <= box.left + MARGIN + 0.5 : c.x + n.width / 2 >= box.right - MARGIN - 0.5;
-          if (atEdge && fitsUpright(el, box)) next = towards;
+          const atEdge = towards === 'left' ? c.x - half <= box.left + MARGIN + 0.5 : c.x + half >= box.right - MARGIN - 0.5;
+          if (atEdge && fitsUpright(box)) next = towards;
           else x += towards === 'left' ? -step : step;
         }
       } else return;
@@ -355,5 +400,5 @@ export function useFloatingPlacement<T extends HTMLElement, G extends HTMLElemen
     },
   };
 
-  return { ref, gripRef, dock, handleProps };
+  return { anchorRef, barRef, contentRef, gripRef, dock, handleProps };
 }

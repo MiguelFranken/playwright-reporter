@@ -1319,7 +1319,7 @@ export function CheckpointViewer({
               style={overlaid ? { gridTemplateColumns: panelColumns(panel.open ? panel.width : null) } : undefined}
             >
               {/* The container the screens take their size from (see `zoomCss`): its height too, beside the panel. */}
-              <section data-float-bounds className="relative flex min-h-0 flex-col bg-surface [container-type:inline-size] lg:[container-type:size]" aria-label="Checkpoint image">
+              <section className="relative flex min-h-0 flex-col bg-surface [container-type:inline-size] lg:[container-type:size]" aria-label="Checkpoint image">
                 <div
                   ref={setToolbarEl}
                   className="z-20 flex flex-wrap items-center justify-between gap-2 border-b border-border bg-surface/85 px-4 py-2 backdrop-blur-sm lg:absolute lg:inset-x-0"
@@ -1550,8 +1550,9 @@ export function CheckpointViewer({
                 />
                 {canComment && pinsOn && !verifying && !(resolving && ended) ? (
                   // Over the bottom of the screens, the way a drawing tool's bar floats: always at hand, never in the layout.
-                  // Its grip moves it off whatever it covers, and the browser remembers where.
-                  <div className="pointer-events-none absolute inset-x-0 z-40 flex justify-center px-4" style={{ bottom: overlaid ? stripHeight : 16 }}>
+                  // Its grip moves it off whatever it covers, and the browser remembers where. It moves within the screens
+                  // between the bars over them — under the toolbar, above the strip of checkpoints — not over either.
+                  <div data-float-bounds className="pointer-events-none absolute inset-x-0 z-40 flex items-end justify-center px-4" style={{ top: inset.top, bottom: overlaid ? stripHeight : 16 }}>
                     <CommentBar
                       className="pointer-events-auto"
                       positionKey="review:comment-bar-position"
