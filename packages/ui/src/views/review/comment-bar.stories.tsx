@@ -83,6 +83,7 @@ function Held(args: React.ComponentProps<typeof CommentBar> & { short?: boolean 
 
 const stored = () => JSON.parse(localStorage.getItem(POSITION_KEY) ?? 'null') as { dock: string | null; x: number; y: number } | null;
 const bar = (canvasElement: HTMLElement) => canvasElement.querySelector<HTMLElement>('[data-slot="comment-bar"]')!;
+const anchor = (canvasElement: HTMLElement) => canvasElement.querySelector<HTMLElement>('[data-slot="comment-bar-anchor"]')!;
 
 /** Starts each story with nothing remembered, or with the place given, and forgets it afterwards. */
 const remembering = (placement?: { dock: 'left' | 'right' | null; x: number; y: number }) => () => {
@@ -149,11 +150,11 @@ export const DockByDragging: Story = {
       { target: grip, coords: { clientX: stage.right - 12, clientY: stage.top + stage.height / 2 } },
     ]);
     await waitFor(() => expect(bar(canvasElement)).toHaveAttribute('data-dock', 'right'));
-    // Held, it is where the pointer has it at once: its place does not ease after it, docking or not.
-    await expect(bar(canvasElement)).toHaveAttribute('data-dragging');
-    await expect(getComputedStyle(bar(canvasElement)).transitionProperty).not.toMatch(/translate|all/);
+    // Held, it is where the pointer has it at once: its place (the anchor's) does not ease after it, docking or not.
+    await expect(anchor(canvasElement)).toHaveAttribute('data-dragging');
+    await expect(getComputedStyle(anchor(canvasElement)).transitionProperty).not.toMatch(/translate|all/);
     await user.pointer({ keys: '[/MouseLeft]', target: grip, coords: { clientX: stage.right - 12, clientY: stage.top + stage.height / 2 } });
-    await expect(bar(canvasElement)).not.toHaveAttribute('data-dragging');
+    await expect(anchor(canvasElement)).not.toHaveAttribute('data-dragging');
     await waitFor(() => expect(stored()).toMatchObject({ dock: 'right' }));
     const docked = grip.getBoundingClientRect();
     const at = { clientX: docked.left + docked.width / 2, clientY: docked.top + docked.height / 2 };
@@ -164,6 +165,60 @@ export const DockByDragging: Story = {
     ]);
     await waitFor(() => expect(bar(canvasElement)).not.toHaveAttribute('data-dock'));
     await expect(stored()).toMatchObject({ dock: null });
+  },
+};
+
+/**
+ * What the bar eases when `button` is pressed: each property, from where to
+ * where. Read from its CSS transitions as they start, not frame by frame — a
+ * story in a hidden frame gets no animation frames to count.
+ */
+async function eased(el: HTMLElement, button: HTMLElement) {
+  button.click();
+  // A moment in, well inside the ease: what is easing is easing from where it started.
+  await new Promise((r) => setTimeout(r, 60));
+  const out: Record<string, [number, number]> = {};
+  for (const a of el.getAnimations()) {
+    // A transition, not the bar's entrance; by shape, since the story's realm is not the page's.
+    if (!('transitionProperty' in a)) continue;
+    const property = (a as CSSTransition).transitionProperty;
+    const [from, to] = (a.effect as KeyframeEffect).getKeyframes();
+    out[property] = [Number.parseFloat(String(from[property])), Number.parseFloat(String(to[property]))];
+  }
+  // Let it arrive before the next step.
+  await new Promise((r) => setTimeout(r, 400));
+  return out;
+}
+
+/**
+ * Folding and unfolding grow the bar along its run only: wider lying down,
+ * taller upright — and upright, from its own folded size, never from the
+ * shape it had lying down.
+ */
+export const GrowsAlongItsRun: Story = {
+  render: (args) => <Held {...args} />,
+  beforeEach: remembering(),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const el = bar(canvasElement);
+    // Lying down: unfolding and folding ease its width only.
+    const unfolded = await eased(el, canvas.getByRole('button', { name: 'Comment' }));
+    await expect(Object.keys(unfolded), 'unfolded: what eases').toEqual(['width']);
+    await expect(unfolded.width[1] - unfolded.width[0]).toBeGreaterThan(100);
+    const folded = await eased(el, canvas.getByRole('button', { name: 'Stop commenting' }));
+    await expect(Object.keys(folded), 'folded: what eases').toEqual(['width']);
+    // Docked upright, folded: the same along its height, from its own folded height.
+    canvas.getByRole('button', { name: 'Move the comment bar' }).focus();
+    for (let i = 0; i < 8 && !el.dataset.dock; i++) await userEvent.keyboard('{Shift>}{ArrowLeft}{/Shift}');
+    await waitFor(() => expect(el).toHaveAttribute('data-dock', 'left'));
+    await new Promise((r) => setTimeout(r, 450));
+    const foldedHeight = el.getBoundingClientRect().height;
+    const upright = await eased(el, canvas.getByRole('button', { name: 'Comment' }));
+    await expect(Object.keys(upright), 'upright: what eases').toEqual(['height']);
+    await expect(Math.abs(upright.height[0] + 2 - foldedHeight)).toBeLessThan(1);
+    await expect(upright.height[1] - upright.height[0]).toBeGreaterThan(100);
+    const uprightFolded = await eased(el, canvas.getByRole('button', { name: 'Stop commenting' }));
+    await expect(Object.keys(uprightFolded), 'uprightFolded: what eases').toEqual(['height']);
   },
 };
 

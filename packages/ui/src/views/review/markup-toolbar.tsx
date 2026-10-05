@@ -145,7 +145,6 @@ const MarkupTools = memo(function MarkupTools({
             orientation={orientation}
             value={[color]}
             onValueChange={(v) => v[0] && onColorChange(v[0] as MarkupColor)}
-            className={upright ? 'px-0.5' : 'py-0.5'}
           >
             {MARKUP_COLORS.map((c, i) => (
               <ToggleGroupItem
@@ -228,9 +227,8 @@ const prefersReducedMotion = () => typeof window !== 'undefined' && window.match
  * opening ease its size.
  */
 export function CommentBar({ commenting, onCommentingChange, openCount = 0, positionKey, className, ...tools }: CommentBarProps) {
-  const contentRef = useRef<HTMLDivElement>(null);
   const flipFrom = useRef<Map<string, Point> | null>(null);
-  const { ref, gripRef, dock, handleProps } = useFloatingPlacement<HTMLDivElement, HTMLButtonElement>({
+  const { anchorRef, barRef, contentRef, gripRef, dock, handleProps } = useFloatingPlacement<HTMLDivElement, HTMLDivElement, HTMLDivElement, HTMLButtonElement>({
     storageKey: positionKey,
     onBeforeDockChange: () => {
       flipFrom.current = measureControls(contentRef.current, gripRef.current);
@@ -254,37 +252,47 @@ export function CommentBar({ commenting, onCommentingChange, openCount = 0, posi
   }
   // The bar's size is its content's, left to the layout: the colours ease open inside it, and it follows. Folding,
   // unfolding and turning swap what it holds at once, though; then it is held at the size it had and eased to the
-  // new one (`data-swapping`), and let go again. The size it had is the last one the observer saw — nothing is
-  // written from the observer, and nothing in all this renders.
+  // new one (`data-swapping`), and let go again. Folded or unfolded where it stands, it only grows along its run —
+  // wider lying down, taller upright — and keeps its breadth; only turning changes both. Nothing in this renders.
   const resizing = useRef(false);
   const shapeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const lastShape = useRef(shape);
+  // The size it was last laid out at, every time — mid-ease too, so a change that cuts in eases on from there.
   const lastSize = useRef<{ width: number; height: number } | null>(null);
-  useEffect(() => {
-    const el = ref.current;
+  useLayoutEffect(() => {
+    const el = barRef.current;
     if (!el) return;
+    // Measured at once as well: the observer's first word comes a frame later, and a quick first press must ease too.
+    lastSize.current = { width: el.clientWidth, height: el.clientHeight };
     const observer = new ResizeObserver(([entry]) => {
-      if (el.dataset.swapping === undefined) lastSize.current = { width: entry.contentRect.width, height: entry.contentRect.height };
+      lastSize.current = { width: entry.contentRect.width, height: entry.contentRect.height };
     });
     observer.observe(el);
     return () => observer.disconnect();
-  }, [ref]);
+  }, [barRef]);
   useLayoutEffect(() => {
     const was = lastShape.current;
     lastShape.current = shape;
-    const el = ref.current;
+    const el = barRef.current;
     const content = contentRef.current;
     if (was === shape || !el || !content) return;
     resizing.current = true;
     const from = lastSize.current;
-    if ((was.commenting !== shape.commenting || was.upright !== shape.upright) && from && !prefersReducedMotion()) {
+    const turned = was.upright !== shape.upright;
+    if ((was.commenting !== shape.commenting || turned) && from && !prefersReducedMotion()) {
+      const to = { width: content.offsetWidth, height: content.offsetHeight };
+      // Along its run only, unless it turned: upright it grows taller, lying down wider.
+      if (!turned) {
+        if (shape.upright) from.width = to.width;
+        else from.height = to.height;
+      }
       el.style.width = `${from.width}px`;
       el.style.height = `${from.height}px`;
       el.dataset.swapping = '';
       // The old size has to be laid out before the new one is set, or there is nothing to ease from.
       void el.offsetWidth;
-      el.style.width = `${content.offsetWidth}px`;
-      el.style.height = `${content.offsetHeight}px`;
+      el.style.width = `${to.width}px`;
+      el.style.height = `${to.height}px`;
     }
     // Started over by every change, so a quick second one gets its own full ease.
     clearTimeout(shapeTimer.current);
@@ -294,7 +302,7 @@ export function CommentBar({ commenting, onCommentingChange, openCount = 0, posi
       el.style.width = '';
       el.style.height = '';
     }, SHAPE_MS);
-  }, [shape, ref]);
+  }, [shape, barRef, contentRef]);
   useEffect(() => () => clearTimeout(shapeTimer.current), []);
 
   // Turned upright or back: every control starts where it was, seen from the grip, and flies to its new place.
@@ -324,7 +332,7 @@ export function CommentBar({ commenting, onCommentingChange, openCount = 0, posi
     for (const el of root.querySelectorAll<HTMLElement>('[data-flip-fade]')) {
       el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180, delay: SHAPE_MS / 2, easing: 'ease-out', fill: 'backwards' });
     }
-  }, [upright, gripRef]);
+  }, [upright, gripRef, contentRef]);
 
   // Where the pointer was last seen over the bar: the browser re-sends a still pointer's position once the
   // tools stop under it, and that is not the reviewer reaching for one. Not while it is dragged: the tooltips
@@ -336,105 +344,112 @@ export function CommentBar({ commenting, onCommentingChange, openCount = 0, posi
     tooltipsOn.current = tooltips;
   }, [tooltips]);
   useEffect(() => {
-    const el = ref.current;
+    const el = barRef.current;
     if (!el) return;
     const rearm = (e: PointerEvent) => {
       const last = lastPointer.current;
       lastPointer.current = { x: e.clientX, y: e.clientY };
-      if (tooltipsOn.current || resizing.current || !last || el.dataset.dragging !== undefined) return;
+      if (tooltipsOn.current || resizing.current || !last || anchorRef.current?.dataset.dragging !== undefined) return;
       if (Math.abs(e.clientX - last.x) + Math.abs(e.clientY - last.y) > 2) setTooltips(true);
     };
     el.addEventListener('pointermove', rearm);
     return () => el.removeEventListener('pointermove', rearm);
-  }, [ref]);
+  }, [barRef, anchorRef]);
   return (
+    // The point the layout places, and the bar moves by: the bar stands on it at home and is centred on it once
+    // moved, by its own CSS, so it grows and shrinks around the right point without a script.
     <div
-      ref={ref}
-      data-slot="comment-bar"
-      data-dock={dock ?? undefined}
-      className={cn(
-        'relative box-content animate-rise-in overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-e3 duration-300 ease-emphasized [will-change:translate] data-dragging:ring-1 data-dragging:ring-foreground/10',
-        // It eases its size around its content while it changes shape, and glides when a key or a jump home moves
-        // it; dragged, it is written under the pointer frame by frame, with nothing easing behind it.
-        'transition-none data-gliding:transition-[translate] data-swapping:transition-[width,height] data-swapping:data-gliding:transition-[width,height,translate] motion-reduce:transition-none!',
-        className,
-      )}
-      onPointerLeave={() => {
-        lastPointer.current = null;
-        if (!resizing.current) setTooltips(true);
-      }}
-      onKeyDown={() => {
-        if (!resizing.current) setTooltips(true);
-      }}
+      ref={anchorRef}
+      data-slot="comment-bar-anchor"
+      className="group/anchor relative size-0 duration-300 ease-emphasized [will-change:translate] transition-none data-gliding:transition-[translate] motion-reduce:transition-none!"
     >
-      <div ref={contentRef} className={cn('flex w-max items-center gap-1 p-1', upright && 'h-max flex-col')}>
-        <button
-          ref={gripRef}
-          type="button"
-          aria-label="Move the comment bar"
-          aria-description="Drag, or use the arrow keys; against the left or right edge it stands upright. Double-click or Home puts it back."
-          title="Drag to move · to a side edge to dock · double-click to put back"
-          className={cn(
-            'flex shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground/70 outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40 active:cursor-grabbing',
-            upright ? 'h-4 w-8' : 'h-8 w-4',
-          )}
-          {...handleProps}
-        >
-          {upright ? <GripHorizontal className="size-4" /> : <GripVertical className="size-4" />}
-        </button>
-        {commenting ? (
-          <div
-            key="tools"
-            role="toolbar"
-            aria-label="Comment tools"
-            aria-orientation={orientation}
-            data-slot="markup-toolbar"
-            className={cn('flex animate-fade-in items-center gap-1', upright && 'flex-col')}
-          >
-            <MarkupTools {...tools} tooltips={tooltips} orientation={orientation} tipSide={tipSide} onClose={onClose} />
-          </div>
-        ) : (
-          <div key="folded" className="flex animate-fade-in items-center">
-            <Tooltip disabled={!tooltips}>
-              {upright ? (
-                // Upright, the bar is as narrow as a button: the icon alone, the open count a badge on its corner.
-                <TooltipTrigger
-                  render={
-                    <Button variant="ghost" size="icon" data-flip="comment" aria-label="Comment" aria-pressed={false} aria-keyshortcuts="C" className="relative size-8" onClick={() => onCommentingChange(true)} />
-                  }
-                >
-                  <MessageSquarePlus />
-                  {openCount ? (
-                    <span aria-hidden title={`${openCount} open`} className="absolute -top-0.5 -right-0.5 min-w-4 rounded-full bg-accent-subtle px-1 text-center text-[10px] leading-4 text-accent-text tabular-nums ring-2 ring-popover">
-                      {openCount}
-                    </span>
-                  ) : null}
-                </TooltipTrigger>
-              ) : (
-                <TooltipTrigger render={<Button variant="ghost" size="sm" data-flip="comment" aria-pressed={false} aria-keyshortcuts="C" className="gap-2 px-3" onClick={() => onCommentingChange(true)} />}>
-                  <MessageSquarePlus /> Comment
-                  {openCount ? (
-                    <span aria-hidden title={`${openCount} open`} className="rounded-full bg-accent-subtle px-1.5 text-label-xs text-accent-text tabular-nums">
-                      {openCount}
-                    </span>
-                  ) : null}
-                  <Kbd aria-hidden className="h-4 min-w-4 text-[10px]">
-                    C
-                  </Kbd>
-                </TooltipTrigger>
-              )}
-              <TooltipContent side={tipSide}>
-                {upright ? (
-                  <>
-                    Comment <Kbd>C</Kbd>
-                  </>
-                ) : (
-                  'Click to pin a comment, drag for an area, or draw on the screen'
-                )}
-              </TooltipContent>
-            </Tooltip>
-          </div>
+      <div
+        ref={barRef}
+        data-slot="comment-bar"
+        data-dock={dock ?? undefined}
+        className={cn(
+          'absolute top-0 left-0 box-content w-max -translate-x-1/2 -translate-y-full animate-rise-in overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-e3 group-data-placed/anchor:-translate-y-1/2 group-data-dragging/anchor:ring-1 group-data-dragging/anchor:ring-foreground/10',
+          // It eases its size around its content while it changes shape; its place is the anchor's.
+          'duration-300 ease-emphasized transition-none data-swapping:transition-[width,height] motion-reduce:transition-none!',
+          className,
         )}
+        onPointerLeave={() => {
+          lastPointer.current = null;
+          if (!resizing.current) setTooltips(true);
+        }}
+        onKeyDown={() => {
+          if (!resizing.current) setTooltips(true);
+        }}
+      >
+        <div ref={contentRef} className={cn('flex w-max items-center gap-1 p-1', upright && 'h-max flex-col')}>
+          <button
+            ref={gripRef}
+            type="button"
+            aria-label="Move the comment bar"
+            aria-description="Drag, or use the arrow keys; against the left or right edge it stands upright. Double-click or Home puts it back."
+            title="Drag to move · to a side edge to dock · double-click to put back"
+            className={cn(
+              'flex shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground/70 outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40 active:cursor-grabbing',
+              upright ? 'h-4 w-8' : 'h-8 w-4',
+            )}
+            {...handleProps}
+          >
+            {upright ? <GripHorizontal className="size-4" /> : <GripVertical className="size-4" />}
+          </button>
+          {commenting ? (
+            <div
+              key="tools"
+              role="toolbar"
+              aria-label="Comment tools"
+              aria-orientation={orientation}
+              data-slot="markup-toolbar"
+              className={cn('flex animate-fade-in items-center gap-1', upright && 'flex-col')}
+            >
+              <MarkupTools {...tools} tooltips={tooltips} orientation={orientation} tipSide={tipSide} onClose={onClose} />
+            </div>
+          ) : (
+            <div key="folded" className="flex animate-fade-in items-center">
+              <Tooltip disabled={!tooltips}>
+                {upright ? (
+                  // Upright, the bar is as narrow as a button: the icon alone, the open count a badge on its corner.
+                  <TooltipTrigger
+                    render={
+                      <Button variant="ghost" size="icon" data-flip="comment" aria-label="Comment" aria-pressed={false} aria-keyshortcuts="C" className="relative size-8" onClick={() => onCommentingChange(true)} />
+                    }
+                  >
+                    <MessageSquarePlus />
+                    {openCount ? (
+                      <span aria-hidden title={`${openCount} open`} className="absolute -top-0.5 -right-0.5 min-w-4 rounded-full bg-accent-subtle px-1 text-center text-[10px] leading-4 text-accent-text tabular-nums ring-2 ring-popover">
+                        {openCount}
+                      </span>
+                    ) : null}
+                  </TooltipTrigger>
+                ) : (
+                  <TooltipTrigger render={<Button variant="ghost" size="sm" data-flip="comment" aria-pressed={false} aria-keyshortcuts="C" className="gap-2 px-3" onClick={() => onCommentingChange(true)} />}>
+                    <MessageSquarePlus /> Comment
+                    {openCount ? (
+                      <span aria-hidden title={`${openCount} open`} className="rounded-full bg-accent-subtle px-1.5 text-label-xs text-accent-text tabular-nums">
+                        {openCount}
+                      </span>
+                    ) : null}
+                    <Kbd aria-hidden className="h-4 min-w-4 text-[10px]">
+                      C
+                    </Kbd>
+                  </TooltipTrigger>
+                )}
+                <TooltipContent side={tipSide}>
+                  {upright ? (
+                    <>
+                      Comment <Kbd>C</Kbd>
+                    </>
+                  ) : (
+                    'Click to pin a comment, drag for an area, or draw on the screen'
+                  )}
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
