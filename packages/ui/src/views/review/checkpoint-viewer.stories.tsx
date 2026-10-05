@@ -133,7 +133,8 @@ export const FillTheStage: Story = {
     const stage = body.getByLabelText('Checkpoint screens');
     const screen = body.getByRole('region', { name: /desktop screen/ });
     await waitFor(() => expect(Math.abs(screen.getBoundingClientRect().width - stage.clientWidth)).toBeLessThanOrEqual(1));
-    await expect(Math.abs(screen.getBoundingClientRect().height - stage.clientHeight)).toBeLessThanOrEqual(1);
+    // The toolbar changes with the view; the stage's height follows it a frame later.
+    await waitFor(() => expect(Math.abs(screen.getBoundingClientRect().height - stage.clientHeight)).toBeLessThanOrEqual(1));
     await expect(stage.scrollHeight).toBeLessThanOrEqual(stage.clientHeight);
     await expect(body.getByRole('button', { name: /Fill/ })).toHaveAttribute('aria-pressed', 'true');
     await expect(body.getByRole('combobox', { name: 'Zoom' })).toBeDisabled();

@@ -1393,8 +1393,9 @@ export function CheckpointViewer({
                       </Button>
                     ) : null}
                     {leftOutToggle ? (
-                      <Button variant={leftOutShown ? 'secondary' : 'ghost'} size="xs" aria-pressed={leftOutShown} title="Show the areas left out of the comparison on the screens (X)" onClick={() => setLeftOutShown((on) => !on)}>
-                        <ScanEye /> Show areas left out ({leftOutCount})
+                      <Button variant={leftOutShown ? 'secondary' : 'ghost'} size="xs" aria-pressed={leftOutShown} aria-label={`Show areas left out (${leftOutCount})`} title="Show the areas left out of the comparison on the screens (X)" onClick={() => setLeftOutShown((on) => !on)}>
+                        {/* Compact where the toolbar is narrow: a toolbar that wraps takes room from the screens. */}
+                        <ScanEye /> <span className="hidden xl:inline">Areas left out</span> <span className="tabular-nums">{leftOutCount}</span>
                       </Button>
                     ) : null}
                     {effectiveStage === 'side-by-side' ? (
